@@ -16,9 +16,12 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   run-nba-intelligence-cycle:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -28,9 +31,9 @@ jobs:
           fetch-depth: 1
 
       - name: 2. Instalar uv y configurar Python 3.12
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true
+          enable-cache: false
           python-version: "3.12"
 
       - name: 3. Instalar dependencias del proyecto
@@ -47,7 +50,15 @@ jobs:
         run: |
           uv run python scripts/run_cloud_cycle.py --mode "${{ github.event.inputs.cycle_mode || 'auto' }}"
 
-      - name: 6. Guardar estado (SQLite, Reportes y Vault Obsidian) en el repositorio
+      - name: 6. Publicar Tablero de Pronósticos y Bankroll en el Summary de GitHub Actions
+        run: |
+          cat reports/daily_report.md >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat reports/weekly_report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: 7. Guardar estado (SQLite, Reportes y Vault Obsidian) en el repositorio
         run: |
           git config user.name "nba-intelligence-bot"
           git config user.email "nba-intelligence-bot@users.noreply.github.com"
