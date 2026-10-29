@@ -15,9 +15,7 @@ on:
 
 permissions:
   contents: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  issues: write
 
 jobs:
   run-nba-intelligence-cycle:
@@ -25,32 +23,40 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: 1. Checkout repositorio (con historial SQLite y Vault Obsidian)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      - name: 1. Clonar repositorio con historial SQLite y Vault Obsidian (Nativo sin Node.js)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin main
+          git checkout -B main origin/main
 
-      - name: 2. Instalar uv y configurar Python 3.12
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: false
-          python-version: "3.12"
+      - name: 2. Instalar uv y configurar Python 3.12 (Nativo sin Node.js)
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: 3. Instalar dependencias del proyecto
         run: uv sync --extra dev --python 3.12
 
-      - name: 4. Ejecutar suite de pruebas de integridad y anti-leakage (16 tests)
+      - name: 4. Ejecutar suite de pruebas de integridad y anti-leakage
         run: uv run pytest
 
-      - name: 5. Ejecutar Ciclo Stateful (Ingestión -> Liquidación -> Auto-Calibración -> Predicción)
+      - name: 5. Ejecutar Ciclo Stateful y Evaluar Alerta de Madurez para Entorno Real
         env:
           SPORTRADAR_API_KEY: ${{ secrets.SPORTRADAR_API_KEY }}
           THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
           SIMULATION_ONLY: "true"
         run: |
           uv run python scripts/run_cloud_cycle.py --mode "${{ github.event.inputs.cycle_mode || 'auto' }}"
 
-      - name: 6. Publicar Tablero de Pronósticos y Bankroll en el Summary de GitHub Actions
+      - name: 6. Publicar Tablero de Pronósticos y Semáforo en el Summary de GitHub Actions
         run: |
           cat SEGUIMIENTO_APUESTAS.md >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -58,14 +64,14 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           cat reports/daily_report.md >> $GITHUB_STEP_SUMMARY
 
-      - name: 7. Guardar estado (SQLite, CSV, Reportes y Vault Obsidian) en el repositorio
+      - name: 7. Guardar estado (SQLite, CSV, Alerta de Madurez, Reportes y Vault Obsidian)
         run: |
           git config user.name "nba-intelligence-bot"
           git config user.email "nba-intelligence-bot@users.noreply.github.com"
-          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/nba_intelligence.sqlite3 data/evaluation/latest_run_summary.json reports/*.md NBA/
+          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/nba_intelligence.sqlite3 data/evaluation/latest_run_summary.json reports/*.md NBA/
           if git diff --staged --quiet; then
             echo "Sin cambios nuevos para confirmar."
           else
             git commit -m "chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]"
-            git push
+            git push origin main
           fi

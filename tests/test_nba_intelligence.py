@@ -477,3 +477,58 @@ def test_16_end_to_end_orchestrator_and_retry_control(tmp_path: Path) -> None:
     assert (tmp_path / "reports" / "daily_report.md").exists()
     assert (tmp_path / "reports" / "weekly_report.md").exists()
     assert (tmp_path / "reports" / "audit_report.md").exists()
+
+
+# 17. Prueba del Sistema de Alerta de Madurez para Entorno Real (6 Puertas Estadísticas)
+def test_17_readiness_notification_system(tmp_path: Path) -> None:
+    from src.reporting.notifier import evaluate_and_notify_readiness
+
+    status_file = tmp_path / "readiness_status.json"
+    calibrating_metrics = {
+        "settled_bets_count": 98,
+        "pending_bets_count": 6,
+        "current_settled_bankroll_pen": 103.03,
+        "roi_pct": 3.10,
+        "yield_pct": 2.92,
+        "overall_brier_score": 0.2455,
+        "baseline_brier_score": 0.2503,
+        "bootstrap_uncertainty": {"roi_ci_lower_95_pct": -21.81, "roi_ci_upper_95_pct": 27.73},
+        "exit_gates_evaluation": {
+            "gates": {
+                "gate_1_min_500_settled_selections": {"passed": False},
+                "gate_3_calibration_non_inferior_to_baseline": {"passed": True},
+                "gate_5_positive_roi_and_yield": {"passed": True},
+                "gate_6_statistical_uncertainty_excludes_zero_edge": {"passed": False},
+                "gate_7_zero_temporal_leakage": {"passed": True},
+            }
+        },
+    }
+    res_cal = evaluate_and_notify_readiness(calibrating_metrics, status_file)
+    assert res_cal["is_ready_for_real_money"] is False
+    assert res_cal["passed_gates_count"] == 4
+    assert res_cal["missing_settled_bets"] == 402
+
+    ready_metrics = {
+        "settled_bets_count": 512,
+        "pending_bets_count": 2,
+        "current_settled_bankroll_pen": 142.50,
+        "roi_pct": 8.30,
+        "yield_pct": 7.95,
+        "overall_brier_score": 0.2390,
+        "baseline_brier_score": 0.2503,
+        "bootstrap_uncertainty": {"roi_ci_lower_95_pct": 1.85, "roi_ci_upper_95_pct": 14.90},
+        "exit_gates_evaluation": {
+            "gates": {
+                "gate_1_min_500_settled_selections": {"passed": True},
+                "gate_3_calibration_non_inferior_to_baseline": {"passed": True},
+                "gate_5_positive_roi_and_yield": {"passed": True},
+                "gate_6_statistical_uncertainty_excludes_zero_edge": {"passed": True},
+                "gate_7_zero_temporal_leakage": {"passed": True},
+            }
+        },
+    }
+    res_ready = evaluate_and_notify_readiness(ready_metrics, status_file)
+    assert res_ready["is_ready_for_real_money"] is True
+    assert res_ready["passed_gates_count"] == 6
+    assert res_ready["missing_settled_bets"] == 0
+    assert "LISTO PARA ENTORNO REAL" in res_ready["headline"]

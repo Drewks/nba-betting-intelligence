@@ -1,15 +1,16 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración
 
-- **Última actualización**: `2026-10-28 19:50 (Hora Perú UTC-5)` (`2026-10-29T00:50:51Z`)
+- **Última actualización**: `2026-10-28 19:56 (Hora Perú UTC-5)` (`2026-10-29T00:56:44Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/103.03 PEN`** (`+3.04 PEN`)
 - **ROI Actual**: `+3.10%` | **Yield Actual**: `+2.92%` | **Apuestas en espera**: `6` (`S/6.00 PEN` reservados)
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
+- **Sistema de Aviso Automático**: `ACTIVO` *(En cuanto los 6 criterios lleguen a ✅ VERDE, el bot abrirá un Issue en GitHub mencionando a `@Drewks` que enviará un correo inmediato a tu bandeja de entrada)*.
 
 ---
 
 ## 🚦 1. ¿Cuándo Terminar la Calibración y Evaluar Uso con Dinero Real?
 
-### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (NO USAR DINERO REAL AÚN)**
+### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (4/6 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
 **Progreso de Muestra Mínima**: `[████░░░░░░░░░░░░░░░░] 98 / 500 apuestas liquidadas (19.6%)` — *Faltan **402** apuestas liquidadas.*
 
 Para considerar que la calibración ha finalizado con evidencia estadística rigurosa, **las 6 luces del semáforo deben estar en VERDE (✅) al mismo tiempo**:
@@ -23,15 +24,15 @@ Para considerar que la calibración ha finalizado con evidencia estadística rig
 | 5 | **Cero Fuga de Información (Anti-Leakage)** | ✅ VERDE | `0 violaciones` | **0 violaciones** |
 | 6 | **Contabilidad e Inmutabilidad SQLite Verificadas** | ✅ VERDE | `100% reconciliado` | **Reconciliado sin errores** |
 
-> **Regla práctica**: Con un ritmo de ~2 a 3 apuestas diarias durante la temporada NBA, el sistema alcanzará las **500 apuestas reales liquidadas** de forma automática. Solo cuando las 6 filas de arriba marquen **✅ VERDE**, tendrás evidencia estadística de que el modelo supera al margen de la casa.
+> **🔔 Aviso automático configurado**: No necesitas revisar esta página todos los días. En el instante en que las 6 filas de arriba marquen **✅ VERDE**, el bot creará una alerta automática en GitHub asignada a tu usuario (`@Drewks`) que te llegará directamente por **correo electrónico**.
 
 ---
 
-## 🏀 2. Mis Apuestas NBA Reales (ESPN / Cuotas Reales DraftKings)
+## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)
 
 Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido):
 
-| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Cuota (DraftKings) | Prob. Modelo | EV (%) | Stake | Estado | Resultado / Ganancia |
+| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota | Prob. Modelo | EV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
 | `2026-10-29 21:00` | **MEM @ POR** | Total Puntos (Over/Under) | **UNDER 232.5** | **1.910** | 63.5% | `+21.2%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-29 19:00` | **SAC @ NOP** | Total Puntos (Over/Under) | **UNDER 237.5** | **1.950** | 66.9% | `+30.4%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |

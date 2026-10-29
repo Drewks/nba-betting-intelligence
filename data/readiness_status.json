@@ -1,0 +1,22 @@
+{
+  "updated_at_utc": "2026-10-29T00:56:44Z",
+  "is_ready_for_real_money": false,
+  "passed_gates_count": 4,
+  "total_gates_count": 6,
+  "settled_bets_count": 98,
+  "target_settled_bets": 500,
+  "missing_settled_bets": 402,
+  "progress_pct": 19.6,
+  "pending_bets_count": 6,
+  "bankroll_pen": 103.03,
+  "roi_pct": 3.1,
+  "yield_pct": 2.92,
+  "brier_score": 0.2455,
+  "baseline_brier_score": 0.2503,
+  "roi_ci_95_lower_pct": -21.81,
+  "roi_ci_95_upper_pct": 27.73,
+  "headline": "🚦 Estado del Modelo: EN CALIBRACIÓN (4/6 Criterios en VERDE — No usar dinero real aún)",
+  "detail_message": "Progreso de muestra: 98/500 apuestas liquidadas (19.6% — faltan 402 apuestas) | Apuestas en espera hoy: 6 | Bankroll Virtual: S/103.03 PEN (ROI +3.10%) | Calibración Brier: 0.2455 (Baseline 0.2503). Cuando llegue a 6/6 recibirás una alerta por correo.",
+  "notification_sent_at": null,
+  "last_triggered_channels": []
+}

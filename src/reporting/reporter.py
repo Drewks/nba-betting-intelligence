@@ -11,6 +11,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from src.reporting.notifier import evaluate_and_notify_readiness
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc
 
@@ -124,6 +125,18 @@ def export_bets_and_tracking_dashboard(
     ci_ok = gates.get("gate_6_statistical_uncertainty_excludes_zero_edge", {}).get("passed", False)
     sample_ok = gates.get("gate_1_min_500_settled_selections", {}).get("passed", False)
 
+    readiness_file = csv_path.parent / "readiness_status.json"
+    readiness = evaluate_and_notify_readiness(metrics, readiness_file)
+    is_ready = bool(readiness["is_ready_for_real_money"])
+    passed_gates = int(readiness["passed_gates_count"])
+    total_gates = int(readiness["total_gates_count"])
+
+    global_banner = (
+        "🟢 ¡LISTO PARA ENTORNO REAL! (6/6 CRITERIOS EN VERDE — VENTAJA ESTADÍSTICA CONFIRMADA)"
+        if is_ready
+        else f"🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING ({passed_gates}/{total_gates} CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)"
+    )
+
     lines = [
         "# 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración",
         "",
@@ -131,12 +144,13 @@ def export_bets_and_tracking_dashboard(
         f"- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/{metrics['current_settled_bankroll_pen']:.2f} PEN`** (`{metrics['net_profit_pen']:+.2f} PEN`)",
         f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **Apuestas en espera**: `{pending_count}` (`S/{pending_count:.2f} PEN` reservados)",
         "- **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)",
+        "- **Sistema de Aviso Automático**: `ACTIVO` *(En cuanto los 6 criterios lleguen a ✅ VERDE, el bot abrirá un Issue en GitHub mencionando a `@Drewks` que enviará un correo inmediato a tu bandeja de entrada)*.",
         "",
         "---",
         "",
         "## 🚦 1. ¿Cuándo Terminar la Calibración y Evaluar Uso con Dinero Real?",
         "",
-        f"### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (NO USAR DINERO REAL AÚN)**",
+        f"### Estado Global: **{global_banner}**",
         f"**Progreso de Muestra Mínima**: `[{progress_bar}] {settled_count} / 500 apuestas liquidadas ({progress_pct:.1f}%)` — *Faltan **{max(0, 500 - settled_count)}** apuestas liquidadas.*",
         "",
         "Para considerar que la calibración ha finalizado con evidencia estadística rigurosa, **las 6 luces del semáforo deben estar en VERDE (✅) al mismo tiempo**:",
@@ -150,15 +164,15 @@ def export_bets_and_tracking_dashboard(
         "| 5 | **Cero Fuga de Información (Anti-Leakage)** | ✅ VERDE | `0 violaciones` | **0 violaciones** |",
         "| 6 | **Contabilidad e Inmutabilidad SQLite Verificadas** | ✅ VERDE | `100% reconciliado` | **Reconciliado sin errores** |",
         "",
-        "> **Regla práctica**: Con un ritmo de ~2 a 3 apuestas diarias durante la temporada NBA, el sistema alcanzará las **500 apuestas reales liquidadas** de forma automática. Solo cuando las 6 filas de arriba marquen **✅ VERDE**, tendrás evidencia estadística de que el modelo supera al margen de la casa.",
+        "> **🔔 Aviso automático configurado**: No necesitas revisar esta página todos los días. En el instante en que las 6 filas de arriba marquen **✅ VERDE**, el bot creará una alerta automática en GitHub asignada a tu usuario (`@Drewks`) que te llegará directamente por **correo electrónico**.",
         "",
         "---",
         "",
-        "## 🏀 2. Mis Apuestas NBA Reales (ESPN / Cuotas Reales DraftKings)",
+        "## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)",
         "",
         "Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido):",
         "",
-        "| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Cuota (DraftKings) | Prob. Modelo | EV (%) | Stake | Estado | Resultado / Ganancia |",
+        "| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota | Prob. Modelo | EV (%) | Stake | Estado | Resultado / Ganancia |",
         "| :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |",
     ]
 
