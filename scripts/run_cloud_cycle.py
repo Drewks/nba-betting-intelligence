@@ -13,6 +13,7 @@ Designed to run unattended in the cloud (e.g., GitHub Actions cron 2x/day) witho
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -79,11 +80,12 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     now_str = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     yesterday_str = (now_dt - timedelta(days=1)).strftime("%Y-%m-%d")
     today_str = now_dt.strftime("%Y-%m-%d")
+    tomorrow_str = (now_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    # 1. Fetch yesterday and today from ESPN Public API to get final scores + new scheduled games/odds
+    # 1. Fetch yesterday, today, and tomorrow from ESPN + The Odds API (32 books)
     router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10)])
     ingested_dates: list[str] = []
-    for dt_str in (yesterday_str, today_str):
+    for dt_str in (yesterday_str, today_str, tomorrow_str):
         try:
             scout.ingest_and_validate_dataset(router, date_str=dt_str)
             ingested_dates.append(dt_str)
@@ -190,12 +192,14 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             ),
         )
 
-    # 4. Evaluate upcoming SCHEDULED games that do not yet have predictions
+    # 4. Evaluate upcoming SCHEDULED games across the entire slate and rank globally by EV per matchday
     scheduled_games = db.fetch_all(
         "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_start_time > ? ORDER BY game_start_time ASC",
         (now_str,),
     )
     new_bets_placed = 0
+    candidates_by_matchday: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
     for g in scheduled_games:
         existing_pred = db.fetch_one("SELECT prediction_id FROM predictions WHERE game_id = ?", (g["game_id"],))
         if existing_pred:
@@ -227,7 +231,6 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         raw_p_over = pred_f_tot["p_over"]
         cal_p_over = tot_cal.transform_single(raw_p_over)
 
-        candidates: list[dict[str, Any]] = []
         for o in game_odds:
             validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
             mkt = o["market"]
@@ -274,9 +277,10 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             opp["raw_probability"] = raw_p
             opp["calibrated_probability"] = cal_p
             opp["emitted_at"] = pred_ts
-            candidates.append(opp)
+            candidates_by_matchday[g["matchday_date"]].append(opp)
 
-        day_res = paper_engine.evaluate_and_record_matchday_selections(g["matchday_date"], candidates)
+    for m_date in sorted(candidates_by_matchday.keys()):
+        day_res = paper_engine.evaluate_and_record_matchday_selections(m_date, candidates_by_matchday[m_date])
         new_bets_placed += len(day_res["placed_bets"])
 
     # 5. Recompute metrics, audit, and refresh reports + Obsidian

@@ -2,10 +2,12 @@ name: NBA Betting Intelligence — Cloud Auto-Trading & Calibration (S/100 Virtu
 
 on:
   schedule:
-    # 1. Ejecución Post-Partido + Liquidación + Auto-Calibración: 11:00 UTC (06:00 AM Hora Perú)
-    - cron: "0 11 * * *"
-    # 2. Ejecución Pre-Partido (Captura de cuotas y emisión de pronósticos): 22:00 UTC (05:00 PM Hora Perú)
-    - cron: "0 22 * * *"
+    # 1. Post-Partido + Liquidación + Auto-Calibración: 11:23 UTC (06:23 AM Hora Perú — fuera de hora punta :00)
+    - cron: "23 11 * * *"
+    # 2. Pre-Partido Principal (Line Shopping 32 casas + Pronósticos): 21:37 UTC (04:37 PM Hora Perú)
+    - cron: "37 21 * * *"
+    # 3. Cierre Pre-Tipoff (Captura de Closing Line Value CLV + Costa Oeste): 23:43 UTC (06:43 PM Hora Perú)
+    - cron: "43 23 * * *"
   workflow_dispatch:
     inputs:
       cycle_mode:

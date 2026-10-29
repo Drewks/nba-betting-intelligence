@@ -155,6 +155,10 @@ class NBADataScoutAgent:
             try:
                 validate_odds_record(o, g_start)
                 validated_odds.append(o)
+                has_existing_pred = self.db.fetch_one(
+                    "SELECT prediction_id FROM predictions WHERE game_id = ? LIMIT 1",
+                    (o["game_id"],),
+                )
                 self.db.execute_insert(
                     """
                     INSERT OR IGNORE INTO odds_snapshots (
@@ -175,6 +179,27 @@ class NBADataScoutAgent:
                         int(o.get("is_closing_line", 0)),
                     ),
                 )
+                if has_existing_pred and int(o.get("is_closing_line", 0)) == 0:
+                    close_id = f"{o['odds_id']}_CLV_{o['captured_at'][:13].replace('-', '').replace('T', '')}"
+                    self.db.execute_insert(
+                        """
+                        INSERT OR REPLACE INTO odds_snapshots (
+                            odds_id, game_id, provider, market, selection, line_value,
+                            decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                        """,
+                        (
+                            close_id,
+                            o["game_id"],
+                            o["provider"],
+                            o["market"],
+                            o["selection"],
+                            o.get("line_value"),
+                            o["decimal_odds"],
+                            o.get("counterpart_decimal_odds"),
+                            o["captured_at"],
+                        ),
+                    )
             except Exception as exc:
                 rejected_odds.append({"odds_id": str(o.get("odds_id")), "reason": str(exc)})
 

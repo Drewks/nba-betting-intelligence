@@ -638,6 +638,14 @@ class WalkForwardBacktester:
         max_exposure = float(ledger_rows[0]["max_exp"] or 0.0) if ledger_rows else 0.0
 
         # Closing Line Value (CLV)
+        if not closing_odds_lookup:
+            closing_odds_lookup = {}
+            close_rows = self.db.fetch_all(
+                "SELECT game_id, market, selection, line_value, decimal_odds FROM odds_snapshots WHERE is_closing_line = 1 ORDER BY captured_at ASC"
+            )
+            for cr in close_rows:
+                closing_odds_lookup[(cr["game_id"], cr["market"], cr["selection"], cr["line_value"])] = float(cr["decimal_odds"])
+
         clv_values: list[float] = []
         if closing_odds_lookup:
             for b in settled_bets:
