@@ -1,0 +1,66 @@
+{
+  "run_id": "RUN_20261028_222638_9E8989",
+  "sources_info": {
+    "espn_public_api": {
+      "reachable": true,
+      "events_found_today": 12,
+      "includes_draftkings_pregame_odds": true
+    },
+    "sportradar_api": {
+      "credentials_configured": false,
+      "status": "READY_IF_KEY_PROVIDED"
+    },
+    "nba_com_stats": {
+      "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
+      "historical_odds_included": false
+    },
+    "playwright": {
+      "playwright_python_installed": true,
+      "browser_binaries_installed": false,
+      "extracted_at": "2026-10-28T22:26:38Z",
+      "anti_bot_bypass_enabled": false,
+      "status": "READY_FOR_BROWSER_INSTALL"
+    }
+  },
+  "visual_context": {
+    "pixelrag_installed": false,
+    "pixelrag_status": "PIXELRAG_NOT_INSTALLED_IN_LOCAL_MCP",
+    "mode_used": "STRUCTURED_DOCUMENT_CROSSCHECK_FALLBACK",
+    "direct_betting_probabilities_emitted": false,
+    "confidence_score": 1.0,
+    "limitations_documented": "PixelRAG no está instalado ni configurado en mcp_config.json; se documenta la limitación sin inventar una integración MCP y el pipeline continúa exclusivamente con datos estructurados verificados."
+  },
+  "financial_and_statistical_summary": {
+    "initial_bankroll_pen": 100.0,
+    "current_settled_bankroll_pen": 105.995,
+    "net_profit_pen": 5.995,
+    "roi_pct": 6.4462,
+    "yield_pct": 6.0556,
+    "settled_bets_count": 93,
+    "pending_bets_count": 6,
+    "won_count": 46,
+    "lost_count": 47,
+    "push_count": 0,
+    "max_drawdown_pen": 9.434,
+    "overall_brier_score": 0.246272,
+    "baseline_brier_score": 0.250885,
+    "overall_log_loss": 0.68576,
+    "baseline_log_loss": 0.696078,
+    "bootstrap_uncertainty": {
+      "n_settled": 93,
+      "n_matchday_blocks": 33,
+      "roi_ci_lower_95_pct": -17.2951,
+      "roi_ci_upper_95_pct": 32.6168,
+      "compatible_with_zero_edge": true,
+      "method": "temporal_matchday_block_bootstrap"
+    }
+  },
+  "audit_verdict": "REMAIN_IN_PAPER_TRADING",
+  "reports_info": {
+    "target_date": "2026-10-29",
+    "daily_report_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\reports\\daily_report.md",
+    "weekly_report_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\reports\\weekly_report.md",
+    "audit_report_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\reports\\audit_report.md",
+    "obsidian_files_count": 12
+  }
+}

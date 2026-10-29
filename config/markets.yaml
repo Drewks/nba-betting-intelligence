@@ -1,0 +1,58 @@
+version: "1.0"
+supported_markets:
+  moneyline:
+    code: "moneyline"
+    name: "Ganador del partido (Moneyline)"
+    enabled_v1: true
+    selections:
+      - "HOME"
+      - "AWAY"
+    requires_line: false
+    push_possible: false
+    settlement_rules:
+      home_win: "HOME=WON, AWAY=LOST"
+      away_win: "HOME=LOST, AWAY=WON"
+      cancelled_or_postponed: "VOID (net_profit = 0.0)"
+    essential_features:
+      - "home_off_rtg"
+      - "home_def_rtg"
+      - "away_off_rtg"
+      - "away_def_rtg"
+      - "home_rest_days"
+      - "away_rest_days"
+    devig_method: "multiplicative_proportional"
+
+  total_points:
+    code: "total_points"
+    name: "Total de puntos del partido (Over/Under)"
+    enabled_v1: true
+    selections:
+      - "OVER"
+      - "UNDER"
+    requires_line: true
+    push_possible: true
+    settlement_rules:
+      total_greater_than_line: "OVER=WON, UNDER=LOST"
+      total_less_than_line: "OVER=LOST, UNDER=WON"
+      total_equal_to_line: "OVER=PUSH, UNDER=PUSH (net_profit = 0.0)"
+      cancelled_or_postponed: "VOID (net_profit = 0.0)"
+    essential_features:
+      - "home_off_rtg"
+      - "home_def_rtg"
+      - "away_off_rtg"
+      - "away_def_rtg"
+      - "home_pace"
+      - "away_pace"
+      - "line_value"
+    devig_method: "multiplicative_proportional"
+
+disabled_markets_v1:
+  player_props:
+    enabled_v1: false
+    reason: "Excluido en v1 hasta validar estadísticas de equipos, control temporal y backtesting."
+  parlays:
+    enabled_v1: false
+    reason: "Apuestas combinadas prohibidas por política de riesgo y trazabilidad en v1."
+  live_in_play:
+    enabled_v1: false
+    reason: "Mercados en vivo excluidos en v1 por latencia de timestamps y control de integridad."

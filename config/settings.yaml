@@ -1,0 +1,92 @@
+project:
+  name: "NBA Betting Intelligence"
+  version: "0.1.0"
+  coordinator: "Gemini Argon (Google Antigravity)"
+  mode: "PAPER_TRADING_SIMULATION_ONLY"
+  random_seed: 42
+
+storage:
+  sqlite_path: "data/nba_intelligence.sqlite3"
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  evaluation_data_dir: "data/evaluation"
+  reports_dir: "reports"
+  obsidian_vault_dir: "NBA"
+
+ingestion:
+  primary_stats_provider: "espn_public"
+  fallback_stats_provider: "synthetic_fixture"
+  optional_providers:
+    - "sportradar"
+    - "nba_stats_api"
+    - "playwright_scraper"
+  request_timeout_seconds: 10
+  strict_temporal_validation: true
+  allow_missing_critical_fields: false
+
+pixelrag:
+  installed: false
+  mcp_configured: false
+  fallback_mode: "structured_pipeline_with_visual_confidence_audit"
+
+bankroll:
+  currency: "PEN"
+  symbol: "S/"
+  initial_bankroll: 100.00
+  base_stake: 1.00
+  max_stake_per_selection: 1.00
+  max_selections_per_matchday: 3
+  allow_parlays: false
+  allow_martingale: false
+  allow_double_after_loss: false
+  allow_loans_or_deposits: false
+  allow_negative_balance: false
+  allow_kelly_full: false
+  staking_strategy: "flat_conservative"
+  min_ev_threshold: 0.05
+  max_overround_allowed: 0.12
+
+models:
+  active_moneyline_model: "model_c_point_margin"
+  active_totals_model: "model_d_total_points"
+  baseline_model: "model_a_baseline"
+  elo:
+    initial_rating: 1500.0
+    k_factor: 20.0
+    home_advantage_elo: 65.0
+    rest_advantage_per_day: 12.0
+    season_carryover: 0.75
+  point_margin:
+    rolling_window_games: 10
+    min_games_required: 3
+    default_residual_std: 11.8
+    home_court_points: 2.6
+  total_points:
+    rolling_window_games: 10
+    min_games_required: 3
+    default_total_std: 16.5
+    account_for_score_covariance: true
+    distribution: "normal_with_covariance"
+  advanced_gbm:
+    n_estimators: 80
+    learning_rate: 0.05
+    max_depth: 3
+    min_child_samples: 15
+    random_state: 42
+
+calibration:
+  min_samples_logistic: 30
+  min_samples_isotonic: 100
+  n_reliability_bins: 10
+  require_oos_improvement: true
+
+simulation_exit_gates:
+  min_settled_selections: 500
+  min_oos_periods: 2
+  require_calibration_better_than_baseline: true
+  require_zero_data_leakage: true
+  require_positive_roi_and_yield: true
+  require_bootstrap_ci_evaluated: true
+  require_reproducibility: true
+  require_independent_audit_pass: true
+  auto_transition_to_real_money: false
