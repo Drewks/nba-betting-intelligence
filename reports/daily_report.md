@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-29T01:05:27Z
+date_generated: 2026-10-29T17:11:49Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-10-29
@@ -9,15 +9,15 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-10-29
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-10-29T01:05:27Z`
+- **Fecha de generación (UTC)**: `2026-10-29T17:11:49Z`
 - **Jornada evaluada**: `2026-10-29`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
-- **Partidos evaluados**: `3`
+- **Partidos evaluados**: `7`
 - **Partidos descartados por falta de datos/cuotas**: `0`
 - **Predicciones emitidas**: `12`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `9`
-- **Resultados pendientes globales**: `6`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -41,9 +41,9 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261029_748C9155` | `ESPN_401909891_2026-10-29_OKC_AT_DAL` | `moneyline` | **HOME** | 2.760 | 0.4976 | +37.34% | S/1.00 | `PENDING` | PENDIENTE |
-| `BET_20261029_82305F66` | `ESPN_401909892_2026-10-29_LAL_AT_LAC` | `moneyline` | **HOME** | 1.970 | 0.5985 | +17.91% | S/1.00 | `PENDING` | PENDIENTE |
-| `BET_20261029_C23A720D` | `ESPN_401909891_2026-10-29_OKC_AT_DAL` | `total_points` | **UNDER** | 1.920 | 0.5698 | +9.40% | S/1.00 | `PENDING` | PENDIENTE |
+| `BET_20261029_748C9155` | `ESPN_401909891_2026-10-29_OKC_AT_DAL` | `moneyline` | **HOME** | 2.760 | 0.4976 | +37.34% | S/1.00 | `WON` | S/+1.76 |
+| `BET_20261029_82305F66` | `ESPN_401909892_2026-10-29_LAL_AT_LAC` | `moneyline` | **HOME** | 1.970 | 0.5985 | +17.91% | S/1.00 | `LOST` | S/-1.00 |
+| `BET_20261029_C23A720D` | `ESPN_401909891_2026-10-29_OKC_AT_DAL` | `total_points` | **UNDER** | 1.920 | 0.5698 | +9.40% | S/1.00 | `WON` | S/+0.92 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909890_2026-10-29_SAS_AT_UTA` (`moneyline` - `HOME`): **NO_BET** [UNVERIFIED_INJURY_OR_LINEUP_OUTLIER] — Extreme EV (142.35%) indicates likely star injury/rest not in team-level features; skipped.

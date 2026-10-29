@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-29T01:05:27Z
+date_generated: 2026-10-29T17:11:49Z
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 ---
 # Historial Auditable de Predicciones
