@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración
 
-- **Última actualización**: `2026-10-28 19:44 (Hora Perú UTC-5)` (`2026-10-29T00:44:24Z`)
+- **Última actualización**: `2026-10-28 19:50 (Hora Perú UTC-5)` (`2026-10-29T00:50:51Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/103.03 PEN`** (`+3.04 PEN`)
 - **ROI Actual**: `+3.10%` | **Yield Actual**: `+2.92%` | **Apuestas en espera**: `6` (`S/6.00 PEN` reservados)
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
