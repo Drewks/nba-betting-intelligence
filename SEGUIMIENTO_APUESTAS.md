@@ -1,30 +1,33 @@
-# 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración
+# 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-28 19:56 (Hora Perú UTC-5)` (`2026-10-29T00:56:44Z`)
+- **Última actualización**: `2026-10-28 20:05 (Hora Perú UTC-5)` (`2026-10-29T01:05:27Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/103.03 PEN`** (`+3.04 PEN`)
-- **ROI Actual**: `+3.10%` | **Yield Actual**: `+2.92%` | **Apuestas en espera**: `6` (`S/6.00 PEN` reservados)
+- **ROI Actual**: `+3.10%` | **Yield Actual**: `+2.92%` | **Max Drawdown**: `16.44%` | **Apuestas en espera**: `6` (`S/6.00 PEN` reservados)
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
-- **Sistema de Aviso Automático**: `ACTIVO` *(En cuanto los 6 criterios lleguen a ✅ VERDE, el bot abrirá un Issue en GitHub mencionando a `@Drewks` que enviará un correo inmediato a tu bandeja de entrada)*.
+- **Sistema de Aviso Automático (Doble Nivel)**: `ACTIVO` *(Recibirás un correo automático vía GitHub Issue `@Drewks` al desbloquear el **Nivel 1: Micro-Banca** y un segundo correo al desbloquear el **Nivel 2: Banca Completa**)*.
 
 ---
 
-## 🚦 1. ¿Cuándo Terminar la Calibración y Evaluar Uso con Dinero Real?
+## 🚦 1. Semáforo de Madurez de 8 Criterios y Graduación en 2 Niveles
 
-### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (4/6 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
-**Progreso de Muestra Mínima**: `[████░░░░░░░░░░░░░░░░] 98 / 500 apuestas liquidadas (19.6%)` — *Faltan **402** apuestas liquidadas.*
+### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (3/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
+- **Progreso Muestra Total (Nivel 1)**: `[████░░░░░░░░░░░░░░░░] 98 / 500 apuestas (19.6%)` — *Faltan **402** apuestas.*
+- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[░░░░░░░░░░░░░░░░░░░░] 0 / 200 en vivo (0.0%)` — *Tienes **6** apuestas reales en espera hoy.*
 
-Para considerar que la calibración ha finalizado con evidencia estadística rigurosa, **las 6 luces del semáforo deben estar en VERDE (✅) al mismo tiempo**:
+Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterios cuantitativos estrictos** divididos en **2 niveles de graduación**:
 
-| # | Criterio para Salir de Simulación | Estado Hoy | Valor Actual | Meta Requerida |
-| :-: | :--- | :---: | :--- | :--- |
-| 1 | **Muestra mínima de apuestas liquidadas** | 🔴 PENDIENTE | `98 apuestas` | **>= 500 apuestas liquidadas** |
-| 2 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2455 vs 0.2503` | **Brier y LogLoss <= Baseline** |
-| 3 | **Rentabilidad Neta Positiva (ROI y Yield > 0%)** | ✅ VERDE | `ROI +3.10% / Yield +2.92%` | **> +0.00%** |
-| 4 | **Intervalo de Confianza 95% excluye el azar (> 0%)** | 🔴 PENDIENTE | `[-21.81%, +27.73%]` | **Límite inferior > +0.00%** |
-| 5 | **Cero Fuga de Información (Anti-Leakage)** | ✅ VERDE | `0 violaciones` | **0 violaciones** |
-| 6 | **Contabilidad e Inmutabilidad SQLite Verificadas** | ✅ VERDE | `100% reconciliado` | **Reconciliado sin errores** |
+| # | Criterio Cuantitativo de Auditoría | Estado Hoy | Valor Actual | Meta Nivel 1 (Piloto Micro-Banca 25%) | Meta Nivel 2 (Banca Completa 100%) |
+| :-: | :--- | :---: | :--- | :--- | :--- |
+| 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `98 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
+| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `0 liquidadas (6 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
+| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2455 vs 0.2503` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
+| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.0580 (5.80%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
+| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | ✅ VERDE | `ROI +3.10% / Yield +2.92%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
+| 6 | **Control de Caída Máxima (Max Drawdown)** | 🔴 PENDIENTE | `MaxDD 16.44%` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
+| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-17.9%, +24.0%] / IC95 [-21.8%, +27.7%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
+| 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | ✅ VERDE | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |
 
-> **🔔 Aviso automático configurado**: No necesitas revisar esta página todos los días. En el instante en que las 6 filas de arriba marquen **✅ VERDE**, el bot creará una alerta automática en GitHub asignada a tu usuario (`@Drewks`) que te llegará directamente por **correo electrónico**.
+> **🔔 Doble aviso automático a tu correo**: No necesitas vigilar esta tabla a diario. Cuando las 8 filas lleguen a **✅ VERDE** en el **Nivel 1**, recibirás un correo de GitHub (`@Drewks`) autorizando pruebas con micro-banca (25% de tu stake). Cuando alcance el **Nivel 2** (`1,000` apuestas + `IC 95% > 0%`), recibirás el segundo correo de certificación completa.
 
 ---
 

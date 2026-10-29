@@ -127,44 +127,58 @@ def export_bets_and_tracking_dashboard(
 
     readiness_file = csv_path.parent / "readiness_status.json"
     readiness = evaluate_and_notify_readiness(metrics, readiness_file)
-    is_ready = bool(readiness["is_ready_for_real_money"])
+    is_t1_ready = bool(readiness["is_tier1_micro_bankroll_ready"])
+    is_t2_ready = bool(readiness["is_tier2_full_bankroll_ready"])
     passed_gates = int(readiness["passed_gates_count"])
     total_gates = int(readiness["total_gates_count"])
+    live_settled = int(readiness["live_espn_settled_bets_count"])
+    live_prog_pct = float(readiness["progress_live_pct"])
+    live_bars = int(round(live_prog_pct / 5.0))
+    live_progress_bar = "█" * live_bars + "░" * (20 - live_bars)
+    ece_val = float(readiness["ece_score"])
+    max_dd_val = float(readiness["max_drawdown_pct"])
+    ci90_low = float(readiness["roi_ci_90_lower_pct"])
+    ci90_high = float(readiness["roi_ci_90_upper_pct"])
+    flags = readiness["criteria_flags_tier1"]
 
-    global_banner = (
-        "🟢 ¡LISTO PARA ENTORNO REAL! (6/6 CRITERIOS EN VERDE — VENTAJA ESTADÍSTICA CONFIRMADA)"
-        if is_ready
-        else f"🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING ({passed_gates}/{total_gates} CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)"
-    )
+    if is_t2_ready:
+        global_banner = "🟢 NIVEL 2 DESBLOQUEADO: ¡CERTIFICADO PARA ENTORNO REAL COMPLETO! (8/8 CRITERIOS NIVEL 2 EN VERDE)"
+    elif is_t1_ready:
+        global_banner = "🟡 NIVEL 1 DESBLOQUEADO: ¡LISTO PARA PILOTO CON MICRO-BANCA (25% STAKE)! (8/8 CRITERIOS NIVEL 1 EN VERDE)"
+    else:
+        global_banner = f"🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING ({passed_gates}/{total_gates} CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)"
 
     lines = [
-        "# 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración",
+        "# 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)",
         "",
         f"- **Última actualización**: `{peru_str}` (`{now_str}`)",
         f"- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/{metrics['current_settled_bankroll_pen']:.2f} PEN`** (`{metrics['net_profit_pen']:+.2f} PEN`)",
-        f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **Apuestas en espera**: `{pending_count}` (`S/{pending_count:.2f} PEN` reservados)",
+        f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **Max Drawdown**: `{max_dd_val:.2f}%` | **Apuestas en espera**: `{pending_count}` (`S/{pending_count:.2f} PEN` reservados)",
         "- **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)",
-        "- **Sistema de Aviso Automático**: `ACTIVO` *(En cuanto los 6 criterios lleguen a ✅ VERDE, el bot abrirá un Issue en GitHub mencionando a `@Drewks` que enviará un correo inmediato a tu bandeja de entrada)*.",
+        "- **Sistema de Aviso Automático (Doble Nivel)**: `ACTIVO` *(Recibirás un correo automático vía GitHub Issue `@Drewks` al desbloquear el **Nivel 1: Micro-Banca** y un segundo correo al desbloquear el **Nivel 2: Banca Completa**)*.",
         "",
         "---",
         "",
-        "## 🚦 1. ¿Cuándo Terminar la Calibración y Evaluar Uso con Dinero Real?",
+        "## 🚦 1. Semáforo de Madurez de 8 Criterios y Graduación en 2 Niveles",
         "",
         f"### Estado Global: **{global_banner}**",
-        f"**Progreso de Muestra Mínima**: `[{progress_bar}] {settled_count} / 500 apuestas liquidadas ({progress_pct:.1f}%)` — *Faltan **{max(0, 500 - settled_count)}** apuestas liquidadas.*",
+        f"- **Progreso Muestra Total (Nivel 1)**: `[{progress_bar}] {settled_count} / 500 apuestas ({progress_pct:.1f}%)` — *Faltan **{max(0, 500 - settled_count)}** apuestas.*",
+        f"- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[{live_progress_bar}] {live_settled} / 200 en vivo ({live_prog_pct:.1f}%)` — *Tienes **{pending_count}** apuestas reales en espera hoy.*",
         "",
-        "Para considerar que la calibración ha finalizado con evidencia estadística rigurosa, **las 6 luces del semáforo deben estar en VERDE (✅) al mismo tiempo**:",
+        "Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterios cuantitativos estrictos** divididos en **2 niveles de graduación**:",
         "",
-        "| # | Criterio para Salir de Simulación | Estado Hoy | Valor Actual | Meta Requerida |",
-        "| :-: | :--- | :---: | :--- | :--- |",
-        f"| 1 | **Muestra mínima de apuestas liquidadas** | {'✅ VERDE' if sample_ok else '🔴 PENDIENTE'} | `{settled_count} apuestas` | **>= 500 apuestas liquidadas** |",
-        f"| 2 | **Calibración mejor que el Baseline (Brier & LogLoss)** | {'✅ VERDE' if brier_ok else '🟡 AJUSTANDO'} | `Brier {metrics['overall_brier_score']:.4f} vs {metrics['baseline_brier_score']:.4f}` | **Brier y LogLoss <= Baseline** |",
-        f"| 3 | **Rentabilidad Neta Positiva (ROI y Yield > 0%)** | {'✅ VERDE' if roi_ok else '🔴 PENDIENTE'} | `ROI {metrics['roi_pct']:+.2f}% / Yield {metrics['yield_pct']:+.2f}%` | **> +0.00%** |",
-        f"| 4 | **Intervalo de Confianza 95% excluye el azar (> 0%)** | {'✅ VERDE' if ci_ok else '🔴 PENDIENTE'} | `[{ci_low:+.2f}%, {ci_high:+.2f}%]` | **Límite inferior > +0.00%** |",
-        "| 5 | **Cero Fuga de Información (Anti-Leakage)** | ✅ VERDE | `0 violaciones` | **0 violaciones** |",
-        "| 6 | **Contabilidad e Inmutabilidad SQLite Verificadas** | ✅ VERDE | `100% reconciliado` | **Reconciliado sin errores** |",
+        "| # | Criterio Cuantitativo de Auditoría | Estado Hoy | Valor Actual | Meta Nivel 1 (Piloto Micro-Banca 25%) | Meta Nivel 2 (Banca Completa 100%) |",
+        "| :-: | :--- | :---: | :--- | :--- | :--- |",
+        f"| 1 | **Muestra total de apuestas liquidadas** | {'✅ VERDE' if flags['c1_total_sample_500'] else '🔴 PENDIENTE'} | `{settled_count} apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |",
+        f"| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | {'✅ VERDE' if flags['c2_live_sample_200'] else '🔴 PENDIENTE'} | `{live_settled} liquidadas ({pending_count} activas)` | **>= 200 en vivo** | **>= 500 en vivo** |",
+        f"| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | {'✅ VERDE' if flags['c3_brier_beats_baseline'] else '🟡 AJUSTANDO'} | `Brier {metrics['overall_brier_score']:.4f} vs {metrics['baseline_brier_score']:.4f}` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |",
+        f"| 4 | **Error de Calibración por Tramos (ECE)** | {'✅ VERDE' if flags['c4_ece_under_5pct'] else '🟡 AJUSTANDO'} | `ECE {ece_val:.4f} ({ece_val * 100:.2f}%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |",
+        f"| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | {'✅ VERDE' if flags['c5_positive_net_roi'] else '🔴 PENDIENTE'} | `ROI {metrics['roi_pct']:+.2f}% / Yield {metrics['yield_pct']:+.2f}%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |",
+        f"| 6 | **Control de Caída Máxima (Max Drawdown)** | {'✅ VERDE' if flags['c6_max_drawdown_under_15pct'] else '🔴 PENDIENTE'} | `MaxDD {max_dd_val:.2f}%` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |",
+        f"| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | {'✅ VERDE' if flags['c7_bootstrap_ci_excludes_zero'] else '🔴 PENDIENTE'} | `IC90 [{ci90_low:+.1f}%, {ci90_high:+.1f}%] / IC95 [{ci_low:+.1f}%, {ci_high:+.1f}%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |",
+        f"| 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | {'✅ VERDE' if flags['c8_zero_leakage_and_reconciled'] else '🔴 PENDIENTE'} | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |",
         "",
-        "> **🔔 Aviso automático configurado**: No necesitas revisar esta página todos los días. En el instante en que las 6 filas de arriba marquen **✅ VERDE**, el bot creará una alerta automática en GitHub asignada a tu usuario (`@Drewks`) que te llegará directamente por **correo electrónico**.",
+        "> **🔔 Doble aviso automático a tu correo**: No necesitas vigilar esta tabla a diario. Cuando las 8 filas lleguen a **✅ VERDE** en el **Nivel 1**, recibirás un correo de GitHub (`@Drewks`) autorizando pruebas con micro-banca (25% de tu stake). Cuando alcance el **Nivel 2** (`1,000` apuestas + `IC 95% > 0%`), recibirás el segundo correo de certificación completa.",
         "",
         "---",
         "",

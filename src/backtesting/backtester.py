@@ -122,6 +122,8 @@ def compute_block_bootstrap_roi_ci(
 
     low_95 = float(np.percentile(boot_rois, 2.5))
     high_95 = float(np.percentile(boot_rois, 97.5))
+    low_90 = float(np.percentile(boot_rois, 5.0))
+    high_90 = float(np.percentile(boot_rois, 95.0))
     compatible_with_zero = bool(low_95 <= 0.0)
 
     return {
@@ -129,6 +131,8 @@ def compute_block_bootstrap_roi_ci(
         "n_matchday_blocks": n_blocks,
         "roi_ci_lower_95_pct": round(low_95, 4),
         "roi_ci_upper_95_pct": round(high_95, 4),
+        "roi_ci_lower_90_pct": round(low_90, 4),
+        "roi_ci_upper_90_pct": round(high_90, 4),
         "compatible_with_zero_edge": compatible_with_zero,
         "method": "temporal_matchday_block_bootstrap",
     }
@@ -715,6 +719,10 @@ class WalkForwardBacktester:
                 0.5 * (model_metrics["model_a_baseline_ml"]["log_loss"] + model_metrics["model_a_baseline_totals"]["log_loss"]),
                 6,
             )
+            overall_ece = round(
+                0.5 * (model_metrics["model_c_point_margin_ml"]["ece"] + model_metrics["model_d_total_points"]["ece"]),
+                6,
+            )
             oos_seasons = len({r["season"] for r in model_comparison_records})
         else:
             model_metrics = {}
@@ -722,7 +730,11 @@ class WalkForwardBacktester:
             baseline_brier = 0.25
             overall_ll = 0.6931
             baseline_ll = 0.6931
+            overall_ece = 0.05
             oos_seasons = 0
+
+        live_espn_settled = sum(1 for b in settled_bets if str(b["game_id"]).startswith("ESPN_"))
+        live_espn_pending = sum(1 for b in pending_bets if str(b["game_id"]).startswith("ESPN_"))
 
         summary = {
             "initial_bankroll_pen": self.paper_engine.initial_bankroll_pen,
@@ -738,6 +750,8 @@ class WalkForwardBacktester:
             ),
             "settled_bets_count": len(settled_bets),
             "pending_bets_count": len(pending_bets),
+            "live_espn_settled_bets_count": live_espn_settled,
+            "live_espn_pending_bets_count": live_espn_pending,
             "won_count": won_count,
             "lost_count": lost_count,
             "push_count": push_count,
@@ -751,6 +765,7 @@ class WalkForwardBacktester:
             "baseline_brier_score": baseline_brier,
             "overall_log_loss": overall_ll,
             "baseline_log_loss": baseline_ll,
+            "overall_ece": overall_ece,
             "oos_seasons_evaluated": oos_seasons,
             "bootstrap_uncertainty": boot_ci,
             "performance_by_market": by_market,
