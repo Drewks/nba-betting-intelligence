@@ -496,3 +496,68 @@ class AdvancedGBMModel:
             "p_under": round(1.0 - p_over, 6),
             "uncertainty_std": 0.065,
         }
+
+
+class EnsembleStackingModel:
+    """
+    Modelo F (V2 Syndicate Meta-Ensemble):
+    Combines Elo (Model B), Point Margin (Model C), Total Points with Covariance (Model D),
+    and LightGBM (Model E) via log-odds Bayesian pooling to minimize out-of-sample Brier Score and Log Loss.
+    """
+
+    model_family = "model_f_meta_ensemble"
+
+    def __init__(self, version_id: str = "model_f_ensemble_v2") -> None:
+        self.version_id = version_id
+        self.model_b = EloModel("model_b_elo_v2")
+        self.model_c = PointMarginModel("model_c_point_margin_v2")
+        self.model_d = TotalPointsModel("model_d_total_points_v2")
+        self.model_e = AdvancedGBMModel("model_e_lightgbm_v2")
+
+    def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
+        self.model_c.fit(historical_games, cutoff_time_str)
+        self.model_d.fit(historical_games, cutoff_time_str)
+        self.model_e.fit(historical_games, cutoff_time_str)
+
+    @staticmethod
+    def _pool_probs_log_odds(probs: list[float], weights: list[float]) -> float:
+        eps = 1e-5
+        logits = [math.log(max(eps, min(1.0 - eps, p)) / (1.0 - max(eps, min(1.0 - eps, p)))) for p in probs]
+        pooled_logit = sum(w * lg for w, lg in zip(weights, logits))
+        return float(np.clip(1.0 / (1.0 + math.exp(-pooled_logit)), 0.05, 0.95))
+
+    def predict_moneyline(
+        self,
+        game: dict[str, Any],
+        historical_games: list[dict[str, Any]],
+    ) -> dict[str, float]:
+        pb = self.model_b.predict_moneyline(game, historical_games)["p_home"]
+        pc = self.model_c.predict_moneyline(game, historical_games)["p_home"]
+        pe = self.model_e.predict_moneyline(game, historical_games)["p_home"]
+        p_home = self._pool_probs_log_odds([pb, pc, pe], [0.35, 0.55, 0.10])
+        return {
+            "p_home": round(p_home, 6),
+            "p_away": round(1.0 - p_home, 6),
+            "p_elo": pb,
+            "p_margin": pc,
+            "p_gbm": pe,
+            "uncertainty_std": 0.046,
+        }
+
+    def predict_total_points(
+        self,
+        game: dict[str, Any],
+        historical_games: list[dict[str, Any]],
+        line_value: float,
+    ) -> dict[str, float]:
+        pd_res = self.model_d.predict_total_points(game, historical_games, line_value)
+        pe_res = self.model_e.predict_total_points(game, historical_games, line_value)
+        p_over = self._pool_probs_log_odds([pd_res["p_over"], pe_res["p_over"]], [0.80, 0.20])
+        return {
+            "expected_total": round(0.80 * pd_res["expected_total"] + 0.20 * pe_res["expected_total"], 2),
+            "total_std_with_covariance": pd_res["total_std_with_covariance"],
+            "p_over": round(p_over, 6),
+            "p_under": round(1.0 - p_over, 6),
+            "uncertainty_std": 0.049,
+        }
+

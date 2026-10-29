@@ -36,6 +36,7 @@ from src.features.builder import build_pregame_features
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
 from src.models.statistical_models import (
     BaselineModel,
+    EnsembleStackingModel,
     PointMarginModel,
     TotalPointsModel,
 )
@@ -120,9 +121,20 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     model_a = BaselineModel("model_a_baseline_v1")
     model_c = PointMarginModel("model_c_point_margin_v1")
     model_d = TotalPointsModel("model_d_total_points_v1")
+    model_f = EnsembleStackingModel("model_f_ensemble_v2")
+    db.execute_insert(
+        """
+        INSERT OR IGNORE INTO model_versions (
+            model_version_id, model_family, market, train_start_date, train_end_date,
+            trained_at, hyperparameters_json, is_active, approved_by
+        ) VALUES ('model_f_ensemble_v2', 'model_f_meta_ensemble', 'moneyline', '2026-01-01', ?, ?, '{}', 1, 'orchestrator_v2')
+        """,
+        (today_str, now_str),
+    )
     model_a.fit(all_final_games, now_str)
     model_c.fit(all_final_games, now_str)
     model_d.fit(all_final_games, now_str)
+    model_f.fit(all_final_games, now_str)
 
     # Fit probability calibrators on historical predictions of resolved games
     resolved_ml_preds = db.fetch_all(
@@ -205,14 +217,14 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         validate_game_record(g, simulated_prediction_time=pred_ts)
 
         feats = build_pregame_features(g, all_final_games, market="total_points")
-        pred_c_ml = model_c.predict_moneyline(g, all_final_games)
-        raw_p_home = pred_c_ml["p_home"]
+        pred_f_ml = model_f.predict_moneyline(g, all_final_games)
+        raw_p_home = pred_f_ml["p_home"]
         cal_p_home = ml_cal.transform_single(raw_p_home)
 
         tot_odds = [o for o in game_odds if o["market"] == "total_points"]
         line_val = float(tot_odds[0]["line_value"]) if tot_odds else 228.5
-        pred_d_tot = model_d.predict_total_points(g, all_final_games, line_val)
-        raw_p_over = pred_d_tot["p_over"]
+        pred_f_tot = model_f.predict_total_points(g, all_final_games, line_val)
+        raw_p_over = pred_f_tot["p_over"]
         cal_p_over = tot_cal.transform_single(raw_p_over)
 
         candidates: list[dict[str, Any]] = []
@@ -223,13 +235,13 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             if mkt == "moneyline":
                 raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
                 cal_p = cal_p_home if sel == "HOME" else round(1.0 - cal_p_home, 6)
-                unc = pred_c_ml["uncertainty_std"]
-                m_ver = model_c.version_id
+                unc = pred_f_ml["uncertainty_std"]
+                m_ver = model_f.version_id
             else:
                 raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
                 cal_p = cal_p_over if sel == "OVER" else round(1.0 - cal_p_over, 6)
-                unc = pred_d_tot["uncertainty_std"]
-                m_ver = model_d.version_id
+                unc = pred_f_tot["uncertainty_std"]
+                m_ver = model_f.version_id
 
             opp = evaluate_market_opportunity(
                 estimated_prob=cal_p,

@@ -26,6 +26,7 @@ from src.models.statistical_models import (
     AdvancedGBMModel,
     BaselineModel,
     EloModel,
+    EnsembleStackingModel,
     PointMarginModel,
     TotalPointsModel,
 )
@@ -303,6 +304,7 @@ class WalkForwardBacktester:
         model_c = PointMarginModel("model_c_point_margin_v1")
         model_d = TotalPointsModel("model_d_total_points_v1")
         model_e = AdvancedGBMModel("model_e_lightgbm_v1")
+        model_f = EnsembleStackingModel("model_f_ensemble_v2")
 
         ml_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
         tot_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
@@ -314,6 +316,7 @@ class WalkForwardBacktester:
             (model_c.version_id, model_c.model_family, "moneyline"),
             (model_d.version_id, model_d.model_family, "total_points"),
             (model_e.version_id, model_e.model_family, "moneyline"),
+            (model_f.version_id, model_f.model_family, "moneyline"),
         ]:
             self.db.execute_insert(
                 """
@@ -360,6 +363,7 @@ class WalkForwardBacktester:
                 model_c.fit(prior_final_games, cutoff_ts)
                 model_d.fit(prior_final_games, cutoff_ts)
                 model_e.fit(prior_final_games, cutoff_ts)
+                model_f.fit(prior_final_games, cutoff_ts)
                 if len(resolved_ml_cal_records) >= 25:
                     ml_calibrator.fit(resolved_ml_cal_records, cutoff_ts)
                 if len(resolved_tot_cal_records) >= 25:
@@ -384,8 +388,9 @@ class WalkForwardBacktester:
                 pred_b_ml = model_b.predict_moneyline(g, prior_final_games)
                 pred_c_ml = model_c.predict_moneyline(g, prior_final_games)
                 pred_e_ml = model_e.predict_moneyline(g, prior_final_games)
+                pred_f_ml = model_f.predict_moneyline(g, prior_final_games)
 
-                raw_p_home = pred_c_ml["p_home"]
+                raw_p_home = pred_f_ml["p_home"]
                 cal_p_home = ml_calibrator.transform_single(raw_p_home)
                 cal_p_away = round(1.0 - cal_p_home, 6)
 
@@ -395,8 +400,9 @@ class WalkForwardBacktester:
                 pred_a_tot = model_a.predict_total_points(g, prior_final_games, line_val)
                 pred_d_tot = model_d.predict_total_points(g, prior_final_games, line_val)
                 pred_e_tot = model_e.predict_total_points(g, prior_final_games, line_val)
+                pred_f_tot = model_f.predict_total_points(g, prior_final_games, line_val)
 
-                raw_p_over = pred_d_tot["p_over"]
+                raw_p_over = pred_f_tot["p_over"]
                 cal_p_over = tot_calibrator.transform_single(raw_p_over)
                 cal_p_under = round(1.0 - cal_p_over, 6)
 
@@ -408,13 +414,13 @@ class WalkForwardBacktester:
                     if mkt == "moneyline":
                         raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
                         cal_p = cal_p_home if sel == "HOME" else cal_p_away
-                        unc = pred_c_ml["uncertainty_std"]
-                        m_ver = model_c.version_id
+                        unc = pred_f_ml["uncertainty_std"]
+                        m_ver = model_f.version_id
                     else:
                         raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
                         cal_p = cal_p_over if sel == "OVER" else cal_p_under
-                        unc = pred_d_tot["uncertainty_std"]
-                        m_ver = model_d.version_id
+                        unc = pred_f_tot["uncertainty_std"]
+                        m_ver = model_f.version_id
 
                     opp = evaluate_market_opportunity(
                         estimated_prob=cal_p,
@@ -565,14 +571,26 @@ class WalkForwardBacktester:
                     """
                 )
             }
+            all_final_games = self.db.fetch_all(
+                "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
+            )
+            base_model = BaselineModel("model_a_baseline_v1")
             reconstructed: list[dict[str, Any]] = []
-            for r in ml_rows:
+            for idx, r in enumerate(ml_rows):
                 gid = r["game_id"]
                 t_row = tot_rows.get(gid)
                 if not t_row:
                     continue
+                g_full = next((x for x in all_final_games if x["game_id"] == gid), None)
+                prior_g = [x for x in all_final_games if x["game_start_time"] < g_full["game_start_time"]] if g_full else []
+                if prior_g:
+                    base_model.fit(prior_g, g_full["game_start_time"])
+                p_base_ml = base_model.predict_moneyline(g_full, prior_g)["p_home"] if g_full else 0.565
+                line_v = float(t_row["line_value"] or 228.5)
+                p_base_tot = base_model.predict_total_points(g_full, prior_g, line_v)["p_over"] if g_full else 0.50
+
                 home_won = 1 if int(r["home_score"]) > int(r["away_score"]) else 0
-                over_hit = 1 if (int(t_row["home_score"]) + int(t_row["away_score"])) > float(t_row["line_value"] or 228.5) else 0
+                over_hit = 1 if (int(t_row["home_score"]) + int(t_row["away_score"])) > line_v else 0
                 reconstructed.append(
                     {
                         "game_id": gid,
@@ -580,11 +598,11 @@ class WalkForwardBacktester:
                         "matchday_date": r["matchday_date"],
                         "home_won": home_won,
                         "over_hit": over_hit,
-                        "model_a_ml": 0.565,
+                        "model_a_ml": p_base_ml,
                         "model_b_ml": float(r["calibrated_probability"]),
                         "model_c_ml": float(r["calibrated_probability"]),
                         "model_e_ml": float(r["calibrated_probability"]),
-                        "model_a_tot": 0.50,
+                        "model_a_tot": p_base_tot,
                         "model_d_tot": float(t_row["calibrated_probability"]),
                         "model_e_tot": float(t_row["calibrated_probability"]),
                     }
