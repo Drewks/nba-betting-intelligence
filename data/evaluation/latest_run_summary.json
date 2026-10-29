@@ -1,9 +1,9 @@
 {
-  "run_id": "RUN_20261028_222638_9E8989",
+  "run_id": "RUN_20261029_002918_3B7EB2",
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 12,
+      "events_found_today": 3,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -16,10 +16,10 @@
     },
     "playwright": {
       "playwright_python_installed": true,
-      "browser_binaries_installed": false,
-      "extracted_at": "2026-10-28T22:26:38Z",
+      "browser_binaries_installed": true,
+      "extracted_at": "2026-10-29T00:29:18Z",
       "anti_bot_bypass_enabled": false,
-      "status": "READY_FOR_BROWSER_INSTALL"
+      "status": "OPERATIONAL"
     }
   },
   "visual_context": {
@@ -35,9 +35,9 @@
     "current_settled_bankroll_pen": 105.995,
     "net_profit_pen": 5.995,
     "roi_pct": 6.4462,
-    "yield_pct": 6.0556,
+    "yield_pct": 6.3105,
     "settled_bets_count": 93,
-    "pending_bets_count": 6,
+    "pending_bets_count": 2,
     "won_count": 46,
     "lost_count": 47,
     "push_count": 0,

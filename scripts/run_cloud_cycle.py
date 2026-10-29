@@ -43,6 +43,7 @@ from src.orchestrator import Orchestrator
 from src.paper_trading.engine import PaperTradingEngine
 from src.prediction.ev_calculator import evaluate_market_opportunity
 from src.reporting.reporter import (
+    export_bets_and_tracking_dashboard,
     generate_audit_report,
     generate_daily_report,
     generate_weekly_report,
@@ -290,6 +291,12 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     (PROJECT_ROOT / "reports" / "daily_report.md").write_text(daily_md, encoding="utf-8")
     (PROJECT_ROOT / "reports" / "weekly_report.md").write_text(weekly_md, encoding="utf-8")
     (PROJECT_ROOT / "reports" / "audit_report.md").write_text(audit_md, encoding="utf-8")
+    export_bets_and_tracking_dashboard(
+        db=db,
+        metrics=metrics,
+        csv_output_path=PROJECT_ROOT / "data" / "apuestas_historial.csv",
+        md_output_path=PROJECT_ROOT / "SEGUIMIENTO_APUESTAS.md",
+    )
     sync_obsidian_vault(PROJECT_ROOT / "NBA", daily_md, weekly_md, audit_md, metrics, env_status, today_str)
 
     return {

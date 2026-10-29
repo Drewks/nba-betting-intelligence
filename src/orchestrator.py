@@ -21,6 +21,7 @@ from src.backtesting.backtester import WalkForwardBacktester
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter, SyntheticFixtureAdapter
 from src.paper_trading.engine import PaperTradingEngine
 from src.reporting.reporter import (
+    export_bets_and_tracking_dashboard,
     generate_audit_report,
     generate_daily_report,
     generate_weekly_report,
@@ -207,6 +208,14 @@ class Orchestrator:
             (self.reports_dir / "daily_report.md").write_text(daily_md, encoding="utf-8")
             (self.reports_dir / "weekly_report.md").write_text(weekly_md, encoding="utf-8")
             (self.reports_dir / "audit_report.md").write_text(audit_md, encoding="utf-8")
+
+            root_dir = self.reports_dir.parent
+            export_bets_and_tracking_dashboard(
+                db=self.db,
+                metrics=backtest_metrics,
+                csv_output_path=root_dir / "data" / "apuestas_historial.csv",
+                md_output_path=root_dir / "SEGUIMIENTO_APUESTAS.md",
+            )
 
             obsidian_files = sync_obsidian_vault(
                 vault_root=self.obsidian_vault_dir,

@@ -150,13 +150,24 @@ class PaperTradingEngine:
                 )
                 continue
 
-            # 2. Check EV threshold
+            # 2. Check EV threshold and unmodeled injury-outlier sanity cap
             if ev_unit <= self.min_ev_threshold:
                 no_bet_decisions.append(
                     self._record_decision(
                         game_id, matchday_date, market, selection, "NO_BET",
                         "EV_BELOW_THRESHOLD",
                         f"EV {ev_pct:.2f}% <= threshold {self.min_ev_threshold * 100:.2f}%",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
+            if str(game_id).startswith("ESPN_") and ev_unit > 0.45:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "UNVERIFIED_INJURY_OR_LINEUP_OUTLIER",
+                        f"Extreme EV ({ev_pct:.2f}%) indicates likely star injury/rest not in team-level features; skipped.",
                         ev_pct, emitted_at, model_version_id
                     )
                 )

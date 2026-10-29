@@ -101,8 +101,11 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 status = "POSTPONED"
             elif "CANCELED" in status_name or "CANCELLED" in status_name:
                 status = "CANCELLED"
-            else:
+            elif status_name == "STATUS_SCHEDULED" and now_utc < game_start_time:
                 status = "SCHEDULED"
+            else:
+                # Game is currently IN_PROGRESS / HALFTIME; skip live in-play markets (Section 4)
+                continue
 
             home_score = int(home_comp["score"]) if status == "FINAL" and home_comp.get("score") else None
             away_score = int(away_comp["score"]) if status == "FINAL" and away_comp.get("score") else None
@@ -110,8 +113,14 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             game_id = f"ESPN_{event.get('id')}_{matchday_date}_{away_code}_AT_{home_code}"
 
             # Compute pre-game rating proxies from prior records/team baselines so no future leakage occurs
-            home_base_off, home_base_def, home_pace = self._estimate_pregame_team_profile(home_code, home_comp)
-            away_base_off, away_base_def, away_pace = self._estimate_pregame_team_profile(away_code, away_comp)
+            odds_list = comp.get("odds") or []
+            first_odds = odds_list[0] if odds_list else {}
+            home_base_off, home_base_def, home_pace = self._estimate_pregame_team_profile(
+                home_code, home_comp, first_odds, is_home=True
+            )
+            away_base_off, away_base_def, away_pace = self._estimate_pregame_team_profile(
+                away_code, away_comp, first_odds, is_home=False
+            )
 
             # Features available timestamp is strictly before game tipoff and <= capture time for live scheduled games
             try:
@@ -148,8 +157,9 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 }
             )
 
-            # Extract odds only when verifiable before game start
-            odds_list = comp.get("odds") or []
+            # Extract odds ONLY for strictly pre-game SCHEDULED games (never live in-play or post-game)
+            if status != "SCHEDULED":
+                odds_list = []
             for odds_obj in odds_list:
                 provider_name = (
                     odds_obj.get("provider", {}).get("name")
@@ -238,8 +248,16 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         return {"games": games_out, "odds": odds_out}
 
     @staticmethod
-    def _estimate_pregame_team_profile(team_code: str, comp_entry: dict[str, Any]) -> tuple[float, float, float]:
-        """Provides deterministic pre-game efficiency priors without touching post-game boxscores."""
+    def _estimate_pregame_team_profile(
+        team_code: str,
+        comp_entry: dict[str, Any],
+        first_odds: dict[str, Any] | None = None,
+        is_home: bool = True,
+    ) -> tuple[float, float, float]:
+        """
+        Computes pre-game offensive/defensive rating and pace blending structural priors,
+        current season pre-game statistics (avgPoints, W-L record), and pre-game lineup/market context.
+        """
         prior_strength: dict[str, tuple[float, float, float]] = {
             "BOS": (119.5, 110.8, 98.5),
             "OKC": (118.8, 110.2, 100.4),
@@ -272,7 +290,55 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             "DET": (111.2, 116.5, 99.6),
             "WAS": (110.5, 118.9, 102.1),
         }
-        return prior_strength.get(team_code, (114.5, 114.5, 99.0))
+        base_off, base_def, base_pace = prior_strength.get(team_code, (114.5, 114.5, 99.0))
+
+        # Incorporate pre-game season avgPoints if available on SCHEDULED game
+        stats_map = {
+            s.get("name"): s.get("displayValue")
+            for s in (comp_entry.get("statistics") or [])
+            if s.get("name") and s.get("displayValue")
+        }
+        if "avgPoints" in stats_map:
+            try:
+                season_pts = float(stats_map["avgPoints"])
+                if 95.0 <= season_pts <= 138.0:
+                    base_off = round(0.65 * base_off + 0.35 * season_pts, 2)
+            except ValueError:
+                pass
+
+        # Incorporate pre-game win-loss record differential
+        records = comp_entry.get("records") or []
+        if records and isinstance(records[0].get("summary"), str) and "-" in records[0]["summary"]:
+            try:
+                w_str, l_str = records[0]["summary"].split("-")[:2]
+                wins, losses = int(w_str), int(l_str)
+                if (wins + losses) > 0:
+                    win_rate = wins / (wins + losses)
+                    adj = (win_rate - 0.5) * 3.0
+                    base_off = round(base_off + 0.5 * adj, 2)
+                    base_def = round(base_def - 0.5 * adj, 2)
+            except ValueError:
+                pass
+
+        # Anchor against unmodeled star-injury shocks reflected in pre-game consensus total/spread
+        if first_odds:
+            ou = first_odds.get("overUnder")
+            spread = first_odds.get("spread")
+            if ou is not None and spread is not None:
+                try:
+                    ou_f = float(ou)
+                    sp_f = float(spread)  # Home spread (negative means home is favored)
+                    implied_home_pts = 0.5 * (ou_f - sp_f)
+                    implied_away_pts = 0.5 * (ou_f + sp_f)
+                    target_pts = implied_home_pts if is_home else implied_away_pts
+                    opp_pts = implied_away_pts if is_home else implied_home_pts
+                    # Blend 55% structural/season profile with 45% injury-adjusted pre-game consensus
+                    base_off = round(0.55 * base_off + 0.45 * target_pts, 2)
+                    base_def = round(0.55 * base_def + 0.45 * opp_pts, 2)
+                except ValueError:
+                    pass
+
+        return base_off, base_def, base_pace
 
 
 class SportradarAdapter(BaseNBADataAdapter):
