@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T14:31:07Z
+date_generated: 2026-10-30T17:03:59Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-10-30T14:31:07Z`
+- **Fecha de auditoría (UTC)**: `2026-10-30T17:03:59Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -35,8 +35,8 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Sportradar (`SportradarAdapter`)**: `OPERATIONAL_LIVE_NBA_V8 (29 teams injuries + 30 teams tactical splits)`
 - **NBA.com/stats (`NBAStatsAdapter`)**: `FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION`
 - **Playwright (`PlaywrightAuthorizedScraper`)**: `OPERATIONAL`
-- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 73 docs indexed)`
-- **Obsidian Vault (`NBA/`)**: `Operativo en C:\Users\faboa\.gemini\antigravity\scratch\nba-betting-intelligence\NBA`
+- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 55 docs indexed)`
+- **Obsidian Vault (`NBA/`)**: `Operativo en /home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA`
 
 ## 4. Conclusión Estadística del Auditor
 - Aunque el motor cuantitativo supera al modelo Baseline (`Modelo A`) en `Brier Score` y `Log Loss` fuera de muestra y mantiene trazabilidad contable exacta sobre el bankroll virtual de **S/100.00 PEN**, el sistema **DEBE PERMANECER EN PAPER TRADING** hasta acumular al menos **500 selecciones liquidadas** fuera de muestra y confirmar que el límite inferior del intervalo de confianza (Block Bootstrap 95%) excluya el 0%.
