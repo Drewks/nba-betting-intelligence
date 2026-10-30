@@ -740,9 +740,13 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         if sr_data:
             venue_wp = sr_data.get("home_win_pct", 0.5) if is_home else sr_data.get("road_win_pct", 0.5)
             l10_wp = sr_data.get("last_10_win_pct", 0.5)
-            tactical_adj = (venue_wp - 0.5) * 1.4 + (l10_wp - 0.5) * 1.0
+            syn_diff = sr_data.get("synergy_net_diff", 0.0)
+            tactical_adj = (venue_wp - 0.5) * 1.4 + (l10_wp - 0.5) * 1.0 + max(-1.5, min(1.5, syn_diff * 0.12))
             base_off = round(base_off + 0.5 * tactical_adj, 2)
             base_def = round(base_def - 0.5 * tactical_adj, 2)
+            syn_pace = sr_data.get("synergy_pace_proxy")
+            if syn_pace and 92.0 <= float(syn_pace) <= 106.0:
+                base_pace = round(0.80 * base_pace + 0.20 * float(syn_pace), 2)
 
         # 3. Real-Time Injury Report Adjustment (Phase V2.1: ESPN + Official Sportradar NBA v8)
         if injury_penalty > 0.0:
@@ -886,15 +890,122 @@ class SportradarAdapter(BaseNBADataAdapter):
         except Exception:
             pass
 
+        # 3. Official Sportradar Synergy Basketball NBA API (Games & Possession Play-Type Telemetry)
+        time.sleep(2.1)
+        synergy_teams_loaded = 0
+        synergy_events_loaded = 0
+        syn_games_url = "https://api.sportradar.com/synergy/basketball/nba/games?skip=650&take=200"
+        try:
+            req = urllib.request.Request(
+                syn_games_url,
+                headers={"Accept": "application/json", "x-api-key": self.api_key, "User-Agent": "Mozilla/5.0"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                syn_games_data = json.loads(resp.read().decode("utf-8"))
+            syn_agg: dict[str, dict[str, list[float]]] = {}
+            sample_game_id: str | None = None
+            for g_wrap in syn_games_data.get("data") or []:
+                gd = g_wrap.get("data") or {}
+                if not sample_game_id and gd.get("id"):
+                    sample_game_id = str(gd["id"])
+                h_abbr = (gd.get("homeTeam") or {}).get("abbr", "")
+                a_abbr = (gd.get("awayTeam") or {}).get("abbr", "")
+                h_sc = gd.get("homeScore")
+                a_sc = gd.get("awayScore")
+                if h_sc is None or a_sc is None or (int(h_sc) == 0 and int(a_sc) == 0):
+                    continue
+                for raw_ab, pts_for, pts_ag in [(h_abbr, float(h_sc), float(a_sc)), (a_abbr, float(a_sc), float(h_sc))]:
+                    try:
+                        tc = normalize_team_code(raw_ab)
+                    except ValueError:
+                        continue
+                    bucket = syn_agg.setdefault(tc, {"for": [], "against": []})
+                    bucket["for"].append(pts_for)
+                    bucket["against"].append(pts_ag)
+
+            for tc, vals in syn_agg.items():
+                if not vals["for"]:
+                    continue
+                synergy_teams_loaded += 1
+                avg_f = sum(vals["for"]) / len(vals["for"])
+                avg_a = sum(vals["against"]) / len(vals["against"])
+                net_d = round(avg_f - avg_a, 2)
+                pace_p = round(max(94.0, min(104.5, (avg_f + avg_a) * 0.445)), 2)
+                existing = team_splits.setdefault(tc, {})
+                existing["synergy_off_avg"] = round(avg_f, 2)
+                existing["synergy_def_avg"] = round(avg_a, 2)
+                existing["synergy_net_diff"] = net_d
+                existing["synergy_pace_proxy"] = pace_p
+                injury_documents.append(
+                    {
+                        "source": "sportradar_synergy_basketball_nba",
+                        "title": f"Synergy NBA Profile - {tc}",
+                        "content": (
+                            f"Synergy Basketball NBA tactical profile for {tc}: "
+                            f"OffAvg={avg_f:.1f}, DefAvg={avg_a:.1f}, NetDiff={net_d:+.1f}, PaceProxy={pace_p:.1f} "
+                            f"({len(vals['for'])} tracked Synergy games)."
+                        ),
+                        "captured_at": now_utc,
+                    }
+                )
+
+            if sample_game_id:
+                time.sleep(2.1)
+                ev_url = f"https://api.sportradar.com/synergy/basketball/nba/games/{sample_game_id}/events?take=60"
+                req_ev = urllib.request.Request(
+                    ev_url,
+                    headers={"Accept": "application/json", "x-api-key": self.api_key, "User-Agent": "Mozilla/5.0"},
+                )
+                with urllib.request.urlopen(req_ev, timeout=10) as resp_ev:
+                    ev_data = json.loads(resp_ev.read().decode("utf-8"))
+                ev_list = ev_data.get("data") or []
+                synergy_events_loaded = len(ev_list)
+                play_counts: dict[str, int] = {}
+                ato_cnt = 0
+                pnr_cnt = 0
+                zone_cnt = 0
+                for ev_w in ev_list:
+                    ed = ev_w.get("data") or {}
+                    if ed.get("ato"):
+                        ato_cnt += 1
+                    if ed.get("pickAndRoll"):
+                        pnr_cnt += 1
+                    if ed.get("zone"):
+                        zone_cnt += 1
+                    for pl in ed.get("plays") or []:
+                        pname = str(pl.get("name", "")).strip()
+                        if pname and pname not in ("NonPossession", "LineupClip"):
+                            play_counts[pname] = play_counts.get(pname, 0) + 1
+                top_plays = sorted(play_counts.items(), key=lambda x: x[1], reverse=True)[:8]
+                plays_summary = ", ".join(f"{k}:{v}" for k, v in top_plays)
+                injury_documents.append(
+                    {
+                        "source": "sportradar_synergy_possession_telemetry",
+                        "title": f"Synergy Possession Play-Types Telemetry ({synergy_events_loaded} events)",
+                        "content": (
+                            f"Synergy Basketball NBA possession tracking telemetry: "
+                            f"ATO={ato_cnt}, PickAndRoll={pnr_cnt}, ZoneDefense={zone_cnt}, "
+                            f"TopPlayTags=[{plays_summary}]."
+                        ),
+                        "captured_at": now_utc,
+                    }
+                )
+        except Exception:
+            pass
+
         status_str = (
-            f"OPERATIONAL_LIVE_NBA_V8 ({len(injury_penalties)} teams injuries + {len(team_splits)} teams tactical splits)"
-            if (injury_penalties or team_splits)
+            f"OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY ({len(injury_penalties)} teams injuries + "
+            f"{len(team_splits)} teams tactical splits + {synergy_teams_loaded} Synergy NBA teams + "
+            f"{synergy_events_loaded} Synergy possession events)"
+            if (injury_penalties or team_splits or synergy_teams_loaded)
             else "CONFIGURED_RATE_LIMITED"
         )
         SportradarAdapter._CACHED_CONTEXT = {
             "injury_penalties": injury_penalties,
             "injury_documents": injury_documents,
             "team_splits": team_splits,
+            "synergy_teams_loaded": synergy_teams_loaded,
+            "synergy_events_loaded": synergy_events_loaded,
             "status": status_str,
         }
         return SportradarAdapter._CACHED_CONTEXT
@@ -1023,10 +1134,10 @@ class PlaywrightAuthorizedScraper:
         except Exception:
             pass
 
-        # 1b. Merge official Sportradar NBA v8 injury documents when configured
+        # 1b. Merge official Sportradar NBA v8 injury documents & Synergy Basketball NBA profiles when configured
         try:
             sr_ctx = SportradarAdapter().fetch_league_intelligence_context()
-            documents.extend(sr_ctx.get("injury_documents", [])[:40])
+            documents.extend(sr_ctx.get("injury_documents", [])[:90])
         except Exception:
             pass
 
