@@ -820,13 +820,25 @@ class NBAStatsAdapter(BaseNBADataAdapter):
 
 
 class PlaywrightAuthorizedScraper:
-    """Authorized browser inspection helper using Playwright without bypassing anti-bot or auth."""
+    """Authorized browser inspection & DOM table extractor using Playwright without bypassing anti-bot or auth."""
 
     def __init__(self, headless: bool = True) -> None:
         self.headless = headless
 
+    def _find_browser_cache(self) -> bool:
+        candidate_dirs = [
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright"),
+            os.path.expanduser("~/.cache/ms-playwright"),
+            os.path.expanduser("~/Library/Caches/ms-playwright"),
+            os.environ.get("PLAYWRIGHT_BROWSERS_PATH", ""),
+        ]
+        for d in candidate_dirs:
+            if d and os.path.isdir(d) and len(os.listdir(d)) > 0:
+                return True
+        return False
+
     def inspect_status(self) -> dict[str, Any]:
-        """Checks Playwright Python package and browser binary availability."""
+        """Checks Playwright Python package and browser binary availability across Windows/Linux."""
         extracted_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             import playwright  # noqa: F401
@@ -834,8 +846,7 @@ class PlaywrightAuthorizedScraper:
         except ImportError:
             pw_installed = False
 
-        ms_pw_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
-        browsers_installed = os.path.isdir(ms_pw_dir) and len(os.listdir(ms_pw_dir)) > 0
+        browsers_installed = self._find_browser_cache()
         return {
             "playwright_python_installed": pw_installed,
             "browser_binaries_installed": browsers_installed,
@@ -844,6 +855,76 @@ class PlaywrightAuthorizedScraper:
             "status": "READY_FOR_BROWSER_INSTALL" if pw_installed and not browsers_installed else (
                 "OPERATIONAL" if pw_installed and browsers_installed else "NOT_INSTALLED"
             ),
+        }
+
+    def extract_authorized_context_snapshot(self, timeout_ms: int = 8000) -> dict[str, Any]:
+        """
+        Extracts contextual NBA headlines and tabular injury/matchup notes from authorized public feeds.
+        Uses headless Playwright Chromium when binaries are present and falls back to authorized HTTP DOM/JSON
+        extraction if running in a restricted container.
+        """
+        extracted_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        documents: list[dict[str, str]] = []
+        engine_used = "HTTP_AUTHORIZED_FALLBACK"
+
+        # 1. Fetch ESPN public NBA news & injury context
+        try:
+            url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news?limit=15"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                news_payload = json.loads(resp.read().decode("utf-8"))
+            for art in news_payload.get("articles", []):
+                headline = str(art.get("headline", "")).strip()
+                desc = str(art.get("description", "")).strip()
+                published = str(art.get("published", extracted_at))
+                if headline:
+                    documents.append(
+                        {
+                            "source": "espn_nba_news_feed",
+                            "title": headline,
+                            "content": f"{headline}. {desc}",
+                            "captured_at": published,
+                        }
+                    )
+        except Exception:
+            pass
+
+        # 2. If Playwright Chromium is installed, verify live browser DOM rendering on ESPN NBA scoreboard page
+        if self._find_browser_cache():
+            try:
+                from playwright.sync_api import sync_playwright
+
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=self.headless)
+                    page = browser.new_page()
+                    page.goto(
+                        "https://www.espn.com/nba/injuries",
+                        wait_until="domcontentloaded",
+                        timeout=timeout_ms,
+                    )
+                    page_title = page.title()
+                    rows = page.locator("table tr").all_inner_texts()
+                    for row_text in rows[:25]:
+                        clean_row = " ".join(row_text.split())
+                        if len(clean_row) > 15 and "NAME" not in clean_row.upper():
+                            documents.append(
+                                {
+                                    "source": "playwright_espn_injuries_table",
+                                    "title": page_title or "ESPN NBA Injuries Table",
+                                    "content": clean_row,
+                                    "captured_at": extracted_at,
+                                }
+                            )
+                    browser.close()
+                    engine_used = "PLAYWRIGHT_CHROMIUM_HEADLESS"
+            except Exception:
+                engine_used = "PLAYWRIGHT_INSTALLED_HTTP_ASSISTED"
+
+        return {
+            "extracted_at": extracted_at,
+            "engine_used": engine_used,
+            "documents_count": len(documents),
+            "documents": documents,
         }
 
 

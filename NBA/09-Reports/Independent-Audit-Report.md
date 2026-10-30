@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T02:58:56Z
+date_generated: 2026-10-30T13:47:39Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-10-30T02:58:56Z`
+- **Fecha de auditoría (UTC)**: `2026-10-30T13:47:39Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -18,12 +18,12 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 
 | Puerta de Validación | Estado | Valor Observado | Criterio Requerido |
 | :--- | :--- | :--- | :--- |
-| `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `103` | `>= 500` |
+| `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `104` | `>= 500` |
 | `gate_2_multi_period_oos_evaluation` | **PASS** | `2` | `>= 2 temporal periods/seasons` |
-| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.244814, 'baseline_brier': 0.250464, 'model_log_loss': 0.683143, 'baseline_log_loss': 0.695632}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
+| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.244754, 'baseline_brier': 0.250121, 'model_log_loss': 0.68301, 'baseline_log_loss': 0.694905}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
-| `gate_5_positive_roi_and_yield` | **PASS** | `{'roi_pct': 4.1117, 'yield_pct': 3.9579}` | `ROI > 0% and Yield > 0%` |
-| `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -19.8112, 'ci_95_upper_pct': 28.649, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
+| `gate_5_positive_roi_and_yield` | **PASS** | `{'roi_pct': 4.9471, 'yield_pct': 4.8084}` | `ROI > 0% and Yield > 0%` |
+| `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -19.0361, 'ci_95_upper_pct': 29.2899, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
 | `gate_9_independent_audit_approved` | **PASS** | `True` | `True` |
@@ -34,9 +34,9 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Fuente Primaria Activa sin Credenciales**: `ESPNPublicAdapter` (`site.api.espn.com` — Calendario, marcadores, estadísticas y cuotas pre-partido DraftKings)
 - **Sportradar (`SportradarAdapter`)**: `READY_IF_KEY_PROVIDED`
 - **NBA.com/stats (`NBAStatsAdapter`)**: `FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION`
-- **Playwright (`PlaywrightAuthorizedScraper`)**: `READY_FOR_BROWSER_INSTALL`
-- **PixelRAG (`visual_researcher`)**: `PIXELRAG_NOT_INSTALLED_IN_LOCAL_MCP`
-- **Obsidian Vault (`NBA/`)**: `Operativo en /home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA`
+- **Playwright (`PlaywrightAuthorizedScraper`)**: `OPERATIONAL`
+- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 33 docs indexed)`
+- **Obsidian Vault (`NBA/`)**: `Operativo en C:\Users\faboa\.gemini\antigravity\scratch\nba-betting-intelligence\NBA`
 
 ## 4. Conclusión Estadística del Auditor
 - Aunque el motor cuantitativo supera al modelo Baseline (`Modelo A`) en `Brier Score` y `Log Loss` fuera de muestra y mantiene trazabilidad contable exacta sobre el bankroll virtual de **S/100.00 PEN**, el sistema **DEBE PERMANECER EN PAPER TRADING** hasta acumular al menos **500 selecciones liquidadas** fuera de muestra y confirmar que el límite inferior del intervalo de confianza (Block Bootstrap 95%) excluya el 0%.

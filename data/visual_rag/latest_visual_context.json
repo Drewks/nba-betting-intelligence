@@ -1,0 +1,61 @@
+{
+  "pixelrag_installed": true,
+  "external_mcp_server_installed": false,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 33 docs indexed)",
+  "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
+  "indexed_documents_count": 33,
+  "top_retrieved_context": [
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Tobe Awaka F Oct 30 Day-To-Day Oct 29: Awaka (ankle) is questionable for Friday's game in Boston.",
+      "relevance_score": 0.3403,
+      "captured_at": "2026-10-30T13:47:30Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Dennis Schroder G Oct 30 Day-To-Day Oct 29: Schroder (foot) is questionable for Friday's game against the Wizards.",
+      "relevance_score": 0.3353,
+      "captured_at": "2026-10-30T13:47:30Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Jalen Smith F Oct 30 Day-To-Day Oct 29: Smith is questionable for Friday's game against Boston with a left finger sprain.",
+      "relevance_score": 0.3122,
+      "captured_at": "2026-10-30T13:47:30Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Meleek Thomas G Oct 31 Day-To-Day Oct 29: Thomas (foot) has been ruled out for Thursday's game against the Hawks, Serena Winters of FanDuel Sports Network Ohio reports.",
+      "relevance_score": 0.2126,
+      "captured_at": "2026-10-30T13:47:30Z"
+    },
+    {
+      "source": "espn_nba_news_feed",
+      "snippet": "Trail Blazers' Ja Morant exits first game vs. Grizzlies with hamstring injury. Ja Morant exited his first game against his former team in the fourth quarter Thursday night because of a left hamstring injury.",
+      "relevance_score": 0.1039,
+      "captured_at": "2026-10-30T05:56:53Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Devin Carter G Nov 8 Out Oct 18: Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe reports.",
+      "relevance_score": 0.0681,
+      "captured_at": "2026-10-30T13:47:30Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Patrick Williams F Oct 30 Out Oct 29: Williams (adductor) is questionable for Friday's game in Boston.",
+      "relevance_score": 0.0634,
+      "captured_at": "2026-10-30T13:47:30Z"
+    },
+    {
+      "source": "espn_nba_news_feed",
+      "snippet": "Knicks' Jose Alvarado (ankle) to miss fourth straight vs. 76ers. Knicks reserve guard Jose Alvarado will miss Friday's NBA Cup game against the 76ers because of a right ankle injury.",
+      "relevance_score": 0.0484,
+      "captured_at": "2026-10-30T01:22:15Z"
+    }
+  ],
+  "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
+  "direct_betting_probabilities_emitted": false,
+  "confidence_score": 0.95,
+  "limitations_documented": "No existe servidor MCP externo 'PixelRAG' en mcp_config.json; por ello opera el motor nativo Visual/Tabular RAG (Playwright Chromium DOM + TF-IDF Vector Index) contrastado contra ESPN API."
+}

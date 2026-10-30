@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T02:58:56Z
+date_generated: 2026-10-30T13:47:39Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-10-30
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-10-30
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-10-30T02:58:56Z`
+- **Fecha de generación (UTC)**: `2026-10-30T13:47:39Z`
 - **Jornada evaluada**: `2026-10-30`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `8`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `32`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `29`
-- **Resultados pendientes globales**: `4`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -43,7 +43,7 @@ simulation_only: true
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
 | `BET_20261030_26E1FE60` | `ESPN_401909894_2026-10-30_SAC_AT_NOP` | `total_points` | **UNDER** | 1.950 | 0.6685 | +30.37% | S/1.00 | `LOST` | S/-1.00 |
 | `BET_20261030_0F72AE2C` | `ESPN_401909894_2026-10-30_SAC_AT_NOP` | `moneyline` | **HOME** | 1.520 | 0.7168 | +8.96% | S/1.00 | `WON` | S/+0.52 |
-| `BET_20261030_A239BFAF` | `ESPN_401909895_2026-10-30_MEM_AT_POR` | `total_points` | **UNDER** | 1.910 | 0.6347 | +21.23% | S/1.00 | `PENDING` | PENDIENTE |
+| `BET_20261030_A239BFAF` | `ESPN_401909895_2026-10-30_MEM_AT_POR` | `total_points` | **UNDER** | 1.910 | 0.6347 | +21.23% | S/1.00 | `WON` | S/+0.91 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909894_2026-10-30_SAC_AT_NOP` (`moneyline` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -23.83% <= threshold 5.00%
