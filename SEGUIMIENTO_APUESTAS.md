@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-30 14:52 (Hora Perú UTC-5)` (`2026-10-30T19:52:57Z`)
+- **Última actualización**: `2026-10-30 15:01 (Hora Perú UTC-5)` (`2026-10-30T20:01:04Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/105.14 PEN`** (`+5.14 PEN`)
 - **ROI Actual**: `+4.95%` | **Yield Actual**: `+4.81%` | **CLV Promedio**: `+13.20%` | **Max Drawdown**: `16.44%` | **Apuestas en espera**: `3` (`S/3.00 PEN` reservados)
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
@@ -32,6 +32,12 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 ---
 
 ## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)
+
+> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-10-30` — 1 Solo Pick: Mayor Probabilidad de Acierto)
+> - **Partido**: **DEN @ PHX** (`2026-10-30 21:00 Hora Perú`)
+> - **Pick Más Probable**: 🎯 **UNDER 230.5** (Total Puntos (Over/Under)) @ **`1.909`** *(DraftKings)*
+> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`66.3%`** | **EV**: `+26.6%`
+> - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor probabilidad de acierto y sin alerta CLV)*.
 
 Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):
 

@@ -11,7 +11,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from src.reporting.notifier import evaluate_and_notify_readiness
+from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc
 
@@ -151,6 +151,7 @@ def export_bets_and_tracking_dashboard(
 
     readiness_file = csv_path.parent / "readiness_status.json"
     readiness = evaluate_and_notify_readiness(metrics, readiness_file)
+    daily_top_info = select_and_dispatch_daily_top_pick(espn_real_bets, readiness_file)
     is_t1_ready = bool(readiness["is_tier1_micro_bankroll_ready"])
     is_t2_ready = bool(readiness["is_tier2_full_bankroll_ready"])
     passed_gates = int(readiness["passed_gates_count"])
@@ -212,11 +213,29 @@ def export_bets_and_tracking_dashboard(
         "",
         "## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)",
         "",
-        "Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):",
-        "",
-        "| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |",
-        "| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |",
     ]
+
+    if daily_top_info and daily_top_info.get("top_pick"):
+        tp = daily_top_info["top_pick"]
+        lines.extend(
+            [
+                f"> ### 🏆 PICK ESTRELLA DEL DÍA (`{daily_top_info['pick_date']}` — 1 Solo Pick: Mayor Probabilidad de Acierto)",
+                f"> - **Partido**: **{tp['partido']}** (`{tp['hora_partido_peru']} Hora Perú`)",
+                f"> - **Pick Más Probable**: 🎯 **{tp['seleccion']}** ({tp['mercado']}) @ **`{tp['cuota_decimal']:.3f}`** *({tp['casa_apuestas']})*",
+                f"> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`{tp['prob_estimada']:.1f}%`** | **EV**: `+{tp['ev_porcentaje']:.1f}%`",
+                "> - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor probabilidad de acierto y sin alerta CLV)*.",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):",
+            "",
+            "| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |",
+            "| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |",
+        ]
+    )
 
     if espn_real_bets:
         for b in espn_real_bets:

@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-10-30T19:52:57Z",
+  "updated_at_utc": "2026-10-30T20:01:04Z",
   "graduation_level": "FASE_0_SIMULACION_Y_CALIBRACION",
   "is_ready_for_real_money": false,
   "is_tier1_micro_bankroll_ready": false,
@@ -43,5 +43,8 @@
   "detail_message": "Muestra Total: 104/500 (20.8%) | Muestra 100% En Vivo: 6/200 (3.0%, 3 en espera hoy) | Bankroll: S/105.14 PEN (ROI +4.95%, MaxDD 16.44%) | Brier: 0.2448 (ECE 0.0611). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
   "tier1_notification_sent_at": null,
   "tier2_notification_sent_at": null,
+  "last_daily_pick_sent_date": "2026-10-30",
+  "last_daily_pick_bet_id": "BET_20261031_90A3CA7F",
+  "last_daily_pick_summary": "DEN @ PHX | UNDER 230.5 @ 1.909 (DraftKings) — Prob: 66.3%",
   "last_triggered_channels": []
 }
