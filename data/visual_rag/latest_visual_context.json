@@ -21,13 +21,13 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Tobe Awaka F Oct 30 Day-To-Day Oct 29: Awaka (ankle) is questionable for Friday's game in Boston.",
       "relevance_score": 0.2359,
-      "captured_at": "2026-10-30T14:24:57Z"
+      "captured_at": "2026-10-30T14:31:05Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Dennis Schroder G Oct 30 Day-To-Day Oct 29: Schroder (foot) is questionable for Friday's game against the Wizards.",
       "relevance_score": 0.2334,
-      "captured_at": "2026-10-30T14:24:57Z"
+      "captured_at": "2026-10-30T14:31:05Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
@@ -45,7 +45,7 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Jalen Smith F Oct 30 Day-To-Day Oct 29: Smith is questionable for Friday's game against Boston with a left finger sprain.",
       "relevance_score": 0.2154,
-      "captured_at": "2026-10-30T14:24:57Z"
+      "captured_at": "2026-10-30T14:31:05Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",

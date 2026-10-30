@@ -1,8 +1,8 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-30 09:25 (Hora Perú UTC-5)` (`2026-10-30T14:25:00Z`)
+- **Última actualización**: `2026-10-30 09:31 (Hora Perú UTC-5)` (`2026-10-30T14:31:07Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/105.14 PEN`** (`+5.14 PEN`)
-- **ROI Actual**: `+4.95%` | **Yield Actual**: `+4.81%` | **CLV Promedio**: `+13.20%` | **Max Drawdown**: `1.06%` | **Apuestas en espera**: `3` (`S/3.00 PEN` reservados)
+- **ROI Actual**: `+4.95%` | **Yield Actual**: `+4.81%` | **CLV Promedio**: `+13.20%` | **Max Drawdown**: `16.44%` | **Apuestas en espera**: `3` (`S/3.00 PEN` reservados)
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
 - **Sistema de Aviso Automático (Doble Nivel)**: `ACTIVO` *(Recibirás un correo automático vía GitHub Issue `@Drewks` al desbloquear el **Nivel 1: Micro-Banca** y un segundo correo al desbloquear el **Nivel 2: Banca Completa**)*.
 
@@ -10,7 +10,7 @@
 
 ## 🚦 1. Semáforo de Madurez de 8 Criterios y Graduación en 2 Niveles
 
-### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (5/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
+### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (3/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
 - **Progreso Muestra Total (Nivel 1)**: `[████░░░░░░░░░░░░░░░░] 104 / 500 apuestas (20.8%)` — *Faltan **396** apuestas.*
 - **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[█░░░░░░░░░░░░░░░░░░░] 6 / 200 en vivo (3.0%)` — *Tienes **3** apuestas reales en espera hoy.*
 
@@ -21,9 +21,9 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 | 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `104 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
 | 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `6 liquidadas (3 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
 | 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2448 vs 0.2501` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
-| 4 | **Error de Calibración por Tramos (ECE)** | ✅ VERDE | `ECE 0.0474 (4.74%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
+| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.0611 (6.11%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
 | 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | ✅ VERDE | `ROI +4.95% / Yield +4.81%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
-| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `MaxDD 1.06%` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
+| 6 | **Control de Caída Máxima (Max Drawdown)** | 🔴 PENDIENTE | `Total 16.44% (En vivo: 1.06%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
 | 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-15.8%, +25.6%] / IC95 [-19.0%, +29.3%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | ✅ VERDE | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |
 

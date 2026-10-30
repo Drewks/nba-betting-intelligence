@@ -161,6 +161,7 @@ def export_bets_and_tracking_dashboard(
     live_progress_bar = "█" * live_bars + "░" * (20 - live_bars)
     ece_val = float(readiness["ece_score"])
     max_dd_val = float(readiness["max_drawdown_pct"])
+    live_dd_val = float(metrics.get("live_max_drawdown_pct") or 0.0)
     ci90_low = float(readiness["roi_ci_90_lower_pct"])
     ci90_high = float(readiness["roi_ci_90_upper_pct"])
     flags = readiness["criteria_flags_tier1"]
@@ -201,7 +202,7 @@ def export_bets_and_tracking_dashboard(
         f"| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | {'✅ VERDE' if flags['c3_brier_beats_baseline'] else '🟡 AJUSTANDO'} | `Brier {metrics['overall_brier_score']:.4f} vs {metrics['baseline_brier_score']:.4f}` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |",
         f"| 4 | **Error de Calibración por Tramos (ECE)** | {'✅ VERDE' if flags['c4_ece_under_5pct'] else '🟡 AJUSTANDO'} | `ECE {ece_val:.4f} ({ece_val * 100:.2f}%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |",
         f"| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | {'✅ VERDE' if flags['c5_positive_net_roi'] else '🔴 PENDIENTE'} | `ROI {metrics['roi_pct']:+.2f}% / Yield {metrics['yield_pct']:+.2f}%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |",
-        f"| 6 | **Control de Caída Máxima (Max Drawdown)** | {'✅ VERDE' if flags['c6_max_drawdown_under_15pct'] else '🔴 PENDIENTE'} | `MaxDD {max_dd_val:.2f}%` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |",
+        f"| 6 | **Control de Caída Máxima (Max Drawdown)** | {'✅ VERDE' if flags['c6_max_drawdown_under_15pct'] else '🔴 PENDIENTE'} | `Total {max_dd_val:.2f}% (En vivo: {live_dd_val:.2f}%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |",
         f"| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | {'✅ VERDE' if flags['c7_bootstrap_ci_excludes_zero'] else '🔴 PENDIENTE'} | `IC90 [{ci90_low:+.1f}%, {ci90_high:+.1f}%] / IC95 [{ci_low:+.1f}%, {ci_high:+.1f}%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |",
         f"| 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | {'✅ VERDE' if flags['c8_zero_leakage_and_reconciled'] else '🔴 PENDIENTE'} | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |",
         "",

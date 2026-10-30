@@ -59,10 +59,7 @@ def compute_reliability_curve(
         if cnt > 0:
             mean_pred = float(np.mean(p[mask]))
             obs_freq = float(np.mean(y[mask]))
-            # Empirical-Bayes finite-sample bin shrinkage (prevents 1-3 game bins from adding quantization noise)
-            prior_weight = 6.0
-            smoothed_obs = (float(np.sum(y[mask])) + prior_weight * mean_pred) / (cnt + prior_weight)
-            gap = abs(mean_pred - smoothed_obs)
+            gap = abs(mean_pred - obs_freq)
             ece_acc += (cnt / n_total) * gap
         else:
             mean_pred = None
