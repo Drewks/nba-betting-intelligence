@@ -60,13 +60,17 @@ jobs:
         run: |
           uv run python scripts/run_cloud_cycle.py --mode "${{ github.event.inputs.cycle_mode || 'auto' }}"
 
-      - name: 6. Publicar Tablero de Pronósticos y Semáforo en el Summary de GitHub Actions
+      - name: 6. Publicar Tablero de Pronósticos, Semáforo y Auditoría en el Summary de GitHub Actions
         run: |
           cat SEGUIMIENTO_APUESTAS.md >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           cat reports/daily_report.md >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat reports/audit_report.md >> $GITHUB_STEP_SUMMARY
 
       - name: 7. Guardar estado (SQLite, CSV, Alerta de Madurez, Reportes y Vault Obsidian)
         run: |
