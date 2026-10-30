@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T14:09:27Z
+date_generated: 2026-10-30T14:25:00Z
 report_type: weekly_report
 model_versions: [model_a_baseline_v1, model_b_elo_v1, model_c_point_margin_v1, model_d_total_points_v1, model_e_lightgbm_v1]
 settled_predictions: 104
@@ -8,7 +8,7 @@ simulation_only: true
 # Informe Semanal y Consolidado Walk-Forward — NBA Betting Intelligence
 
 ## 1. Resumen Financiero Virtual (Bankroll Inicial: S/100.00 PEN)
-- **Fecha de generación (UTC)**: `2026-10-30T14:09:27Z`
+- **Fecha de generación (UTC)**: `2026-10-30T14:25:00Z`
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll virtual liquidado actual**: `S/105.14 PEN`
 - **Beneficio neto acumulado**: `S/+5.14 PEN`
@@ -36,10 +36,10 @@ simulation_only: true
 | :--- | :--- | ---: | ---: | ---: |
 | `Modelo A (Baseline)` | `moneyline` | 0.23783 | 0.66836 | — |
 | `Modelo B (Elo)` | `moneyline` | 0.24014 | 0.67381 | — |
-| `Modelo C (Point Margin)` | `moneyline` | **0.24014** | **0.67381** | 0.05158 |
+| `Modelo C (Point Margin)` | `moneyline` | **0.24014** | **0.67381** | 0.03894 |
 | `Modelo E (LightGBM)` | `moneyline` | 0.24014 | 0.67381 | — |
 | `Modelo A (Baseline)` | `total_points` | 0.26241 | 0.72145 | — |
-| `Modelo D (Total Points + Cov)` | `total_points` | **0.24937** | **0.69221** | 0.07052 |
+| `Modelo D (Total Points + Cov)` | `total_points` | **0.24937** | **0.69221** | 0.05578 |
 | `Modelo E (LightGBM)` | `total_points` | 0.24937 | 0.69221 | — |
 
 ## 4. Análisis de Incertidumbre Estadística (Block Bootstrap por Jornada)

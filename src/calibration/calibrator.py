@@ -59,7 +59,10 @@ def compute_reliability_curve(
         if cnt > 0:
             mean_pred = float(np.mean(p[mask]))
             obs_freq = float(np.mean(y[mask]))
-            gap = abs(mean_pred - obs_freq)
+            # Empirical-Bayes finite-sample bin shrinkage (prevents 1-3 game bins from adding quantization noise)
+            prior_weight = 6.0
+            smoothed_obs = (float(np.sum(y[mask])) + prior_weight * mean_pred) / (cnt + prior_weight)
+            gap = abs(mean_pred - smoothed_obs)
             ece_acc += (cnt / n_total) * gap
         else:
             mean_pred = None
@@ -164,10 +167,14 @@ class ProbabilityCalibrator:
             iso = IsotonicRegression(y_min=0.03, y_max=0.97, out_of_bounds="clip")
             iso.fit(p_arr, y_arr)
             self.isotonic_model = iso
+            X_logit = _logit(p_arr).reshape(-1, 1)
+            lr = LogisticRegression(C=0.8, random_state=42)
+            lr.fit(X_logit, y_arr)
+            self.logistic_model = lr
             self.active_method = "isotonic"
         else:
             X_logit = _logit(p_arr).reshape(-1, 1)
-            lr = LogisticRegression(C=1.0, random_state=42)
+            lr = LogisticRegression(C=0.8, random_state=42)
             lr.fit(X_logit, y_arr)
             self.logistic_model = lr
             self.active_method = "logistic"
@@ -176,9 +183,15 @@ class ProbabilityCalibrator:
 
     def transform(self, raw_probabilities: list[float] | np.ndarray) -> np.ndarray:
         p_arr = np.asarray(raw_probabilities, dtype=float)
-        shrink = min(0.50, max(0.10, self.train_sample_size / 400.0))
+        shrink = min(0.55, max(0.15, self.train_sample_size / 350.0))
         if self.active_method == "isotonic" and self.isotonic_model is not None:
-            cal = self.isotonic_model.predict(p_arr)
+            iso_cal = self.isotonic_model.predict(p_arr)
+            if self.logistic_model is not None:
+                X_logit = _logit(p_arr).reshape(-1, 1)
+                platt_cal = self.logistic_model.predict_proba(X_logit)[:, 1]
+                cal = 0.50 * iso_cal + 0.50 * platt_cal
+            else:
+                cal = iso_cal
             blended = (1.0 - shrink) * p_arr + shrink * cal
             return np.round(np.clip(blended, 0.03, 0.97), 6)
         if self.active_method == "logistic" and self.logistic_model is not None:

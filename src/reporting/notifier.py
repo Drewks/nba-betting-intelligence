@@ -62,7 +62,9 @@ def evaluate_and_notify_readiness(
     bankroll = float(metrics.get("current_settled_bankroll_pen", 100.0))
     roi_pct = float(metrics.get("roi_pct", 0.0))
     yield_pct = float(metrics.get("yield_pct", 0.0))
-    max_dd_pct = float(metrics.get("max_drawdown_pct", 0.0))
+    raw_max_dd = float(metrics.get("max_drawdown_pct", 0.0))
+    live_max_dd = metrics.get("live_max_drawdown_pct")
+    max_dd_pct = float(live_max_dd) if (live_max_dd is not None and live_settled > 0) else raw_max_dd
     brier = float(metrics.get("overall_brier_score", 0.25))
     base_brier = float(metrics.get("baseline_brier_score", 0.25))
     ece = float(metrics.get("overall_ece", 0.025))

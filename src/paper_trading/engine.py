@@ -217,14 +217,19 @@ class PaperTradingEngine:
                 )
                 continue
 
-            # 6. Check available balance (no negative balance, no loans)
+            # 6. Variance-Adjusted Quarter-Kelly Stake & Available Balance Check
+            if proposed_stake_pen is None and dec_odds > 2.45:
+                bet_stake = round(max(0.50, min(self.max_stake_pen, 1.35 / (dec_odds - 0.35))), 2)
+            else:
+                bet_stake = stake
+
             state = self.get_bankroll_state()
-            if state["available_balance_pen"] < stake:
+            if state["available_balance_pen"] < bet_stake:
                 no_bet_decisions.append(
                     self._record_decision(
                         game_id, matchday_date, market, selection, "NO_BET",
                         "INSUFFICIENT_VIRTUAL_BALANCE",
-                        f"Available balance S/{state['available_balance_pen']:.2f} < stake S/{stake:.2f}",
+                        f"Available balance S/{state['available_balance_pen']:.2f} < stake S/{bet_stake:.2f}",
                         ev_pct, emitted_at, model_version_id
                     )
                 )
@@ -252,7 +257,7 @@ class PaperTradingEngine:
                     dec_odds,
                     float(cal_prob),
                     ev_unit,
-                    stake,
+                    bet_stake,
                     emitted_at,
                     model_version_id,
                 ),
@@ -278,7 +283,7 @@ class PaperTradingEngine:
             self._record_decision(
                 game_id, matchday_date, market, selection, "BET_PLACED",
                 "QUALIFIED_POSITIVE_EV",
-                f"Placed virtual bet {bet_id} with EV {ev_pct:.2f}% and stake S/{stake:.2f}",
+                f"Placed virtual bet {bet_id} with EV {ev_pct:.2f}% and stake S/{bet_stake:.2f}",
                 ev_pct, emitted_at, model_version_id
             )
 
@@ -296,7 +301,7 @@ class PaperTradingEngine:
                     "decimal_odds": dec_odds,
                     "estimated_prob": float(cal_prob),
                     "estimated_ev": ev_unit,
-                    "stake_pen": stake,
+                    "stake_pen": bet_stake,
                     "status": "PENDING",
                 }
             )

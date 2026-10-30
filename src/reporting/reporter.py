@@ -36,12 +36,19 @@ def export_bets_and_tracking_dashboard(
     rows = db.fetch_all(
         """
         SELECT b.*, g.home_team, g.away_team, g.game_start_time, g.status AS game_status,
-               g.home_score, g.away_score, g.source_provider
+               g.home_score, g.away_score, g.source_provider, p.odds_provider
         FROM simulated_bets b
         JOIN games g ON b.game_id = g.game_id
+        LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
         ORDER BY g.game_start_time DESC, b.emitted_at DESC
         """
     )
+
+    closing_lookup: dict[tuple[str, str, str, float | None], float] = {}
+    for cr in db.fetch_all(
+        "SELECT game_id, market, selection, line_value, decimal_odds FROM odds_snapshots WHERE is_closing_line = 1 ORDER BY captured_at ASC"
+    ):
+        closing_lookup[(cr["game_id"], cr["market"], cr["selection"], cr["line_value"])] = float(cr["decimal_odds"])
 
     csv_path = Path(csv_output_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,6 +62,8 @@ def export_bets_and_tracking_dashboard(
         "seleccion",
         "linea",
         "cuota_decimal",
+        "casa_apuestas",
+        "clv_porcentaje",
         "prob_estimada",
         "ev_porcentaje",
         "stake_pen",
@@ -79,12 +88,25 @@ def export_bets_and_tracking_dashboard(
                 start_peru = r["game_start_time"]
 
             match_label = f"{r['away_team']} @ {r['home_team']}"
-            sel_label = r["selection"]
             if r["market"] == "moneyline":
                 team_picked = r["home_team"] if r["selection"] == "HOME" else r["away_team"]
                 sel_display = f"{r['selection']} ({team_picked} gana)"
             else:
                 sel_display = f"{r['selection']} {r['line_value']}"
+
+            raw_prov = str(r["odds_provider"] or "DraftKings")
+            book_clean = (
+                raw_prov.split(" (Best of")[0]
+                .replace(" (LineShop)", "")
+                .replace("espn_draftkings_pregame", "DraftKings")
+                .replace("synthetic_sharp_book", "Benchmark")
+                .strip()
+            )
+
+            close_odds = closing_lookup.get((r["game_id"], r["market"], r["selection"], r["line_value"]))
+            indiv_clv: float | None = None
+            if close_odds and close_odds > 1.0:
+                indiv_clv = round(((float(r["decimal_odds"]) / close_odds) - 1.0) * 100.0, 2)
 
             item = {
                 "bet_id": r["bet_id"],
@@ -96,6 +118,8 @@ def export_bets_and_tracking_dashboard(
                 "seleccion": sel_display,
                 "linea": r["line_value"] if r["line_value"] is not None else "",
                 "cuota_decimal": round(float(r["decimal_odds"]), 3),
+                "casa_apuestas": book_clean,
+                "clv_porcentaje": indiv_clv if indiv_clv is not None else "",
                 "prob_estimada": round(float(r["estimated_prob"]) * 100.0, 2),
                 "ev_porcentaje": round(float(r["estimated_ev"]) * 100.0, 2),
                 "stake_pen": round(float(r["stake_pen"]), 2),
@@ -187,31 +211,46 @@ def export_bets_and_tracking_dashboard(
         "",
         "## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)",
         "",
-        "Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido):",
+        "Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):",
         "",
-        "| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota | Prob. Modelo | EV (%) | Stake | Estado | Resultado / Ganancia |",
-        "| :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |",
+        "| Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |",
+        "| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |",
     ]
 
     if espn_real_bets:
         for b in espn_real_bets:
-            badge = "⏳ PENDIENTE" if b["estado"] == "PENDING" else (
-                "✅ GANADA" if b["estado"] == "WON" else (
-                    "❌ PERDIDA" if b["estado"] == "LOST" else f"➖ {b['estado']}"
+            clv_num = float(b["clv_porcentaje"]) if b["clv_porcentaje"] != "" else None
+            clv_cell = f"`{clv_num:+.2f}%`" if clv_num is not None else "—"
+            is_adverse_move = (b["estado"] == "PENDING" and clv_num is not None and clv_num <= -5.0)
+            badge = (
+                "⚠️ ALERTA CLV"
+                if is_adverse_move
+                else (
+                    "⏳ PENDIENTE"
+                    if b["estado"] == "PENDING"
+                    else (
+                        "✅ GANADA"
+                        if b["estado"] == "WON"
+                        else ("❌ PERDIDA" if b["estado"] == "LOST" else f"➖ {b['estado']}")
+                    )
                 )
             )
             res_str = (
                 f"S/{b['beneficio_neto_pen']:+.2f} ({b['marcador_final']})"
                 if b["beneficio_neto_pen"] != ""
-                else "Esperando final del partido"
+                else (
+                    "⚠️ Movimiento brusco en contra (posible baja de última hora)"
+                    if is_adverse_move
+                    else "Esperando final del partido"
+                )
             )
             lines.append(
                 f"| `{b['hora_partido_peru']}` | **{b['partido']}** | {b['mercado']} | **{b['seleccion']}** | "
-                f"**{b['cuota_decimal']:.3f}** | {b['prob_estimada']:.1f}% | `+{b['ev_porcentaje']:.1f}%` | "
-                f"S/{b['stake_pen']:.2f} | {badge} | {res_str} |"
+                f"**{b['cuota_decimal']:.3f}** *({b['casa_apuestas']})* | {b['prob_estimada']:.1f}% | `+{b['ev_porcentaje']:.1f}%` | "
+                f"{clv_cell} | S/{b['stake_pen']:.2f} | {badge} | {res_str} |"
             )
     else:
-        lines.append("| — | — | — | Sin apuestas reales activas en este momento | — | — | — | — | — | — |")
+        lines.append("| — | — | — | Sin apuestas reales activas en este momento | — | — | — | — | — | — | — |")
 
     lines.extend([
         "",

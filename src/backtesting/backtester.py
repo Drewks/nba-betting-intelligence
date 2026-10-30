@@ -741,8 +741,10 @@ class WalkForwardBacktester:
             overall_ece = 0.05
             oos_seasons = 0
 
-        live_espn_settled = sum(1 for b in settled_bets if str(b["game_id"]).startswith("ESPN_"))
+        live_settled_list = [b for b in settled_bets if str(b["game_id"]).startswith("ESPN_")]
+        live_espn_settled = len(live_settled_list)
         live_espn_pending = sum(1 for b in pending_bets if str(b["game_id"]).startswith("ESPN_"))
+        live_dd_info = compute_drawdown_series(self.paper_engine.initial_bankroll_pen, live_settled_list)
 
         summary = {
             "initial_bankroll_pen": self.paper_engine.initial_bankroll_pen,
@@ -767,6 +769,7 @@ class WalkForwardBacktester:
             "average_decimal_odds": avg_odds,
             "max_drawdown_pen": dd_info["max_drawdown_pen"],
             "max_drawdown_pct": dd_info["max_drawdown_pct"],
+            "live_max_drawdown_pct": live_dd_info["max_drawdown_pct"],
             "max_exposure_pen": round(max_exposure, 4),
             "mean_clv_pct": mean_clv_pct,
             "overall_brier_score": overall_brier,

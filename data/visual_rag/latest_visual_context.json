@@ -8,49 +8,49 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "POR Ja Morant (PG) Day To Day (Hamstring): Morant did not return to Thursday's (Oct. 29) game against the Grizzlies due to a left hamstring injury.",
-      "relevance_score": 0.2833,
+      "relevance_score": 0.2796,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "HOU Alperen Şengün (C) Day To Day (Back): The Rockets listed Sengun as Questionable for Friday's (Oct. 30) game against the Mavericks.",
-      "relevance_score": 0.2495,
+      "relevance_score": 0.2438,
       "captured_at": "2026-10-29"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Tobe Awaka F Oct 30 Day-To-Day Oct 29: Awaka (ankle) is questionable for Friday's game in Boston.",
-      "relevance_score": 0.2402,
-      "captured_at": "2026-10-30T14:09:20Z"
+      "relevance_score": 0.2359,
+      "captured_at": "2026-10-30T14:24:57Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Dennis Schroder G Oct 30 Day-To-Day Oct 29: Schroder (foot) is questionable for Friday's game against the Wizards.",
-      "relevance_score": 0.2381,
-      "captured_at": "2026-10-30T14:09:20Z"
+      "relevance_score": 0.2334,
+      "captured_at": "2026-10-30T14:24:57Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Tre Johnson (SG) Day To Day (Achilles): The Wizards listed Johnson as Questionable for Friday's (Oct. 30) game against the Hornets.",
-      "relevance_score": 0.2298,
+      "relevance_score": 0.2248,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DEN Cameron Johnson (PF) Day To Day (Ankle): The Nuggets listed Johnson as Questionable for Friday's (Oct. 30) game against the Suns.",
-      "relevance_score": 0.2265,
+      "relevance_score": 0.2216,
       "captured_at": "2026-10-29"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Jalen Smith F Oct 30 Day-To-Day Oct 29: Smith is questionable for Friday's game against Boston with a left finger sprain.",
-      "relevance_score": 0.2195,
-      "captured_at": "2026-10-30T14:09:20Z"
+      "relevance_score": 0.2154,
+      "captured_at": "2026-10-30T14:24:57Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "HOU Marcus Smart (PG) Day To Day (Forearm): The Rockets listed Smart as Questionable for Friday's (Oct. 30) game against the Mavericks.",
-      "relevance_score": 0.217,
+      "relevance_score": 0.212,
       "captured_at": "2026-10-29"
     }
   ],
