@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 33 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 73 docs indexed)",
   "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-  "indexed_documents_count": 33,
+  "indexed_documents_count": 73,
   "top_retrieved_context": [
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "POR Ja Morant (PG) Day To Day (Hamstring): Morant did not return to Thursday's (Oct. 29) game against the Grizzlies due to a left hamstring injury.",
+      "relevance_score": 0.2833,
+      "captured_at": "2026-10-29"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "HOU Alperen Şengün (C) Day To Day (Back): The Rockets listed Sengun as Questionable for Friday's (Oct. 30) game against the Mavericks.",
+      "relevance_score": 0.2495,
+      "captured_at": "2026-10-29"
+    },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Tobe Awaka F Oct 30 Day-To-Day Oct 29: Awaka (ankle) is questionable for Friday's game in Boston.",
-      "relevance_score": 0.3403,
-      "captured_at": "2026-10-30T13:47:30Z"
+      "relevance_score": 0.2402,
+      "captured_at": "2026-10-30T14:09:20Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Dennis Schroder G Oct 30 Day-To-Day Oct 29: Schroder (foot) is questionable for Friday's game against the Wizards.",
-      "relevance_score": 0.3353,
-      "captured_at": "2026-10-30T13:47:30Z"
+      "relevance_score": 0.2381,
+      "captured_at": "2026-10-30T14:09:20Z"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "WAS Tre Johnson (SG) Day To Day (Achilles): The Wizards listed Johnson as Questionable for Friday's (Oct. 30) game against the Hornets.",
+      "relevance_score": 0.2298,
+      "captured_at": "2026-10-29"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DEN Cameron Johnson (PF) Day To Day (Ankle): The Nuggets listed Johnson as Questionable for Friday's (Oct. 30) game against the Suns.",
+      "relevance_score": 0.2265,
+      "captured_at": "2026-10-29"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Jalen Smith F Oct 30 Day-To-Day Oct 29: Smith is questionable for Friday's game against Boston with a left finger sprain.",
-      "relevance_score": 0.3122,
-      "captured_at": "2026-10-30T13:47:30Z"
+      "relevance_score": 0.2195,
+      "captured_at": "2026-10-30T14:09:20Z"
     },
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Meleek Thomas G Oct 31 Day-To-Day Oct 29: Thomas (foot) has been ruled out for Thursday's game against the Hawks, Serena Winters of FanDuel Sports Network Ohio reports.",
-      "relevance_score": 0.2126,
-      "captured_at": "2026-10-30T13:47:30Z"
-    },
-    {
-      "source": "espn_nba_news_feed",
-      "snippet": "Trail Blazers' Ja Morant exits first game vs. Grizzlies with hamstring injury. Ja Morant exited his first game against his former team in the fourth quarter Thursday night because of a left hamstring injury.",
-      "relevance_score": 0.1039,
-      "captured_at": "2026-10-30T05:56:53Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Devin Carter G Nov 8 Out Oct 18: Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe reports.",
-      "relevance_score": 0.0681,
-      "captured_at": "2026-10-30T13:47:30Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Patrick Williams F Oct 30 Out Oct 29: Williams (adductor) is questionable for Friday's game in Boston.",
-      "relevance_score": 0.0634,
-      "captured_at": "2026-10-30T13:47:30Z"
-    },
-    {
-      "source": "espn_nba_news_feed",
-      "snippet": "Knicks' Jose Alvarado (ankle) to miss fourth straight vs. 76ers. Knicks reserve guard Jose Alvarado will miss Friday's NBA Cup game against the 76ers because of a right ankle injury.",
-      "relevance_score": 0.0484,
-      "captured_at": "2026-10-30T01:22:15Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "HOU Marcus Smart (PG) Day To Day (Forearm): The Rockets listed Smart as Questionable for Friday's (Oct. 30) game against the Mavericks.",
+      "relevance_score": 0.217,
+      "captured_at": "2026-10-29"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

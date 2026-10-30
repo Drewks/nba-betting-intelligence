@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
+import time
 from typing import Any
 import urllib.request
 
@@ -413,6 +414,10 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         if self.enrich_with_the_odds_api and self.odds_api_helper.is_configured():
             multi_book_odds = self.odds_api_helper.fetch_multi_book_odds_by_matchup(now_utc)
 
+        sr_context = SportradarAdapter().fetch_league_intelligence_context()
+        sr_injuries = sr_context.get("injury_penalties", {})
+        sr_splits = sr_context.get("team_splits", {})
+
         games_out: list[dict[str, Any]] = []
         odds_out: list[dict[str, Any]] = []
 
@@ -472,23 +477,34 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             odds_list = comp.get("odds") or []
             first_odds = odds_list[0] if odds_list else {}
 
+            home_inj = max(
+                float(summary_ctx["injury_penalties"].get(home_code, 0.0)),
+                float(sr_injuries.get(home_code, 0.0)),
+            )
+            away_inj = max(
+                float(summary_ctx["injury_penalties"].get(away_code, 0.0)),
+                float(sr_injuries.get(away_code, 0.0)),
+            )
+
             home_base_off, home_base_def, home_pace = self._estimate_pregame_team_profile(
                 home_code,
                 home_comp,
                 first_odds,
                 is_home=True,
-                injury_penalty=summary_ctx["injury_penalties"].get(home_code, 0.0),
-                opp_injury_penalty=summary_ctx["injury_penalties"].get(away_code, 0.0),
+                injury_penalty=home_inj,
+                opp_injury_penalty=away_inj,
                 box_stats=summary_ctx["team_box_stats"].get(home_code, {}),
+                sr_split=sr_splits.get(home_code, {}),
             )
             away_base_off, away_base_def, away_pace = self._estimate_pregame_team_profile(
                 away_code,
                 away_comp,
                 first_odds,
                 is_home=False,
-                injury_penalty=summary_ctx["injury_penalties"].get(away_code, 0.0),
-                opp_injury_penalty=summary_ctx["injury_penalties"].get(home_code, 0.0),
+                injury_penalty=away_inj,
+                opp_injury_penalty=home_inj,
                 box_stats=summary_ctx["team_box_stats"].get(away_code, {}),
+                sr_split=sr_splits.get(away_code, {}),
             )
 
             try:
@@ -647,12 +663,14 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         injury_penalty: float = 0.0,
         opp_injury_penalty: float = 0.0,
         box_stats: dict[str, float] | None = None,
+        sr_split: dict[str, float] | None = None,
     ) -> tuple[float, float, float]:
         """
         V2 Pre-game Team Profile:
         Combines structural priors, Four Factors boxscore stats (`avgPoints`, `avgPointsAgainst`,
-        `fieldGoalPct`, `threePointFieldGoalPct`, `avgTotalTurnovers`), real-time Star Injury penalties,
-        and High-Altitude court adjustments (`DEN`, `UTA`).
+        `fieldGoalPct`, `threePointFieldGoalPct`, `avgTotalTurnovers`), Sportradar Official Standings
+        & Tactical Splits (`home_win_pct`, `road_win_pct`, `last_10_win_pct`, `over_500_win_pct`),
+        real-time Star Injury penalties, and High-Altitude court adjustments (`DEN`, `UTA`).
         """
         prior_strength: dict[str, tuple[float, float, float]] = {
             "BOS": (119.5, 110.8, 98.5),
@@ -688,12 +706,15 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         }
         base_off, base_def, base_pace = prior_strength.get(team_code, (114.5, 114.5, 99.0))
         b_stats = box_stats or {}
+        sr_data = sr_split or {}
 
-        # 1. Four Factors & Real Season Boxscore Integration (Phase V2.2)
-        if "avgPoints" in b_stats and 95.0 <= b_stats["avgPoints"] <= 138.0:
-            base_off = round(0.60 * base_off + 0.40 * b_stats["avgPoints"], 2)
-        if "avgPointsAgainst" in b_stats and 95.0 <= b_stats["avgPointsAgainst"] <= 138.0:
-            base_def = round(0.60 * base_def + 0.40 * b_stats["avgPointsAgainst"], 2)
+        # 1. Four Factors & Real Season Boxscore Integration (Phase V2.2 + Sportradar PPG)
+        avg_pts = b_stats.get("avgPoints") or sr_data.get("points_for")
+        avg_pts_against = b_stats.get("avgPointsAgainst") or sr_data.get("points_against")
+        if avg_pts and 95.0 <= float(avg_pts) <= 138.0:
+            base_off = round(0.60 * base_off + 0.40 * float(avg_pts), 2)
+        if avg_pts_against and 95.0 <= float(avg_pts_against) <= 138.0:
+            base_def = round(0.60 * base_def + 0.40 * float(avg_pts_against), 2)
 
         # Shooting efficiency (FG% and 3P%) and Turnover control adjustment
         fg_pct = b_stats.get("fieldGoalPct", 47.0)
@@ -702,7 +723,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         efg_proxy = (fg_pct - 47.0) * 0.25 + (tp_pct - 36.0) * 0.15 - (tov - 14.0) * 0.20
         base_off = round(base_off + efg_proxy, 2)
 
-        # 2. Win-Loss Record adjustment
+        # 2. Win-Loss & Sportradar Venue/Momentum Tactical Splits
         records = comp_entry.get("records") or []
         if records and isinstance(records[0].get("summary"), str) and "-" in records[0]["summary"]:
             try:
@@ -716,7 +737,14 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             except ValueError:
                 pass
 
-        # 3. Real-Time Injury Report Adjustment (Phase V2.1)
+        if sr_data:
+            venue_wp = sr_data.get("home_win_pct", 0.5) if is_home else sr_data.get("road_win_pct", 0.5)
+            l10_wp = sr_data.get("last_10_win_pct", 0.5)
+            tactical_adj = (venue_wp - 0.5) * 1.4 + (l10_wp - 0.5) * 1.0
+            base_off = round(base_off + 0.5 * tactical_adj, 2)
+            base_def = round(base_def - 0.5 * tactical_adj, 2)
+
+        # 3. Real-Time Injury Report Adjustment (Phase V2.1: ESPN + Official Sportradar NBA v8)
         if injury_penalty > 0.0:
             # Missing stars hurt both offensive creation (65%) and defensive rating (35%)
             base_off = round(base_off - 0.65 * injury_penalty, 2)
@@ -749,35 +777,141 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
 
 
 class SportradarAdapter(BaseNBADataAdapter):
-    """Interchangeable adapter for Sportradar NBA API v8 (requires SPORTRADAR_API_KEY)."""
+    """
+    Official Sportradar NBA v8 & Tactical Splits Adapter (requires SPORTRADAR_API_KEY).
+    Respects Trial 1 req / 2s QPS rate limit and caches league-wide injuries & standings per process run.
+    """
 
     provider_name = "sportradar_nba_v8"
+    _CACHED_CONTEXT: dict[str, Any] | None = None
 
     def __init__(self, api_key: str | None = None, access_level: str = "trial") -> None:
-        self.api_key = api_key or os.getenv("SPORTRADAR_API_KEY", "").strip()
+        self.api_key = (api_key or os.getenv("SPORTRADAR_API_KEY", "") or os.getenv("SPORTRADAR_SYNERGY_API_KEY", "")).strip()
         self.access_level = access_level
+
+    def is_configured(self) -> bool:
+        return len(self.api_key) >= 16
+
+    def fetch_league_intelligence_context(self) -> dict[str, Any]:
+        """
+        Fetches and caches league-wide NBA official injuries (`league/injuries.json`) and
+        official seasonal standings & tactical splits (`seasons/2026/REG/standings.json`).
+        """
+        if SportradarAdapter._CACHED_CONTEXT is not None:
+            return SportradarAdapter._CACHED_CONTEXT
+
+        if not self.is_configured():
+            return {"injury_penalties": {}, "injury_documents": [], "team_splits": {}, "status": "NOT_CONFIGURED"}
+
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        injury_penalties: dict[str, float] = {}
+        injury_documents: list[dict[str, str]] = []
+        team_splits: dict[str, dict[str, float]] = {}
+
+        # 1. Official League Injuries (1 request)
+        inj_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/league/injuries.json?api_key={self.api_key}"
+        try:
+            req = urllib.request.Request(inj_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                inj_data = json.loads(resp.read().decode("utf-8"))
+            for t_obj in inj_data.get("teams") or []:
+                try:
+                    t_code = normalize_team_code(t_obj.get("alias") or t_obj.get("name", ""))
+                except ValueError:
+                    continue
+                pen = 0.0
+                for p_obj in t_obj.get("players") or []:
+                    p_name = str(p_obj.get("full_name", "")).strip()
+                    pos = str(p_obj.get("primary_position") or p_obj.get("position", "")).strip()
+                    for inj in p_obj.get("injuries") or []:
+                        st = str(inj.get("status", "")).lower()
+                        desc = str(inj.get("desc", "")).strip()
+                        comment = str(inj.get("comment", "")).strip()
+                        upd = str(inj.get("update_date") or now_utc)
+                        if p_name:
+                            injury_documents.append(
+                                {
+                                    "source": "sportradar_nba_v8_official_injuries",
+                                    "title": f"{t_code} - {p_name} ({pos}) [{inj.get('status', 'Injury')}]",
+                                    "content": f"{t_code} {p_name} ({pos}) {inj.get('status', '')} ({desc}): {comment}",
+                                    "captured_at": upd,
+                                }
+                            )
+                        impact = STAR_PLAYER_IMPACT_PTS.get(p_name, 1.35)
+                        if "out" in st:
+                            pen += impact
+                        elif "doubtful" in st:
+                            pen += 0.75 * impact
+                        elif "questionable" in st or "day" in st:
+                            pen += 0.35 * impact
+                injury_penalties[t_code] = round(min(14.5, pen), 2)
+        except Exception:
+            pass
+
+        # Respect Sportradar Trial QPS limit (1 req / 2 seconds) before second call
+        time.sleep(2.1)
+
+        # 2. Official Seasonal Standings & Tactical Splits (1 request)
+        std_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/seasons/2026/REG/standings.json?api_key={self.api_key}"
+        try:
+            req = urllib.request.Request(std_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                std_data = json.loads(resp.read().decode("utf-8"))
+            for conf in std_data.get("conferences") or []:
+                for div in conf.get("divisions") or []:
+                    for tm in div.get("teams") or []:
+                        try:
+                            t_code = normalize_team_code(f"{tm.get('market', '')} {tm.get('name', '')}".strip())
+                        except ValueError:
+                            continue
+                        rec_map: dict[str, float] = {}
+                        for r in tm.get("records") or []:
+                            rtype = str(r.get("record_type", ""))
+                            w = int(r.get("wins", 0))
+                            l = int(r.get("losses", 0))
+                            if (w + l) > 0:
+                                rec_map[rtype] = float(r.get("win_pct", w / (w + l)))
+                        team_splits[t_code] = {
+                            "points_for": float(tm.get("points_for", 114.5)),
+                            "points_against": float(tm.get("points_against", 114.5)),
+                            "point_diff": float(tm.get("point_diff", 0.0)),
+                            "win_pct": float(tm.get("win_pct", 0.5)),
+                            "home_win_pct": rec_map.get("home", 0.55),
+                            "road_win_pct": rec_map.get("road", 0.45),
+                            "last_10_win_pct": rec_map.get("last_10", float(tm.get("win_pct", 0.5))),
+                            "over_500_win_pct": rec_map.get("over_500", 0.5),
+                            "leads_fg_win_pct": rec_map.get("leads_field_goal_pct", 0.75),
+                            "fewer_tov_win_pct": rec_map.get("fewer_turnovers", 0.65),
+                        }
+        except Exception:
+            pass
+
+        status_str = (
+            f"OPERATIONAL_LIVE_NBA_V8 ({len(injury_penalties)} teams injuries + {len(team_splits)} teams tactical splits)"
+            if (injury_penalties or team_splits)
+            else "CONFIGURED_RATE_LIMITED"
+        )
+        SportradarAdapter._CACHED_CONTEXT = {
+            "injury_penalties": injury_penalties,
+            "injury_documents": injury_documents,
+            "team_splits": team_splits,
+            "status": status_str,
+        }
+        return SportradarAdapter._CACHED_CONTEXT
 
     def fetch_games_and_odds(
         self,
         date_str: str | None = None,
         as_of_utc: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
-        if not self.api_key:
+        if not self.is_configured():
             raise AdapterUnavailableError(
                 "SportradarAdapter: SPORTRADAR_API_KEY is not configured in environment. "
                 "Note: Sportradar stats API also requires a separate Odds Comparison add-on for historical odds."
             )
-        target_date = (date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")).replace("-", "/")
-        url = (
-            f"https://api.sportradar.com/nba/{self.access_level}/v8/en/games/"
-            f"{target_date}/schedule.json?api_key={self.api_key}"
-        )
-        try:
-            req = urllib.request.Request(url, headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                _ = json.loads(resp.read().decode("utf-8"))
-        except Exception as exc:
-            raise AdapterUnavailableError(f"SportradarAdapter HTTP failure: {exc}") from exc
+        ctx = self.fetch_league_intelligence_context()
+        if not ctx.get("team_splits") and not ctx.get("injury_penalties"):
+            raise AdapterUnavailableError("SportradarAdapter: Unable to reach NBA v8 endpoints.")
         return {"games": [], "odds": []}
 
 
@@ -886,6 +1020,13 @@ class PlaywrightAuthorizedScraper:
                             "captured_at": published,
                         }
                     )
+        except Exception:
+            pass
+
+        # 1b. Merge official Sportradar NBA v8 injury documents when configured
+        try:
+            sr_ctx = SportradarAdapter().fetch_league_intelligence_context()
+            documents.extend(sr_ctx.get("injury_documents", [])[:40])
         except Exception:
             pass
 

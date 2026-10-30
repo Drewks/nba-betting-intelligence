@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T13:47:39Z
+date_generated: 2026-10-30T14:09:27Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-10-30T13:47:39Z`
+- **Fecha de auditoría (UTC)**: `2026-10-30T14:09:27Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -32,10 +32,10 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Coordinador**: `Gemini Argon` en Google Antigravity (Ejecución secuencial verificada)
 - **Python & Entorno Virtual**: `CPython 3.12 (uv cloud/local runner)`
 - **Fuente Primaria Activa sin Credenciales**: `ESPNPublicAdapter` (`site.api.espn.com` — Calendario, marcadores, estadísticas y cuotas pre-partido DraftKings)
-- **Sportradar (`SportradarAdapter`)**: `READY_IF_KEY_PROVIDED`
+- **Sportradar (`SportradarAdapter`)**: `OPERATIONAL_LIVE_NBA_V8 (29 teams injuries + 30 teams tactical splits)`
 - **NBA.com/stats (`NBAStatsAdapter`)**: `FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION`
 - **Playwright (`PlaywrightAuthorizedScraper`)**: `OPERATIONAL`
-- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 33 docs indexed)`
+- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 73 docs indexed)`
 - **Obsidian Vault (`NBA/`)**: `Operativo en C:\Users\faboa\.gemini\antigravity\scratch\nba-betting-intelligence\NBA`
 
 ## 4. Conclusión Estadística del Auditor

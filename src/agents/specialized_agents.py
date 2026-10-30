@@ -68,7 +68,11 @@ class NBADataScoutAgent:
             },
             "sportradar_api": {
                 "credentials_configured": sr_key_present,
-                "status": "READY_IF_KEY_PROVIDED" if not sr_key_present else "CONFIGURED",
+                "status": (
+                    SportradarAdapter().fetch_league_intelligence_context().get("status", "CONFIGURED")
+                    if sr_key_present
+                    else "READY_IF_KEY_PROVIDED"
+                ),
             },
             "nba_com_stats": {
                 "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
