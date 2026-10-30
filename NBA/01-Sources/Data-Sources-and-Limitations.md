@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T20:01:07Z
+date_generated: 2026-10-30T23:13:45Z
 component: nba_data_scout
 ---
 # Evaluación de Fuentes de Estadísticas y Cuotas NBA
@@ -9,7 +9,7 @@ component: nba_data_scout
 - Limitación histórica: en partidos históricos finalizados, `pickcenter` refleja la línea archivada sin historial tick-a-tick; por ello el sistema exige `captured_at < game_start_time` para toda captura en vivo.
 
 ## 2. Sportradar NBA API v8 & Synergy Basketball NBA API (`SportradarAdapter`)
-- Estado: `OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)`.
+- Estado: `OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)`.
 - Sincroniza el parte médico oficial de la liga (`league/injuries.json`), los splits tácticos de los 30 equipos (`seasons/2026/REG/standings.json`) y la telemetría de posesiones y jugadas de **Synergy Basketball NBA API** (`/synergy/basketball/nba/games` y `/events`) usando `SPORTRADAR_API_KEY`.
 
 ## 3. TheOddsAPI Multi-Bookmaker Line Shopping (`TheOddsAPIAdapter`)
@@ -17,4 +17,4 @@ component: nba_data_scout
 
 ## 4. Playwright + PixelRAG (`visual_researcher`)
 - Playwright: `OPERATIONAL`.
-- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 123 docs indexed)` indexando lesiones oficiales de Sportradar, perfiles tácticos de Synergy Basketball NBA y tablas DOM de ESPN.
+- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 122 docs indexed)` indexando lesiones oficiales de Sportradar, perfiles tácticos de Synergy Basketball NBA y tablas DOM de ESPN.

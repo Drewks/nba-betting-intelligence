@@ -132,7 +132,7 @@ DDL_STATEMENTS = [
         decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
         estimated_prob REAL NOT NULL,
         estimated_ev REAL NOT NULL,
-        stake_pen REAL NOT NULL CHECK (stake_pen > 0.0 AND stake_pen <= 1.0),
+        stake_pen REAL NOT NULL CHECK (stake_pen > 0.0 AND stake_pen <= 25.0),
         emitted_at TEXT NOT NULL,
         model_version_id TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),

@@ -585,3 +585,74 @@ def test_17_readiness_notification_system(tmp_path: Path) -> None:
     assert res_t2["is_tier2_full_bankroll_ready"] is True
     assert res_t2["graduation_level"] == "NIVEL_2_BANCA_COMPLETA"
     assert res_t2["tier2_passed_gates_count"] == 8
+
+
+# 18. Staking contextual Kelly-Convicción según probabilidad de acierto (S/1.00 a S/6.00 PEN)
+def test_18_dynamic_contextual_kelly_staking(tmp_path: Path) -> None:
+    db = DatabaseManager(tmp_path / "test_dynamic_stake.sqlite3")
+    engine = PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=100.00,
+        base_stake_pen=1.00,
+        max_stake_pen=6.00,
+        dynamic_conviction_staking=True,
+    )
+    p_low = _seed_sample_game_and_prediction(db, "G_LOW_PROB")
+    p_med = _seed_sample_game_and_prediction(db, "G_MED_PROB")
+    p_high = _seed_sample_game_and_prediction(db, "G_HIGH_PROB")
+
+    res = engine.evaluate_and_record_matchday_selections(
+        matchday_date="2026-10-20",
+        candidate_predictions=[
+            {
+                "prediction_id": p_low,
+                "game_id": "G_LOW_PROB",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 2.75,
+                "calibrated_probability": 0.42,
+                "ev_unit": 0.155,
+                "ev_pct": 15.5,
+                "uncertainty_std": 0.06,
+                "model_version_id": "model_c_test_v1",
+                "emitted_at": "2026-10-20T20:00:00Z",
+            },
+            {
+                "prediction_id": p_med,
+                "game_id": "G_MED_PROB",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 2.00,
+                "calibrated_probability": 0.54,
+                "ev_unit": 0.08,
+                "ev_pct": 8.0,
+                "uncertainty_std": 0.05,
+                "model_version_id": "model_c_test_v1",
+                "emitted_at": "2026-10-20T20:00:00Z",
+            },
+            {
+                "prediction_id": p_high,
+                "game_id": "G_HIGH_PROB",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 1.91,
+                "calibrated_probability": 0.68,
+                "ev_unit": 0.2988,
+                "ev_pct": 29.88,
+                "uncertainty_std": 0.04,
+                "model_version_id": "model_c_test_v1",
+                "emitted_at": "2026-10-20T20:00:00Z",
+            },
+        ],
+    )
+    placed = {b["game_id"]: b["stake_pen"] for b in res["placed_bets"]}
+    assert 1.00 <= placed["G_LOW_PROB"] <= 1.75
+    assert 2.00 <= placed["G_MED_PROB"] <= 3.35
+    assert 4.80 <= placed["G_HIGH_PROB"] <= 6.00
+    assert placed["G_HIGH_PROB"] > placed["G_MED_PROB"] > placed["G_LOW_PROB"]
+    # High-probability pick is prioritized first in placement order
+    assert res["placed_bets"][0]["game_id"] == "G_HIGH_PROB"
+

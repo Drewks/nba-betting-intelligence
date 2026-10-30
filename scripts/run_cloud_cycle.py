@@ -70,7 +70,13 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         return {"cycle_type": "INITIAL_BOOTSTRAP_AND_LIVE_SYNC", "run_id": init_res["run_id"]}
 
     db = DatabaseManager(db_path)
-    paper_engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.00)
+    paper_engine = PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=100.00,
+        base_stake_pen=1.00,
+        max_stake_pen=6.00,
+        dynamic_conviction_staking=True,
+    )
     scout = NBADataScoutAgent(db)
     visual = VisualResearcherAgent()
     calibrator_agent = ModelCalibratorAgent()
@@ -276,6 +282,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             opp["prediction_id"] = pred_id
             opp["raw_probability"] = raw_p
             opp["calibrated_probability"] = cal_p
+            opp["uncertainty_std"] = unc
             opp["emitted_at"] = pred_ts
             candidates_by_matchday[g["matchday_date"]].append(opp)
 

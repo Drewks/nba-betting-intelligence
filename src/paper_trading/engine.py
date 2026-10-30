@@ -41,16 +41,75 @@ class PaperTradingEngine:
         max_stake_pen: float = 1.00,
         max_selections_per_matchday: int = 3,
         min_ev_threshold: float = 0.05,
+        dynamic_conviction_staking: bool = False,
     ) -> None:
-        if max_stake_pen > 1.00 or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
-            raise RiskLimitError("Stake limits in v1 must satisfy 0 < base_stake <= max_stake <= S/1.00 PEN.")
+        max_allowed = 10.00 if dynamic_conviction_staking else 1.00
+        if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
+            raise RiskLimitError(
+                f"Stake limits must satisfy 0 < base_stake <= max_stake <= S/{max_allowed:.2f} PEN."
+            )
         self.db = db
         self.initial_bankroll_pen = round(float(initial_bankroll_pen), 4)
         self.base_stake_pen = round(float(base_stake_pen), 4)
         self.max_stake_pen = round(float(max_stake_pen), 4)
         self.max_selections_per_matchday = int(max_selections_per_matchday)
         self.min_ev_threshold = float(min_ev_threshold)
+        self.dynamic_conviction_staking = bool(dynamic_conviction_staking)
         self._ensure_initial_ledger()
+
+    def compute_contextual_stake_pen(
+        self,
+        calibrated_prob: float,
+        decimal_odds: float,
+        ev_unit: float,
+        current_bankroll_pen: float,
+        uncertainty_std: float = 0.05,
+    ) -> float:
+        """
+        Calculates contextual Kelly-Conviction stake (S/1.00 to S/6.00 PEN on ~S/100 bankroll):
+        - Low probability / Underdog (<50%): S/1.00 - S/1.75 PEN
+        - Medium probability (50% - 58%): S/2.00 - S/3.25 PEN
+        - High probability (58% - 65%): S/3.50 - S/4.75 PEN
+        - Maximum conviction (>=65%): S/4.80 - S/6.00 PEN
+        Also scales with current settled bankroll and penalizes high model disagreement (uncertainty_std).
+        """
+        p = max(0.01, min(0.99, float(calibrated_prob)))
+        b = max(0.05, float(decimal_odds) - 1.0)
+        f_kelly = max(0.0, (p * (b + 1.0) - 1.0) / b)
+
+        # Human-like probability conviction tiers
+        if p < 0.50:
+            # Underdog / lower win rate -> protect capital with small stake
+            tier_base = 1.00 + max(0.0, (p - 0.35) / 0.15) * 0.55
+            kelly_bonus = min(0.25, f_kelly * 1.2)
+        elif p < 0.58:
+            # Medium probability -> moderate contextual stake
+            tier_base = 2.00 + ((p - 0.50) / 0.08) * 0.95
+            kelly_bonus = min(0.35, f_kelly * 1.5)
+        elif p < 0.65:
+            # High probability -> strong conviction stake
+            tier_base = 3.50 + ((p - 0.58) / 0.07) * 0.95
+            kelly_bonus = min(0.40, f_kelly * 1.8)
+        else:
+            # Star Pick (>=65% win probability) -> maximum conviction stake
+            tier_base = 4.80 + min(1.0, (p - 0.65) / 0.10) * 0.85
+            kelly_bonus = min(0.45, f_kelly * 2.0)
+
+        raw_stake = tier_base + kelly_bonus
+
+        # Extra caution on high-variance longshots (odds > 2.50)
+        if decimal_odds > 2.50:
+            raw_stake = min(raw_stake, 1.65)
+
+        # Penalize if ensemble sub-models have high disagreement
+        if uncertainty_std > 0.08:
+            raw_stake *= 0.82
+
+        # Scale proportionally with current settled bankroll (relative to initial S/100)
+        bankroll_scale = max(0.80, min(1.50, float(current_bankroll_pen) / max(1.0, self.initial_bankroll_pen)))
+        scaled_stake = raw_stake * bankroll_scale
+
+        return round(max(1.00, min(self.max_stake_pen, scaled_stake)), 2)
 
     def _ensure_initial_ledger(self) -> None:
         existing = self.db.fetch_one("SELECT COUNT(*) AS cnt FROM bankroll_ledger")
@@ -109,12 +168,22 @@ class PaperTradingEngine:
                 "Martingale or stake escalation is prohibited."
             )
 
-        # Sort candidates by descending EV so the top valid opportunities on a matchday are prioritized
-        sorted_candidates = sorted(
-            candidate_predictions,
-            key=lambda c: float(c.get("ev_unit", -999.0)),
-            reverse=True,
-        )
+        # Sort candidates: in dynamic conviction mode, prioritize high-probability + positive-EV winners
+        if self.dynamic_conviction_staking:
+            sorted_candidates = sorted(
+                candidate_predictions,
+                key=lambda c: (
+                    float(c.get("ev_unit", -999.0))
+                    * ((float(c.get("calibrated_probability") or 0.50) / 0.55) ** 2.0)
+                ),
+                reverse=True,
+            )
+        else:
+            sorted_candidates = sorted(
+                candidate_predictions,
+                key=lambda c: float(c.get("ev_unit", -999.0)),
+                reverse=True,
+            )
 
         placed_bets: list[dict[str, Any]] = []
         no_bet_decisions: list[dict[str, Any]] = []
@@ -217,13 +286,23 @@ class PaperTradingEngine:
                 )
                 continue
 
-            # 6. Variance-Adjusted Quarter-Kelly Stake & Available Balance Check
-            if proposed_stake_pen is None and dec_odds > 2.45:
+            # 6. Contextual Kelly-Conviction Stake (or v1 fixed stake) & Available Balance Check
+            state = self.get_bankroll_state()
+            if proposed_stake_pen is not None:
+                bet_stake = stake
+            elif self.dynamic_conviction_staking:
+                bet_stake = self.compute_contextual_stake_pen(
+                    calibrated_prob=float(cal_prob),
+                    decimal_odds=dec_odds,
+                    ev_unit=ev_unit,
+                    current_bankroll_pen=state["settled_bankroll_pen"],
+                    uncertainty_std=float(cand.get("uncertainty_std") or 0.05),
+                )
+            elif dec_odds > 2.45:
                 bet_stake = round(max(0.50, min(self.max_stake_pen, 1.35 / (dec_odds - 0.35))), 2)
             else:
                 bet_stake = stake
 
-            state = self.get_bankroll_state()
             if state["available_balance_pen"] < bet_stake:
                 no_bet_decisions.append(
                     self._record_decision(

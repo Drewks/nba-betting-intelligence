@@ -176,13 +176,15 @@ def export_bets_and_tracking_dashboard(
 
     clv_val = metrics.get("mean_clv_pct")
     clv_str = f"`{clv_val:+.2f}%`" if clv_val is not None else "`Calculando en cierres pre-partido`"
+    pending_stake_sum = sum(float(x["stake_pen"]) for x in all_formatted if x["estado"] == "PENDING")
 
     lines = [
         "# 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)",
         "",
         f"- **Última actualización**: `{peru_str}` (`{now_str}`)",
         f"- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/{metrics['current_settled_bankroll_pen']:.2f} PEN`** (`{metrics['net_profit_pen']:+.2f} PEN`)",
-        f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **CLV Promedio**: {clv_str} | **Max Drawdown**: `{max_dd_val:.2f}%` | **Apuestas en espera**: `{pending_count}` (`S/{pending_count:.2f} PEN` reservados)",
+        f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **CLV Promedio**: {clv_str} | **Max Drawdown**: `{max_dd_val:.2f}%` | **Apuestas en espera**: `{pending_count}` (`S/{pending_stake_sum:.2f} PEN` reservados)",
+        "- **Modo de Apuesta Activo**: `Kelly-Convicción Contextual (S/1.00 a S/6.00 PEN)` *(Baja prob `<50%`: `S/1.00–S/1.75` | Media `50–58%`: `S/2.00–S/3.25` | Alta `58–65%`: `S/3.50–S/4.75` | Pick Estrella `>=65%`: `S/4.80–S/6.00 PEN`)*.",
         "- **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)",
         "- **Sistema de Aviso Automático (Doble Nivel)**: `ACTIVO` *(Recibirás un correo automático vía GitHub Issue `@Drewks` al desbloquear el **Nivel 1: Micro-Banca** y un segundo correo al desbloquear el **Nivel 2: Banca Completa**)*.",
         "",

@@ -37,6 +37,48 @@ class DatabaseManager:
         with self.connect() as conn:
             for ddl in DDL_STATEMENTS:
                 conn.executescript(ddl)
+            # Auto-migrate legacy simulated_bets table if it still has CHECK (stake_pen <= 1.0)
+            row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='simulated_bets'"
+            ).fetchone()
+            if row and "stake_pen <= 1.0" in str(row["sql"]):
+                conn.execute("PRAGMA foreign_keys = OFF;")
+                conn.executescript(
+                    """
+                    DROP TRIGGER IF EXISTS prevent_settled_bet_tampering;
+                    DROP TRIGGER IF EXISTS prevent_bet_delete;
+                    CREATE TABLE simulated_bets_v2 (
+                        bet_id TEXT PRIMARY KEY,
+                        prediction_id TEXT NOT NULL UNIQUE,
+                        game_id TEXT NOT NULL,
+                        matchday_date TEXT NOT NULL,
+                        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points')),
+                        selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+                        line_value REAL,
+                        decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+                        estimated_prob REAL NOT NULL,
+                        estimated_ev REAL NOT NULL,
+                        stake_pen REAL NOT NULL CHECK (stake_pen > 0.0 AND stake_pen <= 25.0),
+                        emitted_at TEXT NOT NULL,
+                        model_version_id TEXT NOT NULL,
+                        status TEXT NOT NULL CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+                        net_profit_pen REAL,
+                        bankroll_after_pen REAL,
+                        actual_result_summary TEXT,
+                        settled_at TEXT,
+                        UNIQUE(game_id, market, selection, line_value),
+                        FOREIGN KEY (prediction_id) REFERENCES predictions(prediction_id),
+                        FOREIGN KEY (game_id) REFERENCES games(game_id)
+                    );
+                    INSERT INTO simulated_bets_v2 SELECT * FROM simulated_bets;
+                    DROP TABLE simulated_bets;
+                    ALTER TABLE simulated_bets_v2 RENAME TO simulated_bets;
+                    """
+                )
+                for ddl in DDL_STATEMENTS:
+                    if "prevent_settled_bet_tampering" in ddl or "prevent_bet_delete" in ddl:
+                        conn.executescript(ddl)
+                conn.execute("PRAGMA foreign_keys = ON;")
 
     def fetch_all(self, query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
         with self.connect() as conn:
