@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 55 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 123 docs indexed)",
   "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-  "indexed_documents_count": 55,
+  "indexed_documents_count": 123,
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "POR Ja Morant (PG) Day To Day (Hamstring): Morant did not return to Thursday's (Oct. 29) game against the Grizzlies due to a left hamstring injury.",
-      "relevance_score": 0.2917,
+      "relevance_score": 0.2708,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "HOU Alperen Şengün (C) Day To Day (Back): The Rockets listed Sengun as Questionable for Friday's (Oct. 30) game against the Mavericks.",
-      "relevance_score": 0.2693,
+      "relevance_score": 0.2124,
+      "captured_at": "2026-10-29"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Jalen Smith (C) Day To Day (Finger): Smith is Questionable for Friday's (Oct. 30) game against the Celtics.",
+      "relevance_score": 0.2079,
+      "captured_at": "2026-10-29"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Tobe Awaka (PF) Day To Day (Ankle): Awaka is Questionable for Friday's (Oct. 30) game against the Celtics.",
+      "relevance_score": 0.2043,
+      "captured_at": "2026-10-29"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Tobe Awaka F Oct 30 Day-To-Day Oct 29: Awaka (ankle) is questionable for Friday's game in Boston.",
+      "relevance_score": 0.2043,
+      "captured_at": "2026-10-30T19:52:54Z"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "LAL Ziaire Williams (SF) Day To Day (Foot): The Lakers listed Williams as Questionable for Friday's (Oct. 30) game against the Warriors.",
+      "relevance_score": 0.1973,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Tre Johnson (SG) Day To Day (Achilles): The Wizards listed Johnson as Questionable for Friday's (Oct. 30) game against the Hornets.",
-      "relevance_score": 0.2476,
+      "relevance_score": 0.196,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DEN Cameron Johnson (PF) Day To Day (Ankle): The Nuggets listed Johnson as Questionable for Friday's (Oct. 30) game against the Suns.",
-      "relevance_score": 0.2464,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Marcus Smart (PG) Day To Day (Forearm): The Rockets listed Smart as Questionable for Friday's (Oct. 30) game against the Mavericks.",
-      "relevance_score": 0.2356,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DEN Alpha Diallo (NA) Day To Day (Personal): The Nuggets listed Diallo as Questionable for Friday's (Oct. 30) game against the Suns.",
-      "relevance_score": 0.2318,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAC Rui Hachimura (PF) Day To Day (Quad): The Clippers listed Hachimura as Questionable for Friday's (Oct. 30) game against the Timberwolves.",
-      "relevance_score": 0.2315,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.1979,
-      "captured_at": "2026-10-29"
+      "snippet": "BKN Noah Clowney (PF) Day To Day (Illness): Clowney is Questionable for Friday's (Oct. 30) game versus the Pistons.",
+      "relevance_score": 0.1935,
+      "captured_at": "2026-10-30"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

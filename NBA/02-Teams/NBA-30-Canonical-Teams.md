@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T17:03:59Z
+date_generated: 2026-10-30T19:52:57Z
 total_teams: 30
 ---
 # Registro Canónico de Equipos NBA

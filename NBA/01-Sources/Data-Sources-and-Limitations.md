@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T17:03:59Z
+date_generated: 2026-10-30T19:52:57Z
 component: nba_data_scout
 ---
 # Evaluación de Fuentes de Estadísticas y Cuotas NBA
@@ -8,14 +8,13 @@ component: nba_data_scout
 - Proporciona calendario oficial, estados de partido (`SCHEDULED`, `FINAL`), estadísticas de equipo y cuotas pre-partido de `DraftKings` (`moneyline` y `total_points`).
 - Limitación histórica: en partidos históricos finalizados, `pickcenter` refleja la línea archivada sin historial tick-a-tick; por ello el sistema exige `captured_at < game_start_time` para toda captura en vivo.
 
-## 2. Sportradar NBA API v8 (`SportradarAdapter`)
-- Estado: Adaptador intercambiable implementado (`src/ingestion/adapters.py`).
-- Requiere `SPORTRADAR_API_KEY` en `.env`. Las cuotas históricas requieren licencia adicional de Odds Comparison.
+## 2. Sportradar NBA API v8 & Synergy Basketball NBA API (`SportradarAdapter`)
+- Estado: `OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)`.
+- Sincroniza el parte médico oficial de la liga (`league/injuries.json`), los splits tácticos de los 30 equipos (`seasons/2026/REG/standings.json`) y la telemetría de posesiones y jugadas de **Synergy Basketball NBA API** (`/synergy/basketball/nba/games` y `/events`) usando `SPORTRADAR_API_KEY`.
 
-## 3. NBA.com/stats (`NBAStatsAdapter`)
-- Estado: Adaptador implementado con cabeceras oficiales y circuit-breaker.
-- Limitación: `stats.nba.com` bloquea peticiones directas por huella TLS Akamai (timeout) y **no proporciona cuotas históricas de apuestas**.
+## 3. TheOddsAPI Multi-Bookmaker Line Shopping (`TheOddsAPIAdapter`)
+- Escanea en tiempo real hasta 25+ casas de apuestas (`Pinnacle`, `DraftKings`, `FanDuel`, `BetMGM`, `Coolbet`, `Matchbook`, `GTbets`, etc.) para elegir siempre la cuota máxima disponible.
 
-## 4. PixelRAG (`visual_researcher`)
-- Estado: No existe servidor MCP de PixelRAG instalado en `%APPDATA%` / `.gemini/config/mcp_config.json`.
-- El agente `visual_researcher` documenta explícitamente `PIXELRAG_NOT_INSTALLED` y opera sobre el pipeline estructurado sin inventar respuestas.
+## 4. Playwright + PixelRAG (`visual_researcher`)
+- Playwright: `OPERATIONAL`.
+- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 123 docs indexed)` indexando lesiones oficiales de Sportradar, perfiles tácticos de Synergy Basketball NBA y tablas DOM de ESPN.
