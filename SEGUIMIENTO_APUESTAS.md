@@ -1,9 +1,10 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-30 18:13 (Hora Perú UTC-5)` (`2026-10-30T23:13:45Z`)
+- **Última actualización**: `2026-10-30 18:26 (Hora Perú UTC-5)` (`2026-10-30T23:26:32Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/105.14 PEN`** (`+5.14 PEN`)
 - **ROI Actual**: `+4.95%` | **Yield Actual**: `+4.81%` | **CLV Promedio**: `+13.20%` | **Max Drawdown**: `16.44%` | **Apuestas en espera**: `3` (`S/3.00 PEN` reservados)
-- **Modo de Apuesta Activo**: `Kelly-Convicción Contextual (S/1.00 a S/6.00 PEN)` *(Baja prob `<50%`: `S/1.00–S/1.75` | Media `50–58%`: `S/2.00–S/3.25` | Alta `58–65%`: `S/3.50–S/4.75` | Pick Estrella `>=65%`: `S/4.80–S/6.00 PEN`)*.
+- **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
+- **Modo de Apuesta Activo**: `Kelly-Convicción Contextual (S/1.00 a S/6.00 PEN)` *(Baja prob `<50%`: `S/1.00–S/1.75` | Media `50–58%`: `S/2.00–S/3.25` | Alta `58–65%`: `S/3.50–S/4.75` | Pick Estrella `>=65%`: `S/4.80–S/6.00 PEN`, con protección anti-Overtime en UNDERs)*.
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
 - **Sistema de Aviso Automático (Doble Nivel)**: `ACTIVO` *(Recibirás un correo automático vía GitHub Issue `@Drewks` al desbloquear el **Nivel 1: Micro-Banca** y un segundo correo al desbloquear el **Nivel 2: Banca Completa**)*.
 
@@ -44,7 +45,7 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
-| `2026-10-30 21:00` | **DEN @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **2.420** *(DraftKings)* | 56.4% | `+36.4%` | `-1.22%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-10-30 21:00` | **DEN @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **2.420** *(DraftKings)* | 56.4% | `+36.4%` | `-3.20%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-30 21:00` | **DEN @ PHX** | Total Puntos (Over/Under) | **UNDER 230.5** | **1.909** *(DraftKings)* | 66.3% | `+26.6%` | — | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-30 19:00` | **HOU @ DAL** | Ganador (Moneyline) | **HOME (DAL gana)** | **2.600** *(DraftKings)* | 49.9% | `+29.8%` | `-1.52%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-29 21:00` | **MEM @ POR** | Total Puntos (Over/Under) | **UNDER 232.5** | **1.910** *(DraftKings)* | 63.5% | `+21.2%` | `-2.17%` | S/1.00 | ✅ GANADA | S/+0.91 (HOME 103 - AWAY 124 (Total: 227)) |

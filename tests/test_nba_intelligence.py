@@ -656,3 +656,36 @@ def test_18_dynamic_contextual_kelly_staking(tmp_path: Path) -> None:
     # High-probability pick is prioritized first in placement order
     assert res["placed_bets"][0]["game_id"] == "G_HIGH_PROB"
 
+
+# 19. Motor Híbrido Modelo G (ML + 10,000 Simulaciones Monte Carlo con Overtime/Blowout + Conformal)
+def test_19_deep_montecarlo_hybrid_model() -> None:
+    from src.models.statistical_models import DeepMonteCarloHybridModel, EnsembleStackingModel
+
+    adapter = SyntheticFixtureAdapter(seed=101, num_matchdays=12, games_per_day=4)
+    bundle = adapter.fetch_games_and_odds()
+    games = bundle["games"]
+    hist = [g for g in games[:35] if g["status"] == "FINAL"]
+    target_game = games[36]
+
+    mc_model = DeepMonteCarloHybridModel("model_g_test", n_simulations=10000)
+    mc_model.fit(hist, target_game["game_start_time"])
+    sim_1 = mc_model.simulate_matchup(target_game, hist, line_value=228.5)
+    sim_2 = mc_model.simulate_matchup(target_game, hist, line_value=228.5)
+
+    # Deterministic 10,000-simulation reproducibility
+    assert sim_1["p_home_mc"] == sim_2["p_home_mc"]
+    assert sim_1["p_over_mc"] == sim_2["p_over_mc"]
+    assert sim_1["n_simulations"] == 10000
+    assert 0.01 <= sim_1["overtime_prob"] <= 0.18
+    assert 0.01 <= sim_1["blowout_prob"] <= 0.65
+    assert sim_1["conformal_q10_total"] < sim_1["mc_expected_total"] < sim_1["conformal_q90_total"]
+
+    ens = EnsembleStackingModel("model_f_test")
+    ens.fit(hist, target_game["game_start_time"])
+    ml_out = ens.predict_moneyline(target_game, hist)
+    tot_out = ens.predict_total_points(target_game, hist, 228.5)
+    assert "p_montecarlo" in ml_out
+    assert "overtime_prob" in tot_out
+    assert "conformal_q10_total" in tot_out
+
+

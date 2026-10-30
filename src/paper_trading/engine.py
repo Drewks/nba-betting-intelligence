@@ -64,6 +64,8 @@ class PaperTradingEngine:
         ev_unit: float,
         current_bankroll_pen: float,
         uncertainty_std: float = 0.05,
+        selection: str = "",
+        overtime_prob: float = 0.0,
     ) -> float:
         """
         Calculates contextual Kelly-Conviction stake (S/1.00 to S/6.00 PEN on ~S/100 bankroll):
@@ -71,7 +73,8 @@ class PaperTradingEngine:
         - Medium probability (50% - 58%): S/2.00 - S/3.25 PEN
         - High probability (58% - 65%): S/3.50 - S/4.75 PEN
         - Maximum conviction (>=65%): S/4.80 - S/6.00 PEN
-        Also scales with current settled bankroll and penalizes high model disagreement (uncertainty_std).
+        Also integrates 10,000-Simulation Monte Carlo Overtime Risk (protects UNDERs when OT risk >= 6.8%)
+        and Conformal Model Agreement bonus.
         """
         p = max(0.01, min(0.99, float(calibrated_prob)))
         b = max(0.05, float(decimal_odds) - 1.0)
@@ -101,9 +104,15 @@ class PaperTradingEngine:
         if decimal_odds > 2.50:
             raw_stake = min(raw_stake, 1.65)
 
-        # Penalize if ensemble sub-models have high disagreement
+        # Monte Carlo Overtime Guard: if betting UNDER in a game with high OT probability (>= 6.8%), trim stake 15%
+        if str(selection).upper() == "UNDER" and float(overtime_prob) >= 0.068:
+            raw_stake *= 0.85
+
+        # Conformal Agreement / Uncertainty adjustment
         if uncertainty_std > 0.08:
             raw_stake *= 0.82
+        elif uncertainty_std <= 0.045:
+            raw_stake *= 1.08
 
         # Scale proportionally with current settled bankroll (relative to initial S/100)
         bankroll_scale = max(0.80, min(1.50, float(current_bankroll_pen) / max(1.0, self.initial_bankroll_pen)))
@@ -297,6 +306,8 @@ class PaperTradingEngine:
                     ev_unit=ev_unit,
                     current_bankroll_pen=state["settled_bankroll_pen"],
                     uncertainty_std=float(cand.get("uncertainty_std") or 0.05),
+                    selection=selection,
+                    overtime_prob=float(cand.get("overtime_prob") or 0.0),
                 )
             elif dec_odds > 2.45:
                 bet_stake = round(max(0.50, min(self.max_stake_pen, 1.35 / (dec_odds - 0.35))), 2)

@@ -135,7 +135,16 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         INSERT OR IGNORE INTO model_versions (
             model_version_id, model_family, market, train_start_date, train_end_date,
             trained_at, hyperparameters_json, is_active, approved_by
-        ) VALUES ('model_f_ensemble_v2', 'model_f_meta_ensemble', 'moneyline', '2026-01-01', ?, ?, '{}', 1, 'orchestrator_v2')
+        ) VALUES ('model_f_ensemble_v2', 'model_f_meta_ensemble', 'moneyline', '2026-01-01', ?, ?, '{"montecarlo_sims": 10000}', 1, 'orchestrator_v2')
+        """,
+        (today_str, now_str),
+    )
+    db.execute_insert(
+        """
+        INSERT OR IGNORE INTO model_versions (
+            model_version_id, model_family, market, train_start_date, train_end_date,
+            trained_at, hyperparameters_json, is_active, approved_by
+        ) VALUES ('model_g_ml_montecarlo_v2', 'model_g_ml_montecarlo_hybrid', 'total_points', '2026-01-01', ?, ?, '{"n_simulations": 10000, "regimes": ["Q1_Q3", "Q4_Blowout", "Clutch_Fouling", "Overtime"]}', 1, 'orchestrator_v2')
         """,
         (today_str, now_str),
     )
@@ -237,6 +246,11 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         raw_p_over = pred_f_tot["p_over"]
         cal_p_over = tot_cal.transform_single(raw_p_over)
 
+        feats["mc_overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
+        feats["mc_blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
+        feats["mc_conformal_q10_total"] = pred_f_tot.get("conformal_q10_total", 205.0)
+        feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
+
         for o in game_odds:
             validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
             mkt = o["market"]
@@ -283,6 +297,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             opp["raw_probability"] = raw_p
             opp["calibrated_probability"] = cal_p
             opp["uncertainty_std"] = unc
+            opp["overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
+            opp["blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
             opp["emitted_at"] = pred_ts
             candidates_by_matchday[g["matchday_date"]].append(opp)
 

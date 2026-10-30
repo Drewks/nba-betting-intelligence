@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-30T23:13:45Z
+date_generated: 2026-10-30T23:26:32Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-10-30T23:13:45Z`
+- **Fecha de auditoría (UTC)**: `2026-10-30T23:26:32Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`

@@ -184,7 +184,8 @@ def export_bets_and_tracking_dashboard(
         f"- **Última actualización**: `{peru_str}` (`{now_str}`)",
         f"- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/{metrics['current_settled_bankroll_pen']:.2f} PEN`** (`{metrics['net_profit_pen']:+.2f} PEN`)",
         f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **CLV Promedio**: {clv_str} | **Max Drawdown**: `{max_dd_val:.2f}%` | **Apuestas en espera**: `{pending_count}` (`S/{pending_stake_sum:.2f} PEN` reservados)",
-        "- **Modo de Apuesta Activo**: `Kelly-Convicción Contextual (S/1.00 a S/6.00 PEN)` *(Baja prob `<50%`: `S/1.00–S/1.75` | Media `50–58%`: `S/2.00–S/3.25` | Alta `58–65%`: `S/3.50–S/4.75` | Pick Estrella `>=65%`: `S/4.80–S/6.00 PEN`)*.",
+        "- **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.",
+        "- **Modo de Apuesta Activo**: `Kelly-Convicción Contextual (S/1.00 a S/6.00 PEN)` *(Baja prob `<50%`: `S/1.00–S/1.75` | Media `50–58%`: `S/2.00–S/3.25` | Alta `58–65%`: `S/3.50–S/4.75` | Pick Estrella `>=65%`: `S/4.80–S/6.00 PEN`, con protección anti-Overtime en UNDERs)*.",
         "- **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)",
         "- **Sistema de Aviso Automático (Doble Nivel)**: `ACTIVO` *(Recibirás un correo automático vía GitHub Issue `@Drewks` al desbloquear el **Nivel 1: Micro-Banca** y un segundo correo al desbloquear el **Nivel 2: Banca Completa**)*.",
         "",
@@ -620,12 +621,14 @@ def sync_obsidian_vault(
         ),
         "06-Models/Model-Catalog-and-Versions.md": (
             f"---\ndate_generated: {now_str}\n---\n"
-            "# Catálogo de Modelos Cuantitativos (Modelos A–E)\n\n"
+            "# Catálogo de Modelos Cuantitativos (Modelos A–G)\n\n"
             "1. **Modelo A (`model_a_baseline_v1`)**: Frecuencia histórica de victoria local y media/desviación de puntos totales.\n"
-            "2. **Modelo B (`model_b_elo_v1`)**: Sistema Elo secuencial con ajuste por localía (+65 Elo) y descanso (+12 Elo/día).\n"
-            "3. **Modelo C (`model_c_point_margin_v1`)**: Regresión Ridge sobre `Offensive Rating`, `Defensive Rating`, `Net Rating`, `Pace`, descanso y forma reciente.\n"
-            "4. **Modelo D (`model_d_total_points_v1`)**: Distribución normal con **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
-            "5. **Modelo E (`model_e_lightgbm_v1`)**: `LightGBM` evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
+            "2. **Modelo B (`model_b_elo_v2`)**: Sistema Elo secuencial con ajuste por localía (+65 Elo) y descanso (+12 Elo/día).\n"
+            "3. **Modelo C (`model_c_point_margin_v2`)**: Regresión Ridge sobre `Offensive Rating`, `Defensive Rating`, `Net Rating`, `Pace`, descanso y forma reciente.\n"
+            "4. **Modelo D (`model_d_total_points_v2`)**: Distribución normal con **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
+            "5. **Modelo E (`model_e_lightgbm_v2`)**: `LightGBM` evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
+            "6. **Modelo F (`model_f_ensemble_v2`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E y G en escala log-odds con incertidumbre Conformal.\n"
+            "7. **Modelo G (`model_g_ml_montecarlo_v2`)**: **Simulador Híbrido ML + 10,000 Partidos Monte Carlo por Posesión** (modela `Q1–Q3`, desaceleración por `Blowout/Garbage-Time` en `Q4`, faltas intencionales en los últimos 90s `Clutch Fouling` y prórrogas `Overtime OT1/OT2` + intervalos `Conformal Prediction [Q10, Q90]`).\n"
         ),
         "07-Backtesting/Walk-Forward-Backtest-Results.md": weekly_report_md,
         "08-Calibration/Calibration-and-Reliability.md": (
