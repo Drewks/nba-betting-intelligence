@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import sqlite3
 from typing import Any
 import uuid
+import numpy as np
 
 from src.storage.db import DatabaseManager
 from src.validation.validator import (
@@ -43,6 +44,7 @@ class PaperTradingEngine:
         min_ev_threshold: float = 0.05,
         dynamic_conviction_staking: bool = False,
         exclude_synthetic: bool = False,
+        single_bet_per_game: bool = True,
     ) -> None:
         max_allowed = 10.00 if dynamic_conviction_staking else 1.00
         if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
@@ -58,12 +60,58 @@ class PaperTradingEngine:
         self.dynamic_conviction_staking = bool(dynamic_conviction_staking)
         # When True, bankroll / metrics only count bets on REAL games (synthetic SYN_* fixtures are archived benchmarks)
         self.exclude_synthetic = bool(exclude_synthetic)
+        # Anti-correlation: limit maximum exposure to at most 1 active bet per game across all markets
+        self.single_bet_per_game = bool(single_bet_per_game)
         self._ensure_initial_ledger()
 
     @property
     def scope_sql(self) -> str:
         """SQL predicate restricting simulated_bets to the active accounting scope."""
         return "game_id NOT LIKE 'SYN%'" if self.exclude_synthetic else "1 = 1"
+
+    def get_recent_clv_governor_factor(self, lookback: int = 25) -> tuple[float, float | None]:
+        """
+        Active Risk Governor based on Closing Line Value (CLV).
+        If the market has moved against our entry prices on recent bets (mean CLV < 0%),
+        automatically trims stake scaling to protect bankroll during adverse market regimes.
+        Returns (scaling_factor, mean_clv_pct).
+        """
+        rows = self.db.fetch_all(
+            f"""
+            SELECT b.decimal_odds, o.decimal_odds AS closing_odds
+            FROM simulated_bets b
+            JOIN odds_snapshots o ON b.game_id = o.game_id
+                                 AND b.market = o.market
+                                 AND b.selection = o.selection
+                                 AND COALESCE(b.line_value, -9999) = COALESCE(o.line_value, -9999)
+            WHERE b.status IN ('WON', 'LOST', 'PUSH')
+              AND o.is_closing_line = 1
+              AND {self.scope_sql}
+            ORDER BY b.settled_at DESC
+            LIMIT ?
+            """,
+            (lookback,),
+        )
+        if len(rows) < 4:
+            return 1.0, None
+        clvs = [
+            ((float(r["decimal_odds"]) / float(r["closing_odds"])) - 1.0) * 100.0
+            for r in rows
+            if float(r["closing_odds"]) > 1.0
+        ]
+        if not clvs:
+            return 1.0, None
+        mean_clv = float(np.mean(clvs))
+        if mean_clv < -2.0:
+            factor = 0.50
+        elif mean_clv < 0.0:
+            factor = 0.75
+        elif mean_clv >= 2.0:
+            factor = 1.10
+        else:
+            factor = 1.00
+        return factor, round(mean_clv, 2)
+
 
     def compute_contextual_stake_pen(
         self,
@@ -74,6 +122,7 @@ class PaperTradingEngine:
         uncertainty_std: float = 0.05,
         selection: str = "",
         overtime_prob: float = 0.0,
+        apply_clv_governor: bool = True,
     ) -> float:
         """
         Calculates contextual Kelly-Conviction stake (S/1.00 to S/6.00 PEN on ~S/100 bankroll):
@@ -106,7 +155,12 @@ class PaperTradingEngine:
             tier_base = 4.80 + min(1.0, (p - 0.65) / 0.10) * 0.85
             kelly_bonus = min(0.45, f_kelly * 2.0)
 
-        raw_stake = tier_base + kelly_bonus
+        # Edge-Scaling Modulator (Priority 1 Improvement):
+        # A high probability pick with a tiny edge (e.g. EV <= 2%) should NOT risk maximum capital.
+        # Dampen the conviction tier when EV is small, and allow full conviction when EV >= 8%.
+        edge_modulator = min(1.0, max(0.20, float(ev_unit) / 0.08))
+        modulated_tier = 1.00 + (tier_base - 1.00) * edge_modulator
+        raw_stake = modulated_tier + kelly_bonus
 
         # Extra caution on high-variance longshots (odds > 2.50)
         if decimal_odds > 2.50:
@@ -121,6 +175,11 @@ class PaperTradingEngine:
             raw_stake *= 0.82
         elif uncertainty_std <= 0.045:
             raw_stake *= 1.08
+
+        # Active CLV Governor: scale down if market has been closing against us
+        if apply_clv_governor:
+            clv_factor, _ = self.get_recent_clv_governor_factor()
+            raw_stake *= clv_factor
 
         # Scale proportionally with current settled bankroll (relative to initial S/100)
         bankroll_scale = max(0.80, min(1.50, float(current_bankroll_pen) / max(1.0, self.initial_bankroll_pen)))
@@ -211,6 +270,7 @@ class PaperTradingEngine:
         )
         day_count = int(existing_day_bets["cnt"]) if existing_day_bets else 0
         selected_game_markets: set[tuple[str, str]] = set()
+        selected_games: set[str] = set()
 
         for cand in sorted_candidates:
             emitted_at = cand.get("emitted_at") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -275,18 +335,6 @@ class PaperTradingEngine:
                 )
                 continue
 
-            # 3. Check opposite side of same game+market in current batch
-            if (game_id, market) in selected_game_markets:
-                no_bet_decisions.append(
-                    self._record_decision(
-                        game_id, matchday_date, market, selection, "NO_BET",
-                        "MARKET_ALREADY_SELECTED",
-                        "Another selection in the same game and market was already placed",
-                        ev_pct, emitted_at, model_version_id
-                    )
-                )
-                continue
-
             # 4. Check duplicate in DB
             dup = self.db.fetch_one(
                 """
@@ -302,6 +350,45 @@ class PaperTradingEngine:
                         game_id, matchday_date, market, selection, "NO_BET",
                         "DUPLICATE_SELECTION",
                         f"Duplicate selection already recorded ({dup['bet_id']})",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
+            # 3. Check single-game anti-correlation limit (max 1 bet per game across all markets)
+            if self.single_bet_per_game:
+                if game_id in selected_games:
+                    no_bet_decisions.append(
+                        self._record_decision(
+                            game_id, matchday_date, market, selection, "NO_BET",
+                            "CORRELATED_GAME_EXPOSURE",
+                            f"Another selection for game {game_id} was already placed in this matchday.",
+                            ev_pct, emitted_at, model_version_id
+                        )
+                    )
+                    continue
+
+                existing_pending_in_game = self.db.fetch_one(
+                    "SELECT bet_id, market, selection FROM simulated_bets WHERE game_id = ? AND status = 'PENDING'",
+                    (game_id,),
+                )
+                if existing_pending_in_game:
+                    no_bet_decisions.append(
+                        self._record_decision(
+                            game_id, matchday_date, market, selection, "NO_BET",
+                            "PENDING_BET_IN_SAME_GAME",
+                            f"Game already has an active pending bet ({existing_pending_in_game['bet_id']}: "
+                            f"{existing_pending_in_game['market']} {existing_pending_in_game['selection']})",
+                            ev_pct, emitted_at, model_version_id
+                        )
+                    )
+                    continue
+            elif (game_id, market) in selected_game_markets:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "MARKET_ALREADY_SELECTED",
+                        "Another selection in the same game and market was already placed",
                         ev_pct, emitted_at, model_version_id
                     )
                 )
@@ -402,6 +489,7 @@ class PaperTradingEngine:
             )
 
             day_count += 1
+            selected_games.add(game_id)
             selected_game_markets.add((game_id, market))
             placed_bets.append(
                 {

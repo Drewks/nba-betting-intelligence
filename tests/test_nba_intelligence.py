@@ -767,5 +767,100 @@ def test_20_prioridad_0_market_anchoring_and_team_ratings(tmp_path: Path) -> Non
     assert is_synthetic_game_id("SYN_20260101_BOS_AT_MIA")
     assert not is_synthetic_game_id("ESPN_401909891")
 
+# 21. Prioridad 1: Kelly Proporcional a la Ventaja, Guardi?n de Riesgo CLV y Anti-Correlaci?n por Partido
+def test_21_prioridad_1_edge_proportional_kelly_clv_governor_anticorrelation(tmp_path: Path) -> None:
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.storage.db import DatabaseManager
 
+    db = DatabaseManager(tmp_path / "test_p1.sqlite3")
+    engine = PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=100.00,
+        base_stake_pen=1.00,
+        max_stake_pen=6.00,
+        dynamic_conviction_staking=True,
+        single_bet_per_game=True,
+    )
+
+    # 1. Edge-Proportional Staking: High prob (68%) with high EV (29.9%) vs tiny EV (1.5%)
+    stake_high_edge = engine.compute_contextual_stake_pen(
+        calibrated_prob=0.68,
+        decimal_odds=1.91,
+        ev_unit=0.2988,
+        current_bankroll_pen=100.0,
+        apply_clv_governor=False,
+    )
+    stake_tiny_edge = engine.compute_contextual_stake_pen(
+        calibrated_prob=0.68,
+        decimal_odds=1.49,
+        ev_unit=0.015,
+        current_bankroll_pen=100.0,
+        apply_clv_governor=False,
+    )
+    # High edge unlocks high stake (S/5.50), while tiny edge protects bankroll (S/1.76 - S/2.10)
+    assert 4.80 <= stake_high_edge <= 6.00
+    assert 1.00 <= stake_tiny_edge <= 2.20
+    assert stake_high_edge > 2.0 * stake_tiny_edge
+
+    # 2. Anti-Correlation: Only 1 bet allowed per game across all markets
+    p_ml = _seed_sample_game_and_prediction(db, "G_MATCHUP_ALPHA")
+    # Add a second prediction for the same game
+    p_tot = "PRED_TEST_TOT_ALPHA"
+    db.execute_insert(
+        """
+        INSERT INTO predictions (
+            prediction_id, game_id, market, selection, line_value,
+            model_version_id, raw_probability, calibrated_probability,
+            uncertainty_std, implied_prob_gross, implied_prob_fair,
+            bookmaker_overround, decimal_odds_used, odds_provider,
+            odds_captured_at, ev_unit, ev_pct, emitted_at, features_snapshot_json
+        ) VALUES (
+            ?, 'G_MATCHUP_ALPHA', 'total_points', 'UNDER', 228.5,
+            'model_c_test_v1', 0.55, 0.55,
+            0.05, 0.5235, 0.50,
+            0.047, 1.91, 'DraftKings',
+            '2026-10-20T18:00:00Z', 0.0505, 5.05, '2026-10-20T18:00:00Z', '{}'
+        )
+        """,
+        (p_tot,),
+    )
+
+    res_anticorr = engine.evaluate_and_record_matchday_selections(
+        "2026-10-20",
+        [
+            {
+                "prediction_id": p_ml,
+                "game_id": "G_MATCHUP_ALPHA",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 1.95,
+                "calibrated_probability": 0.58,
+                "ev_unit": 0.131,
+                "ev_pct": 13.1,
+                "uncertainty_std": 0.04,
+                "model_version_id": "model_c_test_v1",
+                "emitted_at": "2026-10-20T20:00:00Z",
+            },
+            {
+                "prediction_id": p_tot,
+                "game_id": "G_MATCHUP_ALPHA",
+                "market": "total_points",
+                "selection": "UNDER",
+                "line_value": 228.5,
+                "decimal_odds_used": 1.91,
+                "calibrated_probability": 0.55,
+                "ev_unit": 0.0505,
+                "ev_pct": 5.05,
+                "uncertainty_std": 0.05,
+                "model_version_id": "model_c_test_v1",
+                "emitted_at": "2026-10-20T20:00:00Z",
+            },
+        ],
+    )
+    # Exactly one bet placed on G_MATCHUP_ALPHA; second market is blocked to prevent double-dipping risk
+    assert len(res_anticorr["placed_bets"]) == 1
+    assert res_anticorr["placed_bets"][0]["market"] == "moneyline"
+    assert len(res_anticorr["no_bet_decisions"]) == 1
+    assert res_anticorr["no_bet_decisions"][0]["reason_code"] == "CORRELATED_GAME_EXPOSURE"
 

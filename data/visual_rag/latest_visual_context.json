@@ -9,7 +9,7 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Meleek Thomas G Oct 31 Day-To-Day Oct 30: Thomas (foot) is questionable for Saturday's game against the Bucks.",
       "relevance_score": 0.3352,
-      "captured_at": "2026-10-31T01:14:52Z"
+      "captured_at": "2026-10-31T01:30:08Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
@@ -20,13 +20,13 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2488,
+      "relevance_score": 0.249,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2397,
+      "relevance_score": 0.2399,
       "captured_at": "2026-10-29"
     },
     {
@@ -38,7 +38,7 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Alex Caruso (SG) Day To Day (Ankle): Caruso did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2316,
+      "relevance_score": 0.2318,
       "captured_at": "2026-10-29"
     },
     {
