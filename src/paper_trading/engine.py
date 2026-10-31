@@ -9,7 +9,7 @@ Paper Trading Engine (Sections 7 & 8):
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sqlite3
 from typing import Any
 import uuid
@@ -121,6 +121,82 @@ class PaperTradingEngine:
         else:
             factor = 1.00
         return factor, round(mean_clv, 2)
+
+    def persist_closing_lines_for_games(self, as_of_utc: str | None = None) -> int:
+        """
+        Promotes the latest strictly pre-tipoff odds capture to a formal closing line (is_closing_line = 1)
+        for real games that are FINAL or within 45 minutes of tip-off (or already started).
+        Ensures zero temporal leakage by strictly requiring captured_at <= game_start_time.
+        Returns the count of newly inserted closing odds rows.
+        """
+        now_dt = parse_iso_utc(as_of_utc) if as_of_utc else datetime.now(timezone.utc)
+        now_str = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        cutoff_str = (now_dt + timedelta(minutes=45)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        games_needing_close = self.db.fetch_all(
+            """
+            SELECT g.game_id, g.game_start_time, g.status
+            FROM games g
+            WHERE g.game_id NOT LIKE 'SYN%'
+              AND (g.status IN ('FINAL', 'POSTPONED', 'CANCELLED') OR g.game_start_time <= ?)
+              AND EXISTS (
+                  SELECT 1 FROM odds_snapshots o
+                  WHERE o.game_id = g.game_id AND o.is_closing_line = 0
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM odds_snapshots o
+                  WHERE o.game_id = g.game_id AND o.is_closing_line = 1
+              )
+            """,
+            (cutoff_str,),
+        )
+        inserted_count = 0
+        with self.db.connect() as conn:
+            for g in games_needing_close:
+                gid = g["game_id"]
+                start_ts = g["game_start_time"]
+                latest_time_row = conn.execute(
+                    """
+                    SELECT MAX(captured_at) AS max_captured
+                    FROM odds_snapshots
+                    WHERE game_id = ? AND is_closing_line = 0 AND captured_at <= ?
+                    """,
+                    (gid, start_ts),
+                ).fetchone()
+                if not latest_time_row or not latest_time_row["max_captured"]:
+                    continue
+                max_captured = latest_time_row["max_captured"]
+
+                snapshots = conn.execute(
+                    """
+                    SELECT * FROM odds_snapshots
+                    WHERE game_id = ? AND is_closing_line = 0 AND captured_at = ?
+                    """,
+                    (gid, max_captured),
+                ).fetchall()
+
+                for s in snapshots:
+                    close_id = f"{s['odds_id']}_CLOSE"
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO odds_snapshots (
+                            odds_id, game_id, provider, market, selection, line_value,
+                            decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                        """,
+                        (
+                            close_id,
+                            s["game_id"],
+                            s["provider"],
+                            s["market"],
+                            s["selection"],
+                            s["line_value"],
+                            s["decimal_odds"],
+                            s["counterpart_decimal_odds"],
+                            s["captured_at"],
+                        ),
+                    )
+                    inserted_count += 1
+        return inserted_count
 
 
     def compute_contextual_stake_pen(

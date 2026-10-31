@@ -1021,3 +1021,56 @@ def test_22_clv_deduplication_longshot_guard_and_daily_pick_quality(tmp_path: Pa
     assert res_high["top_pick"] is not None
     assert res_high["top_pick"]["bet_id"] == "BET_HIGH"
     assert res_high["top_pick"]["prob_estimada"] == 67.5
+
+# 23. Persistencia Automática de Cuotas de Cierre (Closing Lines) Pre-Tipoff y Modos de Ciclo
+def test_23_persist_closing_lines_and_cycle_modes(tmp_path: Path) -> None:
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.storage.db import DatabaseManager
+
+    db = DatabaseManager(tmp_path / "test_p23.sqlite3")
+    engine = PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=100.00,
+        base_stake_pen=1.00,
+        max_stake_pen=6.00,
+        dynamic_conviction_staking=True,
+        exclude_synthetic=True,
+    )
+
+    # 1. Seed a scheduled real game starting in 20 minutes
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
+            away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
+            features_available_at, source_provider, ingested_at
+        ) VALUES (
+            'REAL_GAME_TIPOFF', '2026-27', '2026-10-25', '2026-10-25T20:00:00Z', 'GSW', 'LAL',
+            'SCHEDULED', NULL, NULL, 115.0, 112.0, 100.0, 114.0, 113.0, 99.0, 2, 2,
+            '2026-10-25T18:00:00Z', 'espn_real', '2026-10-25T18:00:00Z'
+        )
+        """
+    )
+    # Insert open odds captured pre-tipoff
+    db.execute_insert(
+        """
+        INSERT INTO odds_snapshots (
+            odds_id, game_id, provider, market, selection, line_value, decimal_odds,
+            captured_at, is_closing_line
+        ) VALUES ('ODDS_TIPOFF_HOME', 'REAL_GAME_TIPOFF', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.95, '2026-10-25T19:40:00Z', 0)
+        """
+    )
+
+    # Run persist_closing_lines_for_games as of 19:45 UTC (15 min before tipoff)
+    promoted = engine.persist_closing_lines_for_games(as_of_utc="2026-10-25T19:45:00Z")
+    assert promoted == 1
+
+    # Verify that a closing line row now exists with is_closing_line = 1
+    closing_row = db.fetch_one(
+        "SELECT * FROM odds_snapshots WHERE game_id = 'REAL_GAME_TIPOFF' AND is_closing_line = 1"
+    )
+    assert closing_row is not None
+    assert closing_row["odds_id"] == "ODDS_TIPOFF_HOME_CLOSE"
+    assert float(closing_row["decimal_odds"]) == 1.95
+    assert closing_row["captured_at"] == "2026-10-25T19:40:00Z"

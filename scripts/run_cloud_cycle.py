@@ -103,15 +103,28 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     today_str = now_dt.strftime("%Y-%m-%d")
     tomorrow_str = (now_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    # 1. Fetch yesterday, today, and tomorrow from ESPN + The Odds API (32 books)
+    # 1. Fetch dates based on cycle mode:
+    # - settle_and_calibrate: yesterday and today (final results & boxscores)
+    # - pregame: today and tomorrow (fresh odds & upcoming lines)
+    # - auto: complete slate (yesterday, today, tomorrow)
+    if mode == "settle_and_calibrate":
+        dates_to_ingest = (yesterday_str, today_str)
+    elif mode == "pregame":
+        dates_to_ingest = (today_str, tomorrow_str)
+    else:
+        dates_to_ingest = (yesterday_str, today_str, tomorrow_str)
+
     router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10)])
     ingested_dates: list[str] = []
-    for dt_str in (yesterday_str, today_str, tomorrow_str):
+    for dt_str in dates_to_ingest:
         try:
             scout.ingest_and_validate_dataset(router, date_str=dt_str)
             ingested_dates.append(dt_str)
         except Exception:
             pass
+
+    # 1b. Automatically promote latest pre-tipoff odds to closing lines for started / final games
+    new_closing_lines = paper_engine.persist_closing_lines_for_games(now_str)
 
     # 2. Settle any PENDING simulated bets whose games are now FINAL, POSTPONED, or CANCELLED
     pending_bets = db.fetch_all(
@@ -276,112 +289,114 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         )
 
     # 4. Evaluate upcoming SCHEDULED games across the entire slate and rank globally by EV per matchday
-    scheduled_games = db.fetch_all(
-        "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_start_time > ? ORDER BY game_start_time ASC",
-        (now_str,),
-    )
+    # (Skip pre-game evaluation if running exclusively in settle_and_calibrate mode)
     new_bets_placed = 0
     candidates_by_matchday: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
-    for g in scheduled_games:
-        existing_pred = db.fetch_one("SELECT prediction_id FROM predictions WHERE game_id = ?", (g["game_id"],))
-        if existing_pred:
-            continue
-        game_odds = db.fetch_all(
-            "SELECT * FROM odds_snapshots WHERE game_id = ? AND is_closing_line = 0",
-            (g["game_id"],),
+    if mode != "settle_and_calibrate":
+        scheduled_games = db.fetch_all(
+            "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_start_time > ? ORDER BY game_start_time ASC",
+            (now_str,),
         )
-        if not game_odds:
-            continue
-
-        start_dt = parse_iso_utc(g["game_start_time"])
-        avail_dt = parse_iso_utc(g["features_available_at"])
-        latest_odds_dt = max(parse_iso_utc(o["captured_at"]) for o in game_odds)
-        pred_dt = max(avail_dt, latest_odds_dt)
-        if pred_dt >= start_dt:
-            continue
-        pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        validate_game_record(g, simulated_prediction_time=pred_ts)
-
-        feats = build_pregame_features(g, all_final_games, market="total_points")
-        pred_f_ml = model_f.predict_moneyline(g, all_final_games)
-        raw_p_home = pred_f_ml["p_home"]
-        cal_p_home = ml_cal.transform_single(raw_p_home)
-
-        tot_odds = [o for o in game_odds if o["market"] == "total_points"]
-        line_val = float(tot_odds[0]["line_value"]) if tot_odds else 228.5
-        pred_f_tot = model_f.predict_total_points(g, all_final_games, line_val)
-        raw_p_over = pred_f_tot["p_over"]
-        cal_p_over = tot_cal.transform_single(raw_p_over)
-
-        feats["mc_overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
-        feats["mc_blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
-        feats["mc_conformal_q10_total"] = pred_f_tot.get("conformal_q10_total", 205.0)
-        feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
-
-        consensus_map = compute_market_consensus(game_odds)
-
-        for o in game_odds:
-            validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
-            mkt = o["market"]
-            sel = o["selection"]
-            line_v = o.get("line_value")
-            cons_entry = consensus_map.get((mkt, sel, line_v))
-            cons_p = cons_entry["p_market"] if cons_entry else None
-
-            if mkt == "moneyline":
-                raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
-                cal_p = cal_p_home if sel == "HOME" else round(1.0 - cal_p_home, 6)
-                unc = pred_f_ml["uncertainty_std"]
-                m_ver = model_f.version_id
-            else:
-                raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
-                cal_p = cal_p_over if sel == "OVER" else round(1.0 - cal_p_over, 6)
-                unc = pred_f_tot["uncertainty_std"]
-                m_ver = model_f.version_id
-
-            opp = evaluate_market_opportunity(
-                estimated_prob=cal_p,
-                uncertainty_std=unc,
-                odds_record=o,
-                game_start_time=g["game_start_time"],
-                model_version_id=m_ver,
-                simulated_prediction_time=pred_ts,
-                market_consensus_prob=cons_p,
-                model_weight=DEFAULT_MODEL_WEIGHT,
-                max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
+        for g in scheduled_games:
+            existing_pred = db.fetch_one("SELECT prediction_id FROM predictions WHERE game_id = ?", (g["game_id"],))
+            if existing_pred:
+                continue
+            game_odds = db.fetch_all(
+                "SELECT * FROM odds_snapshots WHERE game_id = ? AND is_closing_line = 0",
+                (g["game_id"],),
             )
-            pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{uuid.uuid4().hex[:6].upper()}"
-            db.execute_insert(
-                """
-                INSERT INTO predictions (
-                    prediction_id, game_id, market, selection, line_value,
-                    model_version_id, raw_probability, calibrated_probability,
-                    uncertainty_std, implied_prob_gross, implied_prob_fair,
-                    bookmaker_overround, decimal_odds_used, odds_provider,
-                    odds_captured_at, ev_unit, ev_pct, emitted_at, features_snapshot_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    pred_id, g["game_id"], mkt, sel, o.get("line_value"),
-                    m_ver, raw_p, opp["estimated_probability"], unc, opp["implied_prob_gross"],
-                    opp["implied_prob_fair"], opp["bookmaker_overround"],
-                    opp["decimal_odds_used"], opp["odds_provider"], opp["odds_captured_at"],
-                    opp["ev_unit"], opp["ev_pct"], pred_ts, json.dumps(feats),
-                ),
-            )
-            opp["prediction_id"] = pred_id
-            opp["raw_probability"] = raw_p
-            opp["calibrated_probability"] = opp["estimated_probability"]
-            opp["uncertainty_std"] = unc
-            opp["overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
-            opp["blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
-            opp["emitted_at"] = pred_ts
-            candidates_by_matchday[g["matchday_date"]].append(opp)
-
-    for m_date in sorted(candidates_by_matchday.keys()):
-        day_res = paper_engine.evaluate_and_record_matchday_selections(m_date, candidates_by_matchday[m_date])
-        new_bets_placed += len(day_res["placed_bets"])
+            if not game_odds:
+                continue
+    
+            start_dt = parse_iso_utc(g["game_start_time"])
+            avail_dt = parse_iso_utc(g["features_available_at"])
+            latest_odds_dt = max(parse_iso_utc(o["captured_at"]) for o in game_odds)
+            pred_dt = max(avail_dt, latest_odds_dt)
+            if pred_dt >= start_dt:
+                continue
+            pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            validate_game_record(g, simulated_prediction_time=pred_ts)
+    
+            feats = build_pregame_features(g, all_final_games, market="total_points")
+            pred_f_ml = model_f.predict_moneyline(g, all_final_games)
+            raw_p_home = pred_f_ml["p_home"]
+            cal_p_home = ml_cal.transform_single(raw_p_home)
+    
+            tot_odds = [o for o in game_odds if o["market"] == "total_points"]
+            line_val = float(tot_odds[0]["line_value"]) if tot_odds else 228.5
+            pred_f_tot = model_f.predict_total_points(g, all_final_games, line_val)
+            raw_p_over = pred_f_tot["p_over"]
+            cal_p_over = tot_cal.transform_single(raw_p_over)
+    
+            feats["mc_overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
+            feats["mc_blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
+            feats["mc_conformal_q10_total"] = pred_f_tot.get("conformal_q10_total", 205.0)
+            feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
+    
+            consensus_map = compute_market_consensus(game_odds)
+    
+            for o in game_odds:
+                validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
+                mkt = o["market"]
+                sel = o["selection"]
+                line_v = o.get("line_value")
+                cons_entry = consensus_map.get((mkt, sel, line_v))
+                cons_p = cons_entry["p_market"] if cons_entry else None
+    
+                if mkt == "moneyline":
+                    raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
+                    cal_p = cal_p_home if sel == "HOME" else round(1.0 - cal_p_home, 6)
+                    unc = pred_f_ml["uncertainty_std"]
+                    m_ver = model_f.version_id
+                else:
+                    raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
+                    cal_p = cal_p_over if sel == "OVER" else round(1.0 - cal_p_over, 6)
+                    unc = pred_f_tot["uncertainty_std"]
+                    m_ver = model_f.version_id
+    
+                opp = evaluate_market_opportunity(
+                    estimated_prob=cal_p,
+                    uncertainty_std=unc,
+                    odds_record=o,
+                    game_start_time=g["game_start_time"],
+                    model_version_id=m_ver,
+                    simulated_prediction_time=pred_ts,
+                    market_consensus_prob=cons_p,
+                    model_weight=DEFAULT_MODEL_WEIGHT,
+                    max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
+                )
+                pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{uuid.uuid4().hex[:6].upper()}"
+                db.execute_insert(
+                    """
+                    INSERT INTO predictions (
+                        prediction_id, game_id, market, selection, line_value,
+                        model_version_id, raw_probability, calibrated_probability,
+                        uncertainty_std, implied_prob_gross, implied_prob_fair,
+                        bookmaker_overround, decimal_odds_used, odds_provider,
+                        odds_captured_at, ev_unit, ev_pct, emitted_at, features_snapshot_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        pred_id, g["game_id"], mkt, sel, o.get("line_value"),
+                        m_ver, raw_p, opp["estimated_probability"], unc, opp["implied_prob_gross"],
+                        opp["implied_prob_fair"], opp["bookmaker_overround"],
+                        opp["decimal_odds_used"], opp["odds_provider"], opp["odds_captured_at"],
+                        opp["ev_unit"], opp["ev_pct"], pred_ts, json.dumps(feats),
+                    ),
+                )
+                opp["prediction_id"] = pred_id
+                opp["raw_probability"] = raw_p
+                opp["calibrated_probability"] = opp["estimated_probability"]
+                opp["uncertainty_std"] = unc
+                opp["overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
+                opp["blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
+                opp["emitted_at"] = pred_ts
+                candidates_by_matchday[g["matchday_date"]].append(opp)
+    
+        for m_date in sorted(candidates_by_matchday.keys()):
+            day_res = paper_engine.evaluate_and_record_matchday_selections(m_date, candidates_by_matchday[m_date])
+            new_bets_placed += len(day_res["placed_bets"])
 
     # 5. Recompute metrics, audit, and refresh reports + Obsidian
     bt = WalkForwardBacktester(db, paper_engine)
@@ -420,6 +435,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         "mode": mode,
         "timestamp_utc": now_str,
         "ingested_dates": ingested_dates,
+        "closing_lines_promoted": new_closing_lines,
         "bets_settled_in_cycle": len(settled_now),
         "new_bets_placed_in_cycle": new_bets_placed,
         "active_calibration_methods": {"moneyline": ml_method, "total_points": tot_method},

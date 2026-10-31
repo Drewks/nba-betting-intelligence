@@ -51,7 +51,7 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Dailyn Swain G Nov 2 Day-To-Day Oct 31: Swain (back) has been ruled out for Friday's game against Boston.",
       "relevance_score": 0.17,
-      "captured_at": "2026-10-31T20:30:29Z"
+      "captured_at": "2026-10-31T20:55:30Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

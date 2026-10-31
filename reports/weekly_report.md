@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-31T20:30:32Z
+date_generated: 2026-10-31T20:55:33Z
 report_type: weekly_report
 model_versions: [model_a_baseline_v1, model_b_elo_v1, model_c_point_margin_v1, model_d_total_points_v1, model_e_lightgbm_v1]
 settled_predictions: 9
@@ -8,7 +8,7 @@ simulation_only: true
 # Informe Semanal y Consolidado Walk-Forward — NBA Betting Intelligence
 
 ## 1. Resumen Financiero Virtual (Bankroll Inicial: S/100.00 PEN)
-- **Fecha de generación (UTC)**: `2026-10-31T20:30:32Z`
+- **Fecha de generación (UTC)**: `2026-10-31T20:55:33Z`
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll virtual liquidado actual**: `S/101.71 PEN`
 - **Beneficio neto acumulado**: `S/+1.71 PEN`
@@ -21,7 +21,7 @@ simulation_only: true
 - **Cuota decimal media**: `2.107`
 - **Drawdown máximo**: `S/1.08 PEN` (`1.06%`)
 - **Exposición máxima simultánea**: `S/6.00 PEN`
-- **Closing Line Value (CLV) medio**: `+0.08%`
+- **Closing Line Value (CLV) medio**: `+0.05%`
 
 ## 2. Rendimiento por Mercado
 
