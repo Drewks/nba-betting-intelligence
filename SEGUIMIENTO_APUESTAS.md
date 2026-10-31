@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-31 12:02 (Hora Perú UTC-5)` (`2026-10-31T17:02:34Z`)
+- **Última actualización**: `2026-10-31 15:30 (Hora Perú UTC-5)` (`2026-10-31T20:30:32Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/101.71 PEN`** (`+1.71 PEN`)
 - **ROI Actual**: `+19.00%` | **Yield Actual**: `+15.49%` | **CLV Promedio**: `+0.08%` | **Max Drawdown**: `1.06%` | **Apuestas en espera**: `2` (`S/2.04 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
@@ -35,18 +35,16 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 
 ## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)
 
-> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-10-31` — 1 Solo Pick: Mayor Probabilidad de Acierto)
-> - **Partido**: **SAC @ MEM** (`2026-10-31 19:00 Hora Perú`)
-> - **Pick Más Probable**: 🎯 **AWAY (SAC gana)** (Ganador (Moneyline)) @ **`4.400`** *(DraftKings)*
-> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`24.1%`** | **EV**: `+6.1%`
-> - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor probabilidad de acierto y sin alerta CLV)*.
+> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-10-31`)
+> - **Estado**: 🛡️ **Jornada de Alta Volatilidad / Sin Selección >= 50% de Probabilidad**
+> - **Protección Activa**: Siguiendo tu directiva de enviar únicamente selecciones con alta probabilidad de acierto, hoy no se emite pick por correo porque las opciones disponibles son underdogs de alta cuota con varianza excesiva.
 
 Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):
 
 | Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
-| `2026-10-31 19:00` | **MIN @ SAS** | Ganador (Moneyline) | **AWAY (MIN gana)** | **5.400** *(DraftKings)* | 20.8% | `+12.2%` | — | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-10-31 19:00` | **SAC @ MEM** | Ganador (Moneyline) | **AWAY (SAC gana)** | **4.400** *(DraftKings)* | 24.1% | `+6.1%` | `+10.00%` | S/1.04 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-10-31 19:00` | **MIN @ SAS** | Ganador (Moneyline) | **AWAY (MIN gana)** | **5.400** *(DraftKings)* | 20.8% | `+12.2%` | `+0.00%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-10-31 19:00` | **SAC @ MEM** | Ganador (Moneyline) | **AWAY (SAC gana)** | **4.400** *(DraftKings)* | 24.1% | `+6.1%` | `+14.29%` | S/1.04 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-30 21:00` | **DEN @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **2.420** *(DraftKings)* | 56.4% | `+36.4%` | `-1.22%` | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 120 - AWAY 127 (Total: 247)) |
 | `2026-10-30 21:00` | **DEN @ PHX** | Total Puntos (Over/Under) | **UNDER 230.5** | **1.909** *(DraftKings)* | 66.3% | `+26.6%` | — | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 120 - AWAY 127 (Total: 247)) |
 | `2026-10-30 19:00` | **HOU @ DAL** | Ganador (Moneyline) | **HOME (DAL gana)** | **2.600** *(DraftKings)* | 49.9% | `+29.8%` | `-1.52%` | S/1.00 | ✅ GANADA | S/+1.60 (HOME 116 - AWAY 111 (Total: 227)) |

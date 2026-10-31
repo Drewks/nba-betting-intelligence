@@ -309,9 +309,25 @@ def select_and_dispatch_daily_top_pick(
     if not pending_candidates:
         return None
 
+    # Filter for high-confidence quality: The Daily Top Pick must satisfy a minimum probability threshold (>= 50%)
+    # and moderate odds (<= 2.60) to honor the user's explicit directive for "el más probable de ser acertado".
+    quality_candidates = [
+        b for b in pending_candidates
+        if float(b.get("prob_estimada", 0.0)) >= 50.0 and float(b.get("cuota_decimal", 99.0)) <= 2.60
+    ]
+    if not quality_candidates:
+        pick_date = str(pending_candidates[0].get("hora_partido_peru", "")[:10] or pending_candidates[0].get("fecha_jornada"))
+        return {
+            "pick_date": pick_date,
+            "top_pick": None,
+            "email_sent_for_date": False,
+            "channels_triggered_now": [],
+            "reason": "NO_HIGH_PROBABILITY_PICK_MEETS_50PCT_THRESHOLD",
+        }
+
     # Sort primarily by highest calibrated win probability, breaking ties by EV%
     ranked = sorted(
-        pending_candidates,
+        quality_candidates,
         key=lambda x: (float(x.get("prob_estimada", 0.0)), float(x.get("ev_porcentaje", 0.0))),
         reverse=True,
     )

@@ -230,6 +230,15 @@ def export_bets_and_tracking_dashboard(
                 "",
             ]
         )
+    elif daily_top_info and daily_top_info.get("pick_date"):
+        lines.extend(
+            [
+                f"> ### 🏆 PICK ESTRELLA DEL DÍA (`{daily_top_info['pick_date']}`)",
+                "> - **Estado**: 🛡️ **Jornada de Alta Volatilidad / Sin Selección >= 50% de Probabilidad**",
+                "> - **Protección Activa**: Siguiendo tu directiva de enviar únicamente selecciones con alta probabilidad de acierto, hoy no se emite pick por correo porque las opciones disponibles son underdogs de alta cuota con varianza excesiva.",
+                "",
+            ]
+        )
 
     lines.extend(
         [

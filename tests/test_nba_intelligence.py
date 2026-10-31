@@ -904,3 +904,120 @@ def test_21_prioridad_1_edge_proportional_kelly_clv_governor_anticorrelation(tmp
     )
     assert 1.00 <= stake_with_clv <= 6.00
 
+# 22. Deduplicación de CLV, Filtro de Sesgo Longshot y Calidad del Pick Diario (>= 50% Prob)
+def test_22_clv_deduplication_longshot_guard_and_daily_pick_quality(tmp_path: Path) -> None:
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.storage.db import DatabaseManager
+    from src.reporting.notifier import select_and_dispatch_daily_top_pick
+
+    db = DatabaseManager(tmp_path / "test_p22.sqlite3")
+    engine = PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=100.00,
+        base_stake_pen=1.00,
+        max_stake_pen=6.00,
+        dynamic_conviction_staking=True,
+        exclude_synthetic=True,
+    )
+
+    # 1. Test Longshot Bias Guard (odds > 3.50 with EV < 15% must be skipped)
+    p_longshot = _seed_sample_game_and_prediction(db, "G_LONGSHOT")
+    res_longshot = engine.evaluate_and_record_matchday_selections(
+        "2026-10-25",
+        [
+            {
+                "prediction_id": p_longshot,
+                "game_id": "G_LONGSHOT",
+                "market": "moneyline",
+                "selection": "AWAY",
+                "line_value": None,
+                "decimal_odds_used": 4.50,
+                "calibrated_probability": 0.24,
+                "ev_unit": 0.08,
+                "ev_pct": 8.0,
+                "uncertainty_std": 0.05,
+                "model_version_id": "model_c_test_v1",
+                "emitted_at": "2026-10-25T18:00:00Z",
+            }
+        ],
+    )
+    assert len(res_longshot["placed_bets"]) == 0
+    assert len(res_longshot["no_bet_decisions"]) == 1
+    assert res_longshot["no_bet_decisions"][0]["reason_code"] == "EXCESSIVE_LONGSHOT_VARIANCE"
+
+    # 2. Test CLV Deduplication with multiple closing lines per bet
+    pred_clv = _seed_sample_game_and_prediction(db, "G_CLV_MULTI")
+    db.execute_insert(
+        """
+        INSERT INTO odds_snapshots (
+            odds_id, game_id, provider, market, selection, line_value, decimal_odds,
+            captured_at, is_closing_line
+        ) VALUES ('ODDS_MULTI_DK', 'G_CLV_MULTI', 'DraftKings', 'moneyline', 'HOME', NULL, 1.75, '2026-10-25T23:55:00Z', 1)
+        """
+    )
+    db.execute_insert(
+        """
+        INSERT INTO odds_snapshots (
+            odds_id, game_id, provider, market, selection, line_value, decimal_odds,
+            captured_at, is_closing_line
+        ) VALUES ('ODDS_MULTI_PINN', 'G_CLV_MULTI', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.80, '2026-10-25T23:58:00Z', 1)
+        """
+    )
+    db.execute_insert(
+        """
+        INSERT INTO simulated_bets (
+            bet_id, prediction_id, game_id, matchday_date, market, selection,
+            line_value, decimal_odds, estimated_prob, estimated_ev, stake_pen, status, net_profit_pen,
+            emitted_at, settled_at, model_version_id
+        ) VALUES ('BET_MULTI_1', ?, 'G_CLV_MULTI', '2026-10-25', 'moneyline', 'HOME',
+                  NULL, 1.95, 0.55, 0.07, 2.50, 'WON', 2.375, '2026-10-25T18:00:00Z', '2026-10-26T03:00:00Z', 'model_c_test_v1')
+        """,
+        (pred_clv,),
+    )
+    factor, mean_clv = engine.get_recent_clv_governor_factor(lookback=10)
+    assert isinstance(factor, float)
+
+    # 3. Test Daily Top Pick Quality Filter (Requires prob >= 50% and odds <= 2.60)
+    status_file = tmp_path / "readiness.json"
+    status_file.write_text("{}", encoding="utf-8")
+
+    low_prob_bets = [
+        {
+            "bet_id": "BET_LOW",
+            "partido": "SAC @ MEM",
+            "mercado": "moneyline",
+            "seleccion": "AWAY",
+            "cuota_decimal": 4.40,
+            "prob_estimada": 24.1,
+            "ev_porcentaje": 6.1,
+            "estado": "PENDING",
+            "fecha_jornada": "2026-10-25",
+            "hora_partido_peru": "2026-10-25 19:00",
+            "stake_pen": 1.04,
+        }
+    ]
+    res_low = select_and_dispatch_daily_top_pick(low_prob_bets, status_file)
+    assert res_low is not None
+    assert res_low["top_pick"] is None
+    assert res_low["reason"] == "NO_HIGH_PROBABILITY_PICK_MEETS_50PCT_THRESHOLD"
+
+    high_prob_bets = [
+        {
+            "bet_id": "BET_HIGH",
+            "partido": "BOS @ MIA",
+            "mercado": "moneyline",
+            "seleccion": "HOME",
+            "cuota_decimal": 1.65,
+            "prob_estimada": 67.5,
+            "ev_porcentaje": 11.4,
+            "estado": "PENDING",
+            "fecha_jornada": "2026-10-25",
+            "hora_partido_peru": "2026-10-25 19:00",
+            "stake_pen": 4.50,
+        }
+    ]
+    res_high = select_and_dispatch_daily_top_pick(high_prob_bets, status_file)
+    assert res_high is not None
+    assert res_high["top_pick"] is not None
+    assert res_high["top_pick"]["bet_id"] == "BET_HIGH"
+    assert res_high["top_pick"]["prob_estimada"] == 67.5

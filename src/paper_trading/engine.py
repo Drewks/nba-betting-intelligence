@@ -83,7 +83,11 @@ class PaperTradingEngine:
         """
         rows = self.db.fetch_all(
             f"""
-            SELECT b.decimal_odds, o.decimal_odds AS closing_odds
+            SELECT b.bet_id, b.decimal_odds,
+                   COALESCE(
+                       MAX(CASE WHEN o.provider LIKE '%Pinnacle%' THEN o.decimal_odds END),
+                       AVG(o.decimal_odds)
+                   ) AS closing_odds
             FROM simulated_bets b
             JOIN odds_snapshots o ON b.game_id = o.game_id
                                  AND b.market = o.market
@@ -92,6 +96,7 @@ class PaperTradingEngine:
             WHERE b.status IN ('WON', 'LOST', 'PUSH')
               AND o.is_closing_line = 1
               AND {self.scope_predicate("b")}
+            GROUP BY b.bet_id, b.decimal_odds, b.settled_at
             ORDER BY b.settled_at DESC
             LIMIT ?
             """,
@@ -335,6 +340,19 @@ class PaperTradingEngine:
                         "MODEL_MARKET_DISAGREEMENT",
                         f"Model differs from de-vigged market by {abs(float(disagreement)) * 100:.1f} pts "
                         f"(> {max_gap * 100:.0f}); likely missing information, skipped.",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
+            # 2c. Longshot bias variance guard: deep underdogs (> 3.50 odds) require a substantial margin of safety
+            # (EV >= 15%) because low-probability tails carry high estimation variance on a micro-bankroll.
+            if dec_odds > 3.50 and ev_pct < 15.0:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "EXCESSIVE_LONGSHOT_VARIANCE",
+                        f"Longshot odds {dec_odds:.2f} (> 3.50) require EV >= 15.0% (observed: {ev_pct:.2f}%); skipped to protect bankroll.",
                         ev_pct, emitted_at, model_version_id
                     )
                 )

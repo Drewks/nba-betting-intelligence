@@ -240,13 +240,38 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             (
                 f"CAL_ML_{uuid.uuid4().hex[:8].upper()}",
                 now_str,
-                model_c.version_id,
+                MODEL_VERSION_ID,
                 curve_ml["sample_size"],
                 curve_ml["brier_score"],
                 curve_ml["log_loss"],
                 curve_ml["ece"],
                 ml_method,
                 json.dumps(curve_ml["bins"]),
+            ),
+        )
+
+    if resolved_tot_preds:
+        curve_tot = compute_reliability_curve(
+            [float(r["raw_probability"]) for r in resolved_tot_preds],
+            [int(r["outcome"]) for r in resolved_tot_preds],
+        )
+        db.execute_insert(
+            """
+            INSERT INTO calibration_logs (
+                eval_id, evaluated_at, model_version_id, market, sample_size,
+                brier_score, log_loss, ece, calibration_method, bins_json, promoted
+            ) VALUES (?, ?, ?, 'total_points', ?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                f"CAL_TOT_{uuid.uuid4().hex[:8].upper()}",
+                now_str,
+                MODEL_VERSION_ID,
+                curve_tot["sample_size"],
+                curve_tot["brier_score"],
+                curve_tot["log_loss"],
+                curve_tot["ece"],
+                tot_method,
+                json.dumps(curve_tot["bins"]),
             ),
         )
 
