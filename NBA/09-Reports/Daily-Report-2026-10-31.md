@@ -1,23 +1,23 @@
 ---
-date_generated: 2026-10-31T01:30:10Z
+date_generated: 2026-10-31T17:02:34Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-10-31
-predictions_count: 28
+predictions_count: 32
 simulation_only: true
 ---
 # Informe Diario NBA Betting Intelligence — 2026-10-31
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-10-31T01:30:10Z`
+- **Fecha de generación (UTC)**: `2026-10-31T17:02:34Z`
 - **Jornada evaluada**: `2026-10-31`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `8`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `28`
+- **Predicciones emitidas**: `32`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
-- **Decisiones NO_BET registradas**: `25`
-- **Resultados pendientes globales**: `4`
+- **Decisiones NO_BET registradas**: `29`
+- **Resultados pendientes globales**: `2`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -41,9 +41,9 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261031_B0C4035D` | `ESPN_401909286_2026-10-31_DEN_AT_PHX` | `moneyline` | **HOME** | 2.420 | 0.5638 | +36.44% | S/1.00 | `PENDING` | PENDIENTE |
-| `BET_20261031_BAB6D884` | `ESPN_401909283_2026-10-31_HOU_AT_DAL` | `moneyline` | **HOME** | 2.600 | 0.4992 | +29.78% | S/1.00 | `PENDING` | PENDIENTE |
-| `BET_20261031_90A3CA7F` | `ESPN_401909286_2026-10-31_DEN_AT_PHX` | `total_points` | **UNDER** | 1.909 | 0.6633 | +26.62% | S/1.00 | `PENDING` | PENDIENTE |
+| `BET_20261031_B0C4035D` | `ESPN_401909286_2026-10-31_DEN_AT_PHX` | `moneyline` | **HOME** | 2.420 | 0.5638 | +36.44% | S/1.00 | `LOST` | S/-1.00 |
+| `BET_20261031_BAB6D884` | `ESPN_401909283_2026-10-31_HOU_AT_DAL` | `moneyline` | **HOME** | 2.600 | 0.4992 | +29.78% | S/1.00 | `WON` | S/+1.60 |
+| `BET_20261031_90A3CA7F` | `ESPN_401909286_2026-10-31_DEN_AT_PHX` | `total_points` | **UNDER** | 1.909 | 0.6633 | +26.62% | S/1.00 | `LOST` | S/-1.00 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909282_2026-10-31_IND_AT_MIA` (`total_points` - `UNDER`): **NO_BET** [UNVERIFIED_INJURY_OR_LINEUP_OUTLIER] — Extreme EV (61.50%) indicates likely star injury/rest not in team-level features; skipped.

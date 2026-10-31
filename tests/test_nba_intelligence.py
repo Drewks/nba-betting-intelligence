@@ -864,3 +864,43 @@ def test_21_prioridad_1_edge_proportional_kelly_clv_governor_anticorrelation(tmp
     assert len(res_anticorr["no_bet_decisions"]) == 1
     assert res_anticorr["no_bet_decisions"][0]["reason_code"] == "CORRELATED_GAME_EXPOSURE"
 
+    # 3. CLV Risk Governor with synthetic isolation (exclude_synthetic=True) - tests ambiguous column fix
+    engine_real = PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=100.00,
+        base_stake_pen=1.00,
+        max_stake_pen=6.00,
+        dynamic_conviction_staking=True,
+        exclude_synthetic=True,
+    )
+    pred_real = _seed_sample_game_and_prediction(db, "REAL_GAME_01")
+    db.execute_insert(
+        """
+        INSERT INTO odds_snapshots (
+            odds_id, game_id, provider, market, selection, line_value, decimal_odds,
+            captured_at, is_closing_line
+        ) VALUES ('ODDS_CLV_01', 'REAL_GAME_01', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.80, '2026-10-19T23:55:00Z', 1)
+        """
+    )
+    db.execute_insert(
+        """
+        INSERT INTO simulated_bets (
+            bet_id, prediction_id, game_id, matchday_date, market, selection,
+            line_value, decimal_odds, estimated_prob, estimated_ev, stake_pen, status, net_profit_pen,
+            emitted_at, settled_at, model_version_id
+        ) VALUES ('BET_TEST_CLV_1', ?, 'REAL_GAME_01', '2026-10-19', 'moneyline', 'HOME',
+                  NULL, 1.95, 0.55, 0.07, 2.50, 'WON', 2.375, '2026-10-19T18:00:00Z', '2026-10-20T03:00:00Z', 'model_c_test_v1')
+        """,
+        (pred_real,),
+    )
+    factor, mean_clv = engine_real.get_recent_clv_governor_factor()
+    assert isinstance(factor, float)
+    stake_with_clv = engine_real.compute_contextual_stake_pen(
+        calibrated_prob=0.60,
+        decimal_odds=1.90,
+        ev_unit=0.08,
+        current_bankroll_pen=100.0,
+        apply_clv_governor=True,
+    )
+    assert 1.00 <= stake_with_clv <= 6.00
+

@@ -6,52 +6,52 @@
   "indexed_documents_count": 122,
   "top_retrieved_context": [
     {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "LAL Adou Thiero (SF) Day To Day (Injury Management): Thiero did not play on Friday's (Oct. 30) game against the Warriors.",
+      "relevance_score": 0.2281,
+      "captured_at": "2026-10-31"
+    },
+    {
       "source": "playwright_espn_injuries_table",
       "snippet": "Meleek Thomas G Oct 31 Day-To-Day Oct 30: Thomas (foot) is questionable for Saturday's game against the Bucks.",
-      "relevance_score": 0.3352,
-      "captured_at": "2026-10-31T01:30:08Z"
+      "relevance_score": 0.2245,
+      "captured_at": "2026-10-31T17:03:14Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Quinten Post (C) Day To Day (Ankle): Post did not return to Thursday's (Oct. 29) game against the Blazers.",
-      "relevance_score": 0.2774,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.249,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2399,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Meleek Thomas (SG) Day To Day (Foot): Thomas did not play on Thursday's (Oct. 29) game against the Hawks.",
-      "relevance_score": 0.2333,
+      "snippet": "CLE Meleek Thomas (SG) Day To Day (Foot): The Cavaliers listed Thomas as Questionable for Saturday's (Oct. 31) game against the Bucks.",
+      "relevance_score": 0.2086,
       "captured_at": "2026-10-30"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Alex Caruso (SG) Day To Day (Ankle): Caruso did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2318,
-      "captured_at": "2026-10-29"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "NOP Jordan Poole (SG) Day To Day (Ankle): Poole did not play on Thursday's (Oct. 29) game against the Kings.",
-      "relevance_score": 0.2274,
+      "snippet": "MEM Ty Jerome (SG) Day To Day (Back): The Grizzlies listed Jerome as Questionable for Saturday's (Oct. 31) game against the Kings.",
+      "relevance_score": 0.2084,
       "captured_at": "2026-10-30"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAS Tobias Harris (PF) Day To Day (Calf): Harris did not play on Wednesday's (Oct. 28) game against the Jazz.",
-      "relevance_score": 0.2264,
-      "captured_at": "2026-10-29"
+      "snippet": "POR Chris Youngblood (SG) Day To Day (Ankle): The Trail Blazers listed Youngblood as Questionable for Saturday's (Oct. 31) game against the Jazz.",
+      "relevance_score": 0.1976,
+      "captured_at": "2026-10-30"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "UTA Lauri Markkanen (PF) Day To Day (Wrist): The Jazz listed Markkanen as Questionable for Saturday's (Oct. 31) game against the Trail Blazers.",
+      "relevance_score": 0.1919,
+      "captured_at": "2026-10-30"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "POR Robert Williams III (C) Day To Day (Knee): The Trail Blazers listed Williams III as Questionable for Saturday's (Oct. 31) game against the Jazz.",
+      "relevance_score": 0.1793,
+      "captured_at": "2026-10-30"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MEM Scotty Pippen Jr. (PG) Day To Day (Back): The Grizzlies listed Pippen Jr. as Questionable for Saturday's (Oct. 31) game against the Kings.",
+      "relevance_score": 0.1775,
+      "captured_at": "2026-10-30"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

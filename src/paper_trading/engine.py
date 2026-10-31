@@ -64,10 +64,15 @@ class PaperTradingEngine:
         self.single_bet_per_game = bool(single_bet_per_game)
         self._ensure_initial_ledger()
 
+    def scope_predicate(self, alias: str = "") -> str:
+        """SQL predicate restricting simulated_bets to the active accounting scope, optionally table-qualified."""
+        col = f"{alias}.game_id" if alias else "game_id"
+        return f"{col} NOT LIKE 'SYN%'" if self.exclude_synthetic else "1 = 1"
+
     @property
     def scope_sql(self) -> str:
         """SQL predicate restricting simulated_bets to the active accounting scope."""
-        return "game_id NOT LIKE 'SYN%'" if self.exclude_synthetic else "1 = 1"
+        return self.scope_predicate()
 
     def get_recent_clv_governor_factor(self, lookback: int = 25) -> tuple[float, float | None]:
         """
@@ -86,7 +91,7 @@ class PaperTradingEngine:
                                  AND COALESCE(b.line_value, -9999) = COALESCE(o.line_value, -9999)
             WHERE b.status IN ('WON', 'LOST', 'PUSH')
               AND o.is_closing_line = 1
-              AND {self.scope_sql}
+              AND {self.scope_predicate("b")}
             ORDER BY b.settled_at DESC
             LIMIT ?
             """,
