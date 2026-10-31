@@ -36,18 +36,33 @@ def build_pregame_features(
             else parse_iso_utc(g["game_start_time"]) < target_start
         )
     ]
+    # Guarantee chronological order so "last N games" really means the most recent N
+    prior_games.sort(key=lambda g: str(g.get("game_start_time", "")))
+
+    # Rolling league-average combined total (last ~300 games) instead of a hard-coded constant
+    recent_league = prior_games[-300:]
+    league_avg_total = (
+        float(np.mean([float(g["home_score"] + g["away_score"]) for g in recent_league]))
+        if len(recent_league) >= 30
+        else 228.5
+    )
 
     def _recent_margins_and_totals(team_code: str) -> tuple[list[float], list[float]]:
+        # Walk backwards and stop once the window is full (O(window) on long histories)
         margins: list[float] = []
         totals: list[float] = []
-        for g in prior_games:
+        for g in reversed(prior_games):
             if g["home_team"] == team_code:
                 margins.append(float(g["home_score"] - g["away_score"]))
                 totals.append(float(g["home_score"] + g["away_score"]))
             elif g["away_team"] == team_code:
                 margins.append(float(g["away_score"] - g["home_score"]))
                 totals.append(float(g["home_score"] + g["away_score"]))
-        return margins[-rolling_window:], totals[-rolling_window:]
+            if len(margins) >= rolling_window:
+                break
+        margins.reverse()
+        totals.reverse()
+        return margins, totals
 
     def _ewma(values: list[float], default: float = 0.0) -> float:
         if not values:
@@ -62,7 +77,9 @@ def build_pregame_features(
     away_recent_net = _ewma(away_margins, 0.0)
     home_win_pct = _ewma([1.0 if m > 0 else 0.0 for m in home_margins], 0.5)
     away_win_pct = _ewma([1.0 if m > 0 else 0.0 for m in away_margins], 0.5)
-    recent_total_trend = 0.5 * (_ewma(home_totals, 228.5) + _ewma(away_totals, 228.5)) - 228.5
+    recent_total_trend = 0.5 * (
+        _ewma(home_totals, league_avg_total) + _ewma(away_totals, league_avg_total)
+    ) - league_avg_total
 
     h_off = float(target_game["home_off_rtg"])
     h_def = float(target_game["home_def_rtg"])

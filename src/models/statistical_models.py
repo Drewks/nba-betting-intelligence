@@ -216,11 +216,12 @@ class PointMarginModel:
             self.is_fitted = False
             return
 
+        # Train on the most recent ~500 games for optimal relevance and instant execution
+        train_sample = prior[-500:] if len(prior) > 500 else prior
         X_rows: list[list[float]] = []
         y_vals: list[float] = []
-        for idx, g in enumerate(prior):
-            sub_hist = prior[:idx]
-            feats = build_pregame_features(g, sub_hist, market="moneyline")
+        for g in train_sample:
+            feats = build_pregame_features(g, prior, market="moneyline")
             X_rows.append([feats[c] for c in FEATURE_COLUMNS])
             y_vals.append(float(g["home_score"] - g["away_score"]))
 
@@ -312,14 +313,14 @@ class TotalPointsModel:
             self.is_fitted = False
             return
 
+        train_sample = prior[-500:] if len(prior) > 500 else prior
         X_rows: list[list[float]] = []
         y_totals: list[float] = []
         h_res_list: list[float] = []
         a_res_list: list[float] = []
 
-        for idx, g in enumerate(prior):
-            sub_hist = prior[:idx]
-            feats = build_pregame_features(g, sub_hist, market="total_points")
+        for g in train_sample:
+            feats = build_pregame_features(g, prior, market="total_points")
             X_rows.append([feats[c] for c in FEATURE_COLUMNS])
             h_pts = float(g["home_score"])
             a_pts = float(g["away_score"])
@@ -432,13 +433,13 @@ class AdvancedGBMModel:
             self.is_fitted = False
             return
 
+        train_sample = prior[-500:] if len(prior) > 500 else prior
         X_rows: list[list[float]] = []
         y_cls: list[int] = []
         y_tot: list[float] = []
 
-        for idx, g in enumerate(prior):
-            sub_hist = prior[:idx]
-            feats = build_pregame_features(g, sub_hist, market="total_points")
+        for g in train_sample:
+            feats = build_pregame_features(g, prior, market="total_points")
             X_rows.append([feats[c] for c in FEATURE_COLUMNS])
             y_cls.append(1 if g["home_score"] > g["away_score"] else 0)
             y_tot.append(float(g["home_score"] + g["away_score"]))

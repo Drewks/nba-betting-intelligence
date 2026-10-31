@@ -612,8 +612,14 @@ class WalkForwardBacktester:
                     }
                 )
             model_comparison_records = reconstructed
+            if getattr(self.paper_engine, "exclude_synthetic", False):
+                model_comparison_records = [
+                    r for r in model_comparison_records if not str(r["game_id"]).startswith("SYN_")
+                ]
 
-        all_bets = self.db.fetch_all("SELECT * FROM simulated_bets ORDER BY emitted_at ASC")
+        all_bets = self.db.fetch_all(
+            f"SELECT * FROM simulated_bets WHERE {getattr(self.paper_engine, 'scope_sql', '1 = 1')} ORDER BY emitted_at ASC"
+        )
         settled_bets = [b for b in all_bets if b["status"] in ("WON", "LOST", "PUSH", "VOID")]
         pending_bets = [b for b in all_bets if b["status"] == "PENDING"]
 

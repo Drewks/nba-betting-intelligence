@@ -42,6 +42,7 @@ class PaperTradingEngine:
         max_selections_per_matchday: int = 3,
         min_ev_threshold: float = 0.05,
         dynamic_conviction_staking: bool = False,
+        exclude_synthetic: bool = False,
     ) -> None:
         max_allowed = 10.00 if dynamic_conviction_staking else 1.00
         if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
@@ -55,7 +56,14 @@ class PaperTradingEngine:
         self.max_selections_per_matchday = int(max_selections_per_matchday)
         self.min_ev_threshold = float(min_ev_threshold)
         self.dynamic_conviction_staking = bool(dynamic_conviction_staking)
+        # When True, bankroll / metrics only count bets on REAL games (synthetic SYN_* fixtures are archived benchmarks)
+        self.exclude_synthetic = bool(exclude_synthetic)
         self._ensure_initial_ledger()
+
+    @property
+    def scope_sql(self) -> str:
+        """SQL predicate restricting simulated_bets to the active accounting scope."""
+        return "game_id NOT LIKE 'SYN%'" if self.exclude_synthetic else "1 = 1"
 
     def compute_contextual_stake_pen(
         self,
@@ -139,10 +147,10 @@ class PaperTradingEngine:
         Computes current bankroll state from immutable simulated_bets history and verifies ledger consistency.
         """
         settled_rows = self.db.fetch_all(
-            "SELECT net_profit_pen FROM simulated_bets WHERE status IN ('WON', 'LOST', 'PUSH', 'VOID')"
+            f"SELECT net_profit_pen FROM simulated_bets WHERE status IN ('WON', 'LOST', 'PUSH', 'VOID') AND {self.scope_sql}"
         )
         pending_rows = self.db.fetch_all(
-            "SELECT stake_pen FROM simulated_bets WHERE status = 'PENDING'"
+            f"SELECT stake_pen FROM simulated_bets WHERE status = 'PENDING' AND {self.scope_sql}"
         )
 
         cumulative_profit = round(sum(float(r["net_profit_pen"] or 0.0) for r in settled_rows), 4)
@@ -246,6 +254,22 @@ class PaperTradingEngine:
                         game_id, matchday_date, market, selection, "NO_BET",
                         "UNVERIFIED_INJURY_OR_LINEUP_OUTLIER",
                         f"Extreme EV ({ev_pct:.2f}%) indicates likely star injury/rest not in team-level features; skipped.",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
+            # 2b. Model vs sharp-market disagreement guard: a huge gap is far more likely to be
+            # missing information (injuries, rest, lineup) than genuine edge.
+            disagreement = cand.get("model_market_disagreement")
+            max_gap = float(cand.get("max_model_market_disagreement") or 0.15)
+            if disagreement is not None and abs(float(disagreement)) > max_gap:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "MODEL_MARKET_DISAGREEMENT",
+                        f"Model differs from de-vigged market by {abs(float(disagreement)) * 100:.1f} pts "
+                        f"(> {max_gap * 100:.0f}); likely missing information, skipped.",
                         ev_pct, emitted_at, model_version_id
                     )
                 )

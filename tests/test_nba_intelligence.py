@@ -689,3 +689,83 @@ def test_19_deep_montecarlo_hybrid_model() -> None:
     assert "conformal_q10_total" in tot_out
 
 
+# 20. Prioridad 0: Anclaje al Mercado Eficiente, Ratings Anti-Fuga y Filtro de Datos Reales
+def test_20_prioridad_0_market_anchoring_and_team_ratings(tmp_path: Path) -> None:
+    from src.features.team_ratings import compute_pregame_team_ratings, is_synthetic_game_id
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.prediction.ev_calculator import (
+        DEFAULT_MODEL_WEIGHT,
+        compute_market_consensus,
+        evaluate_market_opportunity,
+        market_anchored_probability,
+    )
+    from src.storage.db import DatabaseManager
+
+    # 1. Anclaje de Probabilidad al Mercado
+    odds_sample = [
+        {"provider": "Pinnacle (LineShop)", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.95, "counterpart_decimal_odds": 1.95},
+        {"provider": "DraftKings", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.91, "counterpart_decimal_odds": 1.91},
+    ]
+    cons = compute_market_consensus(odds_sample)
+    assert ("moneyline", "HOME", None) in cons
+    # Pinnacle devigged fair prob is exactly 0.50
+    assert abs(cons[("moneyline", "HOME", None)]["p_market"] - 0.50) < 1e-4
+
+    # Blending test: model says 65% (0.65), market consensus is 50% (0.50)
+    anchored = market_anchored_probability(0.65, 0.50, model_weight=DEFAULT_MODEL_WEIGHT)
+    # 0.30 * 0.65 + 0.70 * 0.50 = 0.545
+    assert abs(anchored - 0.545) < 1e-4
+
+    # 2. evaluate_market_opportunity anchors probability and computes disagreement
+    eval_res = evaluate_market_opportunity(
+        estimated_prob=0.65,
+        uncertainty_std=0.05,
+        odds_record={"game_id": "G_REAL", "provider": "Pinnacle", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.95, "counterpart_decimal_odds": 1.95, "captured_at": "2026-10-30T18:00:00Z"},
+        game_start_time="2026-10-30T23:00:00Z",
+        model_version_id="model_f_v3",
+        simulated_prediction_time="2026-10-30T19:00:00Z",
+        market_consensus_prob=0.50,
+    )
+    assert abs(eval_res["estimated_probability"] - 0.545) < 1e-4
+    assert abs(eval_res["model_market_disagreement"] - 0.15) < 1e-4
+
+    # 3. Model-Market Disagreement Gate in PaperTradingEngine
+    db = DatabaseManager(tmp_path / "test_p0.sqlite3")
+    engine = PaperTradingEngine(db=db, min_ev_threshold=0.02, dynamic_conviction_staking=True, exclude_synthetic=True)
+    res_gate = engine.evaluate_and_record_matchday_selections(
+        "2026-10-30",
+        [
+            {
+                "prediction_id": "PRED_HUGE_GAP",
+                "game_id": "G_REAL_1",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 1.95,
+                "calibrated_probability": 0.56,
+                "ev_unit": 0.09,
+                "ev_pct": 9.0,
+                "uncertainty_std": 0.05,
+                "model_version_id": "model_f_v3",
+                "model_market_disagreement": 0.22,  # 22 points > 15 max gap
+                "max_model_market_disagreement": 0.15,
+                "emitted_at": "2026-10-30T20:00:00Z",
+            }
+        ],
+    )
+    assert len(res_gate["placed_bets"]) == 0
+    assert res_gate["no_bet_decisions"][0]["reason_code"] == "MODEL_MARKET_DISAGREEMENT"
+
+    # 4. Anti-leakage rest days & rating engine
+    chron_games = [
+        {"game_id": "ESPN_1", "game_start_time": "2026-10-25T00:00:00Z", "home_team": "BOS", "away_team": "NYK", "status": "FINAL", "home_score": 110, "away_score": 105},
+        {"game_id": "ESPN_2", "game_start_time": "2026-10-26T00:00:00Z", "home_team": "BOS", "away_team": "MIA", "status": "SCHEDULED", "home_score": None, "away_score": None},
+    ]
+    ratings = compute_pregame_team_ratings(chron_games)
+    # BOS played on Oct 25 and Oct 26 -> 1 day rest (Back-to-Back)
+    assert ratings["ESPN_2"]["home_rest_days"] == 1
+    assert is_synthetic_game_id("SYN_20260101_BOS_AT_MIA")
+    assert not is_synthetic_game_id("ESPN_401909891")
+
+
+

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sys
@@ -25,6 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.backfill_espn_history import backfill as backfill_espn_history
 from src.agents.specialized_agents import (
     ModelCalibratorAgent,
     NBAAuditorAgent,
@@ -34,6 +35,7 @@ from src.agents.specialized_agents import (
 from src.backtesting.backtester import WalkForwardBacktester
 from src.calibration.calibrator import ProbabilityCalibrator, compute_reliability_curve
 from src.features.builder import build_pregame_features
+from src.features.team_ratings import apply_pregame_team_ratings, is_synthetic_game_id
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
 from src.models.statistical_models import (
     BaselineModel,
@@ -43,7 +45,13 @@ from src.models.statistical_models import (
 )
 from src.orchestrator import Orchestrator
 from src.paper_trading.engine import PaperTradingEngine
-from src.prediction.ev_calculator import evaluate_market_opportunity
+from src.prediction.ev_calculator import (
+    DEFAULT_MODEL_WEIGHT,
+    MAX_MODEL_MARKET_DISAGREEMENT,
+    compute_market_consensus,
+    evaluate_market_opportunity,
+    market_anchored_probability,
+)
 from src.reporting.reporter import (
     export_bets_and_tracking_dashboard,
     generate_audit_report,
@@ -53,6 +61,9 @@ from src.reporting.reporter import (
 )
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
+
+MODEL_VERSION_ID = "model_f_ensemble_v3"
+MIN_REAL_GAMES_FOR_TRAINING = 120
 
 
 def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
@@ -75,7 +86,11 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         initial_bankroll_pen=100.00,
         base_stake_pen=1.00,
         max_stake_pen=6.00,
+        # EV is now measured against market-anchored probabilities, so realistic edges are 2-8%
+        min_ev_threshold=0.02,
         dynamic_conviction_staking=True,
+        # Real-money readiness is judged ONLY on real games; synthetic SYN_* bets are an archived benchmark
+        exclude_synthetic=True,
     )
     scout = NBADataScoutAgent(db)
     visual = VisualResearcherAgent()
@@ -123,21 +138,49 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             pass
 
     # 3. Auto-Calibration Step: Fit calibrators & models on all strictly prior FINAL games
+    # 3a. Make sure real NBA history exists (one-time ESPN backfill of 2 seasons) and recompute
+    #     leakage-free pre-game ratings + real rest days for every real game.
+    real_final_count = db.fetch_one(
+        "SELECT COUNT(*) AS c FROM games WHERE status = 'FINAL' AND game_id NOT LIKE 'SYN%'"
+    )["c"]
+    if real_final_count < MIN_REAL_GAMES_FOR_TRAINING:
+        try:
+            backfill_espn_history(db, date(2024, 10, 22), (now_dt - timedelta(days=1)).date())
+        except Exception:
+            pass
+    apply_pregame_team_ratings(db)
+
     all_final_games = db.fetch_all(
         "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
     )
+    real_final_games = [g for g in all_final_games if not is_synthetic_game_id(g["game_id"])]
+    if len(real_final_games) >= MIN_REAL_GAMES_FOR_TRAINING:
+        # Never let synthetic fixtures shape real-game predictions
+        all_final_games = real_final_games
+
     model_a = BaselineModel("model_a_baseline_v1")
-    model_c = PointMarginModel("model_c_point_margin_v1")
-    model_d = TotalPointsModel("model_d_total_points_v1")
-    model_f = EnsembleStackingModel("model_f_ensemble_v2")
+    model_f = EnsembleStackingModel(MODEL_VERSION_ID)
     db.execute_insert(
         """
         INSERT OR IGNORE INTO model_versions (
             model_version_id, model_family, market, train_start_date, train_end_date,
             trained_at, hyperparameters_json, is_active, approved_by
-        ) VALUES ('model_f_ensemble_v2', 'model_f_meta_ensemble', 'moneyline', '2026-01-01', ?, ?, '{"montecarlo_sims": 10000}', 1, 'orchestrator_v2')
+        ) VALUES (?, 'model_f_meta_ensemble', 'moneyline', '2024-10-22', ?, ?, ?, 1, 'orchestrator_v3')
         """,
-        (today_str, now_str),
+        (
+            MODEL_VERSION_ID,
+            today_str,
+            now_str,
+            json.dumps(
+                {
+                    "montecarlo_sims": 10000,
+                    "market_anchor_model_weight": DEFAULT_MODEL_WEIGHT,
+                    "max_model_market_disagreement": MAX_MODEL_MARKET_DISAGREEMENT,
+                    "training_data": "real_espn_history_only",
+                    "team_ratings": "leakage_free_opponent_adjusted_ewma",
+                }
+            ),
+        ),
     )
     db.execute_insert(
         """
@@ -149,21 +192,21 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         (today_str, now_str),
     )
     model_a.fit(all_final_games, now_str)
-    model_c.fit(all_final_games, now_str)
-    model_d.fit(all_final_games, now_str)
     model_f.fit(all_final_games, now_str)
+    model_c = model_f.model_c
 
-    # Fit probability calibrators on historical predictions of resolved games
+    # Fit probability calibrators ONLY on resolved predictions from the current model version
+    # (older versions used leaky features / synthetic training and are not comparable)
     resolved_ml_preds = db.fetch_all(
         """
         SELECT p.raw_probability, g.game_start_time, g.result_recorded_at,
                CASE WHEN g.home_score > g.away_score THEN 1 ELSE 0 END AS outcome
         FROM predictions p
         JOIN games g ON p.game_id = g.game_id
-        WHERE p.market = 'moneyline' AND p.selection = 'HOME'
+        WHERE p.market = 'moneyline' AND p.selection = 'HOME' AND p.model_version_id = ?
           AND g.status = 'FINAL' AND g.game_start_time < ?
         """,
-        (now_str,),
+        (MODEL_VERSION_ID, now_str),
     )
     resolved_tot_preds = db.fetch_all(
         """
@@ -171,10 +214,10 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                CASE WHEN (g.home_score + g.away_score) > p.line_value THEN 1 ELSE 0 END AS outcome
         FROM predictions p
         JOIN games g ON p.game_id = g.game_id
-        WHERE p.market = 'total_points' AND p.selection = 'OVER'
+        WHERE p.market = 'total_points' AND p.selection = 'OVER' AND p.model_version_id = ?
           AND g.status = 'FINAL' AND g.game_start_time < ?
         """,
-        (now_str,),
+        (MODEL_VERSION_ID, now_str),
     )
 
     ml_cal = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
@@ -251,10 +294,16 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         feats["mc_conformal_q10_total"] = pred_f_tot.get("conformal_q10_total", 205.0)
         feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
 
+        consensus_map = compute_market_consensus(game_odds)
+
         for o in game_odds:
             validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
             mkt = o["market"]
             sel = o["selection"]
+            line_v = o.get("line_value")
+            cons_entry = consensus_map.get((mkt, sel, line_v))
+            cons_p = cons_entry["p_market"] if cons_entry else None
+
             if mkt == "moneyline":
                 raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
                 cal_p = cal_p_home if sel == "HOME" else round(1.0 - cal_p_home, 6)
@@ -273,6 +322,9 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                 game_start_time=g["game_start_time"],
                 model_version_id=m_ver,
                 simulated_prediction_time=pred_ts,
+                market_consensus_prob=cons_p,
+                model_weight=DEFAULT_MODEL_WEIGHT,
+                max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
             )
             pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{uuid.uuid4().hex[:6].upper()}"
             db.execute_insert(
@@ -287,7 +339,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                 """,
                 (
                     pred_id, g["game_id"], mkt, sel, o.get("line_value"),
-                    m_ver, raw_p, cal_p, unc, opp["implied_prob_gross"],
+                    m_ver, raw_p, opp["estimated_probability"], unc, opp["implied_prob_gross"],
                     opp["implied_prob_fair"], opp["bookmaker_overround"],
                     opp["decimal_odds_used"], opp["odds_provider"], opp["odds_captured_at"],
                     opp["ev_unit"], opp["ev_pct"], pred_ts, json.dumps(feats),
@@ -295,7 +347,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             )
             opp["prediction_id"] = pred_id
             opp["raw_probability"] = raw_p
-            opp["calibrated_probability"] = cal_p
+            opp["calibrated_probability"] = opp["estimated_probability"]
             opp["uncertainty_std"] = unc
             opp["overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
             opp["blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
