@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-10-31T01:01:10Z
+date_generated: 2026-10-31T01:14:55Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-10-31
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-10-31
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-10-31T01:01:10Z`
+- **Fecha de generación (UTC)**: `2026-10-31T01:14:55Z`
 - **Jornada evaluada**: `2026-10-31`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `8`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `28`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `25`
-- **Resultados pendientes globales**: `6`
+- **Resultados pendientes globales**: `4`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -26,16 +26,16 @@ simulation_only: true
 
 | Partido | Mercado | Selección | Línea | Cuota Dec. | Prob. Implícita Bruta | Prob. Estimada (Cal.) | EV (%) | Proveedor |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- |
-| `POR @ UTA` | `moneyline` | **HOME** | — | 3.220 | 0.3106 | 0.5183 | +66.88% | `Marathon Bet (Best of 22 books)` |
 | `IND @ MIA` | `total_points` | **UNDER** | 239.5 | 1.909 | 0.5238 | 0.8460 | +61.50% | `DraftKings` |
-| `ATL @ NOP` | `moneyline` | **HOME** | — | 2.560 | 0.3906 | 0.5527 | +41.50% | `Marathon Bet (Best of 21 books)` |
 | `DEN @ PHX` | `moneyline` | **HOME** | — | 2.420 | 0.4132 | 0.5638 | +36.44% | `DraftKings` |
-| `ATL @ NOP` | `total_points` | **UNDER** | 238.5 | 1.960 | 0.5102 | 0.6640 | +30.14% | `GTbets (LineShop)` |
 | `HOU @ DAL` | `moneyline` | **HOME** | — | 2.600 | 0.3846 | 0.4992 | +29.78% | `DraftKings` |
 | `DEN @ PHX` | `total_points` | **UNDER** | 230.5 | 1.909 | 0.5238 | 0.6633 | +26.62% | `DraftKings` |
 | `LAC @ MIN` | `total_points` | **UNDER** | 221.5 | 1.909 | 0.5238 | 0.6356 | +21.34% | `DraftKings` |
-| `POR @ UTA` | `total_points` | **UNDER** | 233.5 | 1.880 | 0.5319 | 0.6315 | +18.71% | `BetRivers (LineShop)` |
 | `LAL @ GSW` | `total_points` | **UNDER** | 234.5 | 1.893 | 0.5283 | 0.6267 | +18.63% | `DraftKings` |
+| `LAL @ GSW` | `moneyline` | **HOME** | — | 2.050 | 0.4878 | 0.5632 | +15.45% | `DraftKings` |
+| `LAC @ MIN` | `moneyline` | **HOME** | — | 1.408 | 0.7101 | 0.7733 | +8.89% | `DraftKings` |
+| `IND @ MIA` | `moneyline` | **AWAY** | — | 3.050 | 0.3279 | 0.3548 | +8.20% | `DraftKings` |
+| `ATL @ NOP` | `total_points` | **UNDER** | 238.5 | 1.952 | 0.5122 | 0.5343 | +4.31% | `DraftKings` |
 
 ## 4. Apuestas Simuladas (Paper Trading S/100 PEN) y Resultados Pendientes
 

@@ -1,8 +1,8 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-30 20:01 (Hora Perú UTC-5)` (`2026-10-31T01:01:10Z`)
-- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/105.14 PEN`** (`+5.14 PEN`)
-- **ROI Actual**: `+4.95%` | **Yield Actual**: `+4.28%` | **CLV Promedio**: `+13.20%` | **Max Drawdown**: `16.44%` | **Apuestas en espera**: `6` (`S/16.16 PEN` reservados)
+- **Última actualización**: `2026-10-30 20:14 (Hora Perú UTC-5)` (`2026-10-31T01:14:55Z`)
+- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/102.11 PEN`** (`+2.11 PEN`)
+- **ROI Actual**: `+35.17%` | **Yield Actual**: `+21.02%` | **CLV Promedio**: `+1.53%` | **Max Drawdown**: `1.06%` | **Apuestas en espera**: `4` (`S/4.04 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
 - **Modo de Apuesta Activo**: `Kelly-Convicción Contextual (S/1.00 a S/6.00 PEN)` *(Baja prob `<50%`: `S/1.00–S/1.75` | Media `50–58%`: `S/2.00–S/3.25` | Alta `58–65%`: `S/3.50–S/4.75` | Pick Estrella `>=65%`: `S/4.80–S/6.00 PEN`, con protección anti-Overtime en UNDERs)*.
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
@@ -12,21 +12,21 @@
 
 ## 🚦 1. Semáforo de Madurez de 8 Criterios y Graduación en 2 Niveles
 
-### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (3/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
-- **Progreso Muestra Total (Nivel 1)**: `[████░░░░░░░░░░░░░░░░] 104 / 500 apuestas (20.8%)` — *Faltan **396** apuestas.*
-- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[█░░░░░░░░░░░░░░░░░░░] 6 / 200 en vivo (3.0%)` — *Tienes **6** apuestas reales en espera hoy.*
+### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (5/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
+- **Progreso Muestra Total (Nivel 1)**: `[░░░░░░░░░░░░░░░░░░░░] 6 / 500 apuestas (1.2%)` — *Faltan **494** apuestas.*
+- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[█░░░░░░░░░░░░░░░░░░░] 6 / 200 en vivo (3.0%)` — *Tienes **4** apuestas reales en espera hoy.*
 
 Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterios cuantitativos estrictos** divididos en **2 niveles de graduación**:
 
 | # | Criterio Cuantitativo de Auditoría | Estado Hoy | Valor Actual | Meta Nivel 1 (Piloto Micro-Banca 25%) | Meta Nivel 2 (Banca Completa 100%) |
 | :-: | :--- | :---: | :--- | :--- | :--- |
-| 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `104 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
-| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `6 liquidadas (6 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
-| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2448 vs 0.2501` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
-| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.0611 (6.11%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
-| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | ✅ VERDE | `ROI +4.95% / Yield +4.28%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
-| 6 | **Control de Caída Máxima (Max Drawdown)** | 🔴 PENDIENTE | `Total 16.44% (En vivo: 1.06%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
-| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-15.8%, +25.6%] / IC95 [-19.0%, +29.3%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
+| 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `6 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
+| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `6 liquidadas (4 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
+| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2237 vs 0.2543` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
+| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.2766 (27.66%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
+| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | ✅ VERDE | `ROI +35.17% / Yield +21.02%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
+| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 1.06% (En vivo: 1.06%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
+| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | ✅ VERDE | `IC90 [+14.3%, +56.0%] / IC95 [+14.3%, +56.0%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | ✅ VERDE | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |
 
 > **🔔 Doble aviso automático a tu correo**: No necesitas vigilar esta tabla a diario. Cuando las 8 filas lleguen a **✅ VERDE** en el **Nivel 1**, recibirás un correo de GitHub (`@Drewks`) autorizando pruebas con micro-banca (25% de tu stake). Cuando alcance el **Nivel 2** (`1,000` apuestas + `IC 95% > 0%`), recibirás el segundo correo de certificación completa.
@@ -35,20 +35,18 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 
 ## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)
 
-> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-10-31` — 1 Solo Pick: Mayor Probabilidad de Acierto)
-> - **Partido**: **SAC @ MEM** (`2026-10-31 19:00 Hora Perú`)
-> - **Pick Más Probable**: 🎯 **UNDER 234.5** (Total Puntos (Over/Under)) @ **`1.960`** *(GTbets)*
-> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`71.7%`** | **EV**: `+40.5%`
+> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-10-30` — 1 Solo Pick: Mayor Probabilidad de Acierto)
+> - **Partido**: **DEN @ PHX** (`2026-10-30 21:00 Hora Perú`)
+> - **Pick Más Probable**: 🎯 **UNDER 230.5** (Total Puntos (Over/Under)) @ **`1.909`** *(DraftKings)*
+> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`66.3%`** | **EV**: `+26.6%`
 > - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor probabilidad de acierto y sin alerta CLV)*.
 
 Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):
 
 | Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
-| `2026-10-31 19:00` | **SAC @ MEM** | Total Puntos (Over/Under) | **UNDER 234.5** | **1.960** *(GTbets)* | 71.7% | `+40.5%` | — | S/6.00 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-10-31 19:00` | **CLE @ MIL** | Total Puntos (Over/Under) | **UNDER 236.5** | **1.920** *(GTbets)* | 66.5% | `+27.6%` | — | S/4.80 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-10-31 19:00` | **MIN @ SAS** | Total Puntos (Over/Under) | **UNDER 226.5** | **1.950** *(FanDuel)* | 54.5% | `+6.3%` | — | S/2.36 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-10-30 21:00` | **DEN @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **2.420** *(DraftKings)* | 56.4% | `+36.4%` | `-6.20%` | S/1.00 | ⚠️ ALERTA CLV | ⚠️ Movimiento brusco en contra (posible baja de última hora) |
+| `2026-10-31 19:00` | **SAC @ MEM** | Ganador (Moneyline) | **AWAY (SAC gana)** | **4.400** *(DraftKings)* | 24.1% | `+6.1%` | — | S/1.04 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-10-30 21:00` | **DEN @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **2.420** *(DraftKings)* | 56.4% | `+36.4%` | `-1.22%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-30 21:00` | **DEN @ PHX** | Total Puntos (Over/Under) | **UNDER 230.5** | **1.909** *(DraftKings)* | 66.3% | `+26.6%` | — | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-30 19:00` | **HOU @ DAL** | Ganador (Moneyline) | **HOME (DAL gana)** | **2.600** *(DraftKings)* | 49.9% | `+29.8%` | `-1.52%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-10-29 21:00` | **MEM @ POR** | Total Puntos (Over/Under) | **UNDER 232.5** | **1.910** *(DraftKings)* | 63.5% | `+21.2%` | `-2.17%` | S/1.00 | ✅ GANADA | S/+0.91 (HOME 103 - AWAY 124 (Total: 227)) |
