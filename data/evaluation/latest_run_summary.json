@@ -1,14 +1,56 @@
 {
-  "run_id": "RUN_20261029_004355_A16222",
+  "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
+  "mode": "auto",
+  "timestamp_utc": "2026-10-31T21:31:41Z",
+  "ingested_dates": [
+    "2026-10-30",
+    "2026-10-31",
+    "2026-11-01"
+  ],
+  "closing_lines_promoted": 0,
+  "bets_settled_in_cycle": 0,
+  "new_bets_placed_in_cycle": 0,
+  "active_calibration_methods": {
+    "moneyline": "identity",
+    "total_points": "identity"
+  },
+  "bankroll_state": {
+    "initial_bankroll_pen": 100.0,
+    "settled_bankroll_pen": 101.71,
+    "cumulative_net_profit_pen": 1.71,
+    "pending_exposure_pen": 2.04,
+    "available_balance_pen": 99.67,
+    "settled_bets_count": 9,
+    "pending_bets_count": 2
+  },
+  "audit_verdict": "REMAIN_IN_PAPER_TRADING",
+  "financial_and_statistical_summary": {
+    "initial_bankroll_pen": 100.0,
+    "current_settled_bankroll_pen": 101.71,
+    "net_profit_pen": 1.71,
+    "roi_pct": 19.0,
+    "yield_pct": 15.4891,
+    "settled_bets_count": 9,
+    "won_count": 5,
+    "lost_count": 4,
+    "push_count": 0,
+    "max_drawdown_pen": 1.08,
+    "overall_brier_score": 0.247228,
+    "baseline_brier_score": 0.256989,
+    "overall_log_loss": 0.691594,
+    "baseline_log_loss": 0.70869,
+    "mean_clv_pct": 0.0461,
+    "clv_governor_factor": 1.0
+  },
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 3,
+      "events_found_today": 7,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
-      "credentials_configured": false,
-      "status": "READY_IF_KEY_PROVIDED"
+      "credentials_configured": true,
+      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -17,50 +59,78 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-10-29T00:43:55Z",
+      "extracted_at": "2026-10-31T21:31:43Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
   },
   "visual_context": {
-    "pixelrag_installed": false,
-    "pixelrag_status": "PIXELRAG_NOT_INSTALLED_IN_LOCAL_MCP",
-    "mode_used": "STRUCTURED_DOCUMENT_CROSSCHECK_FALLBACK",
+    "pixelrag_installed": true,
+    "external_mcp_server_installed": false,
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 122 docs indexed)",
+    "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
+    "indexed_documents_count": 122,
+    "top_retrieved_context": [
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MIN Rudy Gobert (C) Day To Day (Back): Gobert is Questionable for Saturday's (Oct. 31) game versus the Spurs.",
+        "relevance_score": 0.245,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin is Questionable for Sunday's (Nov. 1) game versus the Nets.",
+        "relevance_score": 0.2409,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "LAL Adou Thiero (SF) Day To Day (Injury Management): Thiero did not play on Friday's (Oct. 30) game against the Warriors.",
+        "relevance_score": 0.24,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "BOS Mitchell Robinson (C) Day To Day (Rest): Robinson is Questionable for Sunday's (Nov. 1) game versus the Magic.",
+        "relevance_score": 0.2323,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MEM Ty Jerome (SG) Day To Day (Back): The Grizzlies listed Jerome as Questionable for Saturday's (Oct. 31) game against the Kings.",
+        "relevance_score": 0.2288,
+        "captured_at": "2026-10-30"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "SAS Stephon Castle (PG) Day To Day (Migraine): Castle is Questionable for Saturday's (Oct. 31) game versus the Timberwolves.",
+        "relevance_score": 0.2254,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "PHI Tacko Fall (C) Day To Day (Quadriceps): The 76ers listed Fall as Questionable for Saturday's (Oct. 31) game against Charlotte.",
+        "relevance_score": 0.2247,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MEM Scotty Pippen Jr. (PG) Day To Day (Back): The Grizzlies listed Pippen Jr. as Questionable for Saturday's (Oct. 31) game against the Kings.",
+        "relevance_score": 0.1967,
+        "captured_at": "2026-10-30"
+      }
+    ],
+    "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
     "direct_betting_probabilities_emitted": false,
-    "confidence_score": 1.0,
-    "limitations_documented": "PixelRAG no está instalado ni configurado en mcp_config.json; se documenta la limitación sin inventar una integración MCP y el pipeline continúa exclusivamente con datos estructurados verificados."
+    "confidence_score": 0.95,
+    "limitations_documented": "No existe servidor MCP externo 'PixelRAG' en mcp_config.json; por ello opera el motor nativo Visual/Tabular RAG (Playwright Chromium DOM + TF-IDF Vector Index) contrastado contra ESPN API."
   },
-  "financial_and_statistical_summary": {
-    "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 103.035,
-    "net_profit_pen": 3.035,
-    "roi_pct": 3.0969,
-    "yield_pct": 3.005,
-    "settled_bets_count": 98,
-    "pending_bets_count": 3,
-    "won_count": 45,
-    "lost_count": 53,
-    "push_count": 0,
-    "max_drawdown_pen": 19.629,
-    "overall_brier_score": 0.24552,
-    "baseline_brier_score": 0.250885,
-    "overall_log_loss": 0.684632,
-    "baseline_log_loss": 0.696078,
-    "bootstrap_uncertainty": {
-      "n_settled": 98,
-      "n_matchday_blocks": 33,
-      "roi_ci_lower_95_pct": -21.811,
-      "roi_ci_upper_95_pct": 27.7311,
-      "compatible_with_zero_edge": true,
-      "method": "temporal_matchday_block_bootstrap"
-    }
-  },
-  "audit_verdict": "REMAIN_IN_PAPER_TRADING",
-  "reports_info": {
-    "target_date": "2026-10-29",
-    "daily_report_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\reports\\daily_report.md",
-    "weekly_report_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\reports\\weekly_report.md",
-    "audit_report_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\reports\\audit_report.md",
-    "obsidian_files_count": 12
+  "environment_status": {
+    "python_version": "CPython 3.12 (uv cloud/local runner)",
+    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
+    "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
+    "playwright_status": "OPERATIONAL",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 122 docs indexed)",
+    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
   }
 }

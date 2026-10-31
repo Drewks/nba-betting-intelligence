@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-31 15:55 (Hora Perú UTC-5)` (`2026-10-31T20:55:33Z`)
+- **Última actualización**: `2026-10-31 16:31 (Hora Perú UTC-5)` (`2026-10-31T21:31:48Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/101.71 PEN`** (`+1.71 PEN`)
 - **ROI Actual**: `+19.00%` | **Yield Actual**: `+15.49%` | **CLV Promedio**: `+0.05%` | **Max Drawdown**: `1.06%` | **Apuestas en espera**: `2` (`S/2.04 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
@@ -22,8 +22,8 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 | :-: | :--- | :---: | :--- | :--- | :--- |
 | 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `9 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
 | 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `9 liquidadas (2 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
-| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2513 vs 0.2596` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
-| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.2972 (29.72%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
+| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2472 vs 0.2570` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
+| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.3042 (30.42%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
 | 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | ✅ VERDE | `ROI +19.00% / Yield +15.49%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
 | 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 1.06% (En vivo: 1.06%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
 | 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-4.1%, +42.1%] / IC95 [-13.3%, +56.0%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |

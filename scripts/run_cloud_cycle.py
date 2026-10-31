@@ -151,6 +151,10 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             pass
 
     # 3. Auto-Calibration Step: Fit calibrators & models on all strictly prior FINAL games
+    # Refresh current timestamp post-ingestion to encompass recently settled games without temporal leakage
+    now_dt = datetime.now(timezone.utc)
+    now_str = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     # 3a. Make sure real NBA history exists (one-time ESPN backfill of 2 seasons) and recompute
     #     leakage-free pre-game ratings + real rest days for every real game.
     real_final_count = db.fetch_one(
@@ -218,8 +222,9 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         JOIN games g ON p.game_id = g.game_id
         WHERE p.market = 'moneyline' AND p.selection = 'HOME' AND p.model_version_id = ?
           AND g.status = 'FINAL' AND g.game_start_time < ?
+          AND (g.result_recorded_at IS NULL OR g.result_recorded_at <= ?)
         """,
-        (MODEL_VERSION_ID, now_str),
+        (MODEL_VERSION_ID, now_str, now_str),
     )
     resolved_tot_preds = db.fetch_all(
         """
@@ -229,8 +234,9 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         JOIN games g ON p.game_id = g.game_id
         WHERE p.market = 'total_points' AND p.selection = 'OVER' AND p.model_version_id = ?
           AND g.status = 'FINAL' AND g.game_start_time < ?
+          AND (g.result_recorded_at IS NULL OR g.result_recorded_at <= ?)
         """,
-        (MODEL_VERSION_ID, now_str),
+        (MODEL_VERSION_ID, now_str, now_str),
     )
 
     ml_cal = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
@@ -430,7 +436,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     )
     sync_obsidian_vault(PROJECT_ROOT / "NBA", daily_md, weekly_md, audit_md, metrics, env_status, today_str)
 
-    return {
+    summary_payload = {
         "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
         "mode": mode,
         "timestamp_utc": now_str,
@@ -441,7 +447,34 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         "active_calibration_methods": {"moneyline": ml_method, "total_points": tot_method},
         "bankroll_state": paper_engine.get_bankroll_state(),
         "audit_verdict": audit_res["exit_gates_evaluation"]["recommendation"],
+        "financial_and_statistical_summary": {
+            "initial_bankroll_pen": 100.0,
+            "current_settled_bankroll_pen": metrics["current_settled_bankroll_pen"],
+            "net_profit_pen": metrics["net_profit_pen"],
+            "roi_pct": metrics["roi_pct"],
+            "yield_pct": metrics["yield_pct"],
+            "settled_bets_count": metrics["settled_bets_count"],
+            "won_count": metrics["won_count"],
+            "lost_count": metrics["lost_count"],
+            "push_count": metrics["push_count"],
+            "max_drawdown_pen": metrics["max_drawdown_pen"],
+            "overall_brier_score": metrics["overall_brier_score"],
+            "baseline_brier_score": metrics["baseline_brier_score"],
+            "overall_log_loss": metrics["overall_log_loss"],
+            "baseline_log_loss": metrics["baseline_log_loss"],
+            "mean_clv_pct": metrics.get("mean_clv_pct"),
+            "clv_governor_factor": metrics.get("clv_governor_factor", 1.0),
+        },
+        "sources_info": sources_info,
+        "visual_context": vis_info,
+        "environment_status": env_status,
     }
+
+    eval_out_path = PROJECT_ROOT / "data" / "evaluation" / "latest_run_summary.json"
+    eval_out_path.parent.mkdir(parents=True, exist_ok=True)
+    eval_out_path.write_text(json.dumps(summary_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    return summary_payload
 
 
 def main() -> None:
