@@ -1,5 +1,8 @@
 ﻿bet_id,tipo_fuente,fecha_jornada,hora_partido_peru,partido,mercado,seleccion,linea,cuota_decimal,casa_apuestas,clv_porcentaje,prob_estimada,ev_porcentaje,stake_pen,estado,marcador_final,beneficio_neto_pen,bankroll_posterior_pen,modelo
-BET_20261031_B0C4035D,NBA_REAL_ESPN,2026-10-31,2026-10-30 21:00,DEN @ PHX,Ganador (Moneyline),HOME (PHX gana),,2.42,DraftKings,-3.2,56.38,36.44,1.0,PENDING,En espera,,,model_f_ensemble_v2
+BET_20261101_51E12DA0,NBA_REAL_ESPN,2026-11-01,2026-10-31 19:00,SAC @ MEM,Total Puntos (Over/Under),UNDER 234.5,234.5,1.96,GTbets,,71.71,40.55,6.0,PENDING,En espera,,,model_f_ensemble_v2
+BET_20261101_A7CE52ED,NBA_REAL_ESPN,2026-11-01,2026-10-31 19:00,CLE @ MIL,Total Puntos (Over/Under),UNDER 236.5,236.5,1.92,GTbets,,66.45,27.57,4.8,PENDING,En espera,,,model_f_ensemble_v2
+BET_20261101_1072FE31,NBA_REAL_ESPN,2026-11-01,2026-10-31 19:00,MIN @ SAS,Total Puntos (Over/Under),UNDER 226.5,226.5,1.95,FanDuel,,54.52,6.32,2.36,PENDING,En espera,,,model_f_ensemble_v2
+BET_20261031_B0C4035D,NBA_REAL_ESPN,2026-10-31,2026-10-30 21:00,DEN @ PHX,Ganador (Moneyline),HOME (PHX gana),,2.42,DraftKings,-6.2,56.38,36.44,1.0,PENDING,En espera,,,model_f_ensemble_v2
 BET_20261031_90A3CA7F,NBA_REAL_ESPN,2026-10-31,2026-10-30 21:00,DEN @ PHX,Total Puntos (Over/Under),UNDER 230.5,230.5,1.909,DraftKings,,66.33,26.62,1.0,PENDING,En espera,,,model_f_ensemble_v2
 BET_20261031_BAB6D884,NBA_REAL_ESPN,2026-10-31,2026-10-30 19:00,HOU @ DAL,Ganador (Moneyline),HOME (DAL gana),,2.6,DraftKings,-1.52,49.92,29.78,1.0,PENDING,En espera,,,model_f_ensemble_v2
 BET_20261030_A239BFAF,NBA_REAL_ESPN,2026-10-30,2026-10-29 21:00,MEM @ POR,Total Puntos (Over/Under),UNDER 232.5,232.5,1.91,DraftKings,-2.17,63.47,21.23,1.0,WON,HOME 103 - AWAY 124 (Total: 227),0.91,105.14,model_f_ensemble_v2

@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 122 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
   "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-  "indexed_documents_count": 122,
+  "indexed_documents_count": 105,
   "top_retrieved_context": [
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Meleek Thomas G Oct 31 Day-To-Day Oct 30: Thomas (foot) is questionable for Saturday's game against the Bucks.",
-      "relevance_score": 0.2837,
-      "captured_at": "2026-10-30T23:57:52Z"
-    },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DEN Cameron Johnson (PF) Day To Day (Ankle): The Nuggets listed Johnson as Questionable for Friday's (Oct. 30) game against the Suns.",
-      "relevance_score": 0.2813,
+      "relevance_score": 0.3015,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "GSW Gui Santos (PF) Day To Day (Knee): The Warriors listed Santos as Questionable for Friday's (Oct. 30) game against the Lakers.",
-      "relevance_score": 0.2807,
-      "captured_at": "2026-10-30"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "PHX Oso Ighodaro (PF) Day To Day (Oblique): The Suns listed Ighodaro as Questionable for Friday's (Oct. 30) game against the Nuggets.",
-      "relevance_score": 0.2719,
+      "relevance_score": 0.2916,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "MEM Quinten Post (C) Day To Day (Ankle): Post did not return to Thursday's (Oct. 29) game against the Blazers.",
-      "relevance_score": 0.2558,
+      "relevance_score": 0.2661,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2221,
+      "relevance_score": 0.2317,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2145,
+      "relevance_score": 0.2228,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Chet Holmgren (C) Day To Day (Knee): Holmgren did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.2131,
+      "relevance_score": 0.2219,
       "captured_at": "2026-10-29"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Alex Caruso (SG) Day To Day (Ankle): Caruso did not play on Wednesday's (Oct. 28) game against Dallas.",
+      "relevance_score": 0.2156,
+      "captured_at": "2026-10-29"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Meleek Thomas (SG) Day To Day (Foot): Thomas did not play on Thursday's (Oct. 29) game against the Hawks.",
+      "relevance_score": 0.2102,
+      "captured_at": "2026-10-30"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
