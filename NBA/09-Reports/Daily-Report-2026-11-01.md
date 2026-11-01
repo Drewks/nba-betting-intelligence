@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-01T02:36:52Z
+date_generated: 2026-11-01T17:11:29Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-01
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-01
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-01T02:36:52Z`
+- **Fecha de generación (UTC)**: `2026-11-01T17:11:29Z`
 - **Jornada evaluada**: `2026-11-01`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `6`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `24`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `21`
-- **Resultados pendientes globales**: `4`
+- **Resultados pendientes globales**: `2`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -41,8 +41,8 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261101_B7BAE33B` | `ESPN_401909899_2026-11-01_SAC_AT_MEM` | `moneyline` | **AWAY** | 4.400 | 0.2412 | +6.12% | S/1.04 | `PENDING` | PENDIENTE |
-| `BET_20261101_3A37DB1F` | `ESPN_401909901_2026-11-01_MIN_AT_SAS` | `moneyline` | **AWAY** | 5.400 | 0.2079 | +12.25% | S/1.00 | `PENDING` | PENDIENTE |
+| `BET_20261101_B7BAE33B` | `ESPN_401909899_2026-11-01_SAC_AT_MEM` | `moneyline` | **AWAY** | 4.400 | 0.2412 | +6.12% | S/1.04 | `LOST` | S/-1.04 |
+| `BET_20261101_3A37DB1F` | `ESPN_401909901_2026-11-01_MIN_AT_SAS` | `moneyline` | **AWAY** | 5.400 | 0.2079 | +12.25% | S/1.00 | `LOST` | S/-1.00 |
 | `BET_20261101_C66174F8` | `ESPN_401909904_2026-11-01_BKN_AT_IND` | `moneyline` | **HOME** | 1.630 | 0.6390 | +4.15% | S/2.16 | `PENDING` | PENDIENTE |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)

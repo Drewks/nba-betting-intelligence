@@ -1,8 +1,8 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-10-31 21:36 (Hora Perú UTC-5)` (`2026-11-01T02:36:52Z`)
-- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/101.71 PEN`** (`+1.71 PEN`)
-- **ROI Actual**: `+19.00%` | **Yield Actual**: `+12.04%` | **CLV Promedio**: `+0.05%` | **Max Drawdown**: `1.06%` | **Apuestas en espera**: `4` (`S/5.20 PEN` reservados)
+- **Última actualización**: `2026-11-01 12:11 (Hora Perú UTC-5)` (`2026-11-01T17:11:29Z`)
+- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/99.67 PEN`** (`-0.33 PEN`)
+- **ROI Actual**: `-2.99%` | **Yield Actual**: `-2.32%` | **CLV Promedio**: `+1.62%` | **Max Drawdown**: `2.96%` | **Apuestas en espera**: `2` (`S/3.16 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
 - **Modo de Apuesta Activo**: `Kelly-Conviccion Proporcional a la Ventaja (S/1.00 a S/6.00 PEN)` *(Modulado por EV real contra casas sharp, Guardian Activo de CLV que reduce exposicion ante movimientos adversos de linea, y Limite de Anti-Correlacion de 1 apuesta por partido)*.
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
@@ -12,21 +12,21 @@
 
 ## 🚦 1. Semáforo de Madurez de 8 Criterios y Graduación en 2 Niveles
 
-### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (4/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
-- **Progreso Muestra Total (Nivel 1)**: `[░░░░░░░░░░░░░░░░░░░░] 9 / 500 apuestas (1.8%)` — *Faltan **491** apuestas.*
-- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[█░░░░░░░░░░░░░░░░░░░] 9 / 200 en vivo (4.5%)` — *Tienes **4** apuestas reales en espera hoy.*
+### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (3/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
+- **Progreso Muestra Total (Nivel 1)**: `[░░░░░░░░░░░░░░░░░░░░] 11 / 500 apuestas (2.2%)` — *Faltan **489** apuestas.*
+- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[█░░░░░░░░░░░░░░░░░░░] 11 / 200 en vivo (5.5%)` — *Tienes **2** apuestas reales en espera hoy.*
 
 Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterios cuantitativos estrictos** divididos en **2 niveles de graduación**:
 
 | # | Criterio Cuantitativo de Auditoría | Estado Hoy | Valor Actual | Meta Nivel 1 (Piloto Micro-Banca 25%) | Meta Nivel 2 (Banca Completa 100%) |
 | :-: | :--- | :---: | :--- | :--- | :--- |
-| 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `9 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
-| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `9 liquidadas (4 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
-| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2472 vs 0.2570` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
-| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.3042 (30.42%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
-| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | ✅ VERDE | `ROI +19.00% / Yield +12.04%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
-| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 1.06% (En vivo: 1.06%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
-| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-4.1%, +42.1%] / IC95 [-13.3%, +56.0%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
+| 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `11 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
+| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `11 liquidadas (2 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
+| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2370 vs 0.2652` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
+| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.2217 (22.17%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
+| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -2.99% / Yield -2.32%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
+| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 2.96% (En vivo: 2.96%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
+| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-48.7%, +35.2%] / IC95 [-62.4%, +38.7%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | ✅ VERDE | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |
 
 > **🔔 Doble aviso automático a tu correo**: No necesitas vigilar esta tabla a diario. Cuando las 8 filas lleguen a **✅ VERDE** en el **Nivel 1**, recibirás un correo de GitHub (`@Drewks`) autorizando pruebas con micro-banca (25% de tu stake). Cuando alcance el **Nivel 2** (`1,000` apuestas + `IC 95% > 0%`), recibirás el segundo correo de certificación completa.
@@ -45,10 +45,10 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
-| `2026-11-01 21:00` | **TOR @ LAL** | Ganador (Moneyline) | **AWAY (TOR gana)** | **2.670** *(1xBet)* | 39.2% | `+4.7%` | — | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-11-01 17:00` | **BKN @ IND** | Ganador (Moneyline) | **HOME (IND gana)** | **1.630** *(Betfair)* | 63.9% | `+4.2%` | — | S/2.16 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-10-31 19:00` | **MIN @ SAS** | Ganador (Moneyline) | **AWAY (MIN gana)** | **5.400** *(DraftKings)* | 20.8% | `+12.2%` | `+0.00%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-10-31 19:00` | **SAC @ MEM** | Ganador (Moneyline) | **AWAY (SAC gana)** | **4.400** *(DraftKings)* | 24.1% | `+6.1%` | `+14.29%` | S/1.04 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-11-01 21:00` | **TOR @ LAL** | Ganador (Moneyline) | **AWAY (TOR gana)** | **2.670** *(1xBet)* | 39.2% | `+4.7%` | `+10.79%` | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-11-01 17:00` | **BKN @ IND** | Ganador (Moneyline) | **HOME (IND gana)** | **1.630** *(Betfair)* | 63.9% | `+4.2%` | `+0.62%` | S/2.16 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-10-31 19:00` | **MIN @ SAS** | Ganador (Moneyline) | **AWAY (MIN gana)** | **5.400** *(DraftKings)* | 20.8% | `+12.2%` | `+0.00%` | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 121 - AWAY 111 (Total: 232)) |
+| `2026-10-31 19:00` | **SAC @ MEM** | Ganador (Moneyline) | **AWAY (SAC gana)** | **4.400** *(DraftKings)* | 24.1% | `+6.1%` | `+14.29%` | S/1.04 | ❌ PERDIDA | S/-1.04 (HOME 136 - AWAY 105 (Total: 241)) |
 | `2026-10-30 21:00` | **DEN @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **2.420** *(DraftKings)* | 56.4% | `+36.4%` | `-1.22%` | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 120 - AWAY 127 (Total: 247)) |
 | `2026-10-30 21:00` | **DEN @ PHX** | Total Puntos (Over/Under) | **UNDER 230.5** | **1.909** *(DraftKings)* | 66.3% | `+26.6%` | — | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 120 - AWAY 127 (Total: 247)) |
 | `2026-10-30 19:00` | **HOU @ DAL** | Ganador (Moneyline) | **HOME (DAL gana)** | **2.600** *(DraftKings)* | 49.9% | `+29.8%` | `-1.52%` | S/1.00 | ✅ GANADA | S/+1.60 (HOME 116 - AWAY 111 (Total: 227)) |
@@ -65,6 +65,8 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Bet ID | Fecha | Partido | Mercado | Selección | Cuota | Prob. | EV (%) | Estado | Beneficio | Bankroll Post. |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :---: | ---: | ---: |
+| `BET_20261101_3A37DB1F` | `2026-11-01` | `MIN @ SAS` | Ganador (Moneyline) | **AWAY (MIN gana)** | 5.400 | 20.8% | `+12.2%` | ❌ LOST | **S/-1.00** | `S/99.67` |
+| `BET_20261101_B7BAE33B` | `2026-11-01` | `SAC @ MEM` | Ganador (Moneyline) | **AWAY (SAC gana)** | 4.400 | 24.1% | `+6.1%` | ❌ LOST | **S/-1.04** | `S/100.67` |
 | `BET_20261031_B0C4035D` | `2026-10-31` | `DEN @ PHX` | Ganador (Moneyline) | **HOME (PHX gana)** | 2.420 | 56.4% | `+36.4%` | ❌ LOST | **S/-1.00** | `S/101.11` |
 | `BET_20261031_90A3CA7F` | `2026-10-31` | `DEN @ PHX` | Total Puntos (Over/Under) | **UNDER 230.5** | 1.909 | 66.3% | `+26.6%` | ❌ LOST | **S/-1.00** | `S/101.71` |
 | `BET_20261031_BAB6D884` | `2026-10-31` | `HOU @ DAL` | Ganador (Moneyline) | **HOME (DAL gana)** | 2.600 | 49.9% | `+29.8%` | ✅ WON | **S/+1.60** | `S/102.71` |
@@ -83,5 +85,3 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 | `BET_20260212_A176DD2E` | `2026-02-12` | `CHI @ MIL` | Total Puntos (Over/Under) | **UNDER 232.0** | 1.966 | 57.1% | `+12.2%` | ✅ WON | **S/+0.97** | `S/102.80` |
 | `BET_20260212_28B25D61` | `2026-02-12` | `MEM @ ATL` | Ganador (Moneyline) | **AWAY (MEM gana)** | 2.673 | 40.2% | `+7.5%` | ❌ LOST | **S/-1.00** | `S/101.80` |
 | `BET_20260211_97E7A2F9` | `2026-02-11` | `LAL @ ATL` | Ganador (Moneyline) | **AWAY (LAL gana)** | 3.201 | 37.6% | `+20.3%` | ❌ LOST | **S/-1.00** | `S/104.83` |
-| `BET_20260211_29B2E95F` | `2026-02-11` | `CHI @ LAC` | Total Puntos (Over/Under) | **UNDER 223.5** | 2.839 | 40.2% | `+14.1%` | ❌ LOST | **S/-1.00** | `S/103.83` |
-| `BET_20260211_3BD20466` | `2026-02-11` | `CHI @ LAC` | Ganador (Moneyline) | **AWAY (CHI gana)** | 3.134 | 35.5% | `+11.2%` | ❌ LOST | **S/-1.00** | `S/102.83` |
