@@ -1,11 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "auto",
-  "timestamp_utc": "2026-10-31T21:31:41Z",
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-01T00:24:51Z",
   "ingested_dates": [
-    "2026-10-30",
-    "2026-10-31",
-    "2026-11-01"
+    "2026-11-01",
+    "2026-11-02"
   ],
   "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
@@ -45,7 +44,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 7,
+      "events_found_today": 2,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -59,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-10-31T21:31:43Z",
+      "extracted_at": "2026-11-01T00:24:54Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -67,57 +66,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 122 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
     "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-    "indexed_documents_count": 122,
+    "indexed_documents_count": 105,
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIN Rudy Gobert (C) Day To Day (Back): Gobert is Questionable for Saturday's (Oct. 31) game versus the Spurs.",
-        "relevance_score": 0.245,
-        "captured_at": "2026-10-31"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin is Questionable for Sunday's (Nov. 1) game versus the Nets.",
-        "relevance_score": 0.2409,
-        "captured_at": "2026-10-31"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "LAL Adou Thiero (SF) Day To Day (Injury Management): Thiero did not play on Friday's (Oct. 30) game against the Warriors.",
-        "relevance_score": 0.24,
+        "relevance_score": 0.2866,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "BOS Mitchell Robinson (C) Day To Day (Rest): Robinson is Questionable for Sunday's (Nov. 1) game versus the Magic.",
-        "relevance_score": 0.2323,
+        "relevance_score": 0.2765,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MEM Ty Jerome (SG) Day To Day (Back): The Grizzlies listed Jerome as Questionable for Saturday's (Oct. 31) game against the Kings.",
-        "relevance_score": 0.2288,
-        "captured_at": "2026-10-30"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "SAS Stephon Castle (PG) Day To Day (Migraine): Castle is Questionable for Saturday's (Oct. 31) game versus the Timberwolves.",
-        "relevance_score": 0.2254,
+        "snippet": "LAL Adou Thiero (SF) Day To Day (Injury Management): Thiero did not play on Friday's (Oct. 30) game against the Warriors.",
+        "relevance_score": 0.2476,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHI Tacko Fall (C) Day To Day (Quadriceps): The 76ers listed Fall as Questionable for Saturday's (Oct. 31) game against Charlotte.",
-        "relevance_score": 0.2247,
+        "snippet": "LAL Ziaire Williams (SF) Day To Day (Foot): Williams did not play on Friday's (Oct. 30) game against the Warriors.",
+        "relevance_score": 0.1889,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MEM Scotty Pippen Jr. (PG) Day To Day (Back): The Grizzlies listed Pippen Jr. as Questionable for Saturday's (Oct. 31) game against the Kings.",
-        "relevance_score": 0.1967,
-        "captured_at": "2026-10-30"
+        "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Oct. 28) game against Dallas.",
+        "relevance_score": 0.1862,
+        "captured_at": "2026-10-29"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Dailyn Swain (SG) Day To Day (Back): Swain did not play on Friday's (Oct. 30) game against the Celtics.",
+        "relevance_score": 0.1849,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "TOR Nate Bittle (C) Day To Day (Foot): Bittle did not play on Friday's (Oct. 30) game against the Magic.",
+        "relevance_score": 0.184,
+        "captured_at": "2026-10-31"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): Aldama did not play on Friday's (Oct. 30) game against the Rockets.",
+        "relevance_score": 0.1821,
+        "captured_at": "2026-10-31"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -130,7 +129,7 @@
     "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 122 docs indexed)",
-    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
+    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }
