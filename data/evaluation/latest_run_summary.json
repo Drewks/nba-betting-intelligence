@@ -1,14 +1,14 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-01T00:24:51Z",
+  "timestamp_utc": "2026-11-01T02:36:48Z",
   "ingested_dates": [
     "2026-11-01",
     "2026-11-02"
   ],
   "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 0,
+  "new_bets_placed_in_cycle": 2,
   "active_calibration_methods": {
     "moneyline": "identity",
     "total_points": "identity"
@@ -17,10 +17,10 @@
     "initial_bankroll_pen": 100.0,
     "settled_bankroll_pen": 101.71,
     "cumulative_net_profit_pen": 1.71,
-    "pending_exposure_pen": 2.04,
-    "available_balance_pen": 99.67,
+    "pending_exposure_pen": 5.2,
+    "available_balance_pen": 96.51,
     "settled_bets_count": 9,
-    "pending_bets_count": 2
+    "pending_bets_count": 4
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
@@ -28,7 +28,7 @@
     "current_settled_bankroll_pen": 101.71,
     "net_profit_pen": 1.71,
     "roi_pct": 19.0,
-    "yield_pct": 15.4891,
+    "yield_pct": 12.0423,
     "settled_bets_count": 9,
     "won_count": 5,
     "lost_count": 4,
@@ -44,7 +44,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 2,
+      "events_found_today": 6,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -58,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-01T00:24:54Z",
+      "extracted_at": "2026-11-01T02:36:51Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -73,49 +73,49 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin is Questionable for Sunday's (Nov. 1) game versus the Nets.",
-        "relevance_score": 0.2866,
+        "relevance_score": 0.2838,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "BOS Mitchell Robinson (C) Day To Day (Rest): Robinson is Questionable for Sunday's (Nov. 1) game versus the Magic.",
-        "relevance_score": 0.2765,
+        "relevance_score": 0.274,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "LAL Adou Thiero (SF) Day To Day (Injury Management): Thiero did not play on Friday's (Oct. 30) game against the Warriors.",
-        "relevance_score": 0.2476,
+        "relevance_score": 0.2447,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale did not return to Saturday's (Oct. 31) game against the Pelicans.",
+        "relevance_score": 0.2353,
+        "captured_at": "2026-11-01"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "LAL Ziaire Williams (SF) Day To Day (Foot): Williams did not play on Friday's (Oct. 30) game against the Warriors.",
-        "relevance_score": 0.1889,
+        "relevance_score": 0.1845,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Oct. 28) game against Dallas.",
-        "relevance_score": 0.1862,
+        "relevance_score": 0.1821,
         "captured_at": "2026-10-29"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Dailyn Swain (SG) Day To Day (Back): Swain did not play on Friday's (Oct. 30) game against the Celtics.",
-        "relevance_score": 0.1849,
+        "relevance_score": 0.1808,
         "captured_at": "2026-10-31"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "TOR Nate Bittle (C) Day To Day (Foot): Bittle did not play on Friday's (Oct. 30) game against the Magic.",
-        "relevance_score": 0.184,
-        "captured_at": "2026-10-31"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): Aldama did not play on Friday's (Oct. 30) game against the Rockets.",
-        "relevance_score": 0.1821,
+        "relevance_score": 0.18,
         "captured_at": "2026-10-31"
       }
     ],

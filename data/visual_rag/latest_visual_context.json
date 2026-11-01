@@ -8,49 +8,49 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin is Questionable for Sunday's (Nov. 1) game versus the Nets.",
-      "relevance_score": 0.2866,
+      "relevance_score": 0.2838,
       "captured_at": "2026-10-31"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "BOS Mitchell Robinson (C) Day To Day (Rest): Robinson is Questionable for Sunday's (Nov. 1) game versus the Magic.",
-      "relevance_score": 0.2765,
+      "relevance_score": 0.274,
       "captured_at": "2026-10-31"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "LAL Adou Thiero (SF) Day To Day (Injury Management): Thiero did not play on Friday's (Oct. 30) game against the Warriors.",
-      "relevance_score": 0.2476,
+      "relevance_score": 0.2447,
       "captured_at": "2026-10-31"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale did not return to Saturday's (Oct. 31) game against the Pelicans.",
+      "relevance_score": 0.2353,
+      "captured_at": "2026-11-01"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "LAL Ziaire Williams (SF) Day To Day (Foot): Williams did not play on Friday's (Oct. 30) game against the Warriors.",
-      "relevance_score": 0.1889,
+      "relevance_score": 0.1845,
       "captured_at": "2026-10-31"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Oct. 28) game against Dallas.",
-      "relevance_score": 0.1862,
+      "relevance_score": 0.1821,
       "captured_at": "2026-10-29"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CHI Dailyn Swain (SG) Day To Day (Back): Swain did not play on Friday's (Oct. 30) game against the Celtics.",
-      "relevance_score": 0.1849,
+      "relevance_score": 0.1808,
       "captured_at": "2026-10-31"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "TOR Nate Bittle (C) Day To Day (Foot): Bittle did not play on Friday's (Oct. 30) game against the Magic.",
-      "relevance_score": 0.184,
-      "captured_at": "2026-10-31"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): Aldama did not play on Friday's (Oct. 30) game against the Rockets.",
-      "relevance_score": 0.1821,
+      "relevance_score": 0.18,
       "captured_at": "2026-10-31"
     }
   ],
