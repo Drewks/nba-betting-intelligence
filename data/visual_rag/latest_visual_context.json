@@ -7,50 +7,50 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Ziaire Williams (SF) Day To Day (Foot): Williams is Questionable for Sunday's (Nov. 1) game against the Raptors.",
-      "relevance_score": 0.2532,
-      "captured_at": "2026-10-31"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin is Questionable for Sunday's (Nov. 1) game versus the Nets.",
-      "relevance_score": 0.2504,
-      "captured_at": "2026-10-31"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Jalen Johnson exited Saturday’s (Oct. 31) loss to the Pelicans due to an ankle injury and was unable to return.",
-      "relevance_score": 0.2172,
-      "captured_at": "2026-10-31"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale did not return to Saturday's (Oct. 31) game against the Pelicans.",
-      "relevance_score": 0.1928,
+      "snippet": "WAS Anthony Gill (PF) Day To Day (Back): Gill is Questionable for Monday's (Nov. 2) game against the Magic.",
+      "relevance_score": 0.2581,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Reed Sheppard (PG) Day To Day (Back): Sheppard did not play on Saturday's (Oct. 31) game against the Thunder.",
-      "relevance_score": 0.1411,
+      "snippet": "WAS Alex Sarr (C) Day To Day (Knee): Sarr is Questionable for Monday's (Nov. 2) game against the Magic.",
+      "relevance_score": 0.2573,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Grant Williams (PF) Day To Day (Hamstring): Williams did not play on Saturday's (Oct. 31) game against the 76ers.",
-      "relevance_score": 0.139,
+      "snippet": "SAC Dylan Cardwell (C) Day To Day (Calf): Cardwell is Questionable for Monday's (Nov. 2) game against Dallas.",
+      "relevance_score": 0.2444,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Ty Jerome (SG) Day To Day (Back): Jerome did not play on Saturday's (Oct. 31) game against the Kings.",
-      "relevance_score": 0.1389,
+      "snippet": "HOU Reed Sheppard (PG) Day To Day (Back): Sheppard is Questionable for Monday's (Nov. 2) game against Boston.",
+      "relevance_score": 0.2437,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "NOP Yves Missi (C) Day To Day (Knee): Missi did not play on Saturday's (Oct. 31) game against the Hawks.",
-      "relevance_score": 0.1388,
+      "snippet": "HOU Clint Capela (C) Day To Day (Ankle): Capela is Questionable for Monday's (Nov. 2) game against Boston.",
+      "relevance_score": 0.2397,
+      "captured_at": "2026-11-01"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DAL Kyrie Irving (SG) Day To Day (Knee): Irving is Questionable for Monday's (Nov. 2) game against Sacramento.",
+      "relevance_score": 0.235,
+      "captured_at": "2026-11-01"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Monday's (Nov. 2) game against Indiana.",
+      "relevance_score": 0.2346,
+      "captured_at": "2026-11-01"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Peyton Watson (SF) Day To Day (Hamstring): Watson is Questionable for Monday's (Nov. 2) game against the Thunder.",
+      "relevance_score": 0.2309,
       "captured_at": "2026-11-01"
     }
   ],

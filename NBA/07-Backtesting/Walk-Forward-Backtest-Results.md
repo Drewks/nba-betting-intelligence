@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-01T17:11:29Z
+date_generated: 2026-11-02T01:00:29Z
 report_type: weekly_report
 model_versions: [model_a_baseline_v1, model_b_elo_v1, model_c_point_margin_v1, model_d_total_points_v1, model_e_lightgbm_v1]
 settled_predictions: 11
@@ -8,19 +8,19 @@ simulation_only: true
 # Informe Semanal y Consolidado Walk-Forward — NBA Betting Intelligence
 
 ## 1. Resumen Financiero Virtual (Bankroll Inicial: S/100.00 PEN)
-- **Fecha de generación (UTC)**: `2026-11-01T17:11:29Z`
+- **Fecha de generación (UTC)**: `2026-11-02T01:00:29Z`
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll virtual liquidado actual**: `S/99.67 PEN`
 - **Beneficio neto acumulado**: `S/-0.33 PEN`
 - **Stakes liquidados totales**: `S/11.04 PEN`
-- **Importe total apostado**: `S/14.20 PEN`
+- **Importe total apostado**: `S/18.74 PEN`
 - **ROI**: `-2.99%`
-- **Yield**: `-2.32%`
+- **Yield**: `-1.76%`
   - *Nota técnica*: ROI (net_profit / settled_stakes * 100) and Yield (net_profit / total_wagered * 100) are equivalent when all wagered bets are settled; they differ only while pending bets exist.
 - **Selecciones liquidadas**: `11` (Ganadas: `5`, Perdidas: `6`, Push: `0`, Void: `0`)
 - **Cuota decimal media**: `2.615`
 - **Drawdown máximo**: `S/3.04 PEN` (`2.96%`)
-- **Exposición máxima simultánea**: `S/6.00 PEN`
+- **Exposición máxima simultánea**: `S/7.70 PEN`
 - **Closing Line Value (CLV) medio**: `+1.62%`
 
 ## 2. Rendimiento por Mercado
