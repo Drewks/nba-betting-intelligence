@@ -108,11 +108,21 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     # - pregame: today and tomorrow (fresh odds & upcoming lines)
     # - auto: complete slate (yesterday, today, tomorrow)
     if mode == "settle_and_calibrate":
-        dates_to_ingest = (yesterday_str, today_str)
+        dates_to_ingest = [yesterday_str, today_str]
     elif mode == "pregame":
-        dates_to_ingest = (today_str, tomorrow_str)
+        dates_to_ingest = [today_str, tomorrow_str]
     else:
-        dates_to_ingest = (yesterday_str, today_str, tomorrow_str)
+        dates_to_ingest = [yesterday_str, today_str, tomorrow_str]
+
+    # Always ensure any dates with unresolved PENDING bets are refreshed so they can settle without waiting
+    pending_matchdays = [
+        r["matchday_date"]
+        for r in db.fetch_all("SELECT DISTINCT matchday_date FROM simulated_bets WHERE status = 'PENDING'")
+        if r.get("matchday_date")
+    ]
+    for p_date in pending_matchdays:
+        if p_date not in dates_to_ingest:
+            dates_to_ingest.append(p_date)
 
     router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10)])
     ingested_dates: list[str] = []

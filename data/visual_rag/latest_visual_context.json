@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 123 docs indexed)",
   "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-  "indexed_documents_count": 105,
+  "indexed_documents_count": 123,
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Anthony Gill (PF) Day To Day (Back): Gill is Questionable for Monday's (Nov. 2) game against the Magic.",
-      "relevance_score": 0.2619,
+      "relevance_score": 0.207,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Alex Sarr (C) Day To Day (Knee): Sarr is Questionable for Monday's (Nov. 2) game against the Magic.",
-      "relevance_score": 0.2611,
-      "captured_at": "2026-11-01"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAC Dylan Cardwell (C) Day To Day (Calf): Cardwell is Questionable for Monday's (Nov. 2) game against Dallas.",
-      "relevance_score": 0.2487,
-      "captured_at": "2026-11-01"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Reed Sheppard (PG) Day To Day (Back): Sheppard is Questionable for Monday's (Nov. 2) game against Boston.",
-      "relevance_score": 0.248,
-      "captured_at": "2026-11-01"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Clint Capela (C) Day To Day (Ankle): Capela is Questionable for Monday's (Nov. 2) game against Boston.",
-      "relevance_score": 0.2439,
+      "relevance_score": 0.206,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Monday's (Nov. 2) game against Indiana.",
-      "relevance_score": 0.24,
+      "relevance_score": 0.1962,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DAL Kyrie Irving (SG) Day To Day (Knee): Irving is Questionable for Monday's (Nov. 2) game against Sacramento.",
-      "relevance_score": 0.2383,
+      "snippet": "HOU Reed Sheppard (PG) Day To Day (Back): Sheppard is Questionable for Monday's (Nov. 2) game against Boston.",
+      "relevance_score": 0.1958,
+      "captured_at": "2026-11-01"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "HOU Clint Capela (C) Day To Day (Ankle): Capela is Questionable for Monday's (Nov. 2) game against Boston.",
+      "relevance_score": 0.1921,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CLE Peyton Watson (SF) Day To Day (Hamstring): Watson is Questionable for Monday's (Nov. 2) game against the Thunder.",
-      "relevance_score": 0.2354,
+      "relevance_score": 0.1898,
       "captured_at": "2026-11-01"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DAL Kyrie Irving (SG) Day To Day (Knee): Irving is Questionable for Monday's (Nov. 2) game against Sacramento.",
+      "relevance_score": 0.188,
+      "captured_at": "2026-11-01"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Jalen Johnson F Nov 2 Day-To-Day Nov 1: Johnson (ankle) is questionable to play Monday against the Pacers.",
+      "relevance_score": 0.1876,
+      "captured_at": "2026-11-02T17:07:40Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

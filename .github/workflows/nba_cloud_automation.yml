@@ -2,12 +2,23 @@ name: NBA Betting Intelligence — Cloud Auto-Trading & Calibration (S/100 Virtu
 
 on:
   schedule:
-    # 1. Post-Partido + Liquidación + Auto-Calibración: 11:23 UTC (06:23 AM Hora Perú — fuera de hora punta :00)
-    - cron: "23 11 * * *"
-    # 2. Pre-Partido Principal (Line Shopping 32 casas + Pronósticos): 21:37 UTC (04:37 PM Hora Perú)
-    - cron: "37 21 * * *"
-    # 3. Cierre Pre-Tipoff (Captura de Closing Line Value CLV + Costa Oeste): 23:43 UTC (06:43 PM Hora Perú)
-    - cron: "43 23 * * *"
+    # 1. Post-Partido + Liquidación + Auto-Calibración (Adelantado para compensar cola de GitHub Actions):
+    # 06:17 UTC (01:17 AM Perú) -> Ejecuta ~08:30-10:00 UTC con cola típica
+    - cron: "17 6 * * *"
+    # 1b. Respaldo Matutino Liquidación: 10:47 UTC (05:47 AM Perú)
+    - cron: "47 10 * * *"
+    # 2. Pre-Partido Principal (Line Shopping 32 casas + Pronósticos tempranos):
+    # 17:23 UTC (12:23 PM Perú) -> Ejecuta ~19:50-20:30 UTC antes de los partidos
+    - cron: "23 17 * * *"
+    # 3. Cierre Pre-Tipoff Ola 1 (Partidos 00:00 UTC / 7:00 PM EST):
+    # 20:41 UTC (03:41 PM Perú) -> Ejecuta ~23:15-23:45 UTC (CLV exacto 15-45m pre-tipoff)
+    - cron: "41 20 * * *"
+    # 4. Cierre Pre-Tipoff Ola 2 (Partidos 01:00 - 01:30 UTC):
+    # 22:47 UTC (05:47 PM Perú) -> Ejecuta ~01:10-01:35 UTC
+    - cron: "47 22 * * *"
+    # 5. Cierre Pre-Tipoff Ola 3 (Partidos Costa Oeste 03:00 - 03:30 UTC):
+    # 00:37 UTC (07:37 PM Perú) -> Ejecuta ~02:35-02:45 UTC
+    - cron: "37 0 * * *"
   workflow_dispatch:
     inputs:
       cycle_mode:
@@ -64,9 +75,9 @@ jobs:
           CYCLE_MODE="${{ github.event.inputs.cycle_mode }}"
           if [ -z "$CYCLE_MODE" ] || [ "$CYCLE_MODE" = "auto" ]; then
             SCHEDULE="${{ github.event.schedule }}"
-            if [ "$SCHEDULE" = "23 11 * * *" ]; then
+            if [ "$SCHEDULE" = "17 6 * * *" ] || [ "$SCHEDULE" = "47 10 * * *" ]; then
               CYCLE_MODE="settle_and_calibrate"
-            elif [ "$SCHEDULE" = "37 21 * * *" ] || [ "$SCHEDULE" = "43 23 * * *" ]; then
+            elif [ "$SCHEDULE" = "23 17 * * *" ] || [ "$SCHEDULE" = "41 20 * * *" ] || [ "$SCHEDULE" = "47 22 * * *" ] || [ "$SCHEDULE" = "37 0 * * *" ]; then
               CYCLE_MODE="pregame"
             else
               CYCLE_MODE="auto"

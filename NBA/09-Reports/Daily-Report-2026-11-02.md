@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-02T02:45:49Z
+date_generated: 2026-11-02T17:07:43Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-02
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-02
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-02T02:45:49Z`
+- **Fecha de generación (UTC)**: `2026-11-02T17:07:43Z`
 - **Jornada evaluada**: `2026-11-02`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `2`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `8`
 - **Apuestas simuladas registradas en la jornada**: `2` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `6`
-- **Resultados pendientes globales**: `6`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -39,8 +39,8 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261102_555C3423` | `ESPN_401909906_2026-11-02_TOR_AT_LAL` | `moneyline` | **AWAY** | 2.670 | 0.3922 | +4.73% | S/1.00 | `PENDING` | PENDIENTE |
-| `BET_20261102_B4E13E3C` | `ESPN_401909905_2026-11-02_LAC_AT_GSW` | `moneyline` | **HOME** | 1.820 | 0.5692 | +3.59% | S/1.41 | `PENDING` | PENDIENTE |
+| `BET_20261102_555C3423` | `ESPN_401909906_2026-11-02_TOR_AT_LAL` | `moneyline` | **AWAY** | 2.670 | 0.3922 | +4.73% | S/1.00 | `LOST` | S/-1.00 |
+| `BET_20261102_B4E13E3C` | `ESPN_401909905_2026-11-02_LAC_AT_GSW` | `moneyline` | **HOME** | 1.820 | 0.5692 | +3.59% | S/1.41 | `WON` | S/+1.16 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909906_2026-11-02_TOR_AT_LAL` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.90% <= threshold 2.00%

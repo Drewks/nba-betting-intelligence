@@ -84,19 +84,22 @@ class PaperTradingEngine:
         rows = self.db.fetch_all(
             f"""
             SELECT b.bet_id, b.decimal_odds,
-                   COALESCE(
-                       MAX(CASE WHEN o.provider LIKE '%Pinnacle%' THEN o.decimal_odds END),
-                       AVG(o.decimal_odds)
+                   (
+                       SELECT o.decimal_odds
+                       FROM odds_snapshots o
+                       WHERE o.game_id = b.game_id
+                         AND o.market = b.market
+                         AND o.selection = b.selection
+                         AND COALESCE(o.line_value, -9999) = COALESCE(b.line_value, -9999)
+                         AND o.is_closing_line = 1
+                       ORDER BY (CASE WHEN o.provider LIKE '%Pinnacle%' THEN 1 ELSE 0 END) DESC,
+                                o.captured_at DESC
+                       LIMIT 1
                    ) AS closing_odds
             FROM simulated_bets b
-            JOIN odds_snapshots o ON b.game_id = o.game_id
-                                 AND b.market = o.market
-                                 AND b.selection = o.selection
-                                 AND COALESCE(b.line_value, -9999) = COALESCE(o.line_value, -9999)
             WHERE b.status IN ('WON', 'LOST', 'PUSH')
-              AND o.is_closing_line = 1
               AND {self.scope_predicate("b")}
-            GROUP BY b.bet_id, b.decimal_odds, b.settled_at
+              AND closing_odds IS NOT NULL
             ORDER BY b.settled_at DESC
             LIMIT ?
             """,
@@ -145,6 +148,10 @@ class PaperTradingEngine:
               AND NOT EXISTS (
                   SELECT 1 FROM odds_snapshots o
                   WHERE o.game_id = g.game_id AND o.is_closing_line = 1
+                    AND o.captured_at >= (
+                        SELECT MAX(o2.captured_at) FROM odds_snapshots o2
+                        WHERE o2.game_id = g.game_id AND o2.is_closing_line = 0 AND o2.captured_at <= g.game_start_time
+                    )
               )
             """,
             (cutoff_str,),
@@ -176,6 +183,10 @@ class PaperTradingEngine:
 
                 for s in snapshots:
                     close_id = f"{s['odds_id']}_CLOSE"
+                    existing_close = conn.execute("SELECT 1 FROM odds_snapshots WHERE odds_id = ?", (close_id,)).fetchone()
+                    if existing_close:
+                        ts_compact = s["captured_at"].replace("-", "").replace(":", "").replace("T", "_").replace("Z", "")
+                        close_id = f"{s['odds_id']}_CLOSE_{ts_compact}"
                     conn.execute(
                         """
                         INSERT OR IGNORE INTO odds_snapshots (

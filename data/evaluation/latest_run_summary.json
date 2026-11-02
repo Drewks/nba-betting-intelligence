@@ -1,12 +1,13 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-02T02:45:46Z",
+  "mode": "auto",
+  "timestamp_utc": "2026-11-02T17:07:26Z",
   "ingested_dates": [
+    "2026-11-01",
     "2026-11-02"
   ],
   "closing_lines_promoted": 0,
-  "bets_settled_in_cycle": 0,
+  "bets_settled_in_cycle": 3,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
     "moneyline": "identity",
@@ -14,41 +15,41 @@
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 99.67,
-    "cumulative_net_profit_pen": -0.33,
-    "pending_exposure_pen": 7.7,
-    "available_balance_pen": 91.97,
-    "settled_bets_count": 11,
-    "pending_bets_count": 6
+    "settled_bankroll_pen": 97.6662,
+    "cumulative_net_profit_pen": -2.3338,
+    "pending_exposure_pen": 3.13,
+    "available_balance_pen": 94.5362,
+    "settled_bets_count": 14,
+    "pending_bets_count": 3
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 99.67,
-    "net_profit_pen": -0.33,
-    "roi_pct": -2.9891,
-    "yield_pct": -1.7609,
-    "settled_bets_count": 11,
-    "won_count": 5,
-    "lost_count": 6,
+    "current_settled_bankroll_pen": 97.6662,
+    "net_profit_pen": -2.3338,
+    "roi_pct": -14.9507,
+    "yield_pct": -12.4536,
+    "settled_bets_count": 14,
+    "won_count": 6,
+    "lost_count": 8,
     "push_count": 0,
-    "max_drawdown_pen": 3.04,
-    "overall_brier_score": 0.236967,
-    "baseline_brier_score": 0.2652,
-    "overall_log_loss": 0.667733,
-    "baseline_log_loss": 0.726622,
-    "mean_clv_pct": 1.6232,
+    "max_drawdown_pen": 6.2,
+    "overall_brier_score": 0.235851,
+    "baseline_brier_score": 0.261153,
+    "overall_log_loss": 0.66528,
+    "baseline_log_loss": 0.717985,
+    "mean_clv_pct": 2.1678,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 2,
+      "events_found_today": 15,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
       "credentials_configured": true,
-      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
+      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -57,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-02T02:45:48Z",
+      "extracted_at": "2026-11-02T17:07:29Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -65,57 +66,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 123 docs indexed)",
     "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-    "indexed_documents_count": 105,
+    "indexed_documents_count": 123,
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Anthony Gill (PF) Day To Day (Back): Gill is Questionable for Monday's (Nov. 2) game against the Magic.",
-        "relevance_score": 0.2619,
+        "relevance_score": 0.207,
         "captured_at": "2026-11-01"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Alex Sarr (C) Day To Day (Knee): Sarr is Questionable for Monday's (Nov. 2) game against the Magic.",
-        "relevance_score": 0.2611,
-        "captured_at": "2026-11-01"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "SAC Dylan Cardwell (C) Day To Day (Calf): Cardwell is Questionable for Monday's (Nov. 2) game against Dallas.",
-        "relevance_score": 0.2487,
-        "captured_at": "2026-11-01"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "HOU Reed Sheppard (PG) Day To Day (Back): Sheppard is Questionable for Monday's (Nov. 2) game against Boston.",
-        "relevance_score": 0.248,
-        "captured_at": "2026-11-01"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "HOU Clint Capela (C) Day To Day (Ankle): Capela is Questionable for Monday's (Nov. 2) game against Boston.",
-        "relevance_score": 0.2439,
+        "relevance_score": 0.206,
         "captured_at": "2026-11-01"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Monday's (Nov. 2) game against Indiana.",
-        "relevance_score": 0.24,
+        "relevance_score": 0.1962,
         "captured_at": "2026-11-01"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "DAL Kyrie Irving (SG) Day To Day (Knee): Irving is Questionable for Monday's (Nov. 2) game against Sacramento.",
-        "relevance_score": 0.2383,
+        "snippet": "HOU Reed Sheppard (PG) Day To Day (Back): Sheppard is Questionable for Monday's (Nov. 2) game against Boston.",
+        "relevance_score": 0.1958,
+        "captured_at": "2026-11-01"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "HOU Clint Capela (C) Day To Day (Ankle): Capela is Questionable for Monday's (Nov. 2) game against Boston.",
+        "relevance_score": 0.1921,
         "captured_at": "2026-11-01"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CLE Peyton Watson (SF) Day To Day (Hamstring): Watson is Questionable for Monday's (Nov. 2) game against the Thunder.",
-        "relevance_score": 0.2354,
+        "relevance_score": 0.1898,
         "captured_at": "2026-11-01"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "DAL Kyrie Irving (SG) Day To Day (Knee): Irving is Questionable for Monday's (Nov. 2) game against Sacramento.",
+        "relevance_score": 0.188,
+        "captured_at": "2026-11-01"
+      },
+      {
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Jalen Johnson F Nov 2 Day-To-Day Nov 1: Johnson (ankle) is questionable to play Monday against the Pacers.",
+        "relevance_score": 0.1876,
+        "captured_at": "2026-11-02T17:07:40Z"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -125,10 +126,10 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
+    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
-    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 123 docs indexed)",
+    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
   }
 }
