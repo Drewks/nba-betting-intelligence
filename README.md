@@ -27,3 +27,20 @@ uv run pytest
 # 3. Ejecutar el pipeline completo (walk-forward backtest + jornada en vivo + reportes + Obsidian)
 uv run python scripts/run_pipeline.py
 ```
+
+
+## Disparo Remoto Instantáneo (Zero-Latency Dispatcher)
+
+Para ejecutar el ciclo cloud en GitHub Actions de forma inmediata sin esperar en la cola de los cron jobs públicos:
+
+```powershell
+# Modo pre-partido (captura de cuotas y apuestas para la jornada de hoy)
+python scripts/dispatch_cycle.py --mode pregame
+
+# Modo liquidación y calibración (post-partidos)
+python scripts/dispatch_cycle.py --mode settle_and_calibrate
+
+# Simulación previa / dry-run (muestra comando cURL para cron externo como cron-job.org)
+python scripts/dispatch_cycle.py --dry-run
+```
+Requiere la variable `GITHUB_TOKEN` configurada o pasar `--token <PAT>` con permisos `actions:write`.

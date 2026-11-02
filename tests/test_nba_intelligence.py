@@ -1074,3 +1074,22 @@ def test_23_persist_closing_lines_and_cycle_modes(tmp_path: Path) -> None:
     assert closing_row["odds_id"] == "ODDS_TIPOFF_HOME_CLOSE"
     assert float(closing_row["decimal_odds"]) == 1.95
     assert closing_row["captured_at"] == "2026-10-25T19:40:00Z"
+
+def test_24_external_workflow_dispatcher() -> None:
+    """Validates zero-latency external workflow dispatcher (Improvement #4)."""
+    from scripts.dispatch_cycle import resolve_repository, resolve_token, dispatch_workflow
+
+    repo = resolve_repository()
+    assert "nba-betting-intelligence" in repo
+
+    # Dry run execution for each supported cycle mode
+    for mode in ("auto", "pregame", "settle_and_calibrate"):
+        success = dispatch_workflow(
+            repo="Drewks/nba-betting-intelligence",
+            token="ghp_test_token_1234567890",
+            mode=mode,
+            ref="main",
+            dry_run=True,
+        )
+        assert success is True
+
