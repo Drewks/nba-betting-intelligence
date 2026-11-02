@@ -1,10 +1,10 @@
 ---
-date_generated: 2026-11-02T17:07:46Z
+date_generated: 2026-11-02T23:57:28Z
 status: PAPER_TRADING_ACTIVE
 bankroll_initial: 100.00 PEN
 ---
 # NBA Betting Intelligence — Inbox Operativo
 
-- **Última sincronización**: `2026-11-02T17:07:46Z`
+- **Última sincronización**: `2026-11-02T23:57:28Z`
 - **Bankroll virtual actual**: `S/97.67 PEN`
 - **Dictamen del auditor**: `REMAIN_IN_PAPER_TRADING`
