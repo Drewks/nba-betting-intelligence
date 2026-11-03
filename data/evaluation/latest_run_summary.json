@@ -1,13 +1,13 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "settle_and_calibrate",
-  "timestamp_utc": "2026-11-03T14:24:20Z",
+  "timestamp_utc": "2026-11-03T18:04:01Z",
   "ingested_dates": [
     "2026-11-02",
     "2026-11-05"
   ],
   "closing_lines_promoted": 0,
-  "bets_settled_in_cycle": 3,
+  "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
     "moneyline": "logistic",
@@ -44,7 +44,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 15,
+      "events_found_today": 14,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -58,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-03T14:24:23Z",
+      "extracted_at": "2026-11-03T18:04:04Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -73,50 +73,50 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): Jordan Goodwin won't return Monday (Nov. 2)",
-        "relevance_score": 0.4273,
+        "relevance_score": 0.2004,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Andrew Nembhard (SG) Out (Injury Management): The Pacers have listed Nembhard as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.0584,
+        "snippet": "DAL Max Christie (SG) Day To Day (Hip): Max Christie did not return to Monday's (Nov. 2) game versus the Kings.",
+        "relevance_score": 0.1845,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Aaron Nesmith (SF) Out (Injury Management): The Pacers have listed Nesmith as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.0583,
-        "captured_at": "2026-11-02"
+        "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play in Monday's (Nov. 2) game against Cleveland.",
+        "relevance_score": 0.1687,
+        "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "DEN Julian Strawther (SG) Out (Knee): The Nuggets reported on Friday (Oct. 16) that Strawther will be OUT for six weeks due to a knee injury.",
-        "relevance_score": 0.0516,
-        "captured_at": "2026-10-16"
+        "snippet": "WAS Anthony Gill (PF) Day To Day (Back): Gill did not play in Monday's (Nov. 2) game against the Magic.",
+        "relevance_score": 0.1684,
+        "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHI Dominick Barlow (SF) Out (Back): The 76ers said on Monday (Oct. 19) Barlow is set to miss at least 2 weeks due to a back injury, per Adam Aaronson of PhillyVoice.com.",
-        "relevance_score": 0.045,
-        "captured_at": "2026-10-19"
+        "snippet": "WAS Alex Sarr (C) Day To Day (Knee): Sarr did not play in Monday's (Nov. 2) game against the Magic.",
+        "relevance_score": 0.1678,
+        "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "DAL Max Christie (SG) Out (Hip): Max Christie won’t return Monday (Nov. 2).",
-        "relevance_score": 0.0426,
-        "captured_at": "2026-11-02"
+        "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin did not play in Monday's (Nov. 2) game against the Hawks.",
+        "relevance_score": 0.16,
+        "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "BOS Devin Carter (PG) Out (Illness): Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe.",
-        "relevance_score": 0.0383,
-        "captured_at": "2026-10-18"
+        "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play in Monday's (Nov. 2) game against Cleveland.",
+        "relevance_score": 0.1582,
+        "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIN Donte DiVincenzo (SG) Out (Achilles): DiVincenzo said on Monday (Oct. 5) that he remains confident that he'll return during the 2026-27 season, per Jon Krawczynski of The Athletic.",
-        "relevance_score": 0.0353,
-        "captured_at": "2026-10-05"
+        "snippet": "NOP Yves Missi (C) Day To Day (Knee): Missi did not play in Monday's (Nov. 2) game against the Grizzlies.",
+        "relevance_score": 0.1576,
+        "captured_at": "2026-11-03"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
