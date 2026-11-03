@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-11-03T03:43:04Z",
+  "updated_at_utc": "2026-11-03T07:14:08Z",
   "graduation_level": "FASE_0_SIMULACION_Y_CALIBRACION",
   "is_ready_for_real_money": false,
   "is_tier1_micro_bankroll_ready": false,
@@ -17,10 +17,10 @@
   "missing_live_bets_tier1": 186,
   "progress_pct": 2.8,
   "progress_live_pct": 7.0,
-  "pending_bets_count": 3,
+  "pending_bets_count": 5,
   "bankroll_pen": 97.67,
   "roi_pct": -14.95,
-  "yield_pct": -12.45,
+  "yield_pct": -10.37,
   "max_drawdown_pct": 6.04,
   "brier_score": 0.2359,
   "baseline_brier_score": 0.2612,
@@ -40,11 +40,11 @@
     "c8_zero_leakage_and_reconciled": true
   },
   "headline": "🚦 Estado del Modelo: EN CALIBRACIÓN (3/8 Criterios Nivel 1 en VERDE — No usar dinero real aún)",
-  "detail_message": "Muestra Total: 14/500 (2.8%) | Muestra 100% En Vivo: 14/200 (7.0%, 3 en espera hoy) | Bankroll: S/97.67 PEN (ROI -14.95%, MaxDD 6.04%) | Brier: 0.2359 (ECE 0.1807). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
+  "detail_message": "Muestra Total: 14/500 (2.8%) | Muestra 100% En Vivo: 14/200 (7.0%, 5 en espera hoy) | Bankroll: S/97.67 PEN (ROI -14.95%, MaxDD 6.04%) | Brier: 0.2359 (ECE 0.1807). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
   "tier1_notification_sent_at": null,
   "tier2_notification_sent_at": null,
-  "last_daily_pick_sent_date": "2026-11-02",
-  "last_daily_pick_bet_id": "BET_20261103_E59224AE",
-  "last_daily_pick_summary": "WAS @ ORL | OVER 225.5 @ 1.990 (1xBet) — Prob: 51.8%",
+  "last_daily_pick_sent_date": "2026-11-04",
+  "last_daily_pick_bet_id": "BET_20261105_63E8261D",
+  "last_daily_pick_summary": "CLE @ OKC | HOME (OKC gana) @ 1.770 (FanDuel) — Prob: 58.5%",
   "last_triggered_channels": []
 }

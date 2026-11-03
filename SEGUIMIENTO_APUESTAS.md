@@ -1,8 +1,8 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-02 22:43 (Hora Perú UTC-5)` (`2026-11-03T03:43:04Z`)
+- **Última actualización**: `2026-11-03 02:14 (Hora Perú UTC-5)` (`2026-11-03T07:14:08Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/97.67 PEN`** (`-2.33 PEN`)
-- **ROI Actual**: `-14.95%` | **Yield Actual**: `-12.45%` | **CLV Promedio**: `+2.17%` | **Max Drawdown**: `6.04%` | **Apuestas en espera**: `3` (`S/3.13 PEN` reservados)
+- **ROI Actual**: `-14.95%` | **Yield Actual**: `-10.37%` | **CLV Promedio**: `+2.17%` | **Max Drawdown**: `6.04%` | **Apuestas en espera**: `5` (`S/6.89 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
 - **Modo de Apuesta Activo**: `Kelly-Conviccion Proporcional a la Ventaja (S/1.00 a S/6.00 PEN)` *(Modulado por EV real contra casas sharp, Guardian Activo de CLV que reduce exposicion ante movimientos adversos de linea, y Limite de Anti-Correlacion de 1 apuesta por partido)*.
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
@@ -14,17 +14,17 @@
 
 ### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (3/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
 - **Progreso Muestra Total (Nivel 1)**: `[█░░░░░░░░░░░░░░░░░░░] 14 / 500 apuestas (2.8%)` — *Faltan **486** apuestas.*
-- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[█░░░░░░░░░░░░░░░░░░░] 14 / 200 en vivo (7.0%)` — *Tienes **3** apuestas reales en espera hoy.*
+- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[█░░░░░░░░░░░░░░░░░░░] 14 / 200 en vivo (7.0%)` — *Tienes **5** apuestas reales en espera hoy.*
 
 Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterios cuantitativos estrictos** divididos en **2 niveles de graduación**:
 
 | # | Criterio Cuantitativo de Auditoría | Estado Hoy | Valor Actual | Meta Nivel 1 (Piloto Micro-Banca 25%) | Meta Nivel 2 (Banca Completa 100%) |
 | :-: | :--- | :---: | :--- | :--- | :--- |
 | 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `14 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
-| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `14 liquidadas (3 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
+| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `14 liquidadas (5 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
 | 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2359 vs 0.2612` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
 | 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.1807 (18.07%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
-| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -14.95% / Yield -12.45%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
+| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -14.95% / Yield -10.37%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
 | 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 6.04% (En vivo: 6.04%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
 | 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-56.4%, +30.4%] / IC95 [-67.6%, +33.8%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | ✅ VERDE | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |
@@ -35,16 +35,18 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 
 ## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)
 
-> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-11-02` — 1 Solo Pick: Mayor Probabilidad de Acierto)
-> - **Partido**: **WAS @ ORL** (`2026-11-02 19:30 Hora Perú`)
-> - **Pick Más Probable**: 🎯 **OVER 225.5** (Total Puntos (Over/Under)) @ **`1.990`** *(1xBet)*
-> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`51.8%`** | **EV**: `+3.0%`
+> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-11-04` — 1 Solo Pick: Mayor Probabilidad de Acierto)
+> - **Partido**: **CLE @ OKC** (`2026-11-04 20:00 Hora Perú`)
+> - **Pick Más Probable**: 🎯 **HOME (OKC gana)** (Ganador (Moneyline)) @ **`1.770`** *(FanDuel)*
+> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`58.5%`** | **EV**: `+3.6%`
 > - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor probabilidad de acierto y sin alerta CLV)*.
 
 Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):
 
 | Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
+| `2026-11-04 20:00` | **CLE @ OKC** | Ganador (Moneyline) | **HOME (OKC gana)** | **1.770** *(FanDuel)* | 58.5% | `+3.6%` | — | S/2.19 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-11-04 19:00` | **PHI @ DET** | Ganador (Moneyline) | **HOME (DET gana)** | **1.810** *(Coolbet)* | 56.6% | `+2.5%` | — | S/1.57 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-02 20:30` | **BOS @ HOU** | Total Puntos (Over/Under) | **OVER 219.5** | **1.990** *(1xBet)* | 51.3% | `+2.1%` | — | S/1.00 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-02 20:00` | **NOP @ MEM** | Ganador (Moneyline) | **AWAY (NOP gana)** | **2.900** *(888sport)* | 36.3% | `+5.3%` | `-10.77%` | S/1.00 | ⚠️ ALERTA CLV | ⚠️ Movimiento brusco en contra (posible baja de última hora) |
 | `2026-11-02 19:30` | **WAS @ ORL** | Total Puntos (Over/Under) | **OVER 225.5** | **1.990** *(1xBet)* | 51.8% | `+3.0%` | — | S/1.13 | ⏳ PENDIENTE | Esperando final del partido |

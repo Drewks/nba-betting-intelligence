@@ -1,13 +1,13 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-03T03:43:01Z",
+  "timestamp_utc": "2026-11-03T07:14:05Z",
   "ingested_dates": [
     "2026-11-04"
   ],
   "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 0,
+  "new_bets_placed_in_cycle": 2,
   "active_calibration_methods": {
     "moneyline": "identity",
     "total_points": "identity"
@@ -16,10 +16,10 @@
     "initial_bankroll_pen": 100.0,
     "settled_bankroll_pen": 97.6662,
     "cumulative_net_profit_pen": -2.3338,
-    "pending_exposure_pen": 3.13,
-    "available_balance_pen": 94.5362,
+    "pending_exposure_pen": 6.89,
+    "available_balance_pen": 90.7762,
     "settled_bets_count": 14,
-    "pending_bets_count": 3
+    "pending_bets_count": 5
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
@@ -27,7 +27,7 @@
     "current_settled_bankroll_pen": 97.6662,
     "net_profit_pen": -2.3338,
     "roi_pct": -14.9507,
-    "yield_pct": -12.4536,
+    "yield_pct": -10.3724,
     "settled_bets_count": 14,
     "won_count": 6,
     "lost_count": 8,
@@ -43,7 +43,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 9,
+      "events_found_today": 15,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -57,7 +57,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-03T03:43:03Z",
+      "extracted_at": "2026-11-03T07:14:07Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -71,51 +71,51 @@
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): Jordan Goodwin won't return Monday (Nov. 2)",
+        "relevance_score": 0.4253,
+        "captured_at": "2026-11-02"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Andrew Nembhard (SG) Out (Injury Management): The Pacers have listed Nembhard as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.1453,
+        "relevance_score": 0.0636,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Aaron Nesmith (SF) Out (Injury Management): The Pacers have listed Nesmith as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.1451,
+        "relevance_score": 0.0635,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "DEN Julian Strawther (SG) Out (Knee): The Nuggets reported on Friday (Oct. 16) that Strawther will be OUT for six weeks due to a knee injury.",
-        "relevance_score": 0.1275,
+        "relevance_score": 0.0562,
         "captured_at": "2026-10-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHI Dominick Barlow (SF) Out (Back): The 76ers said on Monday (Oct. 19) Barlow is set to miss at least 2 weeks due to a back injury, per Adam Aaronson of PhillyVoice.com.",
-        "relevance_score": 0.1122,
+        "relevance_score": 0.0491,
         "captured_at": "2026-10-19"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "DAL Max Christie (SG) Out (Hip): Max Christie won’t return Monday (Nov. 2).",
+        "relevance_score": 0.0424,
+        "captured_at": "2026-11-02"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "BOS Devin Carter (PG) Out (Illness): Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe.",
-        "relevance_score": 0.0928,
+        "relevance_score": 0.0382,
         "captured_at": "2026-10-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MIN Donte DiVincenzo (SG) Out (Achilles): DiVincenzo said on Monday (Oct. 5) that he remains confident that he'll return during the 2026-27 season, per Jon Krawczynski of The Athletic.",
-        "relevance_score": 0.0857,
+        "relevance_score": 0.0352,
         "captured_at": "2026-10-05"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "ORL Jonathan Isaac (PF) Out (Knee): Isaac's latest knee setback is unfortunate, but it's encouraging that he's progressing through rehab and remains confident he'll return this season.",
-        "relevance_score": 0.0843,
-        "captured_at": "2026-11-01"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "GSW Jimmy Butler III (SF) Out (Knee): The Warriors said on Friday (Oct. 16) that Butler could return sometime between January and February as he continues recovering from a torn right ACL, per Anthony Slater of ESPN.",
-        "relevance_score": 0.0787,
-        "captured_at": "2026-10-16"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
