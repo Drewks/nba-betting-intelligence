@@ -1,11 +1,11 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-03T02:38:46Z",
+  "timestamp_utc": "2026-11-03T03:43:01Z",
   "ingested_dates": [
     "2026-11-04"
   ],
-  "closing_lines_promoted": 22,
+  "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
@@ -43,7 +43,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 4,
+      "events_found_today": 9,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -57,7 +57,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-03T02:38:48Z",
+      "extracted_at": "2026-11-03T03:43:03Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -72,49 +72,49 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Andrew Nembhard (SG) Out (Injury Management): The Pacers have listed Nembhard as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.1448,
+        "relevance_score": 0.1453,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Aaron Nesmith (SF) Out (Injury Management): The Pacers have listed Nesmith as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.1446,
+        "relevance_score": 0.1451,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "DEN Julian Strawther (SG) Out (Knee): The Nuggets reported on Friday (Oct. 16) that Strawther will be OUT for six weeks due to a knee injury.",
-        "relevance_score": 0.1276,
+        "relevance_score": 0.1275,
         "captured_at": "2026-10-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHI Dominick Barlow (SF) Out (Back): The 76ers said on Monday (Oct. 19) Barlow is set to miss at least 2 weeks due to a back injury, per Adam Aaronson of PhillyVoice.com.",
-        "relevance_score": 0.1115,
+        "relevance_score": 0.1122,
         "captured_at": "2026-10-19"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "BOS Devin Carter (PG) Out (Illness): Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe.",
-        "relevance_score": 0.0932,
+        "relevance_score": 0.0928,
         "captured_at": "2026-10-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MIN Donte DiVincenzo (SG) Out (Achilles): DiVincenzo said on Monday (Oct. 5) that he remains confident that he'll return during the 2026-27 season, per Jon Krawczynski of The Athletic.",
-        "relevance_score": 0.0856,
+        "relevance_score": 0.0857,
         "captured_at": "2026-10-05"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "ORL Jonathan Isaac (PF) Out (Knee): Isaac's latest knee setback is unfortunate, but it's encouraging that he's progressing through rehab and remains confident he'll return this season.",
-        "relevance_score": 0.0844,
+        "relevance_score": 0.0843,
         "captured_at": "2026-11-01"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "GSW Jimmy Butler III (SF) Out (Knee): The Warriors said on Friday (Oct. 16) that Butler could return sometime between January and February as he continues recovering from a torn right ACL, per Anthony Slater of ESPN.",
-        "relevance_score": 0.0788,
+        "relevance_score": 0.0787,
         "captured_at": "2026-10-16"
       }
     ],
