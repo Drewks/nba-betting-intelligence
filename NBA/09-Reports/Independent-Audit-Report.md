@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-03T18:04:08Z
+date_generated: 2026-11-03T22:24:39Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-03T18:04:08Z`
+- **Fecha de auditoría (UTC)**: `2026-11-03T22:24:39Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -22,7 +22,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
 | `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.231403, 'baseline_brier': 0.254783, 'model_log_loss': 0.654242, 'baseline_log_loss': 0.703772}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
-| `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -13.6809, 'yield_pct': -11.3947}` | `ROI > 0% and Yield > 0%` |
+| `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -13.6809, 'yield_pct': -10.8636}` | `ROI > 0% and Yield > 0%` |
 | `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -60.0463, 'ci_95_upper_pct': 26.0382, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |

@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-03T18:04:08Z
+date_generated: 2026-11-03T22:24:39Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-03
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-03
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-03T18:04:08Z`
+- **Fecha de generación (UTC)**: `2026-11-03T22:24:39Z`
 - **Jornada evaluada**: `2026-11-03`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `15`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `60`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `57`
-- **Resultados pendientes globales**: `2`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.

@@ -7,50 +7,50 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "WAS Anthony Gill (PF) Day To Day (Back): The Wizards listed Gill as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
+      "relevance_score": 0.2273,
+      "captured_at": "2026-11-03"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "WAS Alex Sarr (C) Day To Day (Knee): The Wizards listed Sarr as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
+      "relevance_score": 0.2267,
+      "captured_at": "2026-11-03"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Nic Claxton (C) Day To Day (Hamstring): The Bulls listed Claxton as Questionable fro Wednesday's (Nov. 4) game against New York.",
+      "relevance_score": 0.1994,
+      "captured_at": "2026-11-03"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): Jordan Goodwin won't return Monday (Nov. 2)",
-      "relevance_score": 0.2004,
+      "relevance_score": 0.1721,
       "captured_at": "2026-11-02"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DAL Max Christie (SG) Day To Day (Hip): Max Christie did not return to Monday's (Nov. 2) game versus the Kings.",
-      "relevance_score": 0.1845,
+      "relevance_score": 0.1585,
       "captured_at": "2026-11-02"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play in Monday's (Nov. 2) game against Cleveland.",
-      "relevance_score": 0.1687,
-      "captured_at": "2026-11-03"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Anthony Gill (PF) Day To Day (Back): Gill did not play in Monday's (Nov. 2) game against the Magic.",
-      "relevance_score": 0.1684,
-      "captured_at": "2026-11-03"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Alex Sarr (C) Day To Day (Knee): Sarr did not play in Monday's (Nov. 2) game against the Magic.",
-      "relevance_score": 0.1678,
+      "relevance_score": 0.1447,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin did not play in Monday's (Nov. 2) game against the Hawks.",
-      "relevance_score": 0.16,
+      "relevance_score": 0.1373,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play in Monday's (Nov. 2) game against Cleveland.",
-      "relevance_score": 0.1582,
-      "captured_at": "2026-11-03"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "NOP Yves Missi (C) Day To Day (Knee): Missi did not play in Monday's (Nov. 2) game against the Grizzlies.",
-      "relevance_score": 0.1576,
+      "relevance_score": 0.1357,
       "captured_at": "2026-11-03"
     }
   ],
