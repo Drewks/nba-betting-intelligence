@@ -1,22 +1,22 @@
 ---
-date_generated: 2026-11-02T23:57:28Z
+date_generated: 2026-11-03T02:38:49Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
-period_evaluated: 2026-11-02
-predictions_count: 8
+period_evaluated: 2026-11-03
+predictions_count: 60
 simulation_only: true
 ---
-# Informe Diario NBA Betting Intelligence — 2026-11-02
+# Informe Diario NBA Betting Intelligence — 2026-11-03
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-02T23:57:28Z`
-- **Jornada evaluada**: `2026-11-02`
+- **Fecha de generación (UTC)**: `2026-11-03T02:38:49Z`
+- **Jornada evaluada**: `2026-11-03`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
-- **Partidos evaluados**: `2`
+- **Partidos evaluados**: `15`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `8`
-- **Apuestas simuladas registradas en la jornada**: `2` (límite diario: 3, stake máx: S/1.00 PEN)
-- **Decisiones NO_BET registradas**: `6`
+- **Predicciones emitidas**: `60`
+- **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
+- **Decisiones NO_BET registradas**: `57`
 - **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
@@ -26,29 +26,34 @@ simulation_only: true
 
 | Partido | Mercado | Selección | Línea | Cuota Dec. | Prob. Implícita Bruta | Prob. Estimada (Cal.) | EV (%) | Proveedor |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- |
-| `LAC @ GSW` | `total_points` | **OVER** | 221.0 | 1.930 | 0.5181 | 0.5615 | +8.36% | `LowVig.ag (LineShop)` |
-| `TOR @ LAL` | `moneyline` | **AWAY** | — | 2.670 | 0.3745 | 0.3922 | +4.73% | `1xBet (Best of 21 books)` |
-| `LAC @ GSW` | `moneyline` | **HOME** | — | 1.820 | 0.5495 | 0.5692 | +3.59% | `Betfair (Best of 31 books)` |
-| `TOR @ LAL` | `total_points` | **UNDER** | 227.5 | 1.930 | 0.5181 | 0.5228 | +0.90% | `Pinnacle (LineShop)` |
-| `TOR @ LAL` | `moneyline` | **HOME** | — | 1.590 | 0.6289 | 0.5990 | -4.76% | `Betfair (Best of 21 books)` |
-| `LAC @ GSW` | `moneyline` | **AWAY** | — | 2.180 | 0.4587 | 0.4249 | -7.38% | `Betfair (Best of 31 books)` |
-| `TOR @ LAL` | `total_points` | **OVER** | 227.5 | 1.950 | 0.5128 | 0.4726 | -7.83% | `Coolbet (LineShop)` |
-| `LAC @ GSW` | `total_points` | **UNDER** | 221.0 | 1.970 | 0.5076 | 0.4340 | -14.49% | `Pinnacle (LineShop)` |
+| `WAS @ ORL` | `moneyline` | **HOME** | — | 1.830 | 0.5464 | 0.5919 | +8.32% | `DraftKings (Best of 22 books)` |
+| `TOR @ LAC` | `total_points` | **OVER** | 220.5 | 1.926 | 0.5192 | 0.5493 | +5.78% | `DraftKings` |
+| `NOP @ MEM` | `moneyline` | **AWAY** | — | 2.900 | 0.3448 | 0.3630 | +5.28% | `888sport (Best of 20 books)` |
+| `DET @ CHA` | `total_points` | **OVER** | 209.5 | 1.920 | 0.5208 | 0.5455 | +4.73% | `GTbets (LineShop)` |
+| `CHI @ PHI` | `total_points` | **UNDER** | 238.5 | 1.910 | 0.5236 | 0.5471 | +4.50% | `DraftKings (LineShop)` |
+| `DET @ CHA` | `moneyline` | **AWAY** | — | 1.630 | 0.6135 | 0.6390 | +4.16% | `FanDuel (Best of 22 books)` |
+| `WAS @ ORL` | `total_points` | **OVER** | 225.5 | 1.990 | 0.5025 | 0.5178 | +3.04% | `1xBet (LineShop)` |
+| `BOS @ HOU` | `total_points` | **OVER** | 219.5 | 1.990 | 0.5025 | 0.5131 | +2.11% | `1xBet (LineShop)` |
+| `PHX @ GSW` | `total_points` | **OVER** | 227.5 | 1.930 | 0.5181 | 0.5265 | +1.61% | `Unibet (NL) (LineShop)` |
+| `NOP @ MEM` | `total_points` | **UNDER** | 235.5 | 1.920 | 0.5208 | 0.5270 | +1.18% | `GTbets (LineShop)` |
 
 ## 4. Apuestas Simuladas (Paper Trading S/100 PEN) y Resultados Pendientes
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261102_555C3423` | `ESPN_401909906_2026-11-02_TOR_AT_LAL` | `moneyline` | **AWAY** | 2.670 | 0.3922 | +4.73% | S/1.00 | `LOST` | S/-1.00 |
-| `BET_20261102_B4E13E3C` | `ESPN_401909905_2026-11-02_LAC_AT_GSW` | `moneyline` | **HOME** | 1.820 | 0.5692 | +3.59% | S/1.41 | `WON` | S/+1.16 |
+| `BET_20261103_E59224AE` | `ESPN_401909911_2026-11-03_WAS_AT_ORL` | `total_points` | **OVER** | 1.990 | 0.5178 | +3.04% | S/1.13 | `PENDING` | PENDIENTE |
+| `BET_20261103_EF0858D0` | `ESPN_401909914_2026-11-03_NOP_AT_MEM` | `moneyline` | **AWAY** | 2.900 | 0.3630 | +5.28% | S/1.00 | `PENDING` | PENDIENTE |
+| `BET_20261103_06657F1C` | `ESPN_401909916_2026-11-03_BOS_AT_HOU` | `total_points` | **OVER** | 1.990 | 0.5131 | +2.11% | S/1.00 | `PENDING` | PENDIENTE |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
-- `ESPN_401909906_2026-11-02_TOR_AT_LAL` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.90% <= threshold 2.00%
-- `ESPN_401909906_2026-11-02_TOR_AT_LAL` (`moneyline` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -4.76% <= threshold 2.00%
-- `ESPN_401909906_2026-11-02_TOR_AT_LAL` (`total_points` - `OVER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -7.83% <= threshold 2.00%
-- `ESPN_401909905_2026-11-02_LAC_AT_GSW` (`total_points` - `OVER`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 20.5 pts (> 15); likely missing information, skipped.
-- `ESPN_401909905_2026-11-02_LAC_AT_GSW` (`moneyline` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -7.38% <= threshold 2.00%
-- `ESPN_401909905_2026-11-02_LAC_AT_GSW` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -14.49% <= threshold 2.00%
+- `ESPN_401909911_2026-11-03_WAS_AT_ORL` (`moneyline` - `HOME`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 23.2 pts (> 15); likely missing information, skipped.
+- `ESPN_401909908_2026-11-03_DET_AT_CHA` (`moneyline` - `AWAY`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 16.5 pts (> 15); likely missing information, skipped.
+- `ESPN_401909908_2026-11-03_DET_AT_CHA` (`total_points` - `OVER`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 15.2 pts (> 15); likely missing information, skipped.
+- `ESPN_401909912_2026-11-03_CHI_AT_PHI` (`total_points` - `UNDER`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 15.7 pts (> 15); likely missing information, skipped.
+- `ESPN_401909914_2026-11-03_NOP_AT_MEM` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 1.18% <= threshold 2.00%
+- `ESPN_401909915_2026-11-03_MIL_AT_MIN` (`moneyline` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.51% <= threshold 2.00%
+- `ESPN_401909907_2026-11-03_OKC_AT_CLE` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.93% <= threshold 2.00%
+- `ESPN_401909915_2026-11-03_MIL_AT_MIN` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.45% <= threshold 2.00%
 
 ## 6. Limitaciones Documentadas
 - Todas las operaciones son estrictamente simuladas sobre el bankroll virtual de **S/100.00 PEN**.

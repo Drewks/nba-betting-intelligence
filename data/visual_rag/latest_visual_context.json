@@ -7,51 +7,51 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Reed Sheppard (PG) Day To Day (Back): Sheppard is Questionable for Monday's (Nov. 2) game against Boston.",
-      "relevance_score": 0.246,
-      "captured_at": "2026-11-01"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAC Dylan Cardwell (C) Day To Day (Calf): Cardwell is Questionable for Monday's (Nov. 2) game against Dallas.",
-      "relevance_score": 0.2344,
+      "snippet": "IND Andrew Nembhard (SG) Out (Injury Management): The Pacers have listed Nembhard as OUT for Monday's (Nov. 2) game against the Hawks.",
+      "relevance_score": 0.1448,
       "captured_at": "2026-11-02"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Monday's (Nov. 2) game against Indiana.",
-      "relevance_score": 0.2341,
-      "captured_at": "2026-11-01"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND Obi Toppin (PF) Day To Day (Back): The Pacers have listed Toppin as Questionable for Monday's (Nov. 2) game against the Hawks.",
-      "relevance_score": 0.2322,
+      "snippet": "IND Aaron Nesmith (SF) Out (Injury Management): The Pacers have listed Nesmith as OUT for Monday's (Nov. 2) game against the Hawks.",
+      "relevance_score": 0.1446,
       "captured_at": "2026-11-02"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAC Zach LaVine (SG) Day To Day (Elbow): LaVine is Questionable for Monday's (Nov. 2) game against Dallas.",
-      "relevance_score": 0.2265,
+      "snippet": "DEN Julian Strawther (SG) Out (Knee): The Nuggets reported on Friday (Oct. 16) that Strawther will be OUT for six weeks due to a knee injury.",
+      "relevance_score": 0.1276,
+      "captured_at": "2026-10-16"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "PHI Dominick Barlow (SF) Out (Back): The 76ers said on Monday (Oct. 19) Barlow is set to miss at least 2 weeks due to a back injury, per Adam Aaronson of PhillyVoice.com.",
+      "relevance_score": 0.1115,
+      "captured_at": "2026-10-19"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "BOS Devin Carter (PG) Out (Illness): Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe.",
+      "relevance_score": 0.0932,
+      "captured_at": "2026-10-18"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MIN Donte DiVincenzo (SG) Out (Achilles): DiVincenzo said on Monday (Oct. 5) that he remains confident that he'll return during the 2026-27 season, per Jon Krawczynski of The Athletic.",
+      "relevance_score": 0.0856,
+      "captured_at": "2026-10-05"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "ORL Jonathan Isaac (PF) Out (Knee): Isaac's latest knee setback is unfortunate, but it's encouraging that he's progressing through rehab and remains confident he'll return this season.",
+      "relevance_score": 0.0844,
       "captured_at": "2026-11-01"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Quinten Post (C) Day To Day (Ankle): Post is Questionable for Monday's (Nov. 2) game against New Orleans.",
-      "relevance_score": 0.2264,
-      "captured_at": "2026-11-01"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DEN Alpha Diallo (NA) Day To Day (Wrist): Diallo is Questionable for Monday's (Nov. 2) game against Portland.",
-      "relevance_score": 0.2217,
-      "captured_at": "2026-11-01"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "TOR Jakob Poeltl (C) Day To Day (Shoulder): The Raptors have listed Poeltl as Questionable for Monday's (Nov. 2) game against the Clippers.",
-      "relevance_score": 0.2215,
-      "captured_at": "2026-11-01"
+      "snippet": "GSW Jimmy Butler III (SF) Out (Knee): The Warriors said on Friday (Oct. 16) that Butler could return sometime between January and February as he continues recovering from a torn right ACL, per Anthony Slater of ESPN.",
+      "relevance_score": 0.0788,
+      "captured_at": "2026-10-16"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
