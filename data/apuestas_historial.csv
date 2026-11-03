@@ -1,9 +1,9 @@
 ﻿bet_id,tipo_fuente,fecha_jornada,hora_partido_peru,partido,mercado,seleccion,linea,cuota_decimal,casa_apuestas,clv_porcentaje,prob_estimada,ev_porcentaje,stake_pen,estado,marcador_final,beneficio_neto_pen,bankroll_posterior_pen,modelo
 BET_20261105_63E8261D,NBA_REAL_ESPN,2026-11-05,2026-11-04 20:00,CLE @ OKC,Ganador (Moneyline),HOME (OKC gana),,1.77,FanDuel,,58.54,3.61,2.19,PENDING,En espera,,,model_f_ensemble_v3
 BET_20261105_11DC3E0B,NBA_REAL_ESPN,2026-11-05,2026-11-04 19:00,PHI @ DET,Ganador (Moneyline),HOME (DET gana),,1.81,Coolbet,,56.63,2.51,1.57,PENDING,En espera,,,model_f_ensemble_v3
-BET_20261103_06657F1C,NBA_REAL_ESPN,2026-11-03,2026-11-02 20:30,BOS @ HOU,Total Puntos (Over/Under),OVER 219.5,219.5,1.99,1xBet,,51.31,2.11,1.0,PENDING,En espera,,,model_f_ensemble_v3
-BET_20261103_EF0858D0,NBA_REAL_ESPN,2026-11-03,2026-11-02 20:00,NOP @ MEM,Ganador (Moneyline),AWAY (NOP gana),,2.9,888sport,-10.77,36.3,5.28,1.0,PENDING,En espera,,,model_f_ensemble_v3
-BET_20261103_E59224AE,NBA_REAL_ESPN,2026-11-03,2026-11-02 19:30,WAS @ ORL,Total Puntos (Over/Under),OVER 225.5,225.5,1.99,1xBet,,51.78,3.04,1.13,PENDING,En espera,,,model_f_ensemble_v3
+BET_20261103_06657F1C,NBA_REAL_ESPN,2026-11-03,2026-11-02 20:30,BOS @ HOU,Total Puntos (Over/Under),OVER 219.5,219.5,1.99,1xBet,,51.31,2.11,1.0,LOST,HOME 109 - AWAY 93 (Total: 202),-1.0,97.44,model_f_ensemble_v3
+BET_20261103_EF0858D0,NBA_REAL_ESPN,2026-11-03,2026-11-02 20:00,NOP @ MEM,Ganador (Moneyline),AWAY (NOP gana),,2.9,888sport,-10.77,36.3,5.28,1.0,WON,HOME 134 - AWAY 135 (Total: 269),1.9,98.44,model_f_ensemble_v3
+BET_20261103_E59224AE,NBA_REAL_ESPN,2026-11-03,2026-11-02 19:30,WAS @ ORL,Total Puntos (Over/Under),OVER 225.5,225.5,1.99,1xBet,,51.78,3.04,1.13,LOST,HOME 94 - AWAY 103 (Total: 197),-1.13,96.54,model_f_ensemble_v3
 BET_20261102_555C3423,NBA_REAL_ESPN,2026-11-02,2026-11-01 21:00,TOR @ LAL,Ganador (Moneyline),AWAY (TOR gana),,2.67,1xBet,10.79,39.22,4.73,1.0,LOST,HOME 131 - AWAY 125 (Total: 256),-1.0,96.51,model_f_ensemble_v3
 BET_20261102_B4E13E3C,NBA_REAL_ESPN,2026-11-02,2026-11-01 20:30,LAC @ GSW,Ganador (Moneyline),HOME (GSW gana),,1.82,Betfair,0.0,56.92,3.59,1.41,WON,HOME 124 - AWAY 112 (Total: 236),1.16,97.67,model_f_ensemble_v3
 BET_20261101_C66174F8,NBA_REAL_ESPN,2026-11-01,2026-11-01 17:00,BKN @ IND,Ganador (Moneyline),HOME (IND gana),,1.63,Betfair,0.62,63.9,4.15,2.16,LOST,HOME 90 - AWAY 98 (Total: 188),-2.16,97.51,model_f_ensemble_v3

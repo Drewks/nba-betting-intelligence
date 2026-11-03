@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-03T07:14:08Z
+date_generated: 2026-11-03T14:24:24Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-03
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-03
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-03T07:14:08Z`
+- **Fecha de generación (UTC)**: `2026-11-03T14:24:24Z`
 - **Jornada evaluada**: `2026-11-03`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `15`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `60`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `57`
-- **Resultados pendientes globales**: `5`
+- **Resultados pendientes globales**: `2`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -41,9 +41,9 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261103_E59224AE` | `ESPN_401909911_2026-11-03_WAS_AT_ORL` | `total_points` | **OVER** | 1.990 | 0.5178 | +3.04% | S/1.13 | `PENDING` | PENDIENTE |
-| `BET_20261103_EF0858D0` | `ESPN_401909914_2026-11-03_NOP_AT_MEM` | `moneyline` | **AWAY** | 2.900 | 0.3630 | +5.28% | S/1.00 | `PENDING` | PENDIENTE |
-| `BET_20261103_06657F1C` | `ESPN_401909916_2026-11-03_BOS_AT_HOU` | `total_points` | **OVER** | 1.990 | 0.5131 | +2.11% | S/1.00 | `PENDING` | PENDIENTE |
+| `BET_20261103_E59224AE` | `ESPN_401909911_2026-11-03_WAS_AT_ORL` | `total_points` | **OVER** | 1.990 | 0.5178 | +3.04% | S/1.13 | `LOST` | S/-1.13 |
+| `BET_20261103_EF0858D0` | `ESPN_401909914_2026-11-03_NOP_AT_MEM` | `moneyline` | **AWAY** | 2.900 | 0.3630 | +5.28% | S/1.00 | `WON` | S/+1.90 |
+| `BET_20261103_06657F1C` | `ESPN_401909916_2026-11-03_BOS_AT_HOU` | `total_points` | **OVER** | 1.990 | 0.5131 | +2.11% | S/1.00 | `LOST` | S/-1.00 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909911_2026-11-03_WAS_AT_ORL` (`moneyline` - `HOME`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 23.2 pts (> 15); likely missing information, skipped.

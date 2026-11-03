@@ -1,43 +1,44 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-03T07:14:05Z",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-03T14:24:20Z",
   "ingested_dates": [
-    "2026-11-04"
+    "2026-11-02",
+    "2026-11-05"
   ],
   "closing_lines_promoted": 0,
-  "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 2,
+  "bets_settled_in_cycle": 3,
+  "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
-    "moneyline": "identity",
-    "total_points": "identity"
+    "moneyline": "logistic",
+    "total_points": "logistic"
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 97.6662,
-    "cumulative_net_profit_pen": -2.3338,
-    "pending_exposure_pen": 6.89,
-    "available_balance_pen": 90.7762,
-    "settled_bets_count": 14,
-    "pending_bets_count": 5
+    "settled_bankroll_pen": 97.4362,
+    "cumulative_net_profit_pen": -2.5638,
+    "pending_exposure_pen": 3.76,
+    "available_balance_pen": 93.6762,
+    "settled_bets_count": 17,
+    "pending_bets_count": 2
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 97.6662,
-    "net_profit_pen": -2.3338,
-    "roi_pct": -14.9507,
-    "yield_pct": -10.3724,
-    "settled_bets_count": 14,
-    "won_count": 6,
-    "lost_count": 8,
+    "current_settled_bankroll_pen": 97.4362,
+    "net_profit_pen": -2.5638,
+    "roi_pct": -13.6809,
+    "yield_pct": -11.3947,
+    "settled_bets_count": 17,
+    "won_count": 7,
+    "lost_count": 10,
     "push_count": 0,
     "max_drawdown_pen": 6.2,
-    "overall_brier_score": 0.235851,
-    "baseline_brier_score": 0.261153,
-    "overall_log_loss": 0.66528,
-    "baseline_log_loss": 0.717985,
-    "mean_clv_pct": 2.1678,
+    "overall_brier_score": 0.231403,
+    "baseline_brier_score": 0.254783,
+    "overall_log_loss": 0.654242,
+    "baseline_log_loss": 0.703772,
+    "mean_clv_pct": 1.1727,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
@@ -57,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-03T07:14:07Z",
+      "extracted_at": "2026-11-03T14:24:23Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -72,49 +73,49 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): Jordan Goodwin won't return Monday (Nov. 2)",
-        "relevance_score": 0.4253,
+        "relevance_score": 0.4273,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Andrew Nembhard (SG) Out (Injury Management): The Pacers have listed Nembhard as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.0636,
+        "relevance_score": 0.0584,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Aaron Nesmith (SF) Out (Injury Management): The Pacers have listed Nesmith as OUT for Monday's (Nov. 2) game against the Hawks.",
-        "relevance_score": 0.0635,
+        "relevance_score": 0.0583,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "DEN Julian Strawther (SG) Out (Knee): The Nuggets reported on Friday (Oct. 16) that Strawther will be OUT for six weeks due to a knee injury.",
-        "relevance_score": 0.0562,
+        "relevance_score": 0.0516,
         "captured_at": "2026-10-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHI Dominick Barlow (SF) Out (Back): The 76ers said on Monday (Oct. 19) Barlow is set to miss at least 2 weeks due to a back injury, per Adam Aaronson of PhillyVoice.com.",
-        "relevance_score": 0.0491,
+        "relevance_score": 0.045,
         "captured_at": "2026-10-19"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "DAL Max Christie (SG) Out (Hip): Max Christie won’t return Monday (Nov. 2).",
-        "relevance_score": 0.0424,
+        "relevance_score": 0.0426,
         "captured_at": "2026-11-02"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "BOS Devin Carter (PG) Out (Illness): Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe.",
-        "relevance_score": 0.0382,
+        "relevance_score": 0.0383,
         "captured_at": "2026-10-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MIN Donte DiVincenzo (SG) Out (Achilles): DiVincenzo said on Monday (Oct. 5) that he remains confident that he'll return during the 2026-27 season, per Jon Krawczynski of The Athletic.",
-        "relevance_score": 0.0352,
+        "relevance_score": 0.0353,
         "captured_at": "2026-10-05"
       }
     ],
