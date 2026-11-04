@@ -1,7 +1,7 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-04T06:58:15Z",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-04T14:40:00Z",
   "ingested_dates": [
     "2026-11-04",
     "2026-11-05"
@@ -58,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-04T06:58:18Z",
+      "extracted_at": "2026-11-04T14:40:02Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -109,13 +109,13 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): The Mavericks listed Aldama as Questionable for Wednesday's (Nov. 4) game against the Spurs..",
-        "relevance_score": 0.1949,
+        "relevance_score": 0.1952,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "TOR Jakob Poeltl (C) Day To Day (Shoulder): The Raptors listed Poeltl as Questionable for Wednesday's (Nov. 4) game against Denver.",
-        "relevance_score": 0.1944,
+        "relevance_score": 0.1943,
         "captured_at": "2026-11-03"
       }
     ],
