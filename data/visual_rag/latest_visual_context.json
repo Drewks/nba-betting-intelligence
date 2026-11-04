@@ -8,49 +8,49 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): The Thunder listed Williams as Questionable for Wednesday's (Nov. 4) game against Cleveland.",
-      "relevance_score": 0.2151,
+      "relevance_score": 0.2124,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Anthony Gill (PF) Day To Day (Back): The Wizards listed Gill as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-      "relevance_score": 0.2119,
+      "relevance_score": 0.2092,
+      "captured_at": "2026-11-03"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND Ivica Zubac (C) Day To Day (Ankle): The Pacers listed Zubac as Questionable for Wednesday's (Nov. 4) game against Memphis.",
+      "relevance_score": 0.2077,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Alex Sarr (C) Day To Day (Knee): The Wizards listed Sarr as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-      "relevance_score": 0.209,
+      "relevance_score": 0.2066,
+      "captured_at": "2026-11-03"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND Obi Toppin (PF) Day To Day (Back): The Pacers listed Toppin as Questionable for Wednesday's (Nov. 4) game against Memphis.",
+      "relevance_score": 0.2005,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): The Hawks listed Johnson as Questionable for Wednesday's (Nov. 4) game against Washington.",
-      "relevance_score": 0.202,
+      "relevance_score": 0.1995,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): The Mavericks listed Aldama as Questionable for Wednesday's (Nov. 4) game against the Spurs..",
-      "relevance_score": 0.1974,
+      "relevance_score": 0.1949,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "TOR Jakob Poeltl (C) Day To Day (Shoulder): The Raptors listed Poeltl as Questionable for Wednesday's (Nov. 4) game against Denver.",
-      "relevance_score": 0.1966,
-      "captured_at": "2026-11-03"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "PHX Rasheer Fleming (PF) Day To Day (Ankle): The Suns listed Fleming as Questionable for Wednesday's (Nov. 4) game against Portland.",
-      "relevance_score": 0.196,
-      "captured_at": "2026-11-03"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Clint Capela (C) Day To Day (Ankle): The Rockets listed Capela as Questionable for Wednesday's (Nov. 4) game against Minnesota.",
-      "relevance_score": 0.1957,
+      "relevance_score": 0.1944,
       "captured_at": "2026-11-03"
     }
   ],
