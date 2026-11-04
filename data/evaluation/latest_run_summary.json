@@ -1,7 +1,7 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-04T00:53:12Z",
+  "timestamp_utc": "2026-11-04T02:43:13Z",
   "ingested_dates": [
     "2026-11-04",
     "2026-11-05"
@@ -49,7 +49,7 @@
     },
     "sportradar_api": {
       "credentials_configured": true,
-      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
+      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -58,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-04T00:53:14Z",
+      "extracted_at": "2026-11-04T02:43:16Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -73,49 +73,49 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): The Thunder listed Williams as Questionable for Wednesday's (Nov. 4) game against Cleveland.",
-        "relevance_score": 0.2183,
+        "relevance_score": 0.2151,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Anthony Gill (PF) Day To Day (Back): The Wizards listed Gill as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-        "relevance_score": 0.215,
+        "relevance_score": 0.2119,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Alex Sarr (C) Day To Day (Knee): The Wizards listed Sarr as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-        "relevance_score": 0.2132,
-        "captured_at": "2026-11-03"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): The Mavericks listed Aldama as Questionable for Wednesday's (Nov. 4) game against the Spurs..",
-        "relevance_score": 0.2012,
+        "relevance_score": 0.209,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): The Hawks listed Johnson as Questionable for Wednesday's (Nov. 4) game against Washington.",
-        "relevance_score": 0.2011,
+        "relevance_score": 0.202,
+        "captured_at": "2026-11-03"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): The Mavericks listed Aldama as Questionable for Wednesday's (Nov. 4) game against the Spurs..",
+        "relevance_score": 0.1974,
+        "captured_at": "2026-11-03"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "TOR Jakob Poeltl (C) Day To Day (Shoulder): The Raptors listed Poeltl as Questionable for Wednesday's (Nov. 4) game against Denver.",
+        "relevance_score": 0.1966,
+        "captured_at": "2026-11-03"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "PHX Rasheer Fleming (PF) Day To Day (Ankle): The Suns listed Fleming as Questionable for Wednesday's (Nov. 4) game against Portland.",
+        "relevance_score": 0.196,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "HOU Clint Capela (C) Day To Day (Ankle): The Rockets listed Capela as Questionable for Wednesday's (Nov. 4) game against Minnesota.",
-        "relevance_score": 0.1986,
-        "captured_at": "2026-11-03"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "NYK Josh Hart (SG) Day To Day (Ankle): The Knicks listed Hart as Questionable for Wednesday's (Nov. 4) game against Chicago.",
-        "relevance_score": 0.1945,
-        "captured_at": "2026-11-03"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "BOS Payton Pritchard (PG) Day To Day (Shoulder): The Celtics listed Pritchard as Questionable for Wednesday's (Nov. 4) game against the Bucks.",
-        "relevance_score": 0.1943,
+        "relevance_score": 0.1957,
         "captured_at": "2026-11-03"
       }
     ],
@@ -126,7 +126,7 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
+    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
     "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
