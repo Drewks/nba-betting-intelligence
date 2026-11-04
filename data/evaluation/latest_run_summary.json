@@ -1,7 +1,7 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "settle_and_calibrate",
-  "timestamp_utc": "2026-11-04T18:15:01Z",
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-04T22:42:53Z",
   "ingested_dates": [
     "2026-11-04",
     "2026-11-05"
@@ -49,7 +49,7 @@
     },
     "sportradar_api": {
       "credentials_configured": true,
-      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
+      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (30 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -58,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-04T18:15:03Z",
+      "extracted_at": "2026-11-04T22:42:56Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -73,50 +73,50 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): The Thunder listed Williams as Questionable for Wednesday's (Nov. 4) game against Cleveland.",
-        "relevance_score": 0.2062,
+        "relevance_score": 0.2419,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "WAS Anthony Gill (PF) Day To Day (Back): The Wizards listed Gill as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-        "relevance_score": 0.2043,
-        "captured_at": "2026-11-03"
+        "snippet": "LAC Isaiah Jackson (C) Day To Day (Groin): Jackson is Questionable for Wednesday's (Nov. 4) game against the Heat.",
+        "relevance_score": 0.2419,
+        "captured_at": "2026-11-04"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Ivica Zubac (C) Day To Day (Ankle): The Pacers listed Zubac as Questionable for Wednesday's (Nov. 4) game against Memphis.",
-        "relevance_score": 0.2024,
+        "relevance_score": 0.238,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Alex Sarr (C) Day To Day (Knee): The Wizards listed Sarr as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-        "relevance_score": 0.2006,
+        "relevance_score": 0.2366,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Obi Toppin (PF) Day To Day (Back): The Pacers listed Toppin as Questionable for Wednesday's (Nov. 4) game against Memphis.",
-        "relevance_score": 0.1954,
-        "captured_at": "2026-11-03"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): The Hawks listed Johnson as Questionable for Wednesday's (Nov. 4) game against Washington.",
-        "relevance_score": 0.1948,
+        "relevance_score": 0.2297,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MEM Quinten Post (C) Day To Day (Ankle): The Grizzlies listed Post as Questionable for Wednesday's (Nov. 4) game against Indiana.",
-        "relevance_score": 0.1943,
+        "relevance_score": 0.2288,
         "captured_at": "2026-11-03"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): The Mavericks listed Aldama as Questionable for Wednesday's (Nov. 4) game against the Spurs.",
-        "relevance_score": 0.1902,
+        "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): The Hawks listed Johnson as Questionable for Wednesday's (Nov. 4) game against Washington.",
+        "relevance_score": 0.2285,
         "captured_at": "2026-11-03"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "WAS Bilal Coulibaly (SF) Day To Day (Illness): The Wizards listed Coulibaly as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
+        "relevance_score": 0.2265,
+        "captured_at": "2026-11-04"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -126,7 +126,7 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
+    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (30 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
     "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
