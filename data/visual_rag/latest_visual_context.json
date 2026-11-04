@@ -7,50 +7,50 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): The Thunder listed Williams as Questionable for Wednesday's (Nov. 4) game against Cleveland.",
+      "relevance_score": 0.2183,
+      "captured_at": "2026-11-03"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Anthony Gill (PF) Day To Day (Back): The Wizards listed Gill as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-      "relevance_score": 0.2273,
+      "relevance_score": 0.215,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Alex Sarr (C) Day To Day (Knee): The Wizards listed Sarr as Questionable for Wednesday's (Nov. 4) game against Atlanta.",
-      "relevance_score": 0.2267,
+      "relevance_score": 0.2132,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Nic Claxton (C) Day To Day (Hamstring): The Bulls listed Claxton as Questionable fro Wednesday's (Nov. 4) game against New York.",
-      "relevance_score": 0.1994,
+      "snippet": "DAL Santi Aldama (PF) Day To Day (Knee): The Mavericks listed Aldama as Questionable for Wednesday's (Nov. 4) game against the Spurs..",
+      "relevance_score": 0.2012,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): Jordan Goodwin won't return Monday (Nov. 2)",
-      "relevance_score": 0.1721,
-      "captured_at": "2026-11-02"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DAL Max Christie (SG) Day To Day (Hip): Max Christie did not return to Monday's (Nov. 2) game versus the Kings.",
-      "relevance_score": 0.1585,
-      "captured_at": "2026-11-02"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play in Monday's (Nov. 2) game against Cleveland.",
-      "relevance_score": 0.1447,
+      "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): The Hawks listed Johnson as Questionable for Wednesday's (Nov. 4) game against Washington.",
+      "relevance_score": 0.2011,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND Obi Toppin (PF) Day To Day (Back): Toppin did not play in Monday's (Nov. 2) game against the Hawks.",
-      "relevance_score": 0.1373,
+      "snippet": "HOU Clint Capela (C) Day To Day (Ankle): The Rockets listed Capela as Questionable for Wednesday's (Nov. 4) game against Minnesota.",
+      "relevance_score": 0.1986,
       "captured_at": "2026-11-03"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play in Monday's (Nov. 2) game against Cleveland.",
-      "relevance_score": 0.1357,
+      "snippet": "NYK Josh Hart (SG) Day To Day (Ankle): The Knicks listed Hart as Questionable for Wednesday's (Nov. 4) game against Chicago.",
+      "relevance_score": 0.1945,
+      "captured_at": "2026-11-03"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "BOS Payton Pritchard (PG) Day To Day (Shoulder): The Celtics listed Pritchard as Questionable for Wednesday's (Nov. 4) game against the Bucks.",
+      "relevance_score": 0.1943,
       "captured_at": "2026-11-03"
     }
   ],
