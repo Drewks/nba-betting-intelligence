@@ -1,12 +1,12 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-05T01:03:09Z",
+  "timestamp_utc": "2026-11-05T02:48:59Z",
   "ingested_dates": [
     "2026-11-05",
     "2026-11-06"
   ],
-  "closing_lines_promoted": 18,
+  "closing_lines_promoted": 10,
   "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
@@ -44,12 +44,12 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 6,
+      "events_found_today": 3,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
       "credentials_configured": true,
-      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (30 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
+      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -58,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-05T01:03:12Z",
+      "extracted_at": "2026-11-05T02:49:02Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -72,51 +72,51 @@
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "LAC Isaiah Jackson (C) Day To Day (Groin): Jackson is Questionable for Wednesday's (Nov. 4) game against the Heat.",
-        "relevance_score": 0.2866,
+        "snippet": "GSW Brandon Williams (PG) Day To Day (Quadriceps): Williams did not play in Monday's (Nov. 2) game against the Phoenix.",
+        "relevance_score": 0.4024,
+        "captured_at": "2026-11-03"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "DEN Julian Strawther (SG) Out (Knee): The Nuggets reported on Friday (Oct. 16) that Strawther will be OUT for six weeks due to a knee injury.",
+        "relevance_score": 0.0618,
+        "captured_at": "2026-10-16"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "WAS Reece Beekman (PG) Out (Shoulder): The Wizards announced on Monday (Nov. 2) that Beekman sustained a right acromioclavicular joint injury and will be re-evaluated in approximately three weeks.",
+        "relevance_score": 0.0555,
+        "captured_at": "2026-11-02"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Jalen Smith (C) Out (Hand): Smith will not return on Wednesday's (Nov. 4) game against the Knicks.",
+        "relevance_score": 0.0494,
         "captured_at": "2026-11-04"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Ivica Zubac (C) Day To Day (Ankle): The Pacers listed Zubac as Questionable for Wednesday's (Nov. 4) game against Memphis.",
-        "relevance_score": 0.2807,
-        "captured_at": "2026-11-03"
+        "source": "espn_nba_news_feed",
+        "snippet": "Hornets' Kon Knueppel exits 6 minutes into season debut with leg soreness. Charlotte Hornets guard Kon Knueppel exited his season debut after appearing to aggravate the left hamstring injury that had sidelined him to sta",
+        "relevance_score": 0.0391,
+        "captured_at": "2026-11-05T02:13:36Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Obi Toppin (PF) Day To Day (Back): The Pacers listed Toppin as Questionable for Wednesday's (Nov. 4) game against Memphis.",
-        "relevance_score": 0.2715,
-        "captured_at": "2026-11-03"
+        "snippet": "BOS Devin Carter (PG) Out (Illness): Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe.",
+        "relevance_score": 0.038,
+        "captured_at": "2026-10-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MEM Quinten Post (C) Day To Day (Ankle): The Grizzlies listed Post as Questionable for Wednesday's (Nov. 4) game against Indiana.",
-        "relevance_score": 0.2703,
-        "captured_at": "2026-11-03"
+        "snippet": "MIN Donte DiVincenzo (SG) Out (Achilles): DiVincenzo said on Monday (Oct. 5) that he remains confident that he'll return during the 2026-27 season, per Jon Krawczynski of The Athletic.",
+        "relevance_score": 0.0348,
+        "captured_at": "2026-10-05"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "TOR Jakob Poeltl (C) Day To Day (Shoulder): The Raptors listed Poeltl as Questionable for Wednesday's (Nov. 4) game against Denver.",
-        "relevance_score": 0.2633,
-        "captured_at": "2026-11-03"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): The Suns listed Goodwin as Questionable for Wednesday's (Nov. 4) game against Portland.",
-        "relevance_score": 0.2579,
-        "captured_at": "2026-11-03"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "UTA Mo Bamba (C) Day To Day (Ankle): The Jazz listed Bamba as Questionable for Wednesday's (Nov. 4) game against New Orleans.",
-        "relevance_score": 0.2537,
-        "captured_at": "2026-11-03"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Kelly Oubre Jr. (SF) Day To Day (Calf): The Pacers listed Oubre Jr. as Questionable for Wednesday's (Nov. 4) game against Memphis.",
-        "relevance_score": 0.2262,
-        "captured_at": "2026-11-03"
+        "snippet": "ORL Jonathan Isaac (PF) Out (Knee): Isaac's latest knee setback is unfortunate, but it's encouraging that he's progressing through rehab and remains confident he'll return this season.",
+        "relevance_score": 0.0345,
+        "captured_at": "2026-11-01"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -126,7 +126,7 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (30 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
+    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
     "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
