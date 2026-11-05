@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-05 17:44 (Hora Perú UTC-5)` (`2026-11-05T22:44:01Z`)
+- **Última actualización**: `2026-11-05 17:50 (Hora Perú UTC-5)` (`2026-11-05T22:50:22Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/96.45 PEN`** (`-3.55 PEN`)
 - **ROI Actual**: `-15.03%` | **Yield Actual**: `-13.46%` | **CLV Promedio**: `+1.17%` | **Max Drawdown**: `6.09%` | **Apuestas en espera**: `2` (`S/2.75 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
@@ -22,7 +22,7 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 | :-: | :--- | :---: | :--- | :--- | :--- |
 | 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `20 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
 | 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `20 liquidadas (2 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
-| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2277 vs 0.2492` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
+| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2277 vs 0.2483` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
 | 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.1449 (14.49%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
 | 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -15.03% / Yield -13.46%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
 | 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 6.09% (En vivo: 6.09%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
