@@ -1,4 +1,5 @@
 ﻿bet_id,tipo_fuente,fecha_jornada,hora_partido_peru,partido,mercado,seleccion,linea,cuota_decimal,casa_apuestas,clv_porcentaje,prob_estimada,ev_porcentaje,stake_pen,estado,marcador_final,beneficio_neto_pen,bankroll_posterior_pen,modelo
+BET_20261107_CB5E045A,NBA_REAL_ESPN,2026-11-07,2026-11-06 19:30,PHI @ CLE,Ganador (Moneyline),HOME (CLE gana),,2.21,1xBet,,47.92,5.91,1.36,PENDING,En espera,,,model_f_ensemble_v3
 BET_20261106_92B26B33,NBA_REAL_ESPN,2026-11-06,2026-11-05 21:00,ORL @ PHX,Ganador (Moneyline),HOME (PHX gana),,1.91,Matchbook,,53.52,2.23,1.39,PENDING,En espera,,,model_f_ensemble_v3
 BET_20261105_A563FA74,NBA_REAL_ESPN,2026-11-05,2026-11-04 21:00,TOR @ DEN,Ganador (Moneyline),AWAY (TOR gana),,2.9,Bovada,,37.2,7.89,1.1,LOST,HOME 128 - AWAY 109 (Total: 237),-1.1,96.45,model_f_ensemble_v3
 BET_20261105_63E8261D,NBA_REAL_ESPN,2026-11-05,2026-11-04 20:00,CLE @ OKC,Ganador (Moneyline),HOME (OKC gana),,1.77,FanDuel,,58.54,3.61,2.19,WON,HOME 124 - AWAY 116 (Total: 240),1.69,99.12,model_f_ensemble_v3

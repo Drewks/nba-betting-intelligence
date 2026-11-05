@@ -7,50 +7,50 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard is Questionable for Friday's (Nov. 6) game against the Hornets.",
+      "relevance_score": 0.2419,
+      "captured_at": "2026-11-05"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
-      "relevance_score": 0.2045,
+      "relevance_score": 0.1782,
       "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-      "relevance_score": 0.1994,
+      "relevance_score": 0.175,
       "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.1986,
+      "relevance_score": 0.1734,
       "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
-      "relevance_score": 0.1957,
+      "relevance_score": 0.1705,
       "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CHA Kon Knueppel (SF) Day To Day (Leg): Knueppel did not return to Wednesday's (Nov. 4) game against the Nets.",
-      "relevance_score": 0.1951,
+      "relevance_score": 0.1704,
       "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen did not return to Wednesday's (Nov. 4) game versus the Thunder.",
-      "relevance_score": 0.1938,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard did not return on Wedenesday's (Nov. 4) game against the Bucks.",
-      "relevance_score": 0.1829,
+      "relevance_score": 0.1691,
       "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Nov. 4) game against Cleveland.",
-      "relevance_score": 0.1602,
+      "relevance_score": 0.1415,
       "captured_at": "2026-11-05"
     }
   ],
