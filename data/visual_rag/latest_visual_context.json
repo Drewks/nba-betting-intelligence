@@ -7,51 +7,51 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "GSW Brandon Williams (PG) Day To Day (Quadriceps): Williams did not play in Monday's (Nov. 2) game against the Phoenix.",
-      "relevance_score": 0.4024,
-      "captured_at": "2026-11-03"
+      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
+      "relevance_score": 0.2152,
+      "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DEN Julian Strawther (SG) Out (Knee): The Nuggets reported on Friday (Oct. 16) that Strawther will be OUT for six weeks due to a knee injury.",
-      "relevance_score": 0.0618,
-      "captured_at": "2026-10-16"
+      "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return on Wedensday's (Nov. 4) game against the Pacers.",
+      "relevance_score": 0.2109,
+      "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Reece Beekman (PG) Out (Shoulder): The Wizards announced on Monday (Nov. 2) that Beekman sustained a right acromioclavicular joint injury and will be re-evaluated in approximately three weeks.",
-      "relevance_score": 0.0555,
-      "captured_at": "2026-11-02"
+      "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard did not return on Wedenesday's (Nov. 4) game against the Bucks.",
+      "relevance_score": 0.2014,
+      "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Jalen Smith (C) Out (Hand): Smith will not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.0494,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "espn_nba_news_feed",
-      "snippet": "Hornets' Kon Knueppel exits 6 minutes into season debut with leg soreness. Charlotte Hornets guard Kon Knueppel exited his season debut after appearing to aggravate the left hamstring injury that had sidelined him to sta",
-      "relevance_score": 0.0391,
-      "captured_at": "2026-11-05T02:13:36Z"
+      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Nov. 4) game against Cleveland.",
+      "relevance_score": 0.1727,
+      "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BOS Devin Carter (PG) Out (Illness): Carter has been diagnosed with mononucleosis and is without a timetable for a return, Gary Washburn of The Boston Globe.",
-      "relevance_score": 0.038,
-      "captured_at": "2026-10-18"
+      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Wednesday's (Nov. 4) game against Cleveland.",
+      "relevance_score": 0.1711,
+      "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIN Donte DiVincenzo (SG) Out (Achilles): DiVincenzo said on Monday (Oct. 5) that he remains confident that he'll return during the 2026-27 season, per Jon Krawczynski of The Athletic.",
-      "relevance_score": 0.0348,
-      "captured_at": "2026-10-05"
+      "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play on Wednesday's (Nov. 4) game against Cleveland.",
+      "relevance_score": 0.1616,
+      "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ORL Jonathan Isaac (PF) Out (Knee): Isaac's latest knee setback is unfortunate, but it's encouraging that he's progressing through rehab and remains confident he'll return this season.",
-      "relevance_score": 0.0345,
-      "captured_at": "2026-11-01"
+      "snippet": "CHA Grant Williams (PF) Day To Day (Hamstring): Williams did not play on Wednesday's (Nov. 4) game against the Nets.",
+      "relevance_score": 0.1608,
+      "captured_at": "2026-11-05"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "NOP Yves Missi (C) Day To Day (Knee): Missi did not play on Wednesday's (Nov. 4) game against Utah.",
+      "relevance_score": 0.1598,
+      "captured_at": "2026-11-05"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
