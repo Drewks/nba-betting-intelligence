@@ -62,7 +62,7 @@ from src.reporting.reporter import (
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
 
-MODEL_VERSION_ID = "model_f_ensemble_v3"
+MODEL_VERSION_ID = "model_f_ensemble_v4"
 MIN_REAL_GAMES_FOR_TRAINING = 120
 
 
@@ -192,7 +192,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         INSERT OR IGNORE INTO model_versions (
             model_version_id, model_family, market, train_start_date, train_end_date,
             trained_at, hyperparameters_json, is_active, approved_by
-        ) VALUES (?, 'model_f_meta_ensemble', 'moneyline', '2024-10-22', ?, ?, ?, 1, 'orchestrator_v3')
+        ) VALUES (?, 'model_f_meta_ensemble', 'moneyline', '2024-10-22', ?, ?, ?, 1, 'orchestrator_v4')
         """,
         (
             MODEL_VERSION_ID,
@@ -204,7 +204,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     "market_anchor_model_weight": DEFAULT_MODEL_WEIGHT,
                     "max_model_market_disagreement": MAX_MODEL_MARKET_DISAGREEMENT,
                     "training_data": "real_espn_history_only",
-                    "team_ratings": "leakage_free_opponent_adjusted_ewma",
+                    "team_ratings": "pace_decoupled_huber_multi_horizon_ewma",
                 }
             ),
         ),
@@ -214,7 +214,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         INSERT OR IGNORE INTO model_versions (
             model_version_id, model_family, market, train_start_date, train_end_date,
             trained_at, hyperparameters_json, is_active, approved_by
-        ) VALUES ('model_g_ml_montecarlo_v2', 'model_g_ml_montecarlo_hybrid', 'total_points', '2026-01-01', ?, ?, '{"n_simulations": 10000, "regimes": ["Q1_Q3", "Q4_Blowout", "Clutch_Fouling", "Overtime"]}', 1, 'orchestrator_v2')
+        ) VALUES ('model_g_ml_montecarlo_v4', 'model_g_ml_montecarlo_hybrid', 'total_points', '2024-10-22', ?, ?, '{"n_simulations": 10000, "regimes": ["Q1_Q3", "Q4_Blowout", "Clutch_Fouling", "Overtime"]}', 1, 'orchestrator_v4')
         """,
         (today_str, now_str),
     )
@@ -222,8 +222,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     model_f.fit(all_final_games, now_str)
     model_c = model_f.model_c
 
-    # Fit probability calibrators ONLY on resolved predictions from the current model version
-    # (older versions used leaky features / synthetic training and are not comparable)
+    # Fit probability calibrators on resolved predictions from the current model version,
+    # augmented with strictly out-of-sample walk-forward evaluations when live sample < 50
     resolved_ml_preds = db.fetch_all(
         """
         SELECT p.raw_probability, g.game_start_time, g.result_recorded_at,
@@ -248,6 +248,36 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         """,
         (MODEL_VERSION_ID, now_str, now_str),
     )
+
+    if len(resolved_ml_preds) < 50 and len(all_final_games) >= 150:
+        wf_slice = [g for g in all_final_games[-65:] if str(g["game_start_time"]) < now_str]
+        if wf_slice:
+            wf_cutoff = wf_slice[0]["game_start_time"]
+            wf_train = [g for g in all_final_games if str(g["game_start_time"]) < wf_cutoff]
+            wf_model = EnsembleStackingModel(MODEL_VERSION_ID)
+            wf_model.fit(wf_train, wf_cutoff)
+            for wg in wf_slice:
+                rec_ts = wg.get("result_recorded_at")
+                if rec_ts and parse_iso_utc(rec_ts) > parse_iso_utc(now_str):
+                    rec_ts = None
+                p_ml_wf = wf_model.predict_moneyline(wg, all_final_games)["p_home"]
+                p_tot_wf = wf_model.predict_total_points(wg, all_final_games, 228.5)["p_over"]
+                resolved_ml_preds.append(
+                    {
+                        "raw_probability": p_ml_wf,
+                        "game_start_time": wg["game_start_time"],
+                        "result_recorded_at": rec_ts,
+                        "outcome": 1 if wg["home_score"] > wg["away_score"] else 0,
+                    }
+                )
+                resolved_tot_preds.append(
+                    {
+                        "raw_probability": p_tot_wf,
+                        "game_start_time": wg["game_start_time"],
+                        "result_recorded_at": rec_ts,
+                        "outcome": 1 if (wg["home_score"] + wg["away_score"]) > 228.5 else 0,
+                    }
+                )
 
     ml_cal = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
     tot_cal = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
@@ -315,16 +345,30 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             (now_str,),
         )
         for g in scheduled_games:
-            existing_pred = db.fetch_one("SELECT prediction_id FROM predictions WHERE game_id = ?", (g["game_id"],))
-            if existing_pred:
+            existing_bet = db.fetch_one("SELECT bet_id FROM simulated_bets WHERE game_id = ?", (g["game_id"],))
+            if existing_bet:
                 continue
-            game_odds = db.fetch_all(
-                "SELECT * FROM odds_snapshots WHERE game_id = ? AND is_closing_line = 0",
+            raw_game_odds = db.fetch_all(
+                "SELECT * FROM odds_snapshots WHERE game_id = ? AND is_closing_line = 0 ORDER BY captured_at ASC",
                 (g["game_id"],),
             )
-            if not game_odds:
+            if not raw_game_odds:
                 continue
-    
+
+            # Keep only the freshest pre-game line per (market, selection) so stale earlier lines are ignored
+            latest_by_mkt_sel: dict[tuple[str, str], dict[str, Any]] = {}
+            for o in raw_game_odds:
+                latest_by_mkt_sel[(o["market"], o["selection"])] = o
+            game_odds = list(latest_by_mkt_sel.values())
+
+            latest_odds_ts = max(str(o["captured_at"]) for o in game_odds)
+            existing_pred = db.fetch_one(
+                "SELECT MAX(odds_captured_at) AS max_cap FROM predictions WHERE game_id = ? AND model_version_id = ?",
+                (g["game_id"], MODEL_VERSION_ID),
+            )
+            if existing_pred and existing_pred.get("max_cap") and str(existing_pred["max_cap"]) >= latest_odds_ts:
+                continue
+
             start_dt = parse_iso_utc(g["game_start_time"])
             avail_dt = parse_iso_utc(g["features_available_at"])
             latest_odds_dt = max(parse_iso_utc(o["captured_at"]) for o in game_odds)
@@ -333,25 +377,25 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                 continue
             pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
             validate_game_record(g, simulated_prediction_time=pred_ts)
-    
+
             feats = build_pregame_features(g, all_final_games, market="total_points")
             pred_f_ml = model_f.predict_moneyline(g, all_final_games)
             raw_p_home = pred_f_ml["p_home"]
             cal_p_home = ml_cal.transform_single(raw_p_home)
-    
+
             tot_odds = [o for o in game_odds if o["market"] == "total_points"]
             line_val = float(tot_odds[0]["line_value"]) if tot_odds else 228.5
             pred_f_tot = model_f.predict_total_points(g, all_final_games, line_val)
             raw_p_over = pred_f_tot["p_over"]
             cal_p_over = tot_cal.transform_single(raw_p_over)
-    
+
             feats["mc_overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
             feats["mc_blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
             feats["mc_conformal_q10_total"] = pred_f_tot.get("conformal_q10_total", 205.0)
             feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
-    
+
             consensus_map = compute_market_consensus(game_odds)
-    
+
             for o in game_odds:
                 validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
                 mkt = o["market"]
@@ -359,7 +403,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                 line_v = o.get("line_value")
                 cons_entry = consensus_map.get((mkt, sel, line_v))
                 cons_p = cons_entry["p_market"] if cons_entry else None
-    
+
                 if mkt == "moneyline":
                     raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
                     cal_p = cal_p_home if sel == "HOME" else round(1.0 - cal_p_home, 6)
@@ -370,7 +414,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     cal_p = cal_p_over if sel == "OVER" else round(1.0 - cal_p_over, 6)
                     unc = pred_f_tot["uncertainty_std"]
                     m_ver = model_f.version_id
-    
+
                 opp = evaluate_market_opportunity(
                     estimated_prob=cal_p,
                     uncertainty_std=unc,
@@ -409,7 +453,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                 opp["blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
                 opp["emitted_at"] = pred_ts
                 candidates_by_matchday[g["matchday_date"]].append(opp)
-    
+
         for m_date in sorted(candidates_by_matchday.keys()):
             day_res = paper_engine.evaluate_and_record_matchday_selections(m_date, candidates_by_matchday[m_date])
             new_bets_placed += len(day_res["placed_bets"])

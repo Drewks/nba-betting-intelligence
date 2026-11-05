@@ -1,7 +1,8 @@
 """
 Model Calibration & Controlled Retraining (Sections 5 & 9):
 - Computes Brier Score, Log Loss, and Reliability Curves (ECE)
-- Implements Logistic (Platt) calibration and Isotonic calibration (gated by sample size)
+- Implements temperature-regularized Logistic (Platt) calibration and Isotonic calibration (gated by sample size)
+- Enforces monotonic positive slope and small-sample intercept shrinkage to prevent directional Home/Away or Over/Under bias
 - Strictly prohibits future outcomes (game_start_time >= calibration_cutoff_time raises TemporalLeakageError)
 - Selects models/calibrators based on out-of-sample probabilistic metrics, never solely on ROI
 """
@@ -96,8 +97,8 @@ class ProbabilityCalibrator:
     """
     Fits and applies probability calibration strictly without temporal lookahead.
     - 'identity': pass-through when sample size < min_samples_logistic
-    - 'logistic': Platt scaling on log-odds when sample size >= min_samples_logistic
-    - 'isotonic': Isotonic regression when sample size >= min_samples_isotonic
+    - 'logistic': temperature-regularized Platt scaling on log-odds when sample size >= min_samples_logistic
+    - 'isotonic': Isotonic + regularized Platt blend when sample size >= min_samples_isotonic
     """
 
     def __init__(
@@ -112,6 +113,8 @@ class ProbabilityCalibrator:
         self.min_samples_isotonic = min_samples_isotonic
         self.logistic_model: LogisticRegression | None = None
         self.isotonic_model: IsotonicRegression | None = None
+        self.eff_slope: float = 1.0
+        self.eff_intercept: float = 0.0
         self.cutoff_time_str: str | None = None
         self.train_sample_size: int = 0
 
@@ -149,6 +152,8 @@ class ProbabilityCalibrator:
 
         if self.train_sample_size < self.min_samples_logistic or len(set(outcomes)) < 2:
             self.active_method = "identity"
+            self.eff_slope = 1.0
+            self.eff_intercept = 0.0
             return self.active_method
 
         p_arr = np.asarray(probs, dtype=float)
@@ -160,40 +165,46 @@ class ProbabilityCalibrator:
         elif chosen == "isotonic" and self.train_sample_size < self.min_samples_isotonic:
             chosen = "logistic"
 
+        X_logit = _logit(p_arr).reshape(-1, 1)
+        lr = LogisticRegression(C=0.6, random_state=42)
+        lr.fit(X_logit, y_arr)
+        self.logistic_model = lr
+
+        # Enforce positive monotonicity and shrink small-sample intercept toward 0.0
+        # so short-term coin-flip variance on N < 200 games cannot create directional Home/Away bias
+        raw_slope = float(lr.coef_[0][0])
+        raw_intercept = float(lr.intercept_[0])
+        self.eff_slope = float(np.clip(raw_slope, 0.70, 1.30)) if raw_slope > 0.20 else 1.0
+        intercept_w = min(1.0, max(0.0, (self.train_sample_size - 50.0) / 250.0))
+        max_int = min(0.18, 0.02 + 0.16 * intercept_w)
+        self.eff_intercept = float(np.clip(raw_intercept * intercept_w, -max_int, max_int))
+
         if chosen == "isotonic":
             iso = IsotonicRegression(y_min=0.03, y_max=0.97, out_of_bounds="clip")
             iso.fit(p_arr, y_arr)
             self.isotonic_model = iso
-            X_logit = _logit(p_arr).reshape(-1, 1)
-            lr = LogisticRegression(C=0.8, random_state=42)
-            lr.fit(X_logit, y_arr)
-            self.logistic_model = lr
             self.active_method = "isotonic"
         else:
-            X_logit = _logit(p_arr).reshape(-1, 1)
-            lr = LogisticRegression(C=0.8, random_state=42)
-            lr.fit(X_logit, y_arr)
-            self.logistic_model = lr
             self.active_method = "logistic"
 
         return self.active_method
 
+    def _platt_predict(self, p_arr: np.ndarray) -> np.ndarray:
+        logits = _logit(p_arr)
+        cal_logits = self.eff_slope * logits + self.eff_intercept
+        return 1.0 / (1.0 + np.exp(-cal_logits))
+
     def transform(self, raw_probabilities: list[float] | np.ndarray) -> np.ndarray:
         p_arr = np.asarray(raw_probabilities, dtype=float)
-        shrink = min(0.55, max(0.15, self.train_sample_size / 350.0))
+        shrink = min(0.45, max(0.12, self.train_sample_size / 400.0))
         if self.active_method == "isotonic" and self.isotonic_model is not None:
             iso_cal = self.isotonic_model.predict(p_arr)
-            if self.logistic_model is not None:
-                X_logit = _logit(p_arr).reshape(-1, 1)
-                platt_cal = self.logistic_model.predict_proba(X_logit)[:, 1]
-                cal = 0.50 * iso_cal + 0.50 * platt_cal
-            else:
-                cal = iso_cal
+            platt_cal = self._platt_predict(p_arr)
+            cal = 0.40 * iso_cal + 0.60 * platt_cal
             blended = (1.0 - shrink) * p_arr + shrink * cal
             return np.round(np.clip(blended, 0.03, 0.97), 6)
         if self.active_method == "logistic" and self.logistic_model is not None:
-            X_logit = _logit(p_arr).reshape(-1, 1)
-            cal = self.logistic_model.predict_proba(X_logit)[:, 1]
+            cal = self._platt_predict(p_arr)
             blended = (1.0 - shrink) * p_arr + shrink * cal
             return np.round(np.clip(blended, 0.03, 0.97), 6)
         return np.round(np.clip(p_arr, 0.03, 0.97), 6)

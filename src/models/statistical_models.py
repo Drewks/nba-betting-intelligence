@@ -1,14 +1,18 @@
 """
 Statistical NBA Models (Section 5):
 - Model A: BaselineModel (historical reference probabilities and rolling rates)
-- Model B: EloModel (sequential Elo adjusted for home court and rest days)
-- Model C: PointMarginModel (Ridge regression on offensive/defensive/net ratings, pace, rest, form)
-- Model D: TotalPointsModel (normal distribution explicitly accounting for home/away score covariance)
-- Model E: AdvancedGBMModel (LightGBM evaluated strictly out-of-sample)
+- Model B: EloModel (dual-speed MOV-adjusted Elo with offseason regression, rest density, and altitude)
+- Model C: PointMarginModel (residual-anchored RidgeCV on pace-decoupled efficiency, Elo spread, rest, surge)
+- Model D: TotalPointsModel (normal distribution with score covariance, tempo decoupling, B2B & blowout drag)
+- Model E: AdvancedGBMModel (residual-boosted LightGBM evaluated strictly out-of-sample)
+- Model G: DeepMonteCarloHybridModel (10,000-game Q1-Q4 + OT possession simulator with calibrated shared covariance)
+- Model F: EnsembleStackingModel (out-of-sample shrinkage-weighted log-odds pool)
 """
 
 from __future__ import annotations
 
+import hashlib
+import math
 from typing import Any
 import numpy as np
 from scipy.stats import norm
@@ -32,9 +36,38 @@ FEATURE_COLUMNS: list[str] = [
     "pace_clash",
     "rest_diff",
     "b2b_advantage",
+    "fatigue_diff",
+    "altitude_advantage",
     "recent_margin_diff",
+    "form_surge_diff",
     "recent_total_trend",
+    "elo_spread",
+    "structural_margin",
+    "structural_total",
     "home_court_indicator",
+]
+
+MARGIN_FEATURE_COLUMNS: list[str] = [
+    "elo_spread",
+    "eff_spread",
+    "structural_margin",
+    "net_rtg_diff",
+    "fatigue_diff",
+    "altitude_advantage",
+    "form_surge_diff",
+    "recent_margin_diff",
+    "expected_pace",
+]
+
+TOTAL_FEATURE_COLUMNS: list[str] = [
+    "structural_total",
+    "off_def_sum",
+    "tempo_sum",
+    "b2b_total_drag",
+    "blowout_drag",
+    "expected_pace",
+    "pace_clash",
+    "recent_total_trend",
 ]
 
 
@@ -49,9 +82,13 @@ def _filter_strictly_prior_final_games(
         if g.get("status") == "FINAL"
         and g.get("home_score") is not None
         and g.get("away_score") is not None
-        and parse_iso_utc(g["game_start_time"]) < cutoff_dt
+        and (
+            str(g.get("game_start_time", "")) < cutoff_time_str
+            if len(str(g.get("game_start_time", ""))) == len(cutoff_time_str)
+            else parse_iso_utc(g["game_start_time"]) < cutoff_dt
+        )
     ]
-    valid.sort(key=lambda g: g["game_start_time"])
+    valid.sort(key=lambda g: (str(g.get("game_start_time", "")), str(g.get("game_id", ""))))
     return valid
 
 
@@ -68,7 +105,7 @@ class BaselineModel:
         self.version_id = version_id
         self.historical_home_win_rate: float = 0.565
         self.historical_total_mean: float = 228.5
-        self.historical_total_std: float = 17.5
+        self.historical_total_std: float = 18.2
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
         prior = _filter_strictly_prior_final_games(historical_games, cutoff_time_str)
@@ -78,7 +115,7 @@ class BaselineModel:
         totals = [float(g["home_score"] + g["away_score"]) for g in prior]
         self.historical_home_win_rate = float(np.clip(np.mean(home_wins), 0.35, 0.70))
         self.historical_total_mean = float(np.mean(totals))
-        self.historical_total_std = max(10.0, float(np.std(totals, ddof=1)) if len(totals) > 2 else 17.5)
+        self.historical_total_std = max(10.0, float(np.std(totals, ddof=1)) if len(totals) > 2 else 18.2)
 
     def predict_moneyline(
         self,
@@ -114,8 +151,8 @@ class BaselineModel:
 class EloModel:
     """
     Modelo B (Elo):
-    Sequential Elo system adjusted for home-court advantage and rest differential,
-    strictly using games completed prior to each prediction.
+    Dual-horizon Margin-of-Victory Elo system adjusted for modern NBA home-court advantage (50 Elo),
+    offseason regression (0.66 carryover), schedule density fatigue, and high-altitude venues (DEN, UTA).
     """
 
     model_family = "model_b_elo"
@@ -124,9 +161,9 @@ class EloModel:
         self,
         version_id: str = "model_b_elo_v1",
         initial_rating: float = 1500.0,
-        k_factor: float = 20.0,
-        home_advantage_elo: float = 65.0,
-        rest_advantage_per_day: float = 12.0,
+        k_factor: float = 21.0,
+        home_advantage_elo: float = 50.0,
+        rest_advantage_per_day: float = 15.0,
     ) -> None:
         self.version_id = version_id
         self.initial_rating = initial_rating
@@ -142,10 +179,17 @@ class EloModel:
     ) -> dict[str, float]:
         prior = _filter_strictly_prior_final_games(historical_games, cutoff_time_str)
         ratings: dict[str, float] = {}
+        last_dt: dict[str, Any] = {}
 
         for g in prior:
             h_team = g["home_team"]
             a_team = g["away_team"]
+            dt = parse_iso_utc(g["game_start_time"])
+            for t in (h_team, a_team):
+                if t in ratings and t in last_dt and (dt - last_dt[t]).days >= 60:
+                    ratings[t] = self.initial_rating + 0.66 * (ratings[t] - self.initial_rating)
+                last_dt[t] = dt
+
             r_home = ratings.get(h_team, self.initial_rating)
             r_away = ratings.get(a_team, self.initial_rating)
 
@@ -154,7 +198,7 @@ class EloModel:
             exp_home = 1.0 / (1.0 + 10.0 ** (-elo_diff / 400.0))
 
             actual_home = 1.0 if g["home_score"] > g["away_score"] else 0.0
-            margin = abs(float(g["home_score"] - g["away_score"]))
+            margin = min(26.0, abs(float(g["home_score"] - g["away_score"])))
             mov_multiplier = ((margin + 3.0) ** 0.8) / (7.5 + 0.006 * abs(elo_diff))
 
             delta = self.k_factor * mov_multiplier * (actual_home - exp_home)
@@ -169,29 +213,29 @@ class EloModel:
         game: dict[str, Any],
         historical_games: list[dict[str, Any]],
     ) -> dict[str, float]:
-        validate_essential_features(game, "moneyline")
-        ratings = self.compute_ratings_as_of(historical_games, game["game_start_time"])
-        r_home = ratings.get(game["home_team"], self.initial_rating)
-        r_away = ratings.get(game["away_team"], self.initial_rating)
-        rest_diff = float(game["home_rest_days"] - game["away_rest_days"])
-
-        elo_diff = (r_home + self.home_advantage_elo + self.rest_advantage_per_day * rest_diff) - r_away
-        p_home = float(np.clip(1.0 / (1.0 + 10.0 ** (-elo_diff / 400.0)), 0.06, 0.94))
+        feats = build_pregame_features(game, historical_games, market="moneyline")
+        r_home = feats["elo_home"]
+        r_away = feats["elo_away"]
+        elo_diff = feats["elo_diff"]
+        p_home = float(np.clip(feats["p_elo"], 0.05, 0.95))
+        self.ratings[game["home_team"]] = r_home
+        self.ratings[game["away_team"]] = r_away
         return {
             "home_elo": round(r_home, 2),
             "away_elo": round(r_away, 2),
             "elo_diff": round(elo_diff, 2),
             "p_home": round(p_home, 6),
             "p_away": round(1.0 - p_home, 6),
-            "uncertainty_std": 0.065,
+            "uncertainty_std": 0.055,
         }
 
 
 class PointMarginModel:
     """
     Modelo C (Margen de Puntos):
-    Estimates expected point differential E[Home - Away] using offensive/defensive/net ratings,
-    pace, home court, rest days, and recent form. Maps expected margin to win probability.
+    Estimates expected point differential E[Home - Away] using a hybrid structural baseline
+    (combining dual-speed Elo spread, pace-normalized opponent-adjusted net rating, schedule density
+    fatigue, and altitude) plus a recency-weighted, residual-anchored RidgeCV correction.
     """
 
     model_family = "model_c_point_margin"
@@ -199,52 +243,51 @@ class PointMarginModel:
     def __init__(
         self,
         version_id: str = "model_c_point_margin_v1",
-        alpha: float = 5.0,
-        default_residual_std: float = 11.8,
-        home_court_points: float = 2.6,
+        alpha: float = 50.0,
+        default_residual_std: float = 13.6,
+        home_court_points: float = 1.85,
     ) -> None:
         self.version_id = version_id
         self.alpha = alpha
         self.residual_std = default_residual_std
+        self.win_prob_std = 11.5
         self.home_court_points = home_court_points
-        self.regressor: Ridge | None = None
+        self.regressor: Any = None
+        self.ml_weight: float = 0.25
         self.is_fitted = False
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
         prior = _filter_strictly_prior_final_games(historical_games, cutoff_time_str)
-        if len(prior) < 15:
+        if len(prior) < 20:
             self.is_fitted = False
             return
 
-        # Train on the most recent ~500 games for optimal relevance and instant execution
-        train_sample = prior[-500:] if len(prior) > 500 else prior
+        train_sample = prior[-1000:] if len(prior) > 1000 else prior
         X_rows: list[list[float]] = []
         y_vals: list[float] = []
+        s_vals: list[float] = []
+
         for g in train_sample:
             feats = build_pregame_features(g, prior, market="moneyline")
-            X_rows.append([feats[c] for c in FEATURE_COLUMNS])
+            X_rows.append([feats[c] for c in MARGIN_FEATURE_COLUMNS])
             y_vals.append(float(g["home_score"] - g["away_score"]))
+            s_vals.append(float(feats["structural_margin"]))
 
         X = np.asarray(X_rows, dtype=float)
         y = np.asarray(y_vals, dtype=float)
-        model = make_pipeline(StandardScaler(), RidgeCV(alphas=[2.0, 10.0, 35.0, 80.0, 200.0]))
-        model.fit(X, y)
-        self.ml_weight = min(0.55, 0.22 + len(prior) / 500.0)
-        struct_vec = np.asarray(
-            [
-                (
-                    row[4] * (row[6] / 100.0) * 0.5
-                    + self.home_court_points
-                    + 0.65 * row[8]
-                    + 0.35 * row[9]
-                )
-                for row in X_rows
-            ],
-            dtype=float,
-        )
-        preds = self.ml_weight * model.predict(X) + (1.0 - self.ml_weight) * struct_vec
+        s = np.asarray(s_vals, dtype=float)
+        y_res = y - s
+
+        sample_weights = np.exp(np.linspace(-0.75, 0.0, len(X)))
+        model = make_pipeline(StandardScaler(), RidgeCV(alphas=[20.0, 60.0, 180.0, 450.0, 900.0]))
+        model.fit(X, y_res, ridgecv__sample_weight=sample_weights)
+
+        self.ml_weight = min(0.35, 0.15 + len(train_sample) / 4000.0)
+        preds = s + self.ml_weight * model.predict(X)
         residuals = y - preds
-        self.residual_std = float(np.clip(np.std(residuals, ddof=1), 9.5, 15.0))
+        self.residual_std = float(np.clip(np.std(residuals, ddof=1), 11.5, 15.0))
+        # Near margin=0 (clutch win/loss threshold), effective NBA normal scale is ~0.84 * full-game RMS
+        self.win_prob_std = float(np.clip(0.84 * self.residual_std, 11.2, 12.2))
         self.regressor = model
         self.is_fitted = True
 
@@ -254,42 +297,36 @@ class PointMarginModel:
         historical_games: list[dict[str, Any]],
     ) -> dict[str, float]:
         feats = build_pregame_features(game, historical_games, market="moneyline")
-        # Theoretical structural efficiency margin with non-linear B2B fatigue
-        pace_factor = feats["expected_pace"] / 100.0
-        structural_margin = (
-            feats["net_rtg_diff"] * pace_factor * 0.5
-            + self.home_court_points
-            + 0.65 * feats["rest_diff"]
-            + 0.35 * feats["b2b_advantage"]
-            + 0.09 * feats["recent_margin_diff"]
-        )
+        structural_margin = feats["structural_margin"]
 
         if self.is_fitted and self.regressor is not None:
-            x_vec = np.asarray([[feats[c] for c in FEATURE_COLUMNS]], dtype=float)
-            reg_margin = float(self.regressor.predict(x_vec)[0])
-            w_ml = getattr(self, "ml_weight", 0.30)
-            expected_margin = w_ml * reg_margin + (1.0 - w_ml) * structural_margin
+            x_vec = np.asarray([[feats[c] for c in MARGIN_FEATURE_COLUMNS]], dtype=float)
+            res_pred = float(np.clip(self.regressor.predict(x_vec)[0], -4.5, 4.5))
+            expected_margin = structural_margin + self.ml_weight * res_pred
         else:
             expected_margin = structural_margin
 
-        p_home = float(np.clip(1.0 - norm.cdf(0.0, loc=expected_margin, scale=self.residual_std), 0.05, 0.95))
+        p_margin = float(1.0 - norm.cdf(0.0, loc=expected_margin, scale=self.win_prob_std))
+        # Blend margin-derived probability with Elo probability for superior log-loss & Brier accuracy
+        p_elo = feats["p_elo"]
+        p_home = float(np.clip(0.55 * p_margin + 0.45 * p_elo, 0.05, 0.95))
         return {
             "expected_margin": round(expected_margin, 3),
             "margin_std": round(self.residual_std, 3),
             "p_home": round(p_home, 6),
             "p_away": round(1.0 - p_home, 6),
-            "uncertainty_std": 0.052,
+            "uncertainty_std": 0.050,
         }
 
 
 class TotalPointsModel:
     """
     Modelo D (Total de Puntos):
-    Models the distribution of T = Score_home + Score_away using offensive/defensive ratings,
-    pace, and rest.
+    Models the distribution of T = Score_home + Score_away using additive offensive/defensive
+    efficiency deviations from the dynamic league mean, decoupled tempo, B2B fatigue drag,
+    and blowout deceleration drag.
     Explicitly estimates and includes the covariance Cov(Score_home, Score_away):
-        Var(H + A) = Var(H) + Var(A) + 2 * Cov(H, A)
-    rather than assuming naive independence between team scores.
+        Var(H + A) = Var(H) + Var(A) + 2 * Cov(H, A).
     """
 
     model_family = "model_d_total_points"
@@ -297,34 +334,37 @@ class TotalPointsModel:
     def __init__(
         self,
         version_id: str = "model_d_total_points_v1",
-        default_total_std: float = 15.8,
+        default_total_std: float = 18.2,
     ) -> None:
         self.version_id = version_id
         self.total_std = default_total_std
-        self.independent_std = 13.5
-        self.score_covariance = 32.0  # Positive covariance induced by shared game pace
-        self.score_correlation = 0.28
-        self.regressor: Ridge | None = None
+        self.independent_std = 15.6
+        self.score_covariance = 38.0
+        self.score_correlation = 0.31
+        self.regressor: Any = None
+        self.ml_weight: float = 0.25
         self.is_fitted = False
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
         prior = _filter_strictly_prior_final_games(historical_games, cutoff_time_str)
-        if len(prior) < 15:
+        if len(prior) < 20:
             self.is_fitted = False
             return
 
-        train_sample = prior[-500:] if len(prior) > 500 else prior
+        train_sample = prior[-1000:] if len(prior) > 1000 else prior
         X_rows: list[list[float]] = []
         y_totals: list[float] = []
+        s_totals: list[float] = []
         h_res_list: list[float] = []
         a_res_list: list[float] = []
 
         for g in train_sample:
             feats = build_pregame_features(g, prior, market="total_points")
-            X_rows.append([feats[c] for c in FEATURE_COLUMNS])
+            X_rows.append([feats[c] for c in TOTAL_FEATURE_COLUMNS])
             h_pts = float(g["home_score"])
             a_pts = float(g["away_score"])
             y_totals.append(h_pts + a_pts)
+            s_totals.append(float(feats["structural_total"]))
 
             exp_h, exp_a = self._structural_team_points(feats)
             h_res_list.append(h_pts - exp_h)
@@ -332,9 +372,13 @@ class TotalPointsModel:
 
         X = np.asarray(X_rows, dtype=float)
         y = np.asarray(y_totals, dtype=float)
-        model = make_pipeline(StandardScaler(), RidgeCV(alphas=[2.0, 10.0, 35.0, 80.0, 200.0]))
-        model.fit(X, y)
-        self.ml_weight = min(0.50, 0.22 + len(prior) / 500.0)
+        s = np.asarray(s_totals, dtype=float)
+        y_res = y - s
+
+        sample_weights = np.exp(np.linspace(-0.75, 0.0, len(X)))
+        model = make_pipeline(StandardScaler(), RidgeCV(alphas=[30.0, 100.0, 300.0, 800.0, 1500.0]))
+        model.fit(X, y_res, ridgecv__sample_weight=sample_weights)
+        self.ml_weight = min(0.30, 0.12 + len(train_sample) / 5000.0)
 
         h_res = np.asarray(h_res_list, dtype=float)
         a_res = np.asarray(a_res_list, dtype=float)
@@ -343,11 +387,11 @@ class TotalPointsModel:
         cov_matrix = np.cov(h_res, a_res, ddof=1)
         cov_ha = float(cov_matrix[0, 1])
 
-        var_indep = max(64.0, var_h + var_a)
-        var_total_with_cov = max(81.0, var_h + var_a + 2.0 * cov_ha)
+        var_indep = max(100.0, var_h + var_a)
+        var_total_with_cov = max(196.0, var_h + var_a + 2.0 * cov_ha)
 
         self.independent_std = float(np.sqrt(var_indep))
-        self.total_std = float(np.clip(np.sqrt(var_total_with_cov), 11.0, 22.0))
+        self.total_std = float(np.clip(np.sqrt(var_total_with_cov), 16.2, 20.5))
         self.score_covariance = round(cov_ha, 4)
         denom = math.sqrt(max(1e-6, var_h * var_a))
         self.score_correlation = round(cov_ha / denom, 4)
@@ -356,9 +400,10 @@ class TotalPointsModel:
 
     @staticmethod
     def _structural_team_points(feats: dict[str, float]) -> tuple[float, float]:
-        pace = feats["expected_pace"]
-        exp_h = ((feats["home_off_rtg"] + feats["away_def_rtg"]) / 200.0) * pace + 1.3
-        exp_a = ((feats["away_off_rtg"] + feats["home_def_rtg"]) / 200.0) * pace - 1.3
+        struct_tot = feats["structural_total"]
+        struct_mar = feats["structural_margin"]
+        exp_h = 0.5 * (struct_tot + struct_mar)
+        exp_a = 0.5 * (struct_tot - struct_mar)
         return exp_h, exp_a
 
     def predict_total_points(
@@ -372,50 +417,51 @@ class TotalPointsModel:
         structural_total = exp_h + exp_a
 
         if self.is_fitted and self.regressor is not None:
-            x_vec = np.asarray([[feats[c] for c in FEATURE_COLUMNS]], dtype=float)
-            reg_total = float(self.regressor.predict(x_vec)[0])
-            w_ml = getattr(self, "ml_weight", 0.30)
-            expected_total = w_ml * reg_total + (1.0 - w_ml) * structural_total
+            x_vec = np.asarray([[feats[c] for c in TOTAL_FEATURE_COLUMNS]], dtype=float)
+            res_tot = float(np.clip(self.regressor.predict(x_vec)[0], -5.5, 5.5))
+            adj = self.ml_weight * res_tot
+            expected_total = structural_total + adj
+            exp_h += 0.5 * adj
+            exp_a += 0.5 * adj
         else:
             expected_total = structural_total
 
-        # Handle integer lines vs half-point lines
+        eff_std = float(np.clip(0.65 * self.total_std + 0.35 * feats["dynamic_total_std"], 16.5, 20.2))
+
         is_integer_line = abs(line_value - round(line_value)) < 1e-6
         if is_integer_line:
-            p_over_raw = 1.0 - norm.cdf(line_value + 0.5, loc=expected_total, scale=self.total_std)
-            p_under_raw = norm.cdf(line_value - 0.5, loc=expected_total, scale=self.total_std)
+            p_over_raw = 1.0 - norm.cdf(line_value + 0.5, loc=expected_total, scale=eff_std)
+            p_under_raw = norm.cdf(line_value - 0.5, loc=expected_total, scale=eff_std)
             p_push = max(0.0, 1.0 - p_over_raw - p_under_raw)
             non_push = max(1e-6, p_over_raw + p_under_raw)
             p_over = float(np.clip(p_over_raw / non_push, 0.05, 0.95))
             p_under = float(np.clip(p_under_raw / non_push, 0.05, 0.95))
         else:
             p_push = 0.0
-            p_over = float(np.clip(1.0 - norm.cdf(line_value, loc=expected_total, scale=self.total_std), 0.05, 0.95))
+            p_over = float(np.clip(1.0 - norm.cdf(line_value, loc=expected_total, scale=eff_std), 0.05, 0.95))
             p_under = round(1.0 - p_over, 6)
 
         return {
             "expected_home_points": round(exp_h, 2),
             "expected_away_points": round(exp_a, 2),
             "expected_total": round(expected_total, 2),
-            "total_std_with_covariance": round(self.total_std, 3),
+            "total_std_with_covariance": round(eff_std, 3),
             "independent_std_naive": round(self.independent_std, 3),
             "score_covariance": round(self.score_covariance, 3),
             "score_correlation": round(self.score_correlation, 3),
             "p_over": round(p_over, 6),
             "p_under": round(p_under, 6),
             "p_push_estimate": round(float(p_push), 6),
-            "uncertainty_std": 0.058,
+            "uncertainty_std": 0.055,
         }
-
-
-import hashlib
-import math
 
 
 class AdvancedGBMModel:
     """
-    Modelo E (Modelo Avanzado LightGBM):
-    Trained and evaluated strictly out-of-sample after establishing solid baselines A-D.
+    Modelo E (Modelo Avanzado LightGBM Residual-Boosted):
+    Uses regularized shallow trees (max_depth=2, num_leaves=4, high L1/L2 regularization)
+    trained with exponential recency weights to learn non-linear residual corrections on top
+    of the structural margin and structural total baselines without step-function overfitting.
     """
 
     model_family = "model_e_lightgbm"
@@ -423,8 +469,10 @@ class AdvancedGBMModel:
     def __init__(self, version_id: str = "model_e_lightgbm_v1") -> None:
         self.version_id = version_id
         self.clf: LGBMClassifier | None = None
+        self.mar_reg: LGBMRegressor | None = None
         self.reg: LGBMRegressor | None = None
-        self.total_residual_std: float = 16.0
+        self.total_residual_std: float = 18.2
+        self.win_prob_std: float = 11.5
         self.is_fitted = False
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
@@ -433,54 +481,84 @@ class AdvancedGBMModel:
             self.is_fitted = False
             return
 
-        train_sample = prior[-500:] if len(prior) > 500 else prior
-        X_rows: list[list[float]] = []
+        train_sample = prior[-1000:] if len(prior) > 1000 else prior
+        X_mar_rows: list[list[float]] = []
+        X_tot_rows: list[list[float]] = []
         y_cls: list[int] = []
-        y_tot: list[float] = []
+        y_mar_res: list[float] = []
+        y_tot_res: list[float] = []
+        s_tot: list[float] = []
 
         for g in train_sample:
             feats = build_pregame_features(g, prior, market="total_points")
-            X_rows.append([feats[c] for c in FEATURE_COLUMNS])
-            y_cls.append(1 if g["home_score"] > g["away_score"] else 0)
-            y_tot.append(float(g["home_score"] + g["away_score"]))
+            X_mar_rows.append([feats[c] for c in MARGIN_FEATURE_COLUMNS])
+            X_tot_rows.append([feats[c] for c in TOTAL_FEATURE_COLUMNS])
+            h_pts = float(g["home_score"])
+            a_pts = float(g["away_score"])
+            y_cls.append(1 if h_pts > a_pts else 0)
+            y_mar_res.append((h_pts - a_pts) - float(feats["structural_margin"]))
+            y_tot_res.append((h_pts + a_pts) - float(feats["structural_total"]))
+            s_tot.append(float(feats["structural_total"]))
 
-        X = np.asarray(X_rows, dtype=float)
-        y_c = np.asarray(y_cls, dtype=int)
-        y_t = np.asarray(y_tot, dtype=float)
+        Xm = np.asarray(X_mar_rows, dtype=float)
+        Xt = np.asarray(X_tot_rows, dtype=float)
+        yc = np.asarray(y_cls, dtype=int)
+        ym_res = np.asarray(y_mar_res, dtype=float)
+        yt_res = np.asarray(y_tot_res, dtype=float)
+        st_vec = np.asarray(s_tot, dtype=float)
+        w_tr = np.exp(np.linspace(-0.75, 0.0, len(Xm)))
 
         clf = LGBMClassifier(
-            n_estimators=55,
-            learning_rate=0.045,
-            max_depth=3,
-            num_leaves=7,
-            min_child_samples=10,
-            subsample=0.85,
-            colsample_bytree=0.85,
-            reg_alpha=1.0,
-            reg_lambda=2.0,
+            n_estimators=35,
+            learning_rate=0.03,
+            max_depth=2,
+            num_leaves=4,
+            min_child_samples=30,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=4.0,
+            reg_lambda=12.0,
             random_state=42,
             verbose=-1,
         )
-        clf.fit(X, y_c)
+        clf.fit(Xm, yc, sample_weight=w_tr)
+
+        mar_reg = LGBMRegressor(
+            n_estimators=35,
+            learning_rate=0.03,
+            max_depth=2,
+            num_leaves=4,
+            min_child_samples=30,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=5.0,
+            reg_lambda=15.0,
+            random_state=42,
+            verbose=-1,
+        )
+        mar_reg.fit(Xm, ym_res, sample_weight=w_tr)
 
         reg = LGBMRegressor(
-            n_estimators=55,
-            learning_rate=0.045,
-            max_depth=3,
-            num_leaves=7,
-            min_child_samples=10,
-            subsample=0.85,
-            colsample_bytree=0.85,
-            reg_alpha=1.0,
-            reg_lambda=2.0,
+            n_estimators=35,
+            learning_rate=0.03,
+            max_depth=2,
+            num_leaves=4,
+            min_child_samples=30,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=5.0,
+            reg_lambda=15.0,
             random_state=42,
             verbose=-1,
         )
-        reg.fit(X, y_t)
-        tot_preds = reg.predict(X)
-        self.total_residual_std = float(np.clip(np.std(y_t - tot_preds, ddof=1), 11.5, 22.0))
+        reg.fit(Xt, yt_res, sample_weight=w_tr)
+
+        tot_preds = st_vec + 0.35 * reg.predict(Xt)
+        actual_tots = st_vec + yt_res
+        self.total_residual_std = float(np.clip(np.std(actual_tots - tot_preds, ddof=1), 16.5, 20.2))
 
         self.clf = clf
+        self.mar_reg = mar_reg
         self.reg = reg
         self.is_fitted = True
 
@@ -490,16 +568,24 @@ class AdvancedGBMModel:
         historical_games: list[dict[str, Any]],
     ) -> dict[str, float]:
         feats = build_pregame_features(game, historical_games, market="moneyline")
-        if not self.is_fitted or self.clf is None:
+        if not self.is_fitted or self.clf is None or self.mar_reg is None:
             fallback = PointMarginModel()
             return fallback.predict_moneyline(game, historical_games)
 
-        x_vec = np.asarray([[feats[c] for c in FEATURE_COLUMNS]], dtype=float)
-        prob_home = float(np.clip(self.clf.predict_proba(x_vec)[0, 1], 0.06, 0.94))
+        xm_vec = np.asarray([[feats[c] for c in MARGIN_FEATURE_COLUMNS]], dtype=float)
+        res_mar = float(np.clip(self.mar_reg.predict(xm_vec)[0], -4.0, 4.0))
+        gbm_margin = feats["structural_margin"] + 0.28 * res_mar
+        p_from_mar = float(1.0 - norm.cdf(0.0, loc=gbm_margin, scale=self.win_prob_std))
+        p_from_clf = float(self.clf.predict_proba(xm_vec)[0, 1])
+        p_elo = feats["p_elo"]
+
+        # Blend residual-boosted margin probability, Elo anchor, and shallow tree classifier
+        prob_home = float(np.clip(0.52 * p_elo + 0.40 * p_from_mar + 0.08 * p_from_clf, 0.05, 0.95))
         return {
             "p_home": round(prob_home, 6),
             "p_away": round(1.0 - prob_home, 6),
-            "uncertainty_std": 0.062,
+            "expected_margin": round(gbm_margin, 3),
+            "uncertainty_std": 0.054,
         }
 
     def predict_total_points(
@@ -513,25 +599,29 @@ class AdvancedGBMModel:
             fallback = TotalPointsModel()
             return fallback.predict_total_points(game, historical_games, line_value)
 
-        x_vec = np.asarray([[feats[c] for c in FEATURE_COLUMNS]], dtype=float)
-        exp_total = float(self.reg.predict(x_vec)[0])
-        p_over = float(np.clip(1.0 - norm.cdf(line_value, loc=exp_total, scale=self.total_residual_std), 0.05, 0.95))
+        xt_vec = np.asarray([[feats[c] for c in TOTAL_FEATURE_COLUMNS]], dtype=float)
+        res_tot = float(np.clip(self.reg.predict(xt_vec)[0], -5.0, 5.0))
+        exp_total = feats["structural_total"] + 0.22 * res_tot
+        eff_std = float(np.clip(0.65 * self.total_residual_std + 0.35 * feats["dynamic_total_std"], 16.5, 20.2))
+        p_over = float(np.clip(1.0 - norm.cdf(line_value, loc=exp_total, scale=eff_std), 0.05, 0.95))
         return {
             "expected_total": round(exp_total, 2),
-            "total_std": round(self.total_residual_std, 3),
+            "total_std": round(eff_std, 3),
             "p_over": round(p_over, 6),
             "p_under": round(1.0 - p_over, 6),
-            "uncertainty_std": 0.065,
+            "uncertainty_std": 0.058,
         }
 
 
 class DeepMonteCarloHybridModel:
     """
     Modelo G (Hybrid Machine Learning + 10,000-Game Quarter-by-Quarter Possession Monte Carlo + Conformal Prediction):
-    - Layer 1 (ML Parameter Estimation): Uses Ridge + LightGBM + Synergy/Sportradar features to estimate expected
-      possessions per game, Points Per Possession (PPP) for Home & Away, shared pace covariance, and 3PT volatility.
+    - Layer 1 (ML Parameter Estimation): Uses RidgeCV + Residual LightGBM + Elo/Efficiency features to estimate
+      expected possessions per game, Points Per Possession (PPP) for Home & Away, shared game-environment covariance,
+      and 3PT heavy-tailed Student-t volatility.
     - Layer 2 (Vectorized 10,000-Game Monte Carlo Simulator): Simulates Q1-Q3, Q4 Blowout/Garbage-Time deceleration,
-      Late-Game Intentional Fouling (free-throw tax when margin is 1-6 pts), and 5-minute Overtime (OT1/OT2) periods.
+      Late-Game Intentional Fouling (free-throw tax when margin is 1-6 pts), and 5-minute Overtime (OT1/OT2) periods
+      with calibrated total-points standard deviation (~18.2 pts) and margin win-threshold dispersion (~11.6 pts).
     - Layer 3 (Conformal Prediction & Tail-Risk Telemetry): Extracts empirical win/over/under probabilities,
       overtime probability, blowout probability, and 80% Conformal intervals ([Q10, Q90]) for contextual staking.
     """
@@ -580,11 +670,12 @@ class DeepMonteCarloHybridModel:
         e_ml = precomputed_e_ml or self.gbm_model.predict_moneyline(game, historical_games)
         e_tot = precomputed_e_tot or self.gbm_model.predict_total_points(game, historical_games, line_value)
 
-        # Layer 1: Blend ML (LightGBM + RidgeCV) and structural expectations for regulation mean margin & total
-        ml_margin = c_res["expected_margin"] + 4.5 * (e_ml["p_home"] - c_res["p_home"])
-        ml_total = 0.80 * d_res["expected_total"] + 0.20 * e_tot["expected_total"]
+        # Layer 1: Blend Elo spread, RidgeCV margin, and GBM margin
+        e_mar = e_ml.get("expected_margin", c_res["expected_margin"])
+        ml_margin = 0.50 * feats["elo_spread"] + 0.30 * c_res["expected_margin"] + 0.20 * e_mar
+        ml_total = 0.72 * d_res["expected_total"] + 0.28 * e_tot["expected_total"]
 
-        # Adjust baseline regulation total slightly down by ~1.35 pts because OT and clutch fouling add ~1.35 pts on average
+        # Adjust baseline regulation total down by ~1.35 pts because OT and clutch fouling add ~1.35 pts on average
         reg_total_mean = ml_total - 1.35
         exp_home_reg = 0.5 * (reg_total_mean + ml_margin)
         exp_away_reg = 0.5 * (reg_total_mean - ml_margin)
@@ -593,44 +684,44 @@ class DeepMonteCarloHybridModel:
         ppp_home = exp_home_reg / exp_pace
         ppp_away = exp_away_reg / exp_pace
 
-        # Layer 2: Vectorized 10,000-Game Quarter-by-Quarter Possession Monte Carlo with Heavy-Tailed Student-t (df=6)
+        # Layer 2: Vectorized 10,000-Game Quarter-by-Quarter Possession Monte Carlo
         rng = np.random.default_rng(self._deterministic_seed(str(game.get("game_id", "NBA_MC"))))
         n = self.n_simulations
 
-        # Shared regulation possessions (Q1-Q3 = 75%, Q4 = 25%) inducing positive score covariance
-        poss_q1_q3 = rng.normal(loc=0.75 * exp_pace, scale=2.45, size=n)
-        poss_q4 = rng.normal(loc=0.25 * exp_pace, scale=1.40, size=n)
+        # Shared regulation possessions + shared game-flow/whistle environment shock (induces realistic Cov(H, A) ~ +38)
+        poss_q1_q3 = rng.normal(loc=0.75 * exp_pace, scale=3.10, size=n)
+        poss_q4 = rng.normal(loc=0.25 * exp_pace, scale=1.80, size=n)
+        shared_env_ppp = rng.normal(loc=0.0, scale=0.044, size=n)
 
-        # Heavy-tailed Student-t (df=6, variance-normalized by sqrt(4/6)=0.8165) captures 3PT hot/cold shooting streaks
+        # Independent team shooting shocks (calibrated so std(margin) ~ 11.5 near 0 and std(total) ~ 18.2)
         t_scale = 0.8165
-        eff_std_q1_q3 = 0.088 * t_scale
-        eff_std_q4 = 0.052 * t_scale
+        eff_std_q1_q3 = 0.106 * t_scale
+        eff_std_q4 = 0.062 * t_scale
 
         h_shock_q1_q3 = rng.standard_t(df=6.0, size=n) * eff_std_q1_q3
         a_shock_q1_q3 = rng.standard_t(df=6.0, size=n) * eff_std_q1_q3
 
-        h_q1_q3 = poss_q1_q3 * (ppp_home + h_shock_q1_q3)
-        a_q1_q3 = poss_q1_q3 * (ppp_away + a_shock_q1_q3)
+        h_q1_q3 = poss_q1_q3 * (ppp_home + shared_env_ppp + h_shock_q1_q3)
+        a_q1_q3 = poss_q1_q3 * (ppp_away + shared_env_ppp + a_shock_q1_q3)
 
         margin_q3 = h_q1_q3 - a_q1_q3
         is_blowout_q3 = np.abs(margin_q3) >= 18.0
 
-        # Q4 scoring with 15% hot-hand carry-over from Q1-Q3
-        h_shock_q4 = 0.15 * h_shock_q1_q3 + rng.standard_t(df=6.0, size=n) * eff_std_q4
-        a_shock_q4 = 0.15 * a_shock_q1_q3 + rng.standard_t(df=6.0, size=n) * eff_std_q4
-        h_q4 = poss_q4 * (ppp_home + h_shock_q4)
-        a_q4 = poss_q4 * (ppp_away + a_shock_q4)
+        h_shock_q4 = 0.12 * h_shock_q1_q3 + rng.standard_t(df=6.0, size=n) * eff_std_q4
+        a_shock_q4 = 0.12 * a_shock_q1_q3 + rng.standard_t(df=6.0, size=n) * eff_std_q4
+        h_q4 = poss_q4 * (ppp_home + shared_env_ppp + h_shock_q4)
+        a_q4 = poss_q4 * (ppp_away + shared_env_ppp + a_shock_q4)
 
-        # Regime A: Blowout / Garbage-Time Deceleration (starters sit, slower pace, trailing bench scores slightly more)
-        h_q4 = np.where(is_blowout_q3, h_q4 - 1.65 - np.sign(margin_q3) * 0.85, h_q4)
-        a_q4 = np.where(is_blowout_q3, a_q4 - 1.65 + np.sign(margin_q3) * 0.85, a_q4)
+        # Regime A: Blowout / Garbage-Time Deceleration
+        h_q4 = np.where(is_blowout_q3, h_q4 - 1.50 - np.sign(margin_q3) * 0.75, h_q4)
+        a_q4 = np.where(is_blowout_q3, a_q4 - 1.50 + np.sign(margin_q3) * 0.75, a_q4)
 
         h_reg = h_q1_q3 + h_q4
         a_reg = a_q1_q3 + a_q4
         reg_diff = h_reg - a_reg
 
-        # Regime B: Late-Game Intentional Fouling (when margin is between 1.15 and 6.0 pts entering final 90s)
-        is_clutch_foul = (np.abs(reg_diff) >= 1.15) & (np.abs(reg_diff) <= 6.0)
+        # Regime B: Late-Game Intentional Fouling (margin between 1.25 and 6.0 pts entering final 90s)
+        is_clutch_foul = (np.abs(reg_diff) >= 1.25) & (np.abs(reg_diff) <= 6.0)
         foul_trigger = is_clutch_foul & (rng.random(size=n) < 0.58)
         extra_ft_leader = np.where(foul_trigger, rng.uniform(2.2, 4.8, size=n), 0.0)
         extra_ft_trailer = np.where(foul_trigger, rng.uniform(0.8, 2.6, size=n), 0.0)
@@ -638,12 +729,11 @@ class DeepMonteCarloHybridModel:
         h_final = h_reg + np.where(reg_diff > 0, extra_ft_leader, extra_ft_trailer)
         a_final = a_reg + np.where(reg_diff < 0, extra_ft_leader, extra_ft_trailer)
 
-        # Regime C: Overtime (OT1 & OT2) when regulation ends within tie band (|reg_diff| < 1.15 pts)
-        is_overtime = np.abs(reg_diff) < 1.15
+        # Regime C: Overtime (OT1 & OT2) when regulation ends within tie band (|reg_diff| < 1.25 pts)
+        is_overtime = np.abs(reg_diff) < 1.25
         ot_poss = rng.normal(loc=10.4, scale=1.1, size=n)
         ot_h_pts = ot_poss * (ppp_home + rng.normal(0.0, 0.095, size=n))
         ot_a_pts = ot_poss * (ppp_away + rng.normal(0.0, 0.095, size=n))
-        # Ensure no tie after OT
         ot_tie_breaker = np.where(np.abs(ot_h_pts - ot_a_pts) < 0.25, 1.5, 0.0)
         ot_h_pts += ot_tie_breaker
 
@@ -655,7 +745,6 @@ class DeepMonteCarloHybridModel:
 
         p_home_mc = float(np.clip(np.mean(sim_margins > 0.0), 0.05, 0.95))
 
-        # Handle integer lines vs half-point lines for total points
         is_int_line = abs(line_value - round(line_value)) < 1e-6
         if is_int_line:
             over_mask = sim_totals > (line_value + 0.5)
@@ -665,7 +754,6 @@ class DeepMonteCarloHybridModel:
         else:
             p_over_mc = float(np.clip(np.mean(sim_totals > line_value), 0.05, 0.95))
 
-        # Layer 3: Conformal Prediction Intervals ([Q10, Q90]) & Tail-Risk Telemetry
         q10_tot, q90_tot = np.percentile(sim_totals, [10.0, 90.0])
         q10_mar, q90_mar = np.percentile(sim_margins, [10.0, 90.0])
 
@@ -689,65 +777,112 @@ class DeepMonteCarloHybridModel:
 
 class EnsembleStackingModel:
     """
-    Modelo F+G (V2 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid):
-    Combines Elo (Model B), Point Margin (Model C), Total Points with Covariance (Model D),
-    LightGBM (Model E), and Deep Monte Carlo Possession Simulator (Model G) via log-odds Bayesian pooling
-    and Conformal uncertainty estimation.
+    Modelo F+G (V4 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid):
+    Combines Dual-Speed MOV Elo (Model B), Residual-Anchored Point Margin (Model C),
+    Pace-Decoupled Total Points with Covariance (Model D), Residual-Boosted LightGBM (Model E),
+    and Deep Monte Carlo Possession Simulator (Model G) via strictly out-of-sample
+    shrinkage-regularized log-odds Bayesian pooling.
     """
 
     model_family = "model_f_meta_ensemble"
 
-    def __init__(self, version_id: str = "model_f_ensemble_v2") -> None:
+    def __init__(self, version_id: str = "model_f_ensemble_v4") -> None:
         self.version_id = version_id
-        self.model_b = EloModel("model_b_elo_v2")
-        self.model_c = PointMarginModel("model_c_point_margin_v2")
-        self.model_d = TotalPointsModel("model_d_total_points_v2")
-        self.model_e = AdvancedGBMModel("model_e_lightgbm_v2")
+        self.model_b = EloModel("model_b_elo_v4")
+        self.model_c = PointMarginModel("model_c_point_margin_v4")
+        self.model_d = TotalPointsModel("model_d_total_points_v4")
+        self.model_e = AdvancedGBMModel("model_e_lightgbm_v4")
         self.model_g = DeepMonteCarloHybridModel(
-            "model_g_ml_montecarlo_v2",
+            "model_g_ml_montecarlo_v4",
             n_simulations=10000,
             shared_margin_model=self.model_c,
             shared_totals_model=self.model_d,
             shared_gbm_model=self.model_e,
         )
-        self.ml_weights: list[float] = [0.24, 0.36, 0.12, 0.28]
-        self.tot_weights: list[float] = [0.45, 0.15, 0.40]
+        self.ml_weights: list[float] = [0.50, 0.24, 0.14, 0.12]
+        self.tot_weights: list[float] = [0.58, 0.24, 0.18]
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
-        self.model_c.fit(historical_games, cutoff_time_str)
-        self.model_d.fit(historical_games, cutoff_time_str)
-        self.model_e.fit(historical_games, cutoff_time_str)
-
-        # Dynamic Walk-Forward Inverse-Brier Weighting on recent resolved games
         prior = _filter_strictly_prior_final_games(historical_games, cutoff_time_str)
-        if len(prior) >= 40:
-            eval_slice = prior[-25:]
+
+        # Strictly Out-of-Sample Walk-Forward Weight Estimation (Zero In-Sample Leakage)
+        if len(prior) >= 80:
+            val_size = 30
+            train_sub = prior[:-val_size]
+            val_sub = prior[-val_size:]
+            val_cutoff = val_sub[0]["game_start_time"]
+
+            self.model_c.fit(train_sub, val_cutoff)
+            self.model_d.fit(train_sub, val_cutoff)
+            self.model_e.fit(train_sub, val_cutoff)
+
             brier_b, brier_c, brier_e, brier_g = [], [], [], []
-            for idx_offset, g in enumerate(eval_slice):
-                sub_h = prior[: len(prior) - 25 + idx_offset]
+            brier_tot_d, brier_tot_e, brier_tot_g = [], [], []
+
+            for g in val_sub:
                 actual_win = 1.0 if g["home_score"] > g["away_score"] else 0.0
-                pb = self.model_b.predict_moneyline(g, sub_h)["p_home"]
-                pc_res = self.model_c.predict_moneyline(g, sub_h)
-                pe_res = self.model_e.predict_moneyline(g, sub_h)
+                actual_tot = float(g["home_score"] + g["away_score"])
+
+                # build_pregame_features uses bisect_left(< g["game_start_time"]) so passing `prior`
+                # is 100% leakage-free while reusing the single O(1) chronological index cache
+                pb = self.model_b.predict_moneyline(g, prior)["p_home"]
+                pc_res = self.model_c.predict_moneyline(g, prior)
+                pe_res = self.model_e.predict_moneyline(g, prior)
+
+                line_ref = 228.5
+                pd_tot = self.model_d.predict_total_points(g, prior, line_ref)
+                pe_tot = self.model_e.predict_total_points(g, prior, line_ref)
                 pg_res = self.model_g.simulate_matchup(
-                    g, sub_h, precomputed_c=pc_res, precomputed_e_ml=pe_res
+                    g,
+                    prior,
+                    line_value=line_ref,
+                    precomputed_c=pc_res,
+                    precomputed_d=pd_tot,
+                    precomputed_e_ml=pe_res,
+                    precomputed_e_tot=pe_tot,
                 )
+
                 brier_b.append((pb - actual_win) ** 2)
                 brier_c.append((pc_res["p_home"] - actual_win) ** 2)
                 brier_e.append((pe_res["p_home"] - actual_win) ** 2)
                 brier_g.append((pg_res["p_home_mc"] - actual_win) ** 2)
 
-            inv_scores = np.array(
+                actual_over = 1.0 if actual_tot > line_ref else 0.0
+                brier_tot_d.append((pd_tot["p_over"] - actual_over) ** 2)
+                brier_tot_e.append((pe_tot["p_over"] - actual_over) ** 2)
+                brier_tot_g.append((pg_res["p_over_mc"] - actual_over) ** 2)
+
+            inv_ml = np.array(
                 [
-                    1.0 / max(0.15, float(np.mean(brier_b))),
-                    1.25 / max(0.15, float(np.mean(brier_c))),
+                    1.50 / max(0.15, float(np.mean(brier_b))),
+                    0.95 / max(0.15, float(np.mean(brier_c))),
                     0.75 / max(0.15, float(np.mean(brier_e))),
-                    1.15 / max(0.15, float(np.mean(brier_g))),
+                    0.70 / max(0.15, float(np.mean(brier_g))),
                 ],
                 dtype=float,
             )
-            norm_w = inv_scores / np.sum(inv_scores)
-            self.ml_weights = [round(float(w), 4) for w in norm_w]
+            emp_ml_w = inv_ml / np.sum(inv_ml)
+            prior_ml_w = np.array([0.50, 0.24, 0.14, 0.12], dtype=float)
+            blend_ml_w = 0.70 * prior_ml_w + 0.30 * emp_ml_w
+            self.ml_weights = [round(float(w), 4) for w in (blend_ml_w / np.sum(blend_ml_w))]
+
+            inv_tot = np.array(
+                [
+                    1.45 / max(0.15, float(np.mean(brier_tot_d))),
+                    0.85 / max(0.15, float(np.mean(brier_tot_e))),
+                    0.75 / max(0.15, float(np.mean(brier_tot_g))),
+                ],
+                dtype=float,
+            )
+            emp_tot_w = inv_tot / np.sum(inv_tot)
+            prior_tot_w = np.array([0.58, 0.24, 0.18], dtype=float)
+            blend_tot_w = 0.70 * prior_tot_w + 0.30 * emp_tot_w
+            self.tot_weights = [round(float(w), 4) for w in (blend_tot_w / np.sum(blend_tot_w))]
+
+        # Final fit on full prior history up to cutoff_time_str
+        self.model_c.fit(historical_games, cutoff_time_str)
+        self.model_d.fit(historical_games, cutoff_time_str)
+        self.model_e.fit(historical_games, cutoff_time_str)
 
     @staticmethod
     def _pool_probs_log_odds(probs: list[float], weights: list[float]) -> float:
@@ -771,7 +906,6 @@ class EnsembleStackingModel:
         )
         pg = mc_res["p_home_mc"]
 
-        # Pool analytical models + LightGBM + 10,000-simulation Monte Carlo using Dynamic Inverse-Brier weights
         p_home = self._pool_probs_log_odds([pb, pc, pe, pg], self.ml_weights)
         sub_std = float(np.std([pb, pc, pe, pg]))
         unc_std = round(max(0.032, min(0.095, 0.036 + 0.45 * sub_std)), 4)
@@ -783,6 +917,7 @@ class EnsembleStackingModel:
             "p_margin": pc,
             "p_gbm": pe,
             "p_montecarlo": pg,
+            "expected_margin": round(0.55 * c_res["expected_margin"] + 0.45 * mc_res["mc_expected_margin"], 3),
             "ensemble_weights": self.ml_weights,
             "overtime_prob": mc_res["overtime_prob"],
             "blowout_prob": mc_res["blowout_prob"],
@@ -813,7 +948,7 @@ class EnsembleStackingModel:
         unc_std = round(max(0.034, min(0.098, 0.038 + 0.45 * sub_std)), 4)
 
         return {
-            "expected_total": round(0.55 * pd_res["expected_total"] + 0.15 * pe_res["expected_total"] + 0.30 * mc_res["mc_expected_total"], 2),
+            "expected_total": round(0.60 * pd_res["expected_total"] + 0.25 * pe_res["expected_total"] + 0.15 * mc_res["mc_expected_total"], 2),
             "total_std_with_covariance": pd_res["total_std_with_covariance"],
             "p_over": round(p_over, 6),
             "p_under": round(1.0 - p_over, 6),
@@ -825,4 +960,3 @@ class EnsembleStackingModel:
             "conformal_q90_total": mc_res["conformal_q90_total"],
             "uncertainty_std": unc_std,
         }
-

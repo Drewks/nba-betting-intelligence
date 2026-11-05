@@ -360,14 +360,15 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             for inj in t_inj.get("injuries") or []:
                 player_name = inj.get("athlete", {}).get("displayName", "")
                 status = str(inj.get("status", "")).lower()
-                star_val = STAR_PLAYER_IMPACT_PTS.get(player_name, 1.25)
+                star_val = STAR_PLAYER_IMPACT_PTS.get(player_name, 0.35)
                 if "out" in status:
                     penalty += star_val
                 elif "doubtful" in status:
                     penalty += 0.70 * star_val
                 elif "questionable" in status or "day-to-day" in status:
-                    penalty += 0.30 * star_val
-            injury_penalties[t_code] = round(min(11.5, penalty), 2)
+                    penalty += 0.25 * star_val
+            # Subtract normal bench injury baseline (~1.0 pt) so routine reserve absences do not bias ratings
+            injury_penalties[t_code] = round(min(11.5, max(0.0, penalty - 1.0)), 2)
 
         team_box_stats: dict[str, dict[str, float]] = {}
         for bt in data.get("boxscore", {}).get("teams") or []:
@@ -750,9 +751,9 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
 
         # 3. Real-Time Injury Report Adjustment (Phase V2.1: ESPN + Official Sportradar NBA v8)
         if injury_penalty > 0.0:
-            # Missing stars hurt both offensive creation (65%) and defensive rating (35%)
-            base_off = round(base_off - 0.65 * injury_penalty, 2)
-            base_def = round(base_def + 0.35 * injury_penalty, 2)
+            # Apply symmetrically (-50% offense, +50% defense) so missing stars shift net rating without depressing total points mean
+            base_off = round(base_off - 0.50 * injury_penalty, 2)
+            base_def = round(base_def + 0.50 * injury_penalty, 2)
 
         # 4. High-Altitude Court Bonus (`DEN`, `UTA`) (Phase V2.2)
         if is_home and team_code in HIGH_ALTITUDE_BONUS_PTS:

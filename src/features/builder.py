@@ -2,10 +2,310 @@
 
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
+import math
 from typing import Any
 import numpy as np
 
 from src.validation.validator import parse_iso_utc, validate_essential_features
+
+_INDEX_STORE: dict[str, dict[str, Any]] = {}
+
+LEAGUE_PPG_INIT = 114.2
+LEAGUE_TOTAL_INIT = 228.4
+LEAGUE_PACE_BASE = 99.5
+HIGH_ALTITUDE_TEAMS = frozenset({"DEN", "UTA"})
+
+
+def _default_team_snapshot(league_ppg: float = LEAGUE_PPG_INIT) -> dict[str, Any]:
+    return {
+        "elo_slow": 1500.0,
+        "elo_fast": 1500.0,
+        "pf_slow": league_ppg,
+        "pa_slow": league_ppg,
+        "pf_fast": league_ppg,
+        "pa_fast": league_ppg,
+        "tempo_slow": 0.0,
+        "tempo_fast": 0.0,
+        "var_total": 335.0,
+        "last_start": None,
+        "recent_starts": (),
+        "road_streak": 0,
+        "margins": (),
+        "totals": (),
+        "games": 0,
+    }
+
+
+def _apply_offseason_regression(snap: dict[str, Any], target_start_dt: Any, league_ppg: float) -> dict[str, Any]:
+    last_start = snap["last_start"]
+    if last_start is None or (target_start_dt - last_start).days < 60:
+        return snap
+    elo_s = 1500.0 + 0.66 * (snap["elo_slow"] - 1500.0)
+    pf_s = league_ppg + 0.68 * (snap["pf_slow"] - league_ppg)
+    pa_s = league_ppg + 0.68 * (snap["pa_slow"] - league_ppg)
+    t_s = 0.55 * snap["tempo_slow"]
+    return {
+        "elo_slow": elo_s,
+        "elo_fast": elo_s,
+        "pf_slow": pf_s,
+        "pa_slow": pa_s,
+        "pf_fast": pf_s,
+        "pa_fast": pa_s,
+        "tempo_slow": t_s,
+        "tempo_fast": t_s,
+        "var_total": snap["var_total"],
+        "last_start": None,
+        "recent_starts": (),
+        "road_streak": 0,
+        "margins": snap["margins"][-4:],
+        "totals": snap["totals"][-4:],
+        "games": snap["games"],
+    }
+
+
+def _schedule_density(snap: dict[str, Any], target_start_dt: Any) -> tuple[int, int, int]:
+    last_start = snap["last_start"]
+    if last_start is None:
+        return 3, 0, 0
+    target_date = target_start_dt.date()
+    days = int(max(1, min(6, (target_date - last_start.date()).days)))
+    g4 = 0
+    g7 = 0
+    for dt in snap["recent_starts"]:
+        d_gap = (target_date - dt.date()).days
+        if 0 < d_gap <= 4:
+            g4 += 1
+        if 0 < d_gap <= 7:
+            g7 += 1
+    return days, g4, g7
+
+
+def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
+    if g.get("status") != "FINAL" or g.get("home_score") is None or g.get("away_score") is None:
+        return
+    ts_str = str(g["game_start_time"])
+    start_dt = parse_iso_utc(ts_str)
+    h_code = g["home_team"]
+    a_code = g["away_team"]
+    league_ppg = idx["league_ppg"]
+    league_total = idx["league_total"]
+    teams = idx["teams"]
+
+    h_cur = _apply_offseason_regression(teams.get(h_code) or _default_team_snapshot(league_ppg), start_dt, league_ppg)
+    a_cur = _apply_offseason_regression(teams.get(a_code) or _default_team_snapshot(league_ppg), start_dt, league_ppg)
+
+    h_rest, h_g4, h_g7 = _schedule_density(h_cur, start_dt)
+    a_rest, a_g4, a_g7 = _schedule_density(a_cur, start_dt)
+
+    h_fat = (-1.60 if h_rest == 1 else (0.30 if h_rest >= 3 else 0.0)) - 0.50 * max(0, h_g4 - 1) - 0.20 * max(0, h_g7 - 3)
+    a_fat = (
+        (-2.10 if a_rest == 1 else (0.20 if a_rest >= 3 else 0.0))
+        - 0.60 * max(0, a_g4 - 1)
+        - 0.25 * max(0, a_g7 - 3)
+        - 0.22 * min(4, a_cur["road_streak"])
+    )
+    fat_diff = h_fat - a_fat
+    alt_pts = (1.35 if h_code in HIGH_ALTITUDE_TEAMS else 0.0) * (1.30 if a_rest == 1 else 1.0)
+
+    elo_ds = (h_cur["elo_slow"] - a_cur["elo_slow"]) + 50.0 + 15.0 * fat_diff + 14.0 * alt_pts
+    elo_df = (h_cur["elo_fast"] - a_cur["elo_fast"]) + 50.0 + 15.0 * fat_diff + 14.0 * alt_pts
+
+    hs = float(g["home_score"])
+    as_ = float(g["away_score"])
+    raw_tot = hs + as_
+    raw_mar = hs - as_
+    yw = 1.0 if raw_mar > 0.0 else 0.0
+
+    p_es = 1.0 / (1.0 + 10.0 ** (-elo_ds / 400.0))
+    mov = ((min(26.0, abs(raw_mar)) + 3.0) ** 0.8) / (7.5 + 0.006 * abs(elo_ds))
+    new_h_elo_s = h_cur["elo_slow"] + 21.0 * mov * (yw - p_es)
+    new_a_elo_s = a_cur["elo_slow"] - 21.0 * mov * (yw - p_es)
+
+    p_ef = 1.0 / (1.0 + 10.0 ** (-elo_df / 400.0))
+    new_h_elo_f = h_cur["elo_fast"] + 33.0 * mov * (yw - p_ef)
+    new_a_elo_f = a_cur["elo_fast"] - 33.0 * mov * (yw - p_ef)
+
+    exp_eff_tot = (
+        league_total
+        + (h_cur["pf_slow"] - league_ppg)
+        + (a_cur["pa_slow"] - league_ppg)
+        + (a_cur["pf_slow"] - league_ppg)
+        + (h_cur["pa_slow"] - league_ppg)
+    )
+    exp_game_tot = exp_eff_tot + h_cur["tempo_slow"] + a_cur["tempo_slow"]
+    is_likely_ot = (abs(raw_mar) <= 7.0) and (raw_tot > exp_game_tot + 18.0)
+    reg_tot = (raw_tot - 13.0) if is_likely_ot else raw_tot
+    capped_tot = max(league_total - 38.0, min(league_total + 38.0, reg_tot))
+    tempo_err = capped_tot - exp_game_tot
+
+    capped_mar = max(-28.0, min(28.0, raw_mar))
+    adj_hs = 0.5 * (capped_tot + capped_mar)
+    adj_as = 0.5 * (capped_tot - capped_mar)
+
+    hca_side = 0.925
+    h_fa = (adj_hs - hca_side) - (a_cur["pa_slow"] - league_ppg) - 0.35 * a_cur["tempo_slow"]
+    h_aa = (adj_as + hca_side) - (a_cur["pf_slow"] - league_ppg) - 0.35 * a_cur["tempo_slow"]
+    a_fa = (adj_as + hca_side) - (h_cur["pa_slow"] - league_ppg) - 0.35 * h_cur["tempo_slow"]
+    a_aa = (adj_hs - hca_side) - (h_cur["pf_slow"] - league_ppg) - 0.35 * h_cur["tempo_slow"]
+
+    tot_err_sq = min(1400.0, (raw_tot - exp_game_tot) ** 2)
+
+    h_next = {
+        "elo_slow": new_h_elo_s,
+        "elo_fast": new_h_elo_f,
+        "pf_slow": h_cur["pf_slow"] + 0.045 * (h_fa - h_cur["pf_slow"]),
+        "pa_slow": h_cur["pa_slow"] + 0.045 * (h_aa - h_cur["pa_slow"]),
+        "pf_fast": h_cur["pf_fast"] + 0.110 * (h_fa - h_cur["pf_fast"]),
+        "pa_fast": h_cur["pa_fast"] + 0.110 * (h_aa - h_cur["pa_fast"]),
+        "tempo_slow": h_cur["tempo_slow"] + 0.055 * tempo_err,
+        "tempo_fast": h_cur["tempo_fast"] + 0.130 * tempo_err,
+        "var_total": h_cur["var_total"] + 0.04 * (tot_err_sq - h_cur["var_total"]),
+        "last_start": start_dt,
+        "recent_starts": (*h_cur["recent_starts"][-11:], start_dt),
+        "road_streak": 0,
+        "margins": (*h_cur["margins"][-14:], raw_mar),
+        "totals": (*h_cur["totals"][-14:], raw_tot),
+        "games": h_cur["games"] + 1,
+    }
+    a_next = {
+        "elo_slow": new_a_elo_s,
+        "elo_fast": new_a_elo_f,
+        "pf_slow": a_cur["pf_slow"] + 0.045 * (a_fa - a_cur["pf_slow"]),
+        "pa_slow": a_cur["pa_slow"] + 0.045 * (a_aa - a_cur["pa_slow"]),
+        "pf_fast": a_cur["pf_fast"] + 0.110 * (a_fa - a_cur["pf_fast"]),
+        "pa_fast": a_cur["pa_fast"] + 0.110 * (a_aa - a_cur["pa_fast"]),
+        "tempo_slow": a_cur["tempo_slow"] + 0.055 * tempo_err,
+        "tempo_fast": a_cur["tempo_fast"] + 0.130 * tempo_err,
+        "var_total": a_cur["var_total"] + 0.04 * (tot_err_sq - a_cur["var_total"]),
+        "last_start": start_dt,
+        "recent_starts": (*a_cur["recent_starts"][-11:], start_dt),
+        "road_streak": a_cur["road_streak"] + 1,
+        "margins": (*a_cur["margins"][-14:], -raw_mar),
+        "totals": (*a_cur["totals"][-14:], raw_tot),
+        "games": a_cur["games"] + 1,
+    }
+
+    teams[h_code] = h_next
+    teams[a_code] = a_next
+    idx["team_ts"].setdefault(h_code, []).append(ts_str)
+    idx["team_snaps"].setdefault(h_code, []).append(h_next)
+    idx["team_ts"].setdefault(a_code, []).append(ts_str)
+    idx["team_snaps"].setdefault(a_code, []).append(a_next)
+
+    league_ppg += 0.015 * (0.5 * capped_tot - league_ppg)
+    league_total = 2.0 * league_ppg
+    idx["league_ppg"] = league_ppg
+    idx["league_total"] = league_total
+    idx["league_ts"].append(ts_str)
+    idx["league_vals"].append((league_ppg, league_total))
+    idx["game_ids"].append(g.get("game_id"))
+
+
+def _get_or_build_history_index(historical_final_games: list[dict[str, Any]]) -> tuple[dict[str, Any], str | None]:
+    if not historical_final_games:
+        return {
+            "team_ts": {},
+            "team_snaps": {},
+            "league_ts": [],
+            "league_vals": [],
+            "game_ids": [],
+        }, None
+
+    first_id = str(historical_final_games[0].get("game_id", ""))
+    last_id = str(historical_final_games[-1].get("game_id", ""))
+    n_in = len(historical_final_games)
+
+    existing = _INDEX_STORE.get(first_id)
+    if existing is not None:
+        n_ex = len(existing["game_ids"])
+        # Case A: Exact prefix or match of already indexed monotonic history
+        if n_in <= n_ex and n_in > 0 and existing["game_ids"][n_in - 1] == last_id:
+            max_ts = str(historical_final_games[-1].get("game_start_time", ""))
+            return existing, max_ts
+        # Case B: Monotonic extension of already indexed history
+        if n_in > n_ex and n_ex > 0 and str(historical_final_games[n_ex - 1].get("game_id", "")) == existing["game_ids"][n_ex - 1]:
+            tail = historical_final_games[n_ex:]
+            # Check if tail is already sorted
+            is_sorted = all(
+                str(tail[i].get("game_start_time", "")) <= str(tail[i + 1].get("game_start_time", ""))
+                for i in range(len(tail) - 1)
+            )
+            if is_sorted:
+                for g in tail:
+                    _append_game_to_index(existing, g)
+                max_ts = str(historical_final_games[-1].get("game_start_time", ""))
+                return existing, max_ts
+
+    # Otherwise build fresh sorted index
+    valid = [
+        g
+        for g in historical_final_games
+        if g.get("status") == "FINAL"
+        and g.get("home_score") is not None
+        and g.get("away_score") is not None
+    ]
+    valid.sort(key=lambda g: (str(g.get("game_start_time", "")), str(g.get("game_id", ""))))
+
+    new_idx: dict[str, Any] = {
+        "teams": {},
+        "team_ts": {},
+        "team_snaps": {},
+        "league_ppg": LEAGUE_PPG_INIT,
+        "league_total": LEAGUE_TOTAL_INIT,
+        "league_ts": [],
+        "league_vals": [],
+        "game_ids": [],
+    }
+    for g in valid:
+        _append_game_to_index(new_idx, g)
+
+    if valid:
+        new_first_id = str(valid[0].get("game_id", ""))
+        _INDEX_STORE[new_first_id] = new_idx
+        if len(_INDEX_STORE) > 8:
+            oldest_key = next(iter(_INDEX_STORE))
+            if oldest_key != new_first_id:
+                _INDEX_STORE.pop(oldest_key, None)
+        return new_idx, str(valid[-1].get("game_start_time", ""))
+
+    return new_idx, None
+
+
+def _lookup_team_state_before(
+    idx_bundle: dict[str, Any],
+    team_code: str,
+    cutoff_ts_str: str,
+    target_start_dt: Any,
+    league_ppg: float,
+    max_history_ts: str | None = None,
+) -> dict[str, Any]:
+    ts_list = idx_bundle["team_ts"].get(team_code)
+    if not ts_list:
+        return _default_team_snapshot(league_ppg)
+    pos = bisect_left(ts_list, cutoff_ts_str) - 1
+    if max_history_ts is not None and pos >= 0 and ts_list[pos] > max_history_ts:
+        pos = bisect_right(ts_list, max_history_ts) - 1
+    if pos < 0:
+        return _default_team_snapshot(league_ppg)
+    snap = idx_bundle["team_snaps"][team_code][pos]
+    return _apply_offseason_regression(snap, target_start_dt, league_ppg)
+
+
+def _lookup_league_before(
+    idx_bundle: dict[str, Any],
+    cutoff_ts_str: str,
+    max_history_ts: str | None = None,
+) -> tuple[float, float]:
+    l_ts = idx_bundle["league_ts"]
+    if not l_ts:
+        return LEAGUE_PPG_INIT, LEAGUE_TOTAL_INIT
+    pos = bisect_left(l_ts, cutoff_ts_str) - 1
+    if max_history_ts is not None and pos >= 0 and l_ts[pos] > max_history_ts:
+        pos = bisect_right(l_ts, max_history_ts) - 1
+    if pos < 0:
+        return LEAGUE_PPG_INIT, LEAGUE_TOTAL_INIT
+    return idx_bundle["league_vals"][pos]
 
 
 def build_pregame_features(
@@ -24,54 +324,23 @@ def build_pregame_features(
     home_team = target_game["home_team"]
     away_team = target_game["away_team"]
 
-    prior_games = [
-        g
-        for g in historical_final_games
-        if g.get("status") == "FINAL"
-        and g.get("home_score") is not None
-        and g.get("away_score") is not None
-        and (
-            str(g.get("game_start_time", "")) < target_start_str
-            if len(str(g.get("game_start_time", ""))) == len(target_start_str)
-            else parse_iso_utc(g["game_start_time"]) < target_start
-        )
-    ]
-    # Guarantee chronological order so "last N games" really means the most recent N
-    prior_games.sort(key=lambda g: str(g.get("game_start_time", "")))
+    idx_bundle, max_hist_ts = _get_or_build_history_index(historical_final_games)
+    league_ppg, league_avg_total = _lookup_league_before(idx_bundle, target_start_str, max_hist_ts)
 
-    # Rolling league-average combined total (last ~300 games) instead of a hard-coded constant
-    recent_league = prior_games[-300:]
-    league_avg_total = (
-        float(np.mean([float(g["home_score"] + g["away_score"]) for g in recent_league]))
-        if len(recent_league) >= 30
-        else 228.5
-    )
+    h_snap = _lookup_team_state_before(idx_bundle, home_team, target_start_str, target_start, league_ppg, max_hist_ts)
+    a_snap = _lookup_team_state_before(idx_bundle, away_team, target_start_str, target_start, league_ppg, max_hist_ts)
 
-    def _recent_margins_and_totals(team_code: str) -> tuple[list[float], list[float]]:
-        # Walk backwards and stop once the window is full (O(window) on long histories)
-        margins: list[float] = []
-        totals: list[float] = []
-        for g in reversed(prior_games):
-            if g["home_team"] == team_code:
-                margins.append(float(g["home_score"] - g["away_score"]))
-                totals.append(float(g["home_score"] + g["away_score"]))
-            elif g["away_team"] == team_code:
-                margins.append(float(g["away_score"] - g["home_score"]))
-                totals.append(float(g["home_score"] + g["away_score"]))
-            if len(margins) >= rolling_window:
-                break
-        margins.reverse()
-        totals.reverse()
-        return margins, totals
-
-    def _ewma(values: list[float], default: float = 0.0) -> float:
+    def _ewma(values: tuple[float, ...] | list[float], default: float = 0.0) -> float:
         if not values:
             return default
-        weights = np.exp(np.linspace(-1.0, 0.0, len(values)))
-        return float(np.average(values, weights=weights))
+        sliced = values[-rolling_window:]
+        weights = np.exp(np.linspace(-1.0, 0.0, len(sliced)))
+        return float(np.average(sliced, weights=weights))
 
-    home_margins, home_totals = _recent_margins_and_totals(home_team)
-    away_margins, away_totals = _recent_margins_and_totals(away_team)
+    home_margins = h_snap["margins"]
+    home_totals = h_snap["totals"]
+    away_margins = a_snap["margins"]
+    away_totals = a_snap["totals"]
 
     home_recent_net = _ewma(home_margins, 0.0)
     away_recent_net = _ewma(away_margins, 0.0)
@@ -85,22 +354,66 @@ def build_pregame_features(
     h_def = float(target_game["home_def_rtg"])
     a_off = float(target_game["away_off_rtg"])
     a_def = float(target_game["away_def_rtg"])
-    h_pace = float(target_game.get("home_pace") or 99.0)
-    a_pace = float(target_game.get("away_pace") or 99.0)
-    h_rest = float(target_game["home_rest_days"])
-    a_rest = float(target_game["away_rest_days"])
+    h_pace = float(target_game.get("home_pace") or 99.5)
+    a_pace = float(target_game.get("away_pace") or 99.5)
+
+    h_sched_rest, h_g4, h_g7 = _schedule_density(h_snap, target_start)
+    a_sched_rest, a_g4, a_g7 = _schedule_density(a_snap, target_start)
+    h_rest = float(target_game.get("home_rest_days") or h_sched_rest)
+    a_rest = float(target_game.get("away_rest_days") or a_sched_rest)
 
     home_net_rtg = h_off - h_def
     away_net_rtg = a_off - a_def
+    net_rtg_diff = home_net_rtg - away_net_rtg
     expected_pace = 0.5 * (h_pace + a_pace)
 
-    # Non-linear Back-to-Back (B2B) fatigue penalty (away B2B is harsher due to travel)
-    h_b2b_pen = -1.65 if h_rest <= 1.0 else (0.45 if h_rest >= 3.0 else 0.0)
-    a_b2b_pen = -2.25 if a_rest <= 1.0 else (0.35 if a_rest >= 3.0 else 0.0)
+    h_b2b_pen = -1.60 if h_rest <= 1.0 else (0.30 if h_rest >= 3.0 else 0.0)
+    a_b2b_pen = -2.10 if a_rest <= 1.0 else (0.20 if a_rest >= 3.0 else 0.0)
     b2b_advantage = h_b2b_pen - a_b2b_pen
 
-    # Direct offensive vs opposing defensive mismatch
+    h_fatigue = h_b2b_pen - 0.50 * max(0, h_g4 - 1) - 0.20 * max(0, h_g7 - 3)
+    a_fatigue = a_b2b_pen - 0.60 * max(0, a_g4 - 1) - 0.25 * max(0, a_g7 - 3) - 0.22 * min(4, a_snap["road_streak"])
+    fatigue_diff = h_fatigue - a_fatigue
+
+    altitude_advantage = (1.35 if home_team in HIGH_ALTITUDE_TEAMS else 0.0) * (1.30 if a_rest <= 1.0 else 1.0)
     matchup_mismatch = (h_off - a_def) - (a_off - h_def)
+
+    scale_100 = 100.0 / LEAGUE_PACE_BASE
+    dyn_h_net_s = (h_snap["pf_slow"] - h_snap["pa_slow"]) * scale_100
+    dyn_a_net_s = (a_snap["pf_slow"] - a_snap["pa_slow"]) * scale_100
+    dyn_h_net_f = (h_snap["pf_fast"] - h_snap["pa_fast"]) * scale_100
+    dyn_a_net_f = (a_snap["pf_fast"] - a_snap["pa_fast"]) * scale_100
+    dyn_net_diff = (0.88 * dyn_h_net_s + 0.12 * dyn_h_net_f) - (0.88 * dyn_a_net_s + 0.12 * dyn_a_net_f)
+    form_surge_diff = (dyn_h_net_f - dyn_h_net_s) - (dyn_a_net_f - dyn_a_net_s)
+
+    min_games = min(h_snap["games"], a_snap["games"])
+    live_rating_delta = net_rtg_diff - dyn_net_diff if min_games >= 5 else net_rtg_diff
+    elo_ds = (h_snap["elo_slow"] - a_snap["elo_slow"]) + 50.0 + 15.0 * fatigue_diff + 14.0 * altitude_advantage
+    elo_df = (h_snap["elo_fast"] - a_snap["elo_fast"]) + 50.0 + 15.0 * fatigue_diff + 14.0 * altitude_advantage
+    elo_diff = 0.82 * elo_ds + 0.18 * elo_df + (8.0 * live_rating_delta if min_games < 15 else 2.5 * live_rating_delta)
+    p_elo = 1.0 / (1.0 + 10.0 ** (-elo_diff / 400.0))
+    elo_spread = elo_diff / 28.0
+
+    pace_factor = expected_pace / 100.0
+    eff_spread = net_rtg_diff * pace_factor + 1.85 + fatigue_diff + altitude_advantage
+    w_elo_mar = min(0.55, max(0.15, min_games / 25.0))
+    structural_margin = w_elo_mar * elo_spread + (1.0 - w_elo_mar) * eff_spread
+
+    league_rtg = league_ppg * scale_100
+    off_def_sum = (h_off - league_rtg) + (a_def - league_rtg) + (a_off - league_rtg) + (h_def - league_rtg)
+    h_tempo = 0.72 * h_snap["tempo_slow"] + 0.28 * h_snap["tempo_fast"]
+    a_tempo = 0.72 * a_snap["tempo_slow"] + 0.28 * a_snap["tempo_fast"]
+    tempo_sum = h_tempo + a_tempo
+    b2b_total_drag = (-1.15 if h_rest <= 1.0 else 0.0) + (-1.15 if a_rest <= 1.0 else 0.0)
+    blowout_drag = -0.16 * max(0.0, abs(structural_margin) - 9.5)
+    structural_total = (
+        league_avg_total
+        + 0.72 * off_def_sum * pace_factor
+        + 0.40 * tempo_sum
+        + b2b_total_drag
+        + blowout_drag
+    )
+    dynamic_total_std = float(np.clip(math.sqrt(0.5 * (h_snap["var_total"] + a_snap["var_total"])), 16.5, 20.5))
 
     return {
         "home_off_rtg": h_off,
@@ -109,7 +422,7 @@ def build_pregame_features(
         "away_off_rtg": a_off,
         "away_def_rtg": a_def,
         "away_net_rtg": round(away_net_rtg, 4),
-        "net_rtg_diff": round(home_net_rtg - away_net_rtg, 4),
+        "net_rtg_diff": round(net_rtg_diff, 4),
         "matchup_mismatch": round(matchup_mismatch, 4),
         "home_pace": h_pace,
         "away_pace": a_pace,
@@ -119,11 +432,28 @@ def build_pregame_features(
         "away_rest_days": a_rest,
         "rest_diff": round(h_rest - a_rest, 4),
         "b2b_advantage": round(b2b_advantage, 4),
+        "fatigue_diff": round(fatigue_diff, 4),
+        "altitude_advantage": round(altitude_advantage, 4),
         "home_recent_margin": round(home_recent_net, 4),
         "away_recent_margin": round(away_recent_net, 4),
         "recent_margin_diff": round(home_recent_net - away_recent_net, 4),
+        "form_surge_diff": round(form_surge_diff, 4),
         "recent_total_trend": round(recent_total_trend, 4),
         "home_recent_win_pct": round(home_win_pct, 4),
         "away_recent_win_pct": round(away_win_pct, 4),
+        "elo_home": round(h_snap["elo_slow"], 2),
+        "elo_away": round(a_snap["elo_slow"], 2),
+        "elo_diff": round(elo_diff, 3),
+        "elo_spread": round(elo_spread, 4),
+        "p_elo": round(p_elo, 6),
+        "eff_spread": round(eff_spread, 4),
+        "structural_margin": round(structural_margin, 4),
+        "off_def_sum": round(off_def_sum, 4),
+        "tempo_sum": round(tempo_sum, 4),
+        "b2b_total_drag": round(b2b_total_drag, 4),
+        "blowout_drag": round(blowout_drag, 4),
+        "structural_total": round(structural_total, 4),
+        "league_avg_total": round(league_avg_total, 4),
+        "dynamic_total_std": round(dynamic_total_std, 4),
         "home_court_indicator": 1.0,
     }

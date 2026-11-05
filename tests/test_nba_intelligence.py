@@ -1093,3 +1093,57 @@ def test_24_external_workflow_dispatcher() -> None:
         )
         assert success is True
 
+
+def test_25_v4_model_breakthrough_and_calibration_guards() -> None:
+    """Validates V4 pace-decoupled ratings, enriched feature vector, OOS ensemble weights, and small-sample calibration intercept guard."""
+    from src.calibration.calibrator import ProbabilityCalibrator
+    from src.features.builder import build_pregame_features
+    from src.features.team_ratings import compute_pregame_team_ratings
+    from src.models.statistical_models import EnsembleStackingModel
+
+    # 1. Pace-decoupled rating verification: high-scoring offense increases home_off_rtg without artificially lowering home_def_rtg
+    sample_games = [
+        {"game_id": "ESPN_T1", "game_start_time": "2026-10-20T00:00:00Z", "home_team": "IND", "away_team": "ATL", "status": "FINAL", "home_score": 132, "away_score": 114},
+        {"game_id": "ESPN_T2", "game_start_time": "2026-10-22T00:00:00Z", "home_team": "IND", "away_team": "DET", "status": "FINAL", "home_score": 128, "away_score": 114},
+        {"game_id": "ESPN_T3", "game_start_time": "2026-10-25T00:00:00Z", "home_team": "IND", "away_team": "MIA", "status": "SCHEDULED", "home_score": None, "away_score": None},
+    ]
+    rtgs = compute_pregame_team_ratings(sample_games)
+    assert rtgs["ESPN_T3"]["home_off_rtg"] > 115.5
+    assert rtgs["ESPN_T3"]["home_off_rtg"] > rtgs["ESPN_T3"]["home_def_rtg"]
+
+    # 2. Enriched pre-game features & altitude/fatigue signals
+    target_den = {
+        "game_id": "ESPN_DEN_1",
+        "game_start_time": "2026-10-26T01:00:00Z",
+        "home_team": "DEN",
+        "away_team": "ATL",
+        "status": "SCHEDULED",
+        "home_off_rtg": 118.0,
+        "home_def_rtg": 112.0,
+        "home_pace": 99.5,
+        "away_off_rtg": 114.0,
+        "away_def_rtg": 116.0,
+        "away_pace": 100.5,
+        "home_rest_days": 3,
+        "away_rest_days": 1,
+        "features_available_at": "2026-10-25T20:00:00Z",
+    }
+    feats = build_pregame_features(target_den, sample_games[:2], market="moneyline")
+    assert feats["altitude_advantage"] > 1.5
+    assert feats["fatigue_diff"] > 2.0
+    assert feats["structural_margin"] > 8.0
+    assert "elo_spread" in feats and "structural_total" in feats
+
+    # 3. Small-sample intercept regularization in ProbabilityCalibrator (prevents directional Home/Away bias on N=35)
+    cal = ProbabilityCalibrator(method="logistic", min_samples_logistic=25)
+    skewed_small_sample = [
+        {
+            "game_start_time": f"2026-10-{(i % 20) + 1:02d}T12:00:00Z",
+            "raw_probability": 0.50,
+            "outcome": 0 if i < 23 else 1,  # 12 wins, 23 losses at p=0.50 on small N=35
+        }
+        for i in range(35)
+    ]
+    cal.fit(skewed_small_sample, "2026-10-28T00:00:00Z")
+    # At N=35 (<= 50), intercept is regularized to 0.0 so p=0.50 stays centered at 0.50
+    assert abs(cal.transform_single(0.50) - 0.50) < 0.01
