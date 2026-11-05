@@ -1,11 +1,11 @@
 """
 Statistical NBA Models (Section 5):
 - Model A: BaselineModel (historical reference probabilities and rolling rates)
-- Model B: EloModel (dual-speed MOV-adjusted Elo with offseason regression, rest density, and altitude)
-- Model C: PointMarginModel (residual-anchored RidgeCV on pace-decoupled efficiency, Elo spread, rest, surge)
+- Model B: EloModel (dual-speed MOV-adjusted Elo with offseason regression, rest density, geodesic travel & altitude)
+- Model C: PointMarginModel (residual-anchored RidgeCV on pace-decoupled efficiency, Elo spread, rest, venue splits & surge)
 - Model D: TotalPointsModel (normal distribution with score covariance, tempo decoupling, B2B & blowout drag)
 - Model E: AdvancedGBMModel (residual-boosted LightGBM evaluated strictly out-of-sample)
-- Model G: DeepMonteCarloHybridModel (10,000-game Q1-Q4 + OT possession simulator with calibrated shared covariance)
+- Model G: DeepMonteCarloHybridModel (10,000-game Q1-Q4 + OT possession simulator with moment-matched expectations)
 - Model F: EnsembleStackingModel (out-of-sample shrinkage-weighted log-odds pool)
 """
 
@@ -16,7 +16,7 @@ import math
 from typing import Any
 import numpy as np
 from scipy.stats import norm
-from sklearn.linear_model import Ridge, RidgeCV
+from sklearn.linear_model import RidgeCV
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from lightgbm import LGBMClassifier, LGBMRegressor
@@ -38,6 +38,9 @@ FEATURE_COLUMNS: list[str] = [
     "b2b_advantage",
     "fatigue_diff",
     "altitude_advantage",
+    "travel_miles_diff",
+    "venue_split_diff",
+    "streak_diff",
     "recent_margin_diff",
     "form_surge_diff",
     "recent_total_trend",
@@ -152,7 +155,7 @@ class EloModel:
     """
     Modelo B (Elo):
     Dual-horizon Margin-of-Victory Elo system adjusted for modern NBA home-court advantage (50 Elo),
-    offseason regression (0.66 carryover), schedule density fatigue, and high-altitude venues (DEN, UTA).
+    offseason regression (0.66 carryover), schedule density fatigue, geodesic travel, and altitude.
     """
 
     model_family = "model_b_elo"
@@ -235,7 +238,7 @@ class PointMarginModel:
     Modelo C (Margen de Puntos):
     Estimates expected point differential E[Home - Away] using a hybrid structural baseline
     (combining dual-speed Elo spread, pace-normalized opponent-adjusted net rating, schedule density
-    fatigue, and altitude) plus a recency-weighted, residual-anchored RidgeCV correction.
+    fatigue, geodesic travel, altitude, and venue splits) plus a recency-weighted RidgeCV correction.
     """
 
     model_family = "model_c_point_margin"
@@ -253,7 +256,7 @@ class PointMarginModel:
         self.win_prob_std = 11.5
         self.home_court_points = home_court_points
         self.regressor: Any = None
-        self.ml_weight: float = 0.25
+        self.ml_weight: float = 0.22
         self.is_fitted = False
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
@@ -279,10 +282,10 @@ class PointMarginModel:
         y_res = y - s
 
         sample_weights = np.exp(np.linspace(-0.75, 0.0, len(X)))
-        model = make_pipeline(StandardScaler(), RidgeCV(alphas=[20.0, 60.0, 180.0, 450.0, 900.0]))
+        model = make_pipeline(StandardScaler(), RidgeCV(alphas=[40.0, 120.0, 300.0, 600.0, 1200.0]))
         model.fit(X, y_res, ridgecv__sample_weight=sample_weights)
 
-        self.ml_weight = min(0.35, 0.15 + len(train_sample) / 4000.0)
+        self.ml_weight = min(0.28, 0.12 + len(train_sample) / 5000.0)
         preds = s + self.ml_weight * model.predict(X)
         residuals = y - preds
         self.residual_std = float(np.clip(np.std(residuals, ddof=1), 11.5, 15.0))
@@ -301,7 +304,7 @@ class PointMarginModel:
 
         if self.is_fitted and self.regressor is not None:
             x_vec = np.asarray([[feats[c] for c in MARGIN_FEATURE_COLUMNS]], dtype=float)
-            res_pred = float(np.clip(self.regressor.predict(x_vec)[0], -4.5, 4.5))
+            res_pred = float(np.clip(self.regressor.predict(x_vec)[0], -4.0, 4.0))
             expected_margin = structural_margin + self.ml_weight * res_pred
         else:
             expected_margin = structural_margin
@@ -574,7 +577,7 @@ class AdvancedGBMModel:
 
         xm_vec = np.asarray([[feats[c] for c in MARGIN_FEATURE_COLUMNS]], dtype=float)
         res_mar = float(np.clip(self.mar_reg.predict(xm_vec)[0], -4.0, 4.0))
-        gbm_margin = feats["structural_margin"] + 0.28 * res_mar
+        gbm_margin = feats["structural_margin"] + 0.25 * res_mar
         p_from_mar = float(1.0 - norm.cdf(0.0, loc=gbm_margin, scale=self.win_prob_std))
         p_from_clf = float(self.clf.predict_proba(xm_vec)[0, 1])
         p_elo = feats["p_elo"]
@@ -619,10 +622,10 @@ class DeepMonteCarloHybridModel:
     - Layer 1 (ML Parameter Estimation): Uses RidgeCV + Residual LightGBM + Elo/Efficiency features to estimate
       expected possessions per game, Points Per Possession (PPP) for Home & Away, shared game-environment covariance,
       and 3PT heavy-tailed Student-t volatility.
-    - Layer 2 (Vectorized 10,000-Game Monte Carlo Simulator): Simulates Q1-Q3, Q4 Blowout/Garbage-Time deceleration,
-      Late-Game Intentional Fouling (free-throw tax when margin is 1-6 pts), and 5-minute Overtime (OT1/OT2) periods
-      with calibrated total-points standard deviation (~18.2 pts) and margin win-threshold dispersion (~11.6 pts).
-    - Layer 3 (Conformal Prediction & Tail-Risk Telemetry): Extracts empirical win/over/under probabilities,
+    - Layer 2 (Vectorized 10,000-Game Monte Carlo Simulator with First-Moment Matching): Simulates Q1-Q3,
+      Q4 Blowout/Garbage-Time deceleration, Late-Game Intentional Fouling, and 5-minute Overtime periods,
+      centered via exact moment-matching to prevent Monte Carlo drift while preserving heavy-tailed regime shapes.
+    - Layer 3 (Conformal Prediction & Tail-Risk Telemetry): Extracts variance-reduced win/over/under probabilities,
       overtime probability, blowout probability, and 80% Conformal intervals ([Q10, Q90]) for contextual staking.
     """
 
@@ -630,7 +633,7 @@ class DeepMonteCarloHybridModel:
 
     def __init__(
         self,
-        version_id: str = "model_g_ml_montecarlo_v2",
+        version_id: str = "model_g_ml_montecarlo_v5",
         n_simulations: int = 10000,
         shared_margin_model: PointMarginModel | None = None,
         shared_totals_model: TotalPointsModel | None = None,
@@ -639,9 +642,9 @@ class DeepMonteCarloHybridModel:
         self.version_id = version_id
         self.n_simulations = int(n_simulations)
         self._owns_submodels = shared_margin_model is None
-        self.margin_model = shared_margin_model or PointMarginModel("model_c_for_mc_v2")
-        self.totals_model = shared_totals_model or TotalPointsModel("model_d_for_mc_v2")
-        self.gbm_model = shared_gbm_model or AdvancedGBMModel("model_e_for_mc_v2")
+        self.margin_model = shared_margin_model or PointMarginModel("model_c_for_mc_v5")
+        self.totals_model = shared_totals_model or TotalPointsModel("model_d_for_mc_v5")
+        self.gbm_model = shared_gbm_model or AdvancedGBMModel("model_e_for_mc_v5")
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
         if self._owns_submodels:
@@ -740,19 +743,30 @@ class DeepMonteCarloHybridModel:
         h_final = np.where(is_overtime, 0.5 * (h_reg + a_reg) + ot_h_pts, h_final)
         a_final = np.where(is_overtime, 0.5 * (h_reg + a_reg) + ot_a_pts, a_final)
 
-        sim_margins = h_final - a_final
-        sim_totals = h_final + a_final
+        raw_margins = h_final - a_final
+        raw_totals = h_final + a_final
 
-        p_home_mc = float(np.clip(np.mean(sim_margins > 0.0), 0.05, 0.95))
+        # First-moment matching (control variate centering) to eliminate Monte Carlo regime drift
+        # while retaining exact empirical skewness, heavy Student-t tails, and OT/foul multi-modality
+        sim_margins = raw_margins + (ml_margin - float(np.mean(raw_margins)))
+        sim_totals = raw_totals + (ml_total - float(np.mean(raw_totals)))
+
+        p_home_emp = float(np.mean(sim_margins > 0.0))
+        p_home_smooth = float(1.0 - norm.cdf(0.0, loc=ml_margin, scale=11.55))
+        p_home_mc = float(np.clip(0.50 * p_home_emp + 0.50 * p_home_smooth, 0.05, 0.95))
 
         is_int_line = abs(line_value - round(line_value)) < 1e-6
         if is_int_line:
             over_mask = sim_totals > (line_value + 0.5)
             under_mask = sim_totals < (line_value - 0.5)
             non_push = max(1, int(np.sum(over_mask) + np.sum(under_mask)))
-            p_over_mc = float(np.clip(np.sum(over_mask) / non_push, 0.05, 0.95))
+            p_over_emp = float(np.sum(over_mask) / non_push)
         else:
-            p_over_mc = float(np.clip(np.mean(sim_totals > line_value), 0.05, 0.95))
+            p_over_emp = float(np.mean(sim_totals > line_value))
+
+        mc_tot_std = float(np.clip(np.std(sim_totals), 16.5, 20.5))
+        p_over_smooth = float(1.0 - norm.cdf(line_value, loc=ml_total, scale=mc_tot_std))
+        p_over_mc = float(np.clip(0.50 * p_over_emp + 0.50 * p_over_smooth, 0.05, 0.95))
 
         q10_tot, q90_tot = np.percentile(sim_totals, [10.0, 90.0])
         q10_mar, q90_mar = np.percentile(sim_margins, [10.0, 90.0])
@@ -777,7 +791,7 @@ class DeepMonteCarloHybridModel:
 
 class EnsembleStackingModel:
     """
-    Modelo F+G (V4 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid):
+    Modelo F+G (V5 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid):
     Combines Dual-Speed MOV Elo (Model B), Residual-Anchored Point Margin (Model C),
     Pace-Decoupled Total Points with Covariance (Model D), Residual-Boosted LightGBM (Model E),
     and Deep Monte Carlo Possession Simulator (Model G) via strictly out-of-sample
@@ -786,14 +800,14 @@ class EnsembleStackingModel:
 
     model_family = "model_f_meta_ensemble"
 
-    def __init__(self, version_id: str = "model_f_ensemble_v4") -> None:
+    def __init__(self, version_id: str = "model_f_ensemble_v5") -> None:
         self.version_id = version_id
-        self.model_b = EloModel("model_b_elo_v4")
-        self.model_c = PointMarginModel("model_c_point_margin_v4")
-        self.model_d = TotalPointsModel("model_d_total_points_v4")
-        self.model_e = AdvancedGBMModel("model_e_lightgbm_v4")
+        self.model_b = EloModel("model_b_elo_v5")
+        self.model_c = PointMarginModel("model_c_point_margin_v5")
+        self.model_d = TotalPointsModel("model_d_total_points_v5")
+        self.model_e = AdvancedGBMModel("model_e_lightgbm_v5")
         self.model_g = DeepMonteCarloHybridModel(
-            "model_g_ml_montecarlo_v4",
+            "model_g_ml_montecarlo_v5",
             n_simulations=10000,
             shared_margin_model=self.model_c,
             shared_totals_model=self.model_d,

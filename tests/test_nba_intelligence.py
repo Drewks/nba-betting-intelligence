@@ -1147,3 +1147,66 @@ def test_25_v4_model_breakthrough_and_calibration_guards() -> None:
     cal.fit(skewed_small_sample, "2026-10-28T00:00:00Z")
     # At N=35 (<= 50), intercept is regularized to 0.0 so p=0.50 stays centered at 0.50
     assert abs(cal.transform_single(0.50) - 0.50) < 0.01
+
+
+
+def test_26_v5_geodesic_travel_altitude_acclimation_and_moment_matched_mc() -> None:
+    """Validates V5 geodesic Haversine travel miles, road-return penalty, altitude acclimation, and MC moment-matching."""
+    from src.features.builder import _compute_travel_leg, build_pregame_features
+    from src.models.statistical_models import DeepMonteCarloHybridModel
+
+    # 1. Geodesic Haversine travel & altitude acclimation: MIA -> DEN climbs >5,200 ft; UTA -> DEN climbs ~1,054 ft
+    dist_mia_den, tz_mia_den, climb_mia_den = _compute_travel_leg("MIA", "DEN", "MIA")
+    dist_uta_den, tz_uta_den, climb_uta_den = _compute_travel_leg("UTA", "DEN", "UTA")
+    assert dist_mia_den > 1650.0
+    assert tz_mia_den == 2.0
+    assert climb_mia_den > 5200.0
+    assert climb_uta_den < 1100.0
+
+    # 2. First game home after long road trip (>700 miles, rest <= 2 days) triggers first_home_from_road == 1.0
+    hist_road_return = [
+        {
+            "game_id": "ESPN_RR_1",
+            "game_start_time": "2026-10-20T02:00:00Z",
+            "home_team": "LAL",
+            "away_team": "BOS",
+            "status": "FINAL",
+            "home_score": 110,
+            "away_score": 115,
+        },
+        {
+            "game_id": "ESPN_RR_2",
+            "game_start_time": "2026-10-21T00:00:00Z",
+            "home_team": "NYK",
+            "away_team": "PHI",
+            "status": "FINAL",
+            "home_score": 108,
+            "away_score": 104,
+        },
+    ]
+    target_bos_home = {
+        "game_id": "ESPN_RR_TARGET",
+        "game_start_time": "2026-10-22T23:30:00Z",
+        "home_team": "BOS",
+        "away_team": "NYK",
+        "status": "SCHEDULED",
+        "home_off_rtg": 118.0,
+        "home_def_rtg": 111.0,
+        "home_pace": 99.5,
+        "away_off_rtg": 115.0,
+        "away_def_rtg": 112.0,
+        "away_pace": 98.5,
+        "home_rest_days": 2,
+        "away_rest_days": 2,
+        "features_available_at": "2026-10-22T18:00:00Z",
+    }
+    feats_rr = build_pregame_features(target_bos_home, hist_road_return, market="moneyline")
+    assert feats_rr["first_home_from_road"] == 1.0
+    assert feats_rr["travel_miles_diff"] < -2000.0  # BOS traveled ~2,590 mi from LAL vs NYK ~190 mi from NYK
+
+    # 3. Moment-matched Monte Carlo simulator preserves exact analytical expectations
+    mc_model = DeepMonteCarloHybridModel(n_simulations=5000)
+    sim_out = mc_model.simulate_matchup(target_bos_home, hist_road_return, line_value=226.5)
+    assert 0.05 <= sim_out["p_home_mc"] <= 0.95
+    assert 0.05 <= sim_out["p_over_mc"] <= 0.95
+    assert sim_out["conformal_q10_total"] < sim_out["mc_expected_total"] < sim_out["conformal_q90_total"]

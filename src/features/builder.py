@@ -16,6 +16,68 @@ LEAGUE_TOTAL_INIT = 228.4
 LEAGUE_PACE_BASE = 99.5
 HIGH_ALTITUDE_TEAMS = frozenset({"DEN", "UTA"})
 
+# Geodesic NBA Arena Coordinates: (latitude, longitude, utc_offset, altitude_ft)
+# Adapted from NBA_AI phase5/arena_data.py & travel.py for exact Haversine travel miles,
+# timezone jet-lag crossings, "first game home after road trip" penalty, and altitude acclimation.
+ARENA_GEODESIC_DATA: dict[str, tuple[float, float, float, float]] = {
+    "ATL": (33.7573, -84.3963, -5.0, 1050.0),
+    "BOS": (42.3662, -71.0621, -5.0, 20.0),
+    "BKN": (40.6826, -73.9754, -5.0, 30.0),
+    "CHA": (35.2251, -80.8392, -5.0, 751.0),
+    "CHI": (41.8807, -87.6742, -6.0, 594.0),
+    "CLE": (41.4965, -81.6882, -5.0, 653.0),
+    "DAL": (32.7905, -96.8103, -6.0, 430.0),
+    "DEN": (39.7487, -105.0077, -7.0, 5280.0),
+    "DET": (42.3410, -83.0551, -5.0, 600.0),
+    "GSW": (37.7680, -122.3877, -8.0, 10.0),
+    "HOU": (29.7508, -95.3621, -6.0, 50.0),
+    "IND": (39.7639, -86.1555, -5.0, 715.0),
+    "LAC": (33.9450, -118.3410, -8.0, 120.0),
+    "LAL": (34.0430, -118.2673, -8.0, 285.0),
+    "MEM": (35.1382, -90.0505, -6.0, 337.0),
+    "MIA": (25.7814, -80.1870, -5.0, 10.0),
+    "MIL": (43.0451, -87.9172, -6.0, 617.0),
+    "MIN": (44.9795, -93.2760, -6.0, 830.0),
+    "NOP": (29.9490, -90.0821, -6.0, 10.0),
+    "NYK": (40.7505, -73.9934, -5.0, 35.0),
+    "OKC": (35.4634, -97.5151, -6.0, 1201.0),
+    "ORL": (28.5392, -81.3839, -5.0, 82.0),
+    "PHI": (39.9012, -75.1720, -5.0, 39.0),
+    "PHX": (33.4457, -112.0712, -7.0, 1086.0),
+    "POR": (45.5316, -122.6668, -8.0, 50.0),
+    "SAC": (38.5802, -121.4997, -8.0, 30.0),
+    "SAS": (29.4270, -98.4375, -6.0, 650.0),
+    "TOR": (43.6435, -79.3791, -5.0, 249.0),
+    "UTA": (40.7683, -111.9011, -7.0, 4226.0),
+    "WAS": (38.8981, -77.0209, -5.0, 25.0),
+}
+
+
+def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r_miles = 3958.8
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2.0) ** 2
+    return 2.0 * r_miles * math.asin(math.sqrt(max(0.0, min(1.0, a))))
+
+
+def _compute_travel_leg(
+    prev_venue: str | None,
+    curr_venue: str,
+    team_home_venue: str,
+) -> tuple[float, float, float]:
+    """Returns (travel_miles, tz_crossings, altitude_climb_ft) for a team traveling to curr_venue."""
+    curr_info = ARENA_GEODESIC_DATA.get(curr_venue, (39.0, -98.0, -6.0, 500.0))
+    origin = prev_venue if (prev_venue and prev_venue in ARENA_GEODESIC_DATA) else team_home_venue
+    prev_info = ARENA_GEODESIC_DATA.get(origin, curr_info)
+    if origin == curr_venue:
+        return 0.0, 0.0, 0.0
+    dist = _haversine_miles(prev_info[0], prev_info[1], curr_info[0], curr_info[1])
+    tz_diff = abs(curr_info[2] - prev_info[2])
+    alt_climb = max(0.0, curr_info[3] - prev_info[3])
+    return dist, tz_diff, alt_climb
+
 
 def _default_team_snapshot(league_ppg: float = LEAGUE_PPG_INIT) -> dict[str, Any]:
     return {
@@ -31,6 +93,10 @@ def _default_team_snapshot(league_ppg: float = LEAGUE_PPG_INIT) -> dict[str, Any
         "last_start": None,
         "recent_starts": (),
         "road_streak": 0,
+        "last_venue": None,
+        "home_venue_edge": 0.0,
+        "away_venue_edge": 0.0,
+        "streak": 0,
         "margins": (),
         "totals": (),
         "games": 0,
@@ -58,6 +124,10 @@ def _apply_offseason_regression(snap: dict[str, Any], target_start_dt: Any, leag
         "last_start": None,
         "recent_starts": (),
         "road_streak": 0,
+        "last_venue": None,
+        "home_venue_edge": 0.50 * snap["home_venue_edge"],
+        "away_venue_edge": 0.50 * snap["away_venue_edge"],
+        "streak": 0,
         "margins": snap["margins"][-4:],
         "totals": snap["totals"][-4:],
         "games": snap["games"],
@@ -98,15 +168,29 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
     h_rest, h_g4, h_g7 = _schedule_density(h_cur, start_dt)
     a_rest, a_g4, a_g7 = _schedule_density(a_cur, start_dt)
 
-    h_fat = (-1.60 if h_rest == 1 else (0.30 if h_rest >= 3 else 0.0)) - 0.50 * max(0, h_g4 - 1) - 0.20 * max(0, h_g7 - 3)
+    dist_h, tz_h, _alt_climb_h = _compute_travel_leg(h_cur["last_venue"], h_code, h_code)
+    dist_a, tz_a, alt_climb_a = _compute_travel_leg(a_cur["last_venue"], h_code, a_code)
+    first_home_from_road = 1.0 if (dist_h > 700.0 and h_rest <= 2) else 0.0
+    travel_diff_edge = 0.22 * ((dist_a - dist_h) / 1000.0) + 0.12 * (tz_a - tz_h)
+
+    h_fat = (
+        (-1.60 if h_rest == 1 else (0.30 if h_rest >= 3 else 0.0))
+        - 0.50 * max(0, h_g4 - 1)
+        - 0.20 * max(0, h_g7 - 3)
+        - 0.85 * first_home_from_road
+        + 0.50 * travel_diff_edge
+    )
     a_fat = (
         (-2.10 if a_rest == 1 else (0.20 if a_rest >= 3 else 0.0))
         - 0.60 * max(0, a_g4 - 1)
         - 0.25 * max(0, a_g7 - 3)
         - 0.22 * min(4, a_cur["road_streak"])
+        - 0.50 * travel_diff_edge
     )
     fat_diff = h_fat - a_fat
-    alt_pts = (1.35 if h_code in HIGH_ALTITUDE_TEAMS else 0.0) * (1.30 if a_rest == 1 else 1.0)
+
+    c_alt = ARENA_GEODESIC_DATA.get(h_code, (39.0, -98.0, -6.0, 500.0))[3]
+    alt_pts = (1.35 * min(1.15, alt_climb_a / 4200.0) if c_alt >= 4000.0 else 0.0) * (1.30 if a_rest == 1 else 1.0)
 
     elo_ds = (h_cur["elo_slow"] - a_cur["elo_slow"]) + 50.0 + 15.0 * fat_diff + 14.0 * alt_pts
     elo_df = (h_cur["elo_fast"] - a_cur["elo_fast"]) + 50.0 + 15.0 * fat_diff + 14.0 * alt_pts
@@ -151,6 +235,22 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
 
     tot_err_sq = min(1400.0, (raw_tot - exp_game_tot) ** 2)
 
+    exp_mar_base = ((h_cur["elo_slow"] - a_cur["elo_slow"]) + 50.0) / 28.0
+    mar_res = max(-20.0, min(20.0, capped_mar - exp_mar_base))
+    new_h_venue = 0.96 * h_cur["home_venue_edge"] + 0.04 * mar_res
+    new_a_venue = 0.96 * a_cur["away_venue_edge"] + 0.04 * (-mar_res)
+
+    new_h_streak = (
+        (h_cur["streak"] + 1 if h_cur["streak"] > 0 else 1)
+        if raw_mar > 0
+        else (h_cur["streak"] - 1 if h_cur["streak"] < 0 else -1)
+    )
+    new_a_streak = (
+        (a_cur["streak"] + 1 if a_cur["streak"] > 0 else 1)
+        if raw_mar < 0
+        else (a_cur["streak"] - 1 if a_cur["streak"] < 0 else -1)
+    )
+
     h_next = {
         "elo_slow": new_h_elo_s,
         "elo_fast": new_h_elo_f,
@@ -164,6 +264,10 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
         "last_start": start_dt,
         "recent_starts": (*h_cur["recent_starts"][-11:], start_dt),
         "road_streak": 0,
+        "last_venue": h_code,
+        "home_venue_edge": new_h_venue,
+        "away_venue_edge": h_cur["away_venue_edge"],
+        "streak": new_h_streak,
         "margins": (*h_cur["margins"][-14:], raw_mar),
         "totals": (*h_cur["totals"][-14:], raw_tot),
         "games": h_cur["games"] + 1,
@@ -181,6 +285,10 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
         "last_start": start_dt,
         "recent_starts": (*a_cur["recent_starts"][-11:], start_dt),
         "road_streak": a_cur["road_streak"] + 1,
+        "last_venue": h_code,
+        "home_venue_edge": a_cur["home_venue_edge"],
+        "away_venue_edge": new_a_venue,
+        "streak": new_a_streak,
         "margins": (*a_cur["margins"][-14:], -raw_mar),
         "totals": (*a_cur["totals"][-14:], raw_tot),
         "games": a_cur["games"] + 1,
@@ -367,15 +475,39 @@ def build_pregame_features(
     net_rtg_diff = home_net_rtg - away_net_rtg
     expected_pace = 0.5 * (h_pace + a_pace)
 
+    dist_h, tz_h, _alt_climb_h = _compute_travel_leg(h_snap["last_venue"], home_team, home_team)
+    dist_a, tz_a, alt_climb_a = _compute_travel_leg(a_snap["last_venue"], home_team, away_team)
+    first_home_from_road = 1.0 if (dist_h > 700.0 and h_rest <= 2.0) else 0.0
+    travel_miles_diff = dist_a - dist_h
+    travel_diff_edge = 0.22 * (travel_miles_diff / 1000.0) + 0.12 * (tz_a - tz_h)
+
     h_b2b_pen = -1.60 if h_rest <= 1.0 else (0.30 if h_rest >= 3.0 else 0.0)
     a_b2b_pen = -2.10 if a_rest <= 1.0 else (0.20 if a_rest >= 3.0 else 0.0)
     b2b_advantage = h_b2b_pen - a_b2b_pen
 
-    h_fatigue = h_b2b_pen - 0.50 * max(0, h_g4 - 1) - 0.20 * max(0, h_g7 - 3)
-    a_fatigue = a_b2b_pen - 0.60 * max(0, a_g4 - 1) - 0.25 * max(0, a_g7 - 3) - 0.22 * min(4, a_snap["road_streak"])
+    h_fatigue = (
+        h_b2b_pen
+        - 0.50 * max(0, h_g4 - 1)
+        - 0.20 * max(0, h_g7 - 3)
+        - 0.85 * first_home_from_road
+        + 0.50 * travel_diff_edge
+    )
+    a_fatigue = (
+        a_b2b_pen
+        - 0.60 * max(0, a_g4 - 1)
+        - 0.25 * max(0, a_g7 - 3)
+        - 0.22 * min(4, a_snap["road_streak"])
+        - 0.50 * travel_diff_edge
+    )
     fatigue_diff = h_fatigue - a_fatigue
 
-    altitude_advantage = (1.35 if home_team in HIGH_ALTITUDE_TEAMS else 0.0) * (1.30 if a_rest <= 1.0 else 1.0)
+    c_alt = ARENA_GEODESIC_DATA.get(home_team, (39.0, -98.0, -6.0, 500.0))[3]
+    altitude_advantage = (
+        1.35 * min(1.15, alt_climb_a / 4200.0) if c_alt >= 4000.0 else 0.0
+    ) * (1.30 if a_rest <= 1.0 else 1.0)
+
+    venue_split_diff = float(h_snap["home_venue_edge"] - a_snap["away_venue_edge"])
+    streak_diff = float(h_snap["streak"] - a_snap["streak"])
     matchup_mismatch = (h_off - a_def) - (a_off - h_def)
 
     scale_100 = 100.0 / LEAGUE_PACE_BASE
@@ -434,6 +566,11 @@ def build_pregame_features(
         "b2b_advantage": round(b2b_advantage, 4),
         "fatigue_diff": round(fatigue_diff, 4),
         "altitude_advantage": round(altitude_advantage, 4),
+        "travel_miles_diff": round(travel_miles_diff, 1),
+        "away_tz_change": round(tz_a, 1),
+        "first_home_from_road": round(first_home_from_road, 1),
+        "venue_split_diff": round(venue_split_diff, 4),
+        "streak_diff": round(streak_diff, 1),
         "home_recent_margin": round(home_recent_net, 4),
         "away_recent_margin": round(away_recent_net, 4),
         "recent_margin_diff": round(home_recent_net - away_recent_net, 4),

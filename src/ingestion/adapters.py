@@ -182,6 +182,8 @@ class TheOddsAPIAdapter:
 
             pinnacle_home_odds: float | None = None
             pinnacle_away_odds: float | None = None
+            all_home_prices: list[float] = []
+            all_away_prices: list[float] = []
 
             # Also track totals grouped by point line
             totals_by_line: dict[float, dict[str, Any]] = defaultdict(
@@ -192,6 +194,10 @@ class TheOddsAPIAdapter:
                     "best_under": 0.0,
                     "best_under_book": "",
                     "under_counterpart": 0.0,
+                    "pinnacle_over": None,
+                    "pinnacle_under": None,
+                    "over_prices": [],
+                    "under_prices": [],
                     "has_pinnacle": False,
                     "book_count": 0,
                 }
@@ -217,6 +223,8 @@ class TheOddsAPIAdapter:
                             elif code == away_code:
                                 a_price = price
                         if h_price and a_price and h_price > 1.0 and a_price > 1.0:
+                            all_home_prices.append(h_price)
+                            all_away_prices.append(a_price)
                             if b_key == "pinnacle":
                                 pinnacle_home_odds = h_price
                                 pinnacle_away_odds = a_price
@@ -246,8 +254,12 @@ class TheOddsAPIAdapter:
                         if line_pt is not None and over_p and under_p and over_p > 1.0 and under_p > 1.0:
                             entry = totals_by_line[line_pt]
                             entry["book_count"] += 1
+                            entry["over_prices"].append(over_p)
+                            entry["under_prices"].append(under_p)
                             if b_key == "pinnacle":
                                 entry["has_pinnacle"] = True
+                                entry["pinnacle_over"] = over_p
+                                entry["pinnacle_under"] = under_p
                             if over_p > entry["best_over"]:
                                 entry["best_over"] = over_p
                                 entry["best_over_book"] = f"{b_title} (LineShop)"
@@ -257,10 +269,12 @@ class TheOddsAPIAdapter:
                                 entry["best_under_book"] = f"{b_title} (LineShop)"
                                 entry["under_counterpart"] = over_p
 
-            # Use Pinnacle counterpart odds if available so de-vigged fair probability reflects Pinnacle's sharp line
+            # Use Pinnacle counterpart odds if available, otherwise median consensus across sportsbooks (NBA_Betting)
             if best_home_odds > 1.0 and best_away_odds > 1.0:
-                h_counter = pinnacle_away_odds if pinnacle_away_odds else best_home_counterpart
-                a_counter = pinnacle_home_odds if pinnacle_home_odds else best_away_counterpart
+                med_away = float(np.median(all_away_prices)) if len(all_away_prices) >= 2 else best_home_counterpart
+                med_home = float(np.median(all_home_prices)) if len(all_home_prices) >= 2 else best_away_counterpart
+                h_counter = pinnacle_away_odds if pinnacle_away_odds else med_away
+                a_counter = pinnacle_home_odds if pinnacle_home_odds else med_home
                 by_matchup[(matchday_date, away_code, home_code)].extend(
                     [
                         {
@@ -295,6 +309,12 @@ class TheOddsAPIAdapter:
                 )[0]
                 t_info = totals_by_line[chosen_line]
                 if t_info["best_over"] > 1.0 and t_info["best_under"] > 1.0:
+                    over_cnt = t_info["pinnacle_under"] or (
+                        float(np.median(t_info["under_prices"])) if len(t_info["under_prices"]) >= 2 else t_info["over_counterpart"]
+                    )
+                    under_cnt = t_info["pinnacle_over"] or (
+                        float(np.median(t_info["over_prices"])) if len(t_info["over_prices"]) >= 2 else t_info["under_counterpart"]
+                    )
                     by_matchup[(matchday_date, away_code, home_code)].extend(
                         [
                             {
@@ -303,7 +323,7 @@ class TheOddsAPIAdapter:
                                 "selection": "OVER",
                                 "line_value": float(chosen_line),
                                 "decimal_odds": round(float(t_info["best_over"]), 4),
-                                "counterpart_decimal_odds": round(float(t_info["over_counterpart"]), 4),
+                                "counterpart_decimal_odds": round(float(over_cnt), 4),
                                 "captured_at": now_utc,
                                 "is_closing_line": 0,
                             },
@@ -313,7 +333,7 @@ class TheOddsAPIAdapter:
                                 "selection": "UNDER",
                                 "line_value": float(chosen_line),
                                 "decimal_odds": round(float(t_info["best_under"]), 4),
-                                "counterpart_decimal_odds": round(float(t_info["under_counterpart"]), 4),
+                                "counterpart_decimal_odds": round(float(under_cnt), 4),
                                 "captured_at": now_utc,
                                 "is_closing_line": 0,
                             },

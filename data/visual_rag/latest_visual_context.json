@@ -8,49 +8,49 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard is Questionable for Friday's (Nov. 6) game against the Hornets.",
-      "relevance_score": 0.2373,
+      "relevance_score": 0.2288,
       "captured_at": "2026-11-05"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Payton Pritchard G Nov 6 Day-To-Day Nov 5: Pritchard (eye) is questionable for Friday against Charlotte, Taylor Snow of the Celtics' official site reports.",
+      "relevance_score": 0.19,
+      "captured_at": "2026-11-05T23:31:24Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Tyrese Proctor G Nov 6 Day-To-Day Nov 4: Proctor exited Wednesday's 124-116 loss to the Thunder in the fourth quarter and did not return due to an apparent ankle injury, finishing with 11 points (4-7 FG, 2-3 3Pt, 1-1 FT)",
+      "relevance_score": 0.1657,
+      "captured_at": "2026-11-05T23:31:24Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.157,
+      "relevance_score": 0.1642,
       "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-      "relevance_score": 0.1564,
+      "relevance_score": 0.1636,
       "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
-      "relevance_score": 0.1553,
+      "relevance_score": 0.1624,
       "captured_at": "2026-11-05"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
-      "relevance_score": 0.155,
-      "captured_at": "2026-11-05T22:50:18Z"
+      "relevance_score": 0.1621,
+      "captured_at": "2026-11-05T23:31:24Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
-      "relevance_score": 0.1537,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Kon Knueppel (SF) Day To Day (Leg): Knueppel did not return to Wednesday's (Nov. 4) game against the Nets.",
-      "relevance_score": 0.1529,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen did not return to Wednesday's (Nov. 4) game versus the Thunder.",
-      "relevance_score": 0.1507,
+      "relevance_score": 0.1608,
       "captured_at": "2026-11-04"
     }
   ],
