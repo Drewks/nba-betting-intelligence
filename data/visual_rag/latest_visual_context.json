@@ -7,50 +7,50 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.2152,
+      "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
+      "relevance_score": 0.2045,
       "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return on Wedensday's (Nov. 4) game against the Pacers.",
-      "relevance_score": 0.2109,
-      "captured_at": "2026-11-05"
+      "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
+      "relevance_score": 0.1994,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
+      "relevance_score": 0.1986,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
+      "relevance_score": 0.1957,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHA Kon Knueppel (SF) Day To Day (Leg): Knueppel did not return to Wednesday's (Nov. 4) game against the Nets.",
+      "relevance_score": 0.1951,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen did not return to Wednesday's (Nov. 4) game versus the Thunder.",
+      "relevance_score": 0.1938,
+      "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard did not return on Wedenesday's (Nov. 4) game against the Bucks.",
-      "relevance_score": 0.2014,
-      "captured_at": "2026-11-05"
+      "relevance_score": 0.1829,
+      "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Nov. 4) game against Cleveland.",
-      "relevance_score": 0.1736,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Wednesday's (Nov. 4) game against Cleveland.",
-      "relevance_score": 0.1711,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Thomas Sorber (C) Day To Day (Knee): Sorber did not play on Wednesday's (Nov. 4) game against Cleveland.",
-      "relevance_score": 0.1616,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Grant Williams (PF) Day To Day (Hamstring): Williams did not play on Wednesday's (Nov. 4) game against the Nets.",
-      "relevance_score": 0.1608,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "NOP Yves Missi (C) Day To Day (Knee): Missi did not play on Wednesday's (Nov. 4) game against Utah.",
-      "relevance_score": 0.1598,
+      "relevance_score": 0.1602,
       "captured_at": "2026-11-05"
     }
   ],

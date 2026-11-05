@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-05 09:44 (Hora Perú UTC-5)` (`2026-11-05T14:44:38Z`)
+- **Última actualización**: `2026-11-05 13:18 (Hora Perú UTC-5)` (`2026-11-05T18:18:04Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/96.45 PEN`** (`-3.55 PEN`)
 - **ROI Actual**: `-15.03%` | **Yield Actual**: `-14.20%` | **CLV Promedio**: `+1.17%` | **Max Drawdown**: `6.09%` | **Apuestas en espera**: `1` (`S/1.39 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
