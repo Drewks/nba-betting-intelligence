@@ -1,43 +1,44 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-05T07:22:42Z",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-05T14:44:35Z",
   "ingested_dates": [
+    "2026-11-04",
     "2026-11-05",
     "2026-11-06"
   ],
   "closing_lines_promoted": 0,
-  "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 1,
+  "bets_settled_in_cycle": 3,
+  "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic"
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 97.4362,
-    "cumulative_net_profit_pen": -2.5638,
-    "pending_exposure_pen": 6.25,
-    "available_balance_pen": 91.1862,
-    "settled_bets_count": 17,
-    "pending_bets_count": 4
+    "settled_bankroll_pen": 96.4525,
+    "cumulative_net_profit_pen": -3.5475,
+    "pending_exposure_pen": 1.39,
+    "available_balance_pen": 95.0625,
+    "settled_bets_count": 20,
+    "pending_bets_count": 1
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 97.4362,
-    "net_profit_pen": -2.5638,
-    "roi_pct": -13.6809,
-    "yield_pct": -10.2593,
-    "settled_bets_count": 17,
-    "won_count": 7,
-    "lost_count": 10,
+    "current_settled_bankroll_pen": 96.4525,
+    "net_profit_pen": -3.5475,
+    "roi_pct": -15.0318,
+    "yield_pct": -14.1957,
+    "settled_bets_count": 20,
+    "won_count": 8,
+    "lost_count": 12,
     "push_count": 0,
-    "max_drawdown_pen": 6.2,
-    "overall_brier_score": 0.231403,
-    "baseline_brier_score": 0.254783,
-    "overall_log_loss": 0.654242,
-    "baseline_log_loss": 0.703772,
+    "max_drawdown_pen": 6.2575,
+    "overall_brier_score": 0.227718,
+    "baseline_brier_score": 0.249241,
+    "overall_log_loss": 0.645276,
+    "baseline_log_loss": 0.692054,
     "mean_clv_pct": 1.1727,
     "clv_governor_factor": 1.0
   },
@@ -58,7 +59,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-05T07:22:45Z",
+      "extracted_at": "2026-11-05T14:44:37Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -91,7 +92,7 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Nov. 4) game against Cleveland.",
-        "relevance_score": 0.1727,
+        "relevance_score": 0.1736,
         "captured_at": "2026-11-05"
       },
       {

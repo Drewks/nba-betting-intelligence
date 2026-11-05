@@ -1,10 +1,10 @@
 ---
-date_generated: 2026-11-05T07:22:46Z
-brier_score: 0.231403
-log_loss: 0.654242
+date_generated: 2026-11-05T14:44:41Z
+brier_score: 0.227718
+log_loss: 0.645276
 ---
 # Seguimiento de Calibración Probabilística (`model_calibrator`)
 
-- **Brier Score combinado (Modelos C & D)**: `0.23140` (Baseline: `0.25478`)
-- **Log Loss combinado (Modelos C & D)**: `0.65424` (Baseline: `0.70377`)
+- **Brier Score combinado (Modelos C & D)**: `0.22772` (Baseline: `0.24924`)
+- **Log Loss combinado (Modelos C & D)**: `0.64528` (Baseline: `0.69205`)
 - **Política de recalibración**: Calibración logística (`N >= 30`) e isotónica (`N >= 100`) entrenadas exclusivamente con partidos finalizados antes del timestamp de corte.
