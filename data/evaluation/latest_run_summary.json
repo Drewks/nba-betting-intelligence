@@ -1,7 +1,7 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-06T02:51:05Z",
+  "timestamp_utc": "2026-11-06T07:23:19Z",
   "ingested_dates": [
     "2026-11-06",
     "2026-11-07"
@@ -44,7 +44,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 1,
+      "events_found_today": 2,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -61,7 +61,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-06T02:51:07Z",
+      "extracted_at": "2026-11-06T07:23:24Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -74,52 +74,52 @@
     "indexed_documents_count": 124,
     "top_retrieved_context": [
       {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Jalen Johnson F Nov 6 Day-To-Day Nov 5: Johnson is questionable to suit up for Friday's game against Washington.",
-        "relevance_score": 0.2216,
-        "captured_at": "2026-11-06T02:51:08Z"
-      },
-      {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
-        "relevance_score": 0.2155,
-        "captured_at": "2026-11-06T02:51:08Z"
-      },
-      {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
-        "relevance_score": 0.2155,
-        "captured_at": "2026-11-06T02:51:08Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis is Questionable for Friday's (Nov. 6) game against the Hawks.",
+        "relevance_score": 0.2077,
+        "captured_at": "2026-11-05"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard is Questionable for Friday's (Nov. 6) game against the Hornets.",
-        "relevance_score": 0.2087,
+        "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Friday's (Nov. 6) game against the Wizards.",
+        "relevance_score": 0.207,
         "captured_at": "2026-11-05"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-        "relevance_score": 0.182,
+        "relevance_score": 0.2046,
         "captured_at": "2026-11-04"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-        "relevance_score": 0.1813,
-        "captured_at": "2026-11-04"
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
+        "relevance_score": 0.2037,
+        "captured_at": "2026-11-06T07:23:25Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
-        "relevance_score": 0.18,
+        "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Friday's (Nov. 6) game against the 76ers.",
+        "relevance_score": 0.2016,
         "captured_at": "2026-11-05"
       },
       {
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
+        "relevance_score": 0.1995,
+        "captured_at": "2026-11-06T07:23:25Z"
+      },
+      {
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
+        "relevance_score": 0.1985,
+        "captured_at": "2026-11-06T07:23:25Z"
+      },
+      {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
-        "relevance_score": 0.1782,
-        "captured_at": "2026-11-04"
+        "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabaté is Questionable for Friday's (Nov. 6) game against the Celtics.",
+        "relevance_score": 0.1981,
+        "captured_at": "2026-11-05"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
