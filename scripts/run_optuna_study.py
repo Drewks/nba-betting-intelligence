@@ -80,12 +80,14 @@ def main() -> None:
     def objective(trial: optuna.Trial) -> float:
         nonlocal best_so_far, last_print
 
-        alpha_slow = trial.suggest_float("alpha_slow", 0.020, 0.080, step=0.002)
-        alpha_fast = trial.suggest_float("alpha_fast", 0.070, 0.190, step=0.005)
-        tempo_alpha_slow = trial.suggest_float("tempo_alpha_slow", 0.025, 0.085, step=0.002)
-        tempo_alpha_fast = trial.suggest_float("tempo_alpha_fast", 0.080, 0.200, step=0.005)
-        blowout_cap = trial.suggest_float("blowout_cap", 18.0, 36.0, step=1.0)
-        market_weight = trial.suggest_float("market_model_weight", 0.15, 0.45, step=0.01)
+        alpha_slow = trial.suggest_float("alpha_slow", 0.015, 0.040, step=0.002)
+        alpha_fast = trial.suggest_float("alpha_fast", 0.120, 0.190, step=0.005)
+        tempo_alpha_slow = trial.suggest_float("tempo_alpha_slow", 0.020, 0.050, step=0.002)
+        tempo_alpha_fast = trial.suggest_float("tempo_alpha_fast", 0.060, 0.110, step=0.005)
+        blowout_cap = trial.suggest_float("blowout_cap", 22.0, 30.0, step=1.0)
+        market_weight = trial.suggest_float("market_model_weight", 0.10, 0.25, step=0.01)
+        spread_sigma = trial.suggest_float("spread_sigma", 10.2, 13.0, step=0.1)
+        momentum_blend = trial.suggest_float("momentum_blend_weight", 0.75, 0.95, step=0.01)
 
         _, anch_preds, y_true = _simulate_parametric_ratings_and_preds(
             games=games,
@@ -95,6 +97,8 @@ def main() -> None:
             tempo_alpha_fast=tempo_alpha_fast,
             blowout_cap=blowout_cap,
             market_model_weight=market_weight,
+            spread_sigma=spread_sigma,
+            momentum_blend_weight=momentum_blend,
             eval_slice_size=args.eval_slice,
         )
         brier = compute_brier_score(anch_preds, y_true)
@@ -140,13 +144,15 @@ def main() -> None:
         tempo_alpha_fast=best_params["tempo_alpha_fast"],
         blowout_cap=best_params["blowout_cap"],
         market_model_weight=best_params["market_model_weight"],
+        spread_sigma=best_params.get("spread_sigma", 11.6),
+        momentum_blend_weight=best_params.get("momentum_blend_weight", 0.88),
         eval_slice_size=args.eval_slice,
     )
     final_brier = compute_brier_score(best_anch, best_y)
     final_logloss = compute_log_loss(best_anch, best_y)
 
     summary: dict[str, Any] = {
-        "study_type": "MASSIVE_OPTUNA_TPE_WALK_FORWARD_1000",
+        "study_type": "OPTUNA_TPE_8_HYPERPARAMETERS_STUDY",
         "optimized_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "total_historical_games": len(games),
         "evaluation_slice_size": len(best_y),
@@ -171,6 +177,8 @@ def main() -> None:
             "tempo_alpha_fast": "Tasa de ajuste de ritmo de alta frecuencia",
             "blowout_cap": "Umbral de margen Huber para filtrar minutos basura en palizas",
             "market_model_weight": "Ponderación bayesiana del modelo vs consenso de mercado de apuestas",
+            "spread_sigma": "Desviación típica del margen para conversión a probabilidad (CDF Normal)",
+            "momentum_blend_weight": "Ponderación entre rating estructural base y momentum reciente",
         },
     }
 

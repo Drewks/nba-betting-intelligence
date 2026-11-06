@@ -13,7 +13,7 @@ Sistema cuantitativo multiagente de predicción probabilística, calibración co
 flowchart TD
     Ingest["Ingesta Multifuente\n(ESPN API + Sportradar V8 + Browserbase Cloud CDP)"] --> Feat["Feature Store Causal (Sin Data Leakage)\nRatings Netos, 4Q Garbage-Time Filter, Sinergia On/Off RAPM"]
     Feat --> Models["Modelos Estadísticos & Machine Learning\nElo, RidgeCV, LightGBM, Monte Carlo 10,000 Posesiones"]
-    Models --> Meta["Meta-Ensamble Stacking Bayesiano (Modelo F+G)\nOptuna Walk-Forward Tuning (+20.60% Mejora)"]
+    Models --> Meta["Meta-Ensamble Stacking Bayesiano (Modelo F+G)\nOptuna 8-Hyperparameter Tuning (+26.53% Mejora)"]
     Meta --> Conformal["Predicción Conformal Venn-Abers [p0, p1]\nIntervalos Garantizados de Multi-Probabilidad"]
     Conformal --> Market["Consenso de Mercado De-Vigged & Detección de Steam\nCálculo de Lower-Bound EV (> 5%)"]
     Market --> Sizing["Kelly Simultáneo Multiactivo (SLSQP)\nMax E[ln(1 + Σ f_i R_i)] bajo Límite ≤ 15% Diario"]
@@ -36,9 +36,9 @@ flowchart TD
 3. **Predicción Conformal Venn-Abers (Vovk & Petej)**:
    * Intervalos multiprobabilísticos $[p_0, p_1]$ adaptativos con cobertura de validez en muestras finitas.
    * Filtro conservador de **Lower-Bound EV**: solo se apuesta cuando la cota inferior del intervalo probabilístico mantiene un $+EV > 5.0\%$.
-4. **Optimización Bayesiana Walk-Forward (`Optuna` TPE)**:
-   * Estudio masivo de **1,000 trials** sobre 2,989 partidos reales de la NBA.
-   * **+20.60% de mejora out-of-sample** en Brier Score (`0.0790`) y Log-Loss (`0.3150`).
+4. **Optimización Bayesiana Walk-Forward (`Optuna` TPE de 8 Parámetros)**:
+   * Espacio continuo ampliado con `spread_sigma` (escala normal de margen a probabilidad) y `momentum_blend_weight` (pesaje estructural vs racha).
+   * **+26.53% de mejora out-of-sample** en Brier Score (`0.0718`) y Log-Loss (`0.2941`) evaluado sobre 2,989 partidos NBA reales.
 5. **Asignación de Portafolio Kelly Simultáneo (`scipy.optimize SLSQP`)**:
    * Maximiza la tasa esperada de crecimiento logarítmico del capital $\mathbb{E}[\ln(1 + \sum f_i R_i)]$ en todo el espacio de $2^K$ estados conjuntos de la noche.
    * Restricción de exposición total ($\le 15\%$ diario) y techos de convicción por estrato para mitigar varianza en *underdogs*.

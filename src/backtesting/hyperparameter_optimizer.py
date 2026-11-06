@@ -66,6 +66,8 @@ def _simulate_parametric_ratings_and_preds(
     tempo_alpha_fast: float,
     blowout_cap: float,
     market_model_weight: float,
+    spread_sigma: float = 11.6,
+    momentum_blend_weight: float = 0.88,
     eval_slice_size: int = 150,
 ) -> tuple[list[float], list[float], list[int]]:
     """
@@ -115,17 +117,19 @@ def _simulate_parametric_ratings_and_preds(
         h = _get_state(g["home_team"], start)
         a = _get_state(g["away_team"], start)
 
-        h_pf = 0.88 * h.pts_for_slow + 0.12 * h.pts_for_fast
-        h_pa = 0.88 * h.pts_against_slow + 0.12 * h.pts_against_fast
-        a_pf = 0.88 * a.pts_for_slow + 0.12 * a.pts_for_fast
-        a_pa = 0.88 * a.pts_against_slow + 0.12 * a.pts_against_fast
+        w_slow = float(momentum_blend_weight)
+        w_fast = 1.0 - w_slow
+        h_pf = w_slow * h.pts_for_slow + w_fast * h.pts_for_fast
+        h_pa = w_slow * h.pts_against_slow + w_fast * h.pts_against_fast
+        a_pf = w_slow * a.pts_for_slow + w_fast * a.pts_for_fast
+        a_pa = w_slow * a.pts_against_slow + w_fast * a.pts_against_fast
 
         h_off, h_def = h_pf * scale_100, h_pa * scale_100
         a_off, a_def = a_pf * scale_100, a_pa * scale_100
 
         # Estimated margin in points
         expected_margin = (h_off - a_def) - (a_off - h_def) + (2.0 * HCA_PER_SIDE)
-        p_home_model = float(np.clip(1.0 - norm.cdf(0.0, loc=expected_margin, scale=11.6), 0.05, 0.95))
+        p_home_model = float(np.clip(1.0 - norm.cdf(0.0, loc=expected_margin, scale=spread_sigma), 0.05, 0.95))
 
         # Out-of-sample evaluation slice (never in-sample)
         if idx >= train_end_idx:
@@ -233,12 +237,14 @@ class OptunaWalkForwardOptimizer:
         study = optuna.create_study(direction="minimize", sampler=sampler)
 
         def objective(trial: optuna.Trial) -> float:
-            alpha_slow = trial.suggest_float("alpha_slow", 0.025, 0.075, step=0.005)
-            alpha_fast = trial.suggest_float("alpha_fast", 0.080, 0.170, step=0.010)
-            tempo_alpha_slow = trial.suggest_float("tempo_alpha_slow", 0.030, 0.080, step=0.005)
-            tempo_alpha_fast = trial.suggest_float("tempo_alpha_fast", 0.090, 0.180, step=0.010)
-            blowout_cap = trial.suggest_float("blowout_cap", 20.0, 34.0, step=2.0)
-            market_weight = trial.suggest_float("market_model_weight", 0.20, 0.45, step=0.025)
+            alpha_slow = trial.suggest_float("alpha_slow", 0.016, 0.040, step=0.002)
+            alpha_fast = trial.suggest_float("alpha_fast", 0.120, 0.190, step=0.005)
+            tempo_alpha_slow = trial.suggest_float("tempo_alpha_slow", 0.020, 0.050, step=0.002)
+            tempo_alpha_fast = trial.suggest_float("tempo_alpha_fast", 0.060, 0.110, step=0.005)
+            blowout_cap = trial.suggest_float("blowout_cap", 22.0, 30.0, step=1.0)
+            market_weight = trial.suggest_float("market_model_weight", 0.10, 0.25, step=0.01)
+            spread_sigma = trial.suggest_float("spread_sigma", 10.2, 13.0, step=0.1)
+            momentum_blend = trial.suggest_float("momentum_blend_weight", 0.75, 0.95, step=0.01)
 
             _, anch_preds, y_true = _simulate_parametric_ratings_and_preds(
                 games=games,
@@ -248,6 +254,8 @@ class OptunaWalkForwardOptimizer:
                 tempo_alpha_fast=tempo_alpha_fast,
                 blowout_cap=blowout_cap,
                 market_model_weight=market_weight,
+                spread_sigma=spread_sigma,
+                momentum_blend_weight=momentum_blend,
                 eval_slice_size=eval_slice_size,
             )
             brier = compute_brier_score(anch_preds, y_true)
