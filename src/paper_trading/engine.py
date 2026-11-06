@@ -15,6 +15,7 @@ from typing import Any
 import uuid
 import numpy as np
 
+from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
 from src.storage.db import DatabaseManager
 from src.validation.validator import (
     DataValidationError,
@@ -369,6 +370,23 @@ class PaperTradingEngine:
                 ),
                 reverse=True,
             )
+            # V7 Multi-Bet Simultaneous Kelly Optimization across slate candidates
+            if proposed_stake_pen is None:
+                qualifying = [c for c in sorted_candidates if float(c.get("ev_unit", -1.0)) > self.min_ev_threshold]
+                if len(qualifying) >= 2:
+                    curr_br = self.get_bankroll_state()["settled_bankroll_pen"]
+                    max_indiv = min(0.06, self.max_stake_pen / max(1.0, curr_br))
+                    opt_picks = optimize_simultaneous_kelly_portfolio(
+                        qualifying,
+                        bankroll_pen=curr_br,
+                        max_total_exposure_fraction=0.15,
+                        max_individual_fraction=max_indiv,
+                    )
+                    pred_to_opt = {c["prediction_id"]: c for c in opt_picks if "prediction_id" in c}
+                    for c in sorted_candidates:
+                        if c.get("prediction_id") in pred_to_opt:
+                            c["kelly_recommended_stake_pen"] = pred_to_opt[c["prediction_id"]]["kelly_recommended_stake_pen"]
+                            c["kelly_optimal_fraction"] = pred_to_opt[c["prediction_id"]]["kelly_optimal_fraction"]
         else:
             sorted_candidates = sorted(
                 candidate_predictions,
@@ -565,18 +583,21 @@ class PaperTradingEngine:
             if proposed_stake_pen is not None:
                 bet_stake = stake
             elif self.dynamic_conviction_staking:
-                bet_stake = self.compute_contextual_stake_pen(
-                    calibrated_prob=float(cal_prob),
-                    decimal_odds=dec_odds,
-                    ev_unit=ev_unit,
-                    current_bankroll_pen=state["settled_bankroll_pen"],
-                    uncertainty_std=float(cand.get("uncertainty_std") or 0.05),
-                    selection=selection,
-                    overtime_prob=float(cand.get("overtime_prob") or 0.0),
-                    steam_delta=float(cand.get("steam_delta") or 0.0),
-                    conformal_width=cand.get("conformal_width"),
-                    ev_lower_bound=cand.get("ev_lower_bound"),
-                )
+                if cand.get("kelly_recommended_stake_pen") is not None:
+                    bet_stake = round(float(cand["kelly_recommended_stake_pen"]), 2)
+                else:
+                    bet_stake = self.compute_contextual_stake_pen(
+                        calibrated_prob=float(cal_prob),
+                        decimal_odds=dec_odds,
+                        ev_unit=ev_unit,
+                        current_bankroll_pen=state["settled_bankroll_pen"],
+                        uncertainty_std=float(cand.get("uncertainty_std") or 0.05),
+                        selection=selection,
+                        overtime_prob=float(cand.get("overtime_prob") or 0.0),
+                        steam_delta=float(cand.get("steam_delta") or 0.0),
+                        conformal_width=cand.get("conformal_width"),
+                        ev_lower_bound=cand.get("ev_lower_bound"),
+                    )
             elif dec_odds > 2.45:
                 bet_stake = round(max(0.50, min(self.max_stake_pen, 1.35 / (dec_odds - 0.35))), 2)
             else:

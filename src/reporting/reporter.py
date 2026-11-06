@@ -246,7 +246,7 @@ def generate_interactive_html_dashboard(
     3) Interactive Odds & Expected Value (+EV) Calculator + Key Basketball Metrics Guide.
     4) Real Bet History & Bankroll Equity Curve.
     """
-    pending_stake = round(sum(float(b["stake_pen"]) for b in espn_real_bets if b["estado"] == "PENDING"), 2)
+    pending_stake = round(sum(float(b["stake_pen"]) for b in espn_real_bets if (b.get("estado") or b.get("status")) == "PENDING"), 2)
     settled_bank = round(float(metrics.get("current_settled_bankroll_pen", 100.0)), 2)
     avail_bank = round(settled_bank - pending_stake, 2)
     payload = {
@@ -261,10 +261,10 @@ def generate_interactive_html_dashboard(
             "mean_clv_pct": round(float(metrics.get("mean_clv_pct") or 0.0), 2),
             "brier_score": round(float(metrics.get("overall_brier_score", 0.2277)), 4),
             "baseline_brier": round(float(metrics.get("baseline_brier_score", 0.2483)), 4),
-            "pending_count": sum(1 for b in espn_real_bets if b["estado"] == "PENDING"),
-            "settled_real_count": sum(1 for b in espn_real_bets if b["estado"] != "PENDING"),
-            "won_real_count": sum(1 for b in espn_real_bets if b["estado"] == "WON"),
-            "lost_real_count": sum(1 for b in espn_real_bets if b["estado"] == "LOST"),
+            "pending_count": sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) == "PENDING"),
+            "settled_real_count": sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) != "PENDING"),
+            "won_real_count": sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) == "WON"),
+            "lost_real_count": sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) == "LOST"),
         },
         "slate": slate_items,
         "real_bets": espn_real_bets,
@@ -276,7 +276,7 @@ def generate_interactive_html_dashboard(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NBA Betting Intelligence V6 — Dashboard de Apuestas, Cuotas y Estadísticas</title>
+  <title>NBA Betting Intelligence V7 — Dashboard Cuantitativo Institucional (Venn-Abers & Kelly Portfolio)</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
 </head>
 <body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 md:p-6">
@@ -286,15 +286,15 @@ def generate_interactive_html_dashboard(
       <div>
         <div class="flex items-center gap-2.5 flex-wrap">
           <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
-            MOTOR SINDICATO V6 ACTIVO
+            MOTOR CUANTITATIVO V7 ACTIVO (VENN-ABERS & SIMULTANEOUS KELLY)
           </span>
           <span class="text-xs text-[var(--muted-foreground)]" id="hdr-updated"></span>
         </div>
         <h1 class="text-xl md:text-2xl font-bold mt-2 tracking-tight">
-          🏀 Dashboard de Inteligencia NBA: Apuestas Activas, Cuotas y Estadísticas Clave
+          🏀 Dashboard de Inteligencia NBA V7: Apuestas Activas, Cuotas, Sinergia y Kelly Simultáneo
         </h1>
         <p class="text-sm text-[var(--muted-foreground)] mt-1">
-          Visualiza exactamente qué está apostando el modelo, comparativa de cuotas (Line Shopping 25+ casas), proyecciones Monte Carlo (10,000 simulaciones) y qué estadísticas pre-partido determinan cada decisión.
+          Visualiza las apuestas activas, cuotas en vivo de 25+ casas, intervalos conformales adaptativos de Venn-Abers, impacto no lineal de quintetos (Lineup Synergy), optimización simultánea de Kelly y reportes médicos en navegador.
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -406,9 +406,9 @@ def generate_interactive_html_dashboard(
         <!-- 8 Key Stats Guide -->
         <div class="lg:col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-4">
           <div>
-            <h3 class="text-base font-bold">📊 Las 8 Estadísticas y Factores que Debes Tomar en Cuenta (Motor V6)</h3>
+            <h3 class="text-base font-bold">📊 Las 10 Estadísticas y Factores que Debes Tomar en Cuenta (Motor V7)</h3>
             <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
-              Estas son las variables exactas que pondera el algoritmo antes de arriesgar un sol en cualquier partido de la NBA:
+              Estas son las variables cuantitativas e institucionales que pondera el algoritmo antes de arriesgar un sol en cualquier partido de la NBA:
             </p>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
@@ -437,9 +437,9 @@ def generate_interactive_html_dashboard(
               </p>
             </div>
             <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
-              <div class="font-bold text-sm text-rose-500">5. Parte Médico con Decaimiento de Adaptación</div>
+              <div class="font-bold text-sm text-rose-500">5. Sinergia de Quintetos y Bajas Asimétricas por Rol (V7)</div>
               <p class="text-[var(--muted-foreground)]">
-                Una baja de última hora (<code>Acute Injury</code>: hoy o esta semana) golpea al equipo al <strong>100%</strong> porque el mercado tarda en ajustar rotaciones. En cambio, lesiones crónicas (&gt;21 días) se descuentan al <strong>55%</strong> porque el equipo ya redistribuyó minutos.
+                Las bajas no son aditivas simples. Si un equipo pierde a la vez &ge;1.25 manejadores (<code>PRIMARY_INITIATOR</code>), el ataque colapsa un <strong>+32% extra</strong>; si pierde protectores de aro (<code>RIM_ANCHOR</code>), la defensa se hunde <strong>+35% extra</strong>.
               </p>
             </div>
             <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
@@ -458,6 +458,20 @@ def generate_interactive_html_dashboard(
               <div class="font-bold text-sm text-teal-500">8. Altitud (Denver / Utah) y Tendencia Arbitral</div>
               <p class="text-[var(--muted-foreground)]">
                 Visitar a <code>DEN</code> (5,280 pies) o <code>UTA</code> (4,226 pies) en el primer partido en altura castiga la resistencia visitante (+1.5 pts de ventaja local). Además, las ternas arbitrales influyen hasta ±3.5 puntos en el total por su tasa de faltas pitadas.
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-sky-500">9. Predicción Conformal Venn-Abers y Lower-Bound EV (V7)</div>
+              <p class="text-[var(--muted-foreground)]">
+                En lugar de confiar en una probabilidad puntual, calculamos el intervalo garantizado <code>[p0, p1]</code> con calibración finita. Solo se confirma la apuesta si el límite inferior conservador mantiene <strong>EV positivo</strong> ante la cuota de la casa.
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-orange-500">10. Optimización de Portafolio Kelly Simultáneo (V7)</div>
+              <p class="text-[var(--muted-foreground)]">
+                Cuando coinciden múltiples partidos la misma noche, un solver matemático (<code>scipy SLSQP</code>) maximiza el logaritmo de crecimiento de banca <code>E[ln(1 + &sum; f_i R_i)]</code>, protegiendo contra rachas adversas simultáneas.
+              </p>
+            </div>
               </p>
             </div>
           </div>

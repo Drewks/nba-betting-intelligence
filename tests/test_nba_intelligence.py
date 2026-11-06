@@ -1542,4 +1542,78 @@ def test_30_optuna_walk_forward_hyperparameter_optimization(tmp_path: Path) -> N
     assert 0.20 <= best_p["market_model_weight"] <= 0.45
 
 
+# 31. V7 Fase 5: Optimización de Portafolio Kelly Simultáneo Multi-Partido (scipy.optimize)
+def test_31_simultaneous_kelly_portfolio_optimization(tmp_path: Path) -> None:
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
+    from src.storage.db import DatabaseManager
+
+    # 1. Single bet returns exact fractional Kelly stake
+    single_cand = [{"estimated_probability": 0.60, "decimal_odds_used": 1.95}]
+    single_res = optimize_simultaneous_kelly_portfolio(single_cand, bankroll_pen=100.0)
+    assert len(single_res) == 1
+    assert "kelly_optimal_fraction" in single_res[0]
+    assert 1.00 <= single_res[0]["kelly_recommended_stake_pen"] <= 6.00
+
+    # 2. Multi-bet simultaneous optimization across 3 games
+    slate_candidates = [
+        {"game_id": "G1", "selection": "HOME", "estimated_probability": 0.64, "decimal_odds_used": 1.88},  # Strong edge
+        {"game_id": "G2", "selection": "HOME", "estimated_probability": 0.58, "decimal_odds_used": 1.95},  # Medium edge
+        {"game_id": "G3", "selection": "AWAY", "estimated_probability": 0.53, "decimal_odds_used": 2.15},  # Lean edge
+    ]
+    opt_slate = optimize_simultaneous_kelly_portfolio(
+        slate_candidates,
+        bankroll_pen=100.0,
+        max_total_exposure_fraction=0.15,
+        max_individual_fraction=0.06,
+        fractional_multiplier=0.50,
+    )
+    assert len(opt_slate) == 3
+    total_frac = sum(c["kelly_optimal_fraction"] for c in opt_slate)
+    assert total_frac <= 0.150001
+    for c in opt_slate:
+        assert c["kelly_optimal_fraction"] <= 0.060001
+        assert 1.00 <= c["kelly_recommended_stake_pen"] <= 6.00
+
+    # Stronger edge receives more capital than lean edge
+    assert opt_slate[0]["kelly_recommended_stake_pen"] >= opt_slate[2]["kelly_recommended_stake_pen"]
+
+    # 3. Integration with PaperTradingEngine matchday batch allocation
+    db = DatabaseManager(tmp_path / "test_p31.sqlite3")
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0, dynamic_conviction_staking=True)
+    p1 = _seed_sample_game_and_prediction(db, "G_BAT_1")
+    p2 = _seed_sample_game_and_prediction(db, "G_BAT_2")
+    batch_candidates = [
+        {
+            "prediction_id": p1,
+            "game_id": "G_BAT_1",
+            "market": "moneyline",
+            "selection": "HOME",
+            "decimal_odds_used": 1.92,
+            "calibrated_probability": 0.62,
+            "ev_unit": 0.09,
+            "ev_pct": 9.0,
+            "model_version_id": "model_c_test_v1",
+            "emitted_at": "2026-10-20T20:00:00Z",
+        },
+        {
+            "prediction_id": p2,
+            "game_id": "G_BAT_2",
+            "market": "moneyline",
+            "selection": "AWAY",
+            "decimal_odds_used": 2.10,
+            "calibrated_probability": 0.56,
+            "ev_unit": 0.08,
+            "ev_pct": 8.0,
+            "model_version_id": "model_c_test_v1",
+            "emitted_at": "2026-10-20T20:00:00Z",
+        },
+    ]
+    decisions = engine.evaluate_and_record_matchday_selections("2026-10-20", batch_candidates)
+    assert len(decisions["placed_bets"]) == 2
+    for b in decisions["placed_bets"]:
+        assert 1.00 <= b["stake_pen"] <= 6.00
+
+
+
 

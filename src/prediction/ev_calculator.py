@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 from typing import Any
+import numpy as np
+from scipy.optimize import minimize
 
 from src.calibration.calibrator import conformal_lower_bound_ev
 from src.validation.validator import DataValidationError, validate_odds_record
@@ -230,3 +233,100 @@ def evaluate_market_opportunity(
         "ev_lower_bound": round(float(ev_lb_unit), 6),
         "ev_lower_bound_pct": ev_lb_pct,
     }
+
+
+def optimize_simultaneous_kelly_portfolio(
+    candidates: list[dict[str, Any]],
+    bankroll_pen: float,
+    max_total_exposure_fraction: float = 0.15,
+    max_individual_fraction: float = 0.06,
+    fractional_multiplier: float = 0.50,
+) -> list[dict[str, Any]]:
+    """
+    V7 Fase 5: Multi-Bet Simultaneous Kelly Portfolio Optimization (scipy.optimize SLSQP).
+    Maximizes expected logarithmic bankroll growth E[ln(1 + sum(f_i * R_i))] across simultaneous
+    independent game outcomes under a convex joint risk constraint, allocating more capital to
+    picks with superior EV / Uncertainty trade-offs.
+    """
+    if not candidates or bankroll_pen <= 0.0:
+        return candidates
+
+    enriched = [dict(c) for c in candidates]
+    k = len(enriched)
+
+    # Extract probabilities and decimal odds
+    probs: list[float] = []
+    odds: list[float] = []
+    for c in enriched:
+        p = float(c.get("estimated_probability") or c.get("calibrated_probability") or 0.50)
+        o = float(c.get("decimal_odds_used") or c.get("decimal_odds") or 1.90)
+        probs.append(float(np.clip(p, 0.02, 0.98)))
+        odds.append(max(1.05, o))
+
+    p_arr = np.asarray(probs, dtype=float)
+    o_arr = np.asarray(odds, dtype=float)
+
+    # Single-bet exact Kelly formula shortcut
+    if k == 1:
+        p_val = p_arr[0]
+        o_val = o_arr[0]
+        b_val = o_val - 1.0
+        f_star = max(0.0, (p_val * (b_val + 1.0) - 1.0) / b_val)
+        eff_f = min(max_individual_fraction, f_star * fractional_multiplier)
+        if p_val < 0.50:
+            t_cap, t_min = 1.75, 1.00
+        elif p_val < 0.58:
+            t_cap, t_min = 3.35, 2.00
+        elif p_val < 0.65:
+            t_cap, t_min = 4.75, 3.50
+        else:
+            t_cap, t_min = min(6.00, bankroll_pen * max_individual_fraction), 4.80
+        raw_s = bankroll_pen * eff_f
+        stake = round(max(t_min, min(t_cap, raw_s if raw_s > 0 else t_min)), 2)
+        enriched[0]["kelly_optimal_fraction"] = round(float(eff_f), 5)
+        enriched[0]["kelly_recommended_stake_pen"] = stake
+        return enriched
+
+    # Multi-bet joint state enumeration: 2^k states (fast for k <= 10)
+    states = np.asarray(list(itertools.product([0, 1], repeat=k)), dtype=float)
+    p_states = np.prod(states * p_arr + (1.0 - states) * (1.0 - p_arr), axis=1)
+
+    # Net payoffs per state: states * odds - 1
+    state_returns = states * o_arr - 1.0
+
+    def objective(f: np.ndarray) -> float:
+        # wealth = 1 + sum_i (f_i * R_i)
+        rets = np.dot(state_returns, f)
+        wealth = 1.0 + rets
+        if np.any(wealth <= 1e-5):
+            return 1e5 + float(np.sum(np.maximum(0.0, 1e-5 - wealth)) * 1e4)
+        return -float(np.sum(p_states * np.log(wealth)))
+
+    bounds = [(0.0, max_individual_fraction) for _ in range(k)]
+    constraints = {"type": "ineq", "fun": lambda f: max_total_exposure_fraction - np.sum(f)}
+    init_f = np.full(k, min(max_individual_fraction, max_total_exposure_fraction / max(1, k)))
+
+    res = minimize(objective, init_f, method="SLSQP", bounds=bounds, constraints=constraints)
+
+    raw_fractions = res.x if res.success else init_f
+    scaled_fractions = raw_fractions * fractional_multiplier
+
+    for i, c in enumerate(enriched):
+        frac = float(scaled_fractions[i])
+        p_c = p_arr[i]
+        if p_c < 0.50:
+            tier_cap, tier_min = 1.75, 1.00
+        elif p_c < 0.58:
+            tier_cap, tier_min = 3.35, 2.00
+        elif p_c < 0.65:
+            tier_cap, tier_min = 4.75, 3.50
+        else:
+            tier_cap, tier_min = min(6.00, bankroll_pen * max_individual_fraction), 4.80
+
+        raw_stake = bankroll_pen * frac
+        stake = round(max(tier_min, min(tier_cap, raw_stake if raw_stake > 0 else tier_min)), 2)
+        c["kelly_optimal_fraction"] = round(frac, 5)
+        c["kelly_recommended_stake_pen"] = stake
+
+    return enriched
+
