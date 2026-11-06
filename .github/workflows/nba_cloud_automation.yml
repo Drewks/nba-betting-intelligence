@@ -136,17 +136,29 @@ jobs:
           publish_branch: gh-pages
           keep_files: false
 
-      - name: 8. Configurar entorno de GitHub Pages
+  deploy-pages:
+    needs: run-nba-intelligence-cycle
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 1. Clonar repositorio
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 2. Configurar entorno de GitHub Pages
         uses: actions/configure-pages@v5
         continue-on-error: true
 
-      - name: 9. Subir artefacto web de Pages
+      - name: 3. Subir artefacto web de Pages
         uses: actions/upload-pages-artifact@v3
         continue-on-error: true
         with:
           path: 'docs/'
 
-      - name: 10. Desplegar en vivo en GitHub Pages
+      - name: 4. Desplegar en vivo en GitHub Pages
         id: deployment
         continue-on-error: true
         uses: actions/deploy-pages@v4

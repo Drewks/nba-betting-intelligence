@@ -21,6 +21,9 @@ concurrency:
 
 jobs:
   deploy-pages:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-24.04
     steps:
       - name: 1. Clonar repositorio
@@ -36,26 +39,22 @@ jobs:
 
       - name: 3. Publicar en rama gh-pages (Compatible con Deploy from a branch)
         uses: peaceiris/actions-gh-pages@v4
+        continue-on-error: true
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs
           publish_branch: gh-pages
           keep_files: false
 
-      - name: 4. Configurar GitHub Pages (Compatible con GitHub Actions source)
+      - name: 4. Configurar GitHub Pages
         id: pages_config
         uses: actions/configure-pages@v5
-        continue-on-error: true
 
       - name: 5. Subir artefacto web de Pages
-        if: steps.pages_config.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
-        continue-on-error: true
         with:
           path: 'docs/'
 
-      - name: 6. Desplegar mediante GitHub Actions
-        if: steps.pages_config.outcome == 'success'
+      - name: 6. Desplegar en vivo en GitHub Pages
         id: deployment
-        continue-on-error: true
         uses: actions/deploy-pages@v4
