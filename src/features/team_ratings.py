@@ -152,6 +152,12 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
         capped_total = max(league_total - 38.0, min(league_total + 38.0, reg_total))
         tempo_err = capped_total - exp_game_total
 
+        # V7 Garbage-Time Possession Filter:
+        # When raw_margin exceeds 18 pts, 4th-quarter bench units inflate/deflate tempo and uncontested points.
+        # Discount tempo_err and fast-horizon volatility proportionally to garbage-time share.
+        clean_possession_weight = max(0.58, min(1.0, 1.0 - 0.020 * max(0.0, abs(raw_margin) - 18.0)))
+        effective_tempo_err = tempo_err * clean_possession_weight
+
         # Huber blowout cap so 40-point tanking blowouts do not distort team efficiency
         capped_margin = max(-BLOWOUT_CAP_MARGIN, min(BLOWOUT_CAP_MARGIN, raw_margin))
         adj_hs = 0.5 * (capped_total + capped_margin)
@@ -163,13 +169,14 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
         a_for_adj = (adj_as + HCA_PER_SIDE) - (h.pts_against_slow - league_ppg) - 0.35 * h.tempo_slow
         a_against_adj = (adj_hs - HCA_PER_SIDE) - (h.pts_for_slow - league_ppg) - 0.35 * h.tempo_slow
 
+        fast_alpha_eff = EWMA_ALPHA_FAST * clean_possession_weight
         for st, f_adj, ag_adj in ((h, h_for_adj, h_against_adj), (a, a_for_adj, a_against_adj)):
             st.pts_for_slow += EWMA_ALPHA_SLOW * (f_adj - st.pts_for_slow)
             st.pts_against_slow += EWMA_ALPHA_SLOW * (ag_adj - st.pts_against_slow)
-            st.pts_for_fast += EWMA_ALPHA_FAST * (f_adj - st.pts_for_fast)
-            st.pts_against_fast += EWMA_ALPHA_FAST * (ag_adj - st.pts_against_fast)
-            st.tempo_slow += TEMPO_ALPHA_SLOW * tempo_err
-            st.tempo_fast += TEMPO_ALPHA_FAST * tempo_err
+            st.pts_for_fast += fast_alpha_eff * (f_adj - st.pts_for_fast)
+            st.pts_against_fast += fast_alpha_eff * (ag_adj - st.pts_against_fast)
+            st.tempo_slow += TEMPO_ALPHA_SLOW * effective_tempo_err
+            st.tempo_fast += TEMPO_ALPHA_FAST * effective_tempo_err
             st.last_start = start
             st.games += 1
 
@@ -246,3 +253,181 @@ def apply_pregame_team_ratings(db: Any) -> int:
             rows,
         )
     return len(rows)
+
+
+# V7 Lineup Synergy & On/Off RAPM Role Profiles:
+# (net_rapm_pts, off_share, def_share, pace_delta_when_out, tactical_role)
+PLAYER_ON_OFF_SYNERGY_PROFILES: dict[str, tuple[float, float, float, float, str]] = {
+    # Primary Playmaking Hubs / Ball-Handlers (Offense-heavy impact + pace/turnover control)
+    "Nikola Jokic": (6.8, 0.72, 0.28, -1.1, "PRIMARY_INITIATOR"),
+    "Luka Doncic": (6.2, 0.78, 0.22, -0.8, "PRIMARY_INITIATOR"),
+    "Shai Gilgeous-Alexander": (6.0, 0.68, 0.32, -0.6, "PRIMARY_INITIATOR"),
+    "Stephen Curry": (5.0, 0.80, 0.20, -1.2, "PRIMARY_INITIATOR"),
+    "Jalen Brunson": (4.5, 0.76, 0.24, -0.5, "PRIMARY_INITIATOR"),
+    "Tyrese Haliburton": (4.2, 0.82, 0.18, -1.6, "PRIMARY_INITIATOR"),
+    "Ja Morant": (4.2, 0.74, 0.26, -1.3, "PRIMARY_INITIATOR"),
+    "Damian Lillard": (4.0, 0.80, 0.20, -0.7, "PRIMARY_INITIATOR"),
+    "Trae Young": (3.8, 0.84, 0.16, -1.4, "PRIMARY_INITIATOR"),
+    "De'Aaron Fox": (3.6, 0.72, 0.28, -1.1, "PRIMARY_INITIATOR"),
+    "Cade Cunningham": (3.5, 0.74, 0.26, -0.6, "PRIMARY_INITIATOR"),
+    "Kyrie Irving": (3.5, 0.76, 0.24, -0.5, "PRIMARY_INITIATOR"),
+    "James Harden": (3.3, 0.78, 0.22, -0.8, "PRIMARY_INITIATOR"),
+    "Darius Garland": (3.1, 0.76, 0.24, -0.6, "PRIMARY_INITIATOR"),
+    "LaMelo Ball": (3.2, 0.78, 0.22, -1.2, "PRIMARY_INITIATOR"),
+    # Rim Protectors & Interior Defensive Anchors (Defense-heavy impact)
+    "Joel Embiid": (5.8, 0.52, 0.48, -0.4, "RIM_ANCHOR"),
+    "Victor Wembanyama": (5.2, 0.34, 0.66, -0.3, "RIM_ANCHOR"),
+    "Anthony Davis": (4.6, 0.38, 0.62, -0.2, "RIM_ANCHOR"),
+    "Domantas Sabonis": (4.0, 0.62, 0.38, -0.7, "RIM_ANCHOR"),
+    "Chet Holmgren": (3.5, 0.36, 0.64, -0.2, "RIM_ANCHOR"),
+    "Bam Adebayo": (3.5, 0.35, 0.65, -0.2, "RIM_ANCHOR"),
+    "Jaren Jackson Jr.": (3.5, 0.32, 0.68, 0.3, "RIM_ANCHOR"),
+    "Karl-Anthony Towns": (3.4, 0.64, 0.36, -0.3, "RIM_ANCHOR"),
+    "Rudy Gobert": (3.3, 0.22, 0.78, 0.4, "RIM_ANCHOR"),
+    "Evan Mobley": (3.2, 0.34, 0.66, 0.2, "RIM_ANCHOR"),
+    "Kristaps Porzingis": (3.0, 0.45, 0.55, -0.2, "RIM_ANCHOR"),
+    "Jarrett Allen": (2.8, 0.35, 0.65, 0.2, "RIM_ANCHOR"),
+    "Jusuf Nurkic": (2.2, 0.40, 0.60, 0.1, "RIM_ANCHOR"),
+    # Elite Two-Way Wings & Scorers
+    "Giannis Antetokounmpo": (6.0, 0.58, 0.42, -0.9, "TWO_WAY_WING"),
+    "Jayson Tatum": (4.8, 0.58, 0.42, -0.4, "TWO_WAY_WING"),
+    "Kevin Durant": (4.5, 0.68, 0.32, -0.4, "TWO_WAY_WING"),
+    "Anthony Edwards": (4.5, 0.62, 0.38, -0.5, "TWO_WAY_WING"),
+    "LeBron James": (4.4, 0.64, 0.36, -0.6, "TWO_WAY_WING"),
+    "Donovan Mitchell": (4.3, 0.66, 0.34, -0.5, "TWO_WAY_WING"),
+    "Devin Booker": (4.2, 0.70, 0.30, -0.5, "TWO_WAY_WING"),
+    "Kawhi Leonard": (4.2, 0.54, 0.46, -0.2, "TWO_WAY_WING"),
+    "Jimmy Butler": (3.8, 0.56, 0.44, -0.3, "TWO_WAY_WING"),
+    "Lauri Markkanen": (3.8, 0.68, 0.32, -0.3, "TWO_WAY_WING"),
+    "Paolo Banchero": (3.6, 0.62, 0.38, -0.4, "TWO_WAY_WING"),
+    "Zion Williamson": (3.6, 0.66, 0.34, -0.6, "TWO_WAY_WING"),
+    "Jaylen Brown": (3.5, 0.60, 0.40, -0.3, "TWO_WAY_WING"),
+    "Paul George": (3.3, 0.56, 0.44, -0.2, "TWO_WAY_WING"),
+    "Franz Wagner": (3.1, 0.58, 0.42, -0.3, "TWO_WAY_WING"),
+    "Scottie Barnes": (3.1, 0.55, 0.45, -0.3, "TWO_WAY_WING"),
+    "Jalen Williams": (3.0, 0.56, 0.44, -0.2, "TWO_WAY_WING"),
+    "Tobias Harris": (2.0, 0.55, 0.45, -0.1, "TWO_WAY_WING"),
+}
+
+
+def compute_lineup_synergy_penalty(absent_players: list[dict[str, Any]]) -> dict[str, float]:
+    """
+    V7 LineupSynergyEngine (pbpstats On/Off RAPM Role-Cluster Model):
+    Computes non-linear compound lineup degradation when multiple players in the same tactical role
+    (PRIMARY_INITIATOR, RIM_ANCHOR, TWO_WAY_WING) are simultaneously absent, and splits the impact
+    asymmetrically into Offensive Rating penalty, Defensive Rating penalty, and Pace delta.
+    """
+    if not absent_players:
+        return {
+            "total_net_penalty": 0.0,
+            "off_rtg_penalty": 0.0,
+            "def_rtg_penalty": 0.0,
+            "pace_delta": 0.0,
+            "synergy_compound_bonus": 0.0,
+        }
+
+    off_pen_raw = 0.0
+    def_pen_raw = 0.0
+    pace_delta_raw = 0.0
+    role_effective_units: dict[str, float] = {
+        "PRIMARY_INITIATOR": 0.0,
+        "RIM_ANCHOR": 0.0,
+        "TWO_WAY_WING": 0.0,
+        "ROTATION": 0.0,
+    }
+    role_off_acc: dict[str, float] = {k: 0.0 for k in role_effective_units}
+    role_def_acc: dict[str, float] = {k: 0.0 for k in role_effective_units}
+
+    for item in absent_players:
+        p_name = str(item.get("name", "")).strip()
+        status = str(item.get("status", "out")).lower()
+        adapt_factor = float(item.get("adapt_factor", 1.0))
+        pos_hint = str(item.get("position", "")).upper()
+
+        if "out" in status:
+            prob_out = 1.00
+        elif "doubtful" in status:
+            prob_out = 0.72
+        elif "questionable" in status or "day" in status:
+            prob_out = 0.28
+        else:
+            continue
+
+        if p_name in PLAYER_ON_OFF_SYNERGY_PROFILES:
+            base_val, off_sh, def_sh, p_delta, role = PLAYER_ON_OFF_SYNERGY_PROFILES[p_name]
+            unit_weight = prob_out * adapt_factor
+        else:
+            base_val = float(item.get("default_impact", 0.45))
+            if pos_hint in ("PG", "G"):
+                off_sh, def_sh, p_delta, role = 0.68, 0.32, -0.15, "PRIMARY_INITIATOR"
+            elif pos_hint in ("C", "F-C", "C-F"):
+                off_sh, def_sh, p_delta, role = 0.36, 0.64, 0.10, "RIM_ANCHOR"
+            elif pos_hint in ("SF", "PF", "F", "SG", "G-F"):
+                off_sh, def_sh, p_delta, role = 0.54, 0.46, -0.05, "TWO_WAY_WING"
+            else:
+                off_sh, def_sh, p_delta, role = 0.50, 0.50, 0.0, "ROTATION"
+            unit_weight = prob_out * adapt_factor * (0.65 if base_val >= 1.0 else 0.35)
+
+        eff_impact = base_val * prob_out * adapt_factor
+        o_i = eff_impact * off_sh
+        d_i = eff_impact * def_sh
+
+        off_pen_raw += o_i
+        def_pen_raw += d_i
+        pace_delta_raw += p_delta * prob_out * adapt_factor
+        role_effective_units[role] = role_effective_units.get(role, 0.0) + unit_weight
+        role_off_acc[role] = role_off_acc.get(role, 0.0) + o_i
+        role_def_acc[role] = role_def_acc.get(role, 0.0) + d_i
+
+    # Non-linear compound role-cluster synergy degradation:
+    # 1. Playmaking vacuum: >= 1.25 effective initiators out compounds offensive degradation (+32%)
+    compound_off_bonus = 0.0
+    compound_def_bonus = 0.0
+    if role_effective_units["PRIMARY_INITIATOR"] >= 1.25:
+        compound_off_bonus += 0.32 * role_off_acc["PRIMARY_INITIATOR"]
+        pace_delta_raw -= 0.45
+    # 2. Rim protection collapse: >= 1.25 effective interior anchors out compounds defensive degradation (+35%)
+    if role_effective_units["RIM_ANCHOR"] >= 1.25:
+        compound_def_bonus += 0.35 * role_def_acc["RIM_ANCHOR"]
+        pace_delta_raw += 0.35
+    # 3. Wing creation depletion: >= 1.40 effective wings out compounds both sides (+22%)
+    if role_effective_units["TWO_WAY_WING"] >= 1.40:
+        compound_off_bonus += 0.22 * role_off_acc["TWO_WAY_WING"]
+        compound_def_bonus += 0.22 * role_def_acc["TWO_WAY_WING"]
+
+    # Multi-star cross-role vacuum (e.g. Jokic + Murray/Gordon or Embiid + Maxey out together)
+    total_star_units = (
+        role_effective_units["PRIMARY_INITIATOR"]
+        + role_effective_units["RIM_ANCHOR"]
+        + role_effective_units["TWO_WAY_WING"]
+    )
+    if total_star_units >= 1.75:
+        compound_off_bonus += 0.14 * off_pen_raw
+        compound_def_bonus += 0.14 * def_pen_raw
+
+    raw_sum = off_pen_raw + def_pen_raw + compound_off_bonus + compound_def_bonus
+    # Subtract normal bench injury baseline (~0.90 pt) unless explicit star compound shock
+    baseline_deduction = float(absent_players[0].get("baseline_deduction", 0.90))
+    if raw_sum <= baseline_deduction:
+        return {
+            "total_net_penalty": 0.0,
+            "off_rtg_penalty": 0.0,
+            "def_rtg_penalty": 0.0,
+            "pace_delta": 0.0,
+            "synergy_compound_bonus": 0.0,
+        }
+
+    scale_after_base = min(13.5, raw_sum - baseline_deduction) / max(1e-6, raw_sum)
+    final_off = round((off_pen_raw + compound_off_bonus) * scale_after_base, 2)
+    final_def = round((def_pen_raw + compound_def_bonus) * scale_after_base, 2)
+    final_total = round(final_off + final_def, 2)
+    final_compound = round((compound_off_bonus + compound_def_bonus) * scale_after_base, 2)
+    final_pace = round(max(-2.5, min(2.0, pace_delta_raw)), 2)
+
+    return {
+        "total_net_penalty": final_total,
+        "off_rtg_penalty": final_off,
+        "def_rtg_penalty": final_def,
+        "pace_delta": final_pace,
+        "synergy_compound_bonus": final_compound,
+    }

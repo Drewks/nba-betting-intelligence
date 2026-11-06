@@ -1353,3 +1353,55 @@ def test_27_v6_steam_moves_spread_predictions_referees_and_injury_decay(tmp_path
     )
     assert off_high_ref > off_low_ref
     assert pace_high_ref > pace_low_ref
+
+
+# 28. V7 Fase 2: Sinergia de Quintetos (LineupSynergyEngine On/Off RAPM) y Penalización No Lineal por Rol
+def test_28_lineup_synergy_nonlinear_role_penalties() -> None:
+    from src.features.team_ratings import compute_lineup_synergy_penalty
+    from src.ingestion.adapters import ESPNPublicAdapter
+
+    # 1. Single primary initiator out: offense-heavy penalty
+    single_init = compute_lineup_synergy_penalty(
+        [{"name": "Tyrese Haliburton", "status": "out", "position": "PG", "baseline_deduction": 0.0}]
+    )
+    assert single_init["off_rtg_penalty"] > single_init["def_rtg_penalty"] * 2.5
+    assert single_init["pace_delta"] < -1.0
+    assert single_init["synergy_compound_bonus"] == 0.0
+
+    # 2. Two primary initiators out simultaneously -> non-linear compound playmaking collapse (> sum of parts)
+    second_init = compute_lineup_synergy_penalty(
+        [{"name": "Darius Garland", "status": "out", "position": "PG", "baseline_deduction": 0.0}]
+    )
+    double_init = compute_lineup_synergy_penalty(
+        [
+            {"name": "Tyrese Haliburton", "status": "out", "position": "PG", "baseline_deduction": 0.0},
+            {"name": "Darius Garland", "status": "out", "position": "PG", "baseline_deduction": 0.0},
+        ]
+    )
+    assert double_init["synergy_compound_bonus"] > 1.5
+    assert double_init["total_net_penalty"] > round(
+        single_init["total_net_penalty"] + second_init["total_net_penalty"] + 1.5, 2
+    )
+
+    # 3. Rim anchor out: defense-heavy penalty
+    rim_out = compute_lineup_synergy_penalty(
+        [
+            {"name": "Rudy Gobert", "status": "out", "position": "C", "baseline_deduction": 0.0},
+            {"name": "Evan Mobley", "status": "out", "position": "C", "baseline_deduction": 0.0},
+        ]
+    )
+    assert rim_out["def_rtg_penalty"] > rim_out["off_rtg_penalty"] * 2.0
+    assert rim_out["synergy_compound_bonus"] > 1.0
+
+    # 4. Integration with _estimate_pregame_team_profile asymmetric Off/Def/Pace adjustment
+    off_healthy, def_healthy, pace_healthy = ESPNPublicAdapter._estimate_pregame_team_profile("IND", {}, is_home=True)
+    off_syn, def_syn, pace_syn = ESPNPublicAdapter._estimate_pregame_team_profile(
+        "IND",
+        {},
+        is_home=True,
+        injury_penalty=double_init["total_net_penalty"],
+        synergy_detail=double_init,
+    )
+    assert (off_healthy - off_syn) > (def_syn - def_healthy) * 2.0
+    assert pace_syn < pace_healthy
+

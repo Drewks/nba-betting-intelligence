@@ -24,6 +24,7 @@ import urllib.request
 
 import numpy as np
 
+from src.features.team_ratings import compute_lineup_synergy_penalty
 from src.ingestion.normalizer import (
     NBA_TEAMS,
     american_to_decimal_odds,
@@ -406,15 +407,18 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             return {"injury_penalties": {}, "team_box_stats": {}, "referee_total_adj": 0.0, "referee_hca_adj": 0.0}
 
         injury_penalties: dict[str, float] = {}
+        lineup_synergy_details: dict[str, dict[str, float]] = {}
         for t_inj in data.get("injuries") or []:
             raw_abbr = t_inj.get("team", {}).get("abbreviation", "")
             try:
                 t_code = normalize_team_code(raw_abbr)
             except ValueError:
                 continue
-            penalty = 0.0
+            absent_list: list[dict[str, Any]] = []
             for inj in t_inj.get("injuries") or []:
-                player_name = inj.get("athlete", {}).get("displayName", "")
+                athlete = inj.get("athlete") or {}
+                player_name = athlete.get("displayName", "")
+                pos_abbr = (athlete.get("position") or {}).get("abbreviation", "")
                 status = str(inj.get("status", "")).lower()
                 comment_blob = " ".join(
                     str(inj.get(k) or "") for k in ("shortComment", "longComment", "type")
@@ -423,15 +427,19 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 full_text = f"{comment_blob} {details_blob}"
                 # Adaptation decay: if a star has been out long-term, fast team ratings already absorbed ~45% of absence
                 adapt_factor = 0.55 if any(kw in full_text for kw in LONG_TERM_INJURY_KEYWORDS) else 1.00
-                star_val = STAR_PLAYER_IMPACT_PTS.get(player_name, 0.35) * adapt_factor
-                if "out" in status:
-                    penalty += star_val
-                elif "doubtful" in status:
-                    penalty += 0.70 * star_val
-                elif "questionable" in status or "day-to-day" in status:
-                    penalty += 0.25 * star_val
-            # Subtract normal bench injury baseline (~1.0 pt) so routine reserve absences do not bias ratings
-            injury_penalties[t_code] = round(min(11.5, max(0.0, penalty - 1.0)), 2)
+                absent_list.append(
+                    {
+                        "name": player_name,
+                        "status": status,
+                        "position": pos_abbr,
+                        "adapt_factor": adapt_factor,
+                        "default_impact": STAR_PLAYER_IMPACT_PTS.get(player_name, 0.35),
+                        "baseline_deduction": 1.0,
+                    }
+                )
+            syn_res = compute_lineup_synergy_penalty(absent_list)
+            injury_penalties[t_code] = syn_res["total_net_penalty"]
+            lineup_synergy_details[t_code] = syn_res
 
         ref_total_adj = 0.0
         ref_hca_adj = 0.0
@@ -464,6 +472,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
 
         return {
             "injury_penalties": injury_penalties,
+            "lineup_synergy_details": lineup_synergy_details,
             "team_box_stats": team_box_stats,
             "referee_total_adj": ref_total_adj,
             "referee_hca_adj": ref_hca_adj,
@@ -565,6 +574,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
 
             ref_tot = float(summary_ctx.get("referee_total_adj", 0.0))
             ref_hca = float(summary_ctx.get("referee_hca_adj", 0.0))
+            syn_details_map = summary_ctx.get("lineup_synergy_details") or {}
             home_base_off, home_base_def, home_pace = self._estimate_pregame_team_profile(
                 home_code,
                 home_comp,
@@ -576,6 +586,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 sr_split=sr_splits.get(home_code, {}),
                 referee_total_adj=ref_tot,
                 referee_hca_adj=ref_hca,
+                synergy_detail=syn_details_map.get(home_code),
             )
             away_base_off, away_base_def, away_pace = self._estimate_pregame_team_profile(
                 away_code,
@@ -588,6 +599,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 sr_split=sr_splits.get(away_code, {}),
                 referee_total_adj=ref_tot,
                 referee_hca_adj=ref_hca,
+                synergy_detail=syn_details_map.get(away_code),
             )
 
             try:
@@ -754,6 +766,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         sr_split: dict[str, float] | None = None,
         referee_total_adj: float = 0.0,
         referee_hca_adj: float = 0.0,
+        synergy_detail: dict[str, float] | None = None,
     ) -> tuple[float, float, float]:
         """
         V2 Pre-game Team Profile:
@@ -859,8 +872,15 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             if syn_pace and 92.0 <= float(syn_pace) <= 106.0:
                 base_pace = round(0.80 * base_pace + 0.20 * float(syn_pace), 2)
 
-        # 3. Real-Time Injury Report Adjustment (Phase V2.1: ESPN + Official Sportradar NBA v8)
-        if injury_penalty > 0.0:
+        # 3. Real-Time Injury Report & V7 On/Off Lineup Synergy Adjustment (Role-Cluster Non-Linear Split)
+        if synergy_detail and synergy_detail.get("total_net_penalty", 0.0) >= injury_penalty:
+            off_p = float(synergy_detail.get("off_rtg_penalty", 0.0))
+            def_p = float(synergy_detail.get("def_rtg_penalty", 0.0))
+            pace_d = float(synergy_detail.get("pace_delta", 0.0))
+            base_off = round(base_off - off_p, 2)
+            base_def = round(base_def + def_p, 2)
+            base_pace = round(max(92.0, min(106.0, base_pace + pace_d)), 2)
+        elif injury_penalty > 0.0:
             # Apply symmetrically (-50% offense, +50% defense) so missing stars shift net rating without depressing total points mean
             base_off = round(base_off - 0.50 * injury_penalty, 2)
             base_def = round(base_def + 0.50 * injury_penalty, 2)
