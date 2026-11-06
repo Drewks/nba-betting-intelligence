@@ -1,9 +1,8 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "auto",
-  "timestamp_utc": "2026-11-06T01:59:38Z",
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-06T02:51:05Z",
   "ingested_dates": [
-    "2026-11-05",
     "2026-11-06",
     "2026-11-07"
   ],
@@ -45,7 +44,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 2,
+      "events_found_today": 1,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -60,9 +59,9 @@
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
       "browserbase_cli_installed": true,
-      "browserbase_api_key_configured": false,
-      "browserbase_mode": "LOCAL_BROWSE_CLI",
-      "extracted_at": "2026-11-06T01:59:42Z",
+      "browserbase_api_key_configured": true,
+      "browserbase_mode": "REMOTE_CLOUD_CDP",
+      "extracted_at": "2026-11-06T02:51:07Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -70,27 +69,27 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
-    "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
     "indexed_documents_count": 124,
     "top_retrieved_context": [
       {
-        "source": "playwright_espn_injuries_table",
+        "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Jalen Johnson F Nov 6 Day-To-Day Nov 5: Johnson is questionable to suit up for Friday's game against Washington.",
         "relevance_score": 0.2216,
-        "captured_at": "2026-11-06T01:59:44Z"
+        "captured_at": "2026-11-06T02:51:08Z"
       },
       {
-        "source": "playwright_espn_injuries_table",
+        "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
         "relevance_score": 0.2155,
-        "captured_at": "2026-11-06T01:59:44Z"
+        "captured_at": "2026-11-06T02:51:08Z"
       },
       {
-        "source": "playwright_espn_injuries_table",
+        "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
         "relevance_score": 0.2155,
-        "captured_at": "2026-11-06T01:59:44Z"
+        "captured_at": "2026-11-06T02:51:08Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
@@ -133,7 +132,7 @@
     "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
-    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }
