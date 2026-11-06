@@ -48,7 +48,7 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 | `2026-11-06 22:00` | **SAS @ SAC** | Total Puntos (Over/Under) | **UNDER 228.5** | **1.930** *(LowVig.ag)* | 53.2% | `+2.8%` | — | S/1.68 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-06 20:00` | **OKC @ MEM** | Ganador (Moneyline) | **AWAY (OKC gana)** | **1.606** *(DraftKings)* | 63.5% | `+2.0%` | — | S/1.96 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-06 19:30` | **PHI @ CLE** | Ganador (Moneyline) | **HOME (CLE gana)** | **2.210** *(1xBet)* | 47.9% | `+5.9%` | — | S/1.36 | ⏳ PENDIENTE | Esperando final del partido |
-| `2026-11-05 21:00` | **ORL @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **1.910** *(Matchbook)* | 53.5% | `+2.2%` | — | S/1.39 | ⏳ PENDIENTE | Esperando final del partido |
+| `2026-11-05 21:00` | **ORL @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **1.910** *(Matchbook)* | 53.5% | `+2.2%` | — | S/1.39 | ✅ GANADA | S/+1.26 (HOME 117 - AWAY 104 (Total: 221)) |
 | `2026-11-04 21:00` | **TOR @ DEN** | Ganador (Moneyline) | **AWAY (TOR gana)** | **2.900** *(Bovada)* | 37.2% | `+7.9%` | — | S/1.10 | ❌ PERDIDA | S/-1.10 (HOME 128 - AWAY 109 (Total: 237)) |
 | `2026-11-04 20:00` | **CLE @ OKC** | Ganador (Moneyline) | **HOME (OKC gana)** | **1.770** *(FanDuel)* | 58.5% | `+3.6%` | — | S/2.19 | ✅ GANADA | S/+1.69 (HOME 124 - AWAY 116 (Total: 240)) |
 | `2026-11-04 19:00` | **PHI @ DET** | Ganador (Moneyline) | **HOME (DET gana)** | **1.810** *(Coolbet)* | 56.6% | `+2.5%` | — | S/1.57 | ❌ PERDIDA | S/-1.57 (HOME 106 - AWAY 112 (Total: 218)) |
@@ -87,12 +87,12 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 - **¿Qué está apostando el bot?**: **Gana CLE (Local)** en el mercado `Moneyline (Ganador)`
 - **Cuota Tomada vs Cuota Justa**: **`2.210`** en *1xBet* vs Cuota Justa del Modelo **`2.088`** *(Ventaja Matemática EV: `+5.91%`)*
 - **Stake y Ganancia Potencial**: Stake **`S/1.36 PEN`** → Ganancia neta potencial: **`+S/1.65 PEN`** *(Retorno total: `S/3.01 PEN`)*
-- **Probabilidades**: Modelo Calibrado **`47.9%`** vs Probabilidad Implícita Limpia Casa **`44.5%`**
-- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `CLE +0.3 pts` | Total esperado **`224.6 pts`** *(Rango 80% Conformal: `202 – 248 pts` | Prob. Prórroga: `9.5%` | Prob. Paliza: `10.2%`)*
+- **Probabilidades**: Modelo Calibrado **`47.9%`** vs Probabilidad Implícita Limpia Casa **`43.2%`**
+- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `CLE +0.6 pts` | Total esperado **`225.9 pts`** *(Rango 80% Conformal: `203 – 250 pts` | Prob. Prórroga: `9.7%` | Prob. Paliza: `10.1%`)*
 - **Estadísticas Clave Tomadas en Cuenta**:
-  - **Rating Elo**: `CLE 1555` vs `PHI 1564` | **Eficiencia Neta (Off/Def)**: `CLE (115.8/113.7)` vs `PHI (113.0/109.6)` (`Dif: -1.3 pts/100`)
-  - **Ritmo (Pace)**: `99.3 posesiones` | **Descanso**: `CLE 2d` vs `PHI 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. -859 millas` (`0 husos horarios`)
-- **Por qué apostó el modelo**: _Ajuste de retorno de gira incluido · Eficiencia neta favorable (PHI +1.3 pts/100) · Cuota 2.210 en 1xBet supera la cuota justa del modelo (2.088)._
+  - **Rating Elo**: `CLE 1555` vs `PHI 1564` | **Eficiencia Neta (Off/Def)**: `CLE (115.6/113.9)` vs `PHI (113.3/111.2)` (`Dif: -0.4 pts/100`)
+  - **Ritmo (Pace)**: `98.8 posesiones` | **Descanso**: `CLE 2d` vs `PHI 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. -859 millas` (`0 husos horarios`)
+- **Por qué apostó el modelo**: _Ajuste de retorno de gira incluido · Eficiencia neta favorable (PHI +0.4 pts/100) · Cuota 2.210 en 1xBet supera la cuota justa del modelo (2.088)._
 
 #### 🎯 **OKC @ MEM** — `2026-11-06 20:00 Hora Perú`
 - **¿Qué está apostando el bot?**: **Gana OKC (Visita)** en el mercado `Moneyline (Ganador)`
@@ -101,20 +101,20 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 - **Probabilidades**: Modelo Calibrado **`63.5%`** vs Probabilidad Implícita Limpia Casa **`60.8%`**
 - **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `MEM -5.5 pts` | Total esperado **`224.2 pts`** *(Rango 80% Conformal: `202 – 248 pts` | Prob. Prórroga: `8.0%` | Prob. Paliza: `11.7%`)*
 - **Estadísticas Clave Tomadas en Cuenta**:
-  - **Rating Elo**: `MEM 1440` vs `OKC 1658` | **Eficiencia Neta (Off/Def)**: `MEM (114.3/116.3)` vs `OKC (114.1/109.3)` (`Dif: -6.8 pts/100`)
-  - **Ritmo (Pace)**: `98.4 posesiones` | **Descanso**: `MEM 2d` vs `OKC 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. +421 millas` (`0 husos horarios`)
-- **Por qué apostó el modelo**: _Visita (OKC) viaja +421 millas más · Eficiencia neta favorable (OKC +6.8 pts/100) · Cuota 1.606 en DraftKings supera la cuota justa del modelo (1.575)._
+  - **Rating Elo**: `MEM 1440` vs `OKC 1658` | **Eficiencia Neta (Off/Def)**: `MEM (114.7/115.9)` vs `OKC (114.2/109.6)` (`Dif: -5.7 pts/100`)
+  - **Ritmo (Pace)**: `99.0 posesiones` | **Descanso**: `MEM 2d` vs `OKC 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. +421 millas` (`0 husos horarios`)
+- **Por qué apostó el modelo**: _Visita (OKC) viaja +421 millas más · Eficiencia neta favorable (OKC +5.7 pts/100) · Cuota 1.606 en DraftKings supera la cuota justa del modelo (1.575)._
 
 #### 🎯 **SAS @ SAC** — `2026-11-06 22:00 Hora Perú`
 - **¿Qué está apostando el bot?**: **UNDER 228.5** en el mercado `Moneyline (Ganador)`
 - **Cuota Tomada vs Cuota Justa**: **`1.930`** en *LowVig.ag* vs Cuota Justa del Modelo **`1.880`** *(Ventaja Matemática EV: `+2.77%`)*
 - **Stake y Ganancia Potencial**: Stake **`S/1.68 PEN`** → Ganancia neta potencial: **`+S/1.56 PEN`** *(Retorno total: `S/3.24 PEN`)*
-- **Probabilidades**: Modelo Calibrado **`53.2%`** vs Probabilidad Implícita Limpia Casa **`89.0%`**
-- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `SAC -12.0 pts` | Total esperado **`225.2 pts`** *(Rango 80% Conformal: `203 – 248 pts` | Prob. Prórroga: `4.9%` | Prob. Paliza: `18.6%`)*
+- **Probabilidades**: Modelo Calibrado **`53.2%`** vs Probabilidad Implícita Limpia Casa **`89.5%`**
+- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `SAC -10.9 pts` | Total esperado **`225.5 pts`** *(Rango 80% Conformal: `204 – 248 pts` | Prob. Prórroga: `5.6%` | Prob. Paliza: `17.4%`)*
 - **Estadísticas Clave Tomadas en Cuenta**:
-  - **Rating Elo**: `SAC 1354` vs `SAS 1680` | **Eficiencia Neta (Off/Def)**: `SAC (111.2/119.6)` vs `SAS (115.5/107.0)` (`Dif: -16.9 pts/100`)
-  - **Ritmo (Pace)**: `99.2 posesiones` | **Descanso**: `SAC 2d` vs `SAS 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. +1459 millas` (`2 husos horarios`)
-- **Por qué apostó el modelo**: _Visita (SAS) viaja +1459 millas más · Eficiencia neta favorable (SAS +16.9 pts/100) · Cuota 1.930 en LowVig.ag supera la cuota justa del modelo (1.880)._
+  - **Rating Elo**: `SAC 1354` vs `SAS 1680` | **Eficiencia Neta (Off/Def)**: `SAC (111.2/118.2)` vs `SAS (115.7/108.8)` (`Dif: -13.9 pts/100`)
+  - **Ritmo (Pace)**: `99.1 posesiones` | **Descanso**: `SAC 2d` vs `SAS 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. +1459 millas` (`2 husos horarios`)
+- **Por qué apostó el modelo**: _Visita (SAS) viaja +1459 millas más · Eficiencia neta favorable (SAS +13.9 pts/100) · Cuota 1.930 en LowVig.ag supera la cuota justa del modelo (1.880)._
 
 ### 📋 2.B Cartelera Completa de Próximos Partidos: Cuotas, Estadísticas a Tomar en Cuenta y Veredicto
 
@@ -145,6 +145,7 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Bet ID | Fecha | Partido | Mercado | Selección | Cuota | Prob. | EV (%) | Estado | Beneficio | Bankroll Post. |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :---: | ---: | ---: |
+| `BET_20261106_92B26B33` | `2026-11-06` | `ORL @ PHX` | Ganador (Moneyline) | **HOME (PHX gana)** | 1.910 | 53.5% | `+2.2%` | ✅ WON | **S/+1.26** | `S/97.72` |
 | `BET_20261105_A563FA74` | `2026-11-05` | `TOR @ DEN` | Ganador (Moneyline) | **AWAY (TOR gana)** | 2.900 | 37.2% | `+7.9%` | ❌ LOST | **S/-1.10** | `S/96.45` |
 | `BET_20261105_63E8261D` | `2026-11-05` | `CLE @ OKC` | Ganador (Moneyline) | **HOME (OKC gana)** | 1.770 | 58.5% | `+3.6%` | ✅ WON | **S/+1.69** | `S/99.12` |
 | `BET_20261105_11DC3E0B` | `2026-11-05` | `PHI @ DET` | Ganador (Moneyline) | **HOME (DET gana)** | 1.810 | 56.6% | `+2.5%` | ❌ LOST | **S/-1.57** | `S/97.55` |
@@ -164,4 +165,3 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 | `BET_20261030_0F72AE2C` | `2026-10-30` | `SAC @ NOP` | Ganador (Moneyline) | **HOME (NOP gana)** | 1.520 | 71.7% | `+9.0%` | ✅ WON | **S/+0.52** | `S/104.23` |
 | `BET_20261029_82305F66` | `2026-10-29` | `LAL @ LAC` | Ganador (Moneyline) | **HOME (LAC gana)** | 1.970 | 59.9% | `+17.9%` | ❌ LOST | **S/-1.00** | `S/103.80` |
 | `BET_20261029_748C9155` | `2026-10-29` | `OKC @ DAL` | Ganador (Moneyline) | **HOME (DAL gana)** | 2.760 | 49.8% | `+37.3%` | ✅ WON | **S/+1.76** | `S/104.80` |
-| `BET_20261029_C23A720D` | `2026-10-29` | `OKC @ DAL` | Total Puntos (Over/Under) | **UNDER 228.5** | 1.920 | 57.0% | `+9.4%` | ✅ WON | **S/+0.92** | `S/104.72` |

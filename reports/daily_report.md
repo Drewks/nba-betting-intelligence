@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-06T02:51:11Z
+date_generated: 2026-11-06T14:23:24Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-06
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-06
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-06T02:51:11Z`
+- **Fecha de generación (UTC)**: `2026-11-06T14:23:24Z`
 - **Jornada evaluada**: `2026-11-06`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `2`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `20`
 - **Apuestas simuladas registradas en la jornada**: `1` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `19`
-- **Resultados pendientes globales**: `4`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -41,7 +41,7 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261106_92B26B33` | `ESPN_401909936_2026-11-06_ORL_AT_PHX` | `moneyline` | **HOME** | 1.910 | 0.5352 | +2.23% | S/1.39 | `PENDING` | PENDIENTE |
+| `BET_20261106_92B26B33` | `ESPN_401909936_2026-11-06_ORL_AT_PHX` | `moneyline` | **HOME** | 1.910 | 0.5352 | +2.23% | S/1.39 | `WON` | S/+1.26 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909937_2026-11-06_MIA_AT_GSW` (`moneyline` - `AWAY`): **NO_BET** [EXCESSIVE_LONGSHOT_VARIANCE] — Longshot odds 3.55 (> 3.50) require EV >= 15.0% (observed: 9.35%); skipped to protect bankroll.
