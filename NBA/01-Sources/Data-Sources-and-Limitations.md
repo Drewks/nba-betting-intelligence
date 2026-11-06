@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-06T14:23:25Z
+date_generated: 2026-11-06T17:42:01Z
 component: nba_data_scout
 ---
 # Evaluación de Fuentes de Estadísticas y Cuotas NBA
