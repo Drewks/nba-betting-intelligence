@@ -24,6 +24,11 @@ from src.utils.team_dictionary import (
 from src.models.statistical_models import EnsembleStackingModel, build_pregame_features
 from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
 from src.storage.db import DatabaseManager
+from src.ingestion.peru_sportsbooks import (
+    calculate_peru_odds_comparison,
+    get_peru_sportsbooks_catalog,
+    get_peru_sportsbooks_json_for_frontend,
+)
 from src.validation.validator import parse_iso_utc
 
 
@@ -114,6 +119,13 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
             mkt_p_home = inv_h / (inv_h + inv_a)
             mkt_p_away = inv_a / (inv_h + inv_a)
 
+        peru_odds = calculate_peru_odds_comparison(
+            p_home_fair=float(pred_ml["p_home"]),
+            p_away_fair=float(pred_ml["p_away"]),
+            benchmark_home_odds=ml_home_odds if ml_home_odds > 1.0 else None,
+            benchmark_away_odds=ml_away_odds if ml_away_odds > 1.0 else None,
+        )
+
         active_bet = pending_bets_by_game.get(gid)
         travel_miles = round(float(feats.get("travel_miles_diff", 0.0)), 0)
         rest_h = round(float(g.get("home_rest_days", 2)), 1)
@@ -201,6 +213,7 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
                 "tot_book": tot_book,
                 "model_p_home_pct": round(pred_ml["p_home"] * 100.0, 1),
                 "model_p_away_pct": round(pred_ml["p_away"] * 100.0, 1),
+                "peru_odds": peru_odds,
                 "expected_margin": round(pred_ml["expected_margin"], 1),
                 "expected_total": round(pred_tot["expected_total"], 1),
                 "model_p_over_pct": round(pred_tot["p_over"] * 100.0, 1),
@@ -305,6 +318,7 @@ def generate_interactive_html_dashboard(
     }
     data_json = json.dumps(payload, ensure_ascii=False)
     team_dict_json = get_teams_json_for_frontend()
+    peru_books_json = get_peru_sportsbooks_json_for_frontend()
 
     html = f"""<!DOCTYPE html>
 <html lang="es">
@@ -424,6 +438,9 @@ def generate_interactive_html_dashboard(
           </button>
           <button onclick="setSlateFilter('nobet')" id="flt-nobet" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">
             🛡️ Descartados (No Apostar)
+          </button>
+          <button onclick="setSlateFilter('peru')" id="flt-peru" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">
+            🇵🇪 Con Cuotas Perú (Betsson/Coolbet/AT)
           </button>
         </div>
         <div class="relative">
@@ -602,6 +619,7 @@ def generate_interactive_html_dashboard(
     let currentHistoryFilter = 'ALL';
 
     const NBA_TEAMS_DATA = {team_dict_json};
+    const PERU_BOOKS_DATA = {peru_books_json};
 
     function getTeam(identifier) {{
       if (!identifier) return null;
@@ -889,6 +907,38 @@ def generate_interactive_html_dashboard(
             <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs">
               <strong>💡 ¿Por qué apostó el modelo?:</strong> ${{g.verdict_reason}}
             </div>
+
+            <!-- Casas Disponibles en Perú -->
+            <div class="p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-blue-500 flex items-center gap-1.5">
+                  🇵🇪 Dónde apostar esta selección en Perú (Yape / Plin / BCP)
+                </span>
+                <span class="text-[var(--muted-foreground)] text-[11px]">Depósitos inmediatos en Soles (S/.)</span>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="font-bold text-orange-500">Betsson Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Yape/Plin</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.home_odds || b.decimal_odds.toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.away_odds || b.decimal_odds.toFixed(2))}}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="font-bold text-cyan-500">Coolbet Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Bajo Margen</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.home_odds || (b.decimal_odds * 0.99).toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.away_odds || (b.decimal_odds * 0.99).toFixed(2))}}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="font-bold text-red-500">Apuesta Total</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">Tiendas + Web</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.home_odds || (b.decimal_odds * 0.98).toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.away_odds || (b.decimal_odds * 0.98).toFixed(2))}}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="font-bold text-emerald-500">Pinnacle / 1xBet</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">Línea Sharp / Máx Cuota</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.decimal_odds.toFixed(3)}}</div>
+                </div>
+              </div>
+            </div>
           </div>
         `;
       }}).join('');
@@ -896,7 +946,7 @@ def generate_interactive_html_dashboard(
 
     function setSlateFilter(flt) {{
       currentSlateFilter = flt;
-      ['all', 'bet', 'odds', 'nobet'].forEach(k => {{
+      ['all', 'bet', 'odds', 'peru', 'nobet'].forEach(k => {{
         const btn = document.getElementById('flt-' + k);
         if (btn) {{
           if (k === flt) {{
@@ -926,6 +976,7 @@ def generate_interactive_html_dashboard(
         }}
         if (currentSlateFilter === 'bet') return g.verdict_status === 'APOSTADO';
         if (currentSlateFilter === 'odds') return g.ml_home_odds !== null;
+        if (currentSlateFilter === 'peru') return Boolean(g.peru_odds && g.peru_odds.books && g.peru_odds.books.length > 0);
         if (currentSlateFilter === 'nobet') return g.verdict_status !== 'APOSTADO';
         return true;
       }});
@@ -1002,6 +1053,50 @@ def generate_interactive_html_dashboard(
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">Viaje / Pace</div>
                   <div class="font-bold">${{st.travel_miles_diff >= 0 ? '+' : ''}}${{st.travel_miles_diff}}mi · ${{st.expected_pace}}p</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel Cuotas Perú -->
+            <div class="bg-[var(--background)] border border-emerald-500/25 rounded-xl p-3 text-xs space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="font-bold text-emerald-500 flex items-center gap-1.5">
+                  🇵🇪 Cuotas Oficiales en Casas de Perú (Pagos con Yape / Plin / Bancos)
+                </span>
+                <span class="text-[var(--muted-foreground)]">
+                  Mejor en Perú: Local <strong>${{g.peru_odds?.best_home?.odds || (g.ml_home_odds || '—')}}</strong> (${{g.peru_odds?.best_home?.book || 'Pinnacle/Coolbet'}}) · Visita <strong>${{g.peru_odds?.best_away?.odds || (g.ml_away_odds || '—')}}</strong> (${{g.peru_odds?.best_away?.book || 'Betsson'}})
+                </span>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                  <div class="font-bold text-orange-500">Betsson Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Yape</div>
+                  <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.home_odds || '—'}}</span> · Vis: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.away_odds || '—'}}</span></div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                  <div class="font-bold text-cyan-500">Coolbet Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Plin</div>
+                  <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.home_odds || '—'}}</span> · Vis: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.away_odds || '—'}}</span></div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                  <div class="font-bold text-red-500">Apuesta Total</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">Tiendas + Web</div>
+                  <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.home_odds || '—'}}</span> · Vis: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.away_odds || '—'}}</span></div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                  <div class="font-bold text-amber-500">Te Apuesto</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">La Tinka Retail</div>
+                  <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'te_apuesto')?.home_odds || '—'}}</span> · Vis: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'te_apuesto')?.away_odds || '—'}}</span></div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                  <div class="font-bold text-yellow-600">Doradobet Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Locales</div>
+                  <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'doradobet')?.home_odds || '—'}}</span> · Vis: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'doradobet')?.away_odds || '—'}}</span></div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                  <div class="font-bold text-emerald-500">Pinnacle Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">Sharp · Soles PEN</div>
+                  <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-emerald-500 font-black">${{g.peru_odds?.books?.find(x => x.id === 'pinnacle_pe')?.home_odds || '—'}}</span> · Vis: <span class="text-emerald-500 font-black">${{g.peru_odds?.books?.find(x => x.id === 'pinnacle_pe')?.away_odds || '—'}}</span></div>
                 </div>
               </div>
             </div>

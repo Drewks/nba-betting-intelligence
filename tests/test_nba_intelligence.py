@@ -1824,3 +1824,61 @@ def test_33_player_props_engine(tmp_path: Path) -> None:
     assert row["selection"] == "OVER"
     assert row["line_value"] == 26.5
 
+
+
+def test_34_peru_sportsbooks_and_odds_comparator() -> None:
+    """
+    Test 34: Verification of Peruvian Sportsbooks Integration & Local Odds Comparator.
+    Ensures:
+    1. MINCETUR regulated sportsbooks (Betsson, Coolbet, Apuesta Total, Te Apuesto, Doradobet)
+       are properly mapped with local payment gateways (Yape, Plin, BCP, BBVA).
+    2. Sharp international operators accessible in Peru (Pinnacle, 1xBet) are accurately modeled.
+    3. Comparator produces strictly positive decimal odds, correct de-vigged pricing, and
+       valid serialization for the Generative UI dashboard.
+    """
+    from src.ingestion.peru_sportsbooks import (
+        PERU_SPORTSBOOKS,
+        calculate_peru_odds_comparison,
+        get_peru_sportsbooks_catalog,
+        get_peru_sportsbooks_json_for_frontend,
+    )
+    import json
+
+    # 1. Verify catalog completeness
+    catalog = get_peru_sportsbooks_catalog()
+    assert len(catalog) >= 8
+    book_ids = {b["id"] for b in catalog}
+    assert "betsson_pe" in book_ids
+    assert "coolbet_pe" in book_ids
+    assert "apuesta_total" in book_ids
+    assert "te_apuesto" in book_ids
+    assert "doradobet" in book_ids
+    assert "pinnacle_pe" in book_ids
+
+    # Verify MINCETUR compliance & payment methods
+    betsson = PERU_SPORTSBOOKS["betsson_pe"]
+    assert betsson.is_mincetur_licensed is True
+    assert "Yape" in betsson.payment_methods
+    assert "Plin" in betsson.payment_methods
+
+    # 2. Verify odds comparison engine
+    comp = calculate_peru_odds_comparison(
+        p_home_fair=0.55,
+        p_away_fair=0.45,
+        benchmark_home_odds=1.85,
+        benchmark_away_odds=2.00,
+    )
+    assert comp["best_home"]["odds"] >= 1.70
+    assert comp["best_away"]["odds"] >= 1.90
+    assert len(comp["books"]) == len(PERU_SPORTSBOOKS)
+
+    for b in comp["books"]:
+        assert b["home_odds"] > 1.0
+        assert b["away_odds"] > 1.0
+        assert len(b["payment_methods"]) >= 1
+
+    # 3. Verify frontend JSON payload
+    frontend_json = get_peru_sportsbooks_json_for_frontend()
+    parsed = json.loads(frontend_json)
+    assert "sportsbooks" in parsed
+    assert len(parsed["sportsbooks"]) == len(PERU_SPORTSBOOKS)

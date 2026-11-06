@@ -33,7 +33,7 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
       "relevance_score": 0.202,
-      "captured_at": "2026-11-06T17:03:45Z"
+      "captured_at": "2026-11-06T17:23:27Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
@@ -45,13 +45,13 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
       "relevance_score": 0.2,
-      "captured_at": "2026-11-06T17:03:45Z"
+      "captured_at": "2026-11-06T17:23:27Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
       "relevance_score": 0.1991,
-      "captured_at": "2026-11-06T17:03:45Z"
+      "captured_at": "2026-11-06T17:23:27Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
