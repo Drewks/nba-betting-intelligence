@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from src.ingestion.normalizer import NBA_TEAMS
 from src.models.statistical_models import EnsembleStackingModel, build_pregame_features
 from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
 from src.storage.db import DatabaseManager
@@ -113,13 +114,18 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
         elo_h = round(float(feats["elo_home"]), 0)
         elo_a = round(float(feats["elo_away"]), 0)
 
+        home_full = NBA_TEAMS.get(g["home_team"], {}).get("full_name", g["home_team"])
+        away_full = NBA_TEAMS.get(g["away_team"], {}).get("full_name", g["away_team"])
+        matchup_full = f"{away_full} @ {home_full} ({g['away_team']} @ {g['home_team']})"
+
         if active_bet:
-            sel_team = g["home_team"] if active_bet["selection"] == "HOME" else g["away_team"]
-            sel_label = (
-                f"Gana {sel_team} ({'Local' if active_bet['selection'] == 'HOME' else 'Visita'})"
-                if active_bet["market"] == "moneyline"
-                else f"{active_bet['selection']} {active_bet['line_value']}"
-            )
+            if active_bet["market"] == "moneyline":
+                sel_team_code = g["home_team"] if active_bet["selection"] == "HOME" else g["away_team"]
+                sel_team_name = home_full if active_bet["selection"] == "HOME" else away_full
+                side_str = "Local" if active_bet["selection"] == "HOME" else "Visita"
+                sel_label = f"Gana {sel_team_name} ({sel_team_code} - {side_str})"
+            else:
+                sel_label = f"{active_bet['selection']} {active_bet['line_value']} ({away_full} @ {home_full})"
             bet_book = _clean_book(active_bet.get("odds_provider"))
             bet_odds = round(float(active_bet["decimal_odds"]), 3)
             bet_prob = round(float(active_bet["estimated_prob"]) * 100.0, 1)
@@ -130,12 +136,13 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
 
             reasons: list[str] = []
             if travel_miles > 400:
-                reasons.append(f"Visita ({g['away_team']}) viaja +{int(travel_miles)} millas más")
+                reasons.append(f"Visita ({away_full}) viaja +{int(travel_miles)} millas más")
             if int(feats.get("first_home_from_road", 0)) == 1:
-                reasons.append("Ajuste de retorno de gira incluido")
+                reasons.append(f"Ajuste de retorno de gira para {home_full}")
             if abs(net_diff) >= 0.3:
-                better_net = g["home_team"] if net_diff > 0 else g["away_team"]
-                reasons.append(f"Eficiencia neta favorable ({better_net} {abs(net_diff):+.1f} pts/100)")
+                better_team_name = home_full if net_diff > 0 else away_full
+                better_team_code = g["home_team"] if net_diff > 0 else g["away_team"]
+                reasons.append(f"Eficiencia neta favorable ({better_team_name} [{better_team_code}] {abs(net_diff):+.1f} pts/100)")
             reasons.append(f"Cuota {bet_odds:.3f} en {bet_book} supera la cuota justa del modelo ({fair_odds:.3f})")
             verdict_status = "APOSTADO"
             verdict_summary = f"🎯 APOSTADO: {sel_label} @ {bet_odds:.3f} ({bet_book}) | Stake S/{bet_stake:.2f} (EV +{bet_ev:.2f}%)"
@@ -166,9 +173,12 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
         slate_items.append(
             {
                 "game_id": gid,
-                "matchup": f"{g['away_team']} @ {g['home_team']}",
+                "matchup": matchup_full,
+                "matchup_short": f"{g['away_team']} @ {g['home_team']}",
                 "home_team": g["home_team"],
                 "away_team": g["away_team"],
+                "home_name": home_full,
+                "away_name": away_full,
                 "matchday_date": g["matchday_date"],
                 "hora_peru": peru_dt,
                 "ml_home_odds": round(ml_home_odds, 3) if ml_home_odds else None,
@@ -242,11 +252,11 @@ def generate_interactive_html_dashboard(
 ) -> str:
     """
     Generates a standalone, interactive HTML dashboard (`reports/dashboard.html`) displaying:
-    1) Active Bets in course with full statistical rationale, odds vs fair odds, and Monte Carlo intervals.
+    1) Active Bets in course with full team names (e.g. Orlando Magic @ Phoenix Suns), statistical rationale, odds vs fair odds.
     2) Complete Upcoming Slate with Bookmaker Odds, Model Projections, Key Stats to Watch, and Bot Verdict.
     3) V7.2 Player Props Engine (PTS, REB, AST, PRA) with usage redistribution and Conformal Lower-Bound EV.
     4) Interactive Odds & Expected Value (+EV) Calculator + Key Basketball Metrics Guide.
-    5) Real Bet History & Bankroll Equity Curve with resilient multi-key formatting.
+    5) Real Bet History & Bankroll Equity Curve with resilient multi-key formatting and full team names.
     """
     if player_props is None:
         try:
@@ -310,7 +320,7 @@ def generate_interactive_html_dashboard(
           🏀 Dashboard de Inteligencia NBA V7.2: Apuestas Activas, Cuotas, Sinergia, Kelly y Props Engine
         </h1>
         <p class="text-xs md:text-sm text-[var(--muted-foreground)] mt-1">
-          Visualiza apuestas activas, cuotas en vivo de 25+ casas, intervalos conformales adaptativos de Venn-Abers, impacto no lineal de quintetos (Lineup Synergy), optimización simultánea de Kelly, monitoreo médico Injury Sniper y proyecciones de Player Props.
+          Visualiza apuestas activas con nombres completos de equipos, cuotas en vivo de 25+ casas, intervalos conformales adaptativos de Venn-Abers, impacto no lineal de quintetos (Lineup Synergy), optimización simultánea de Kelly y proyecciones de Player Props.
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -353,7 +363,7 @@ def generate_interactive_html_dashboard(
         <div>
           <h2 class="text-base font-bold">🎯 Apuestas Reales en Curso (Pre-Partido Oficial NBA)</h2>
           <p class="text-xs text-[var(--muted-foreground)]">
-            Cada tarjeta muestra la selección exacta, la mejor cuota encontrada entre 25+ casas vs la cuota justa del modelo, el capital asignado por Kelly simultáneo y las estadísticas clave que justifican la entrada.
+            Cada tarjeta muestra los nombres completos de los equipos, selección exacta, mejor cuota de 25+ casas vs cuota justa del modelo, capital asignado y las estadísticas que justifican la entrada.
           </p>
         </div>
         <span class="text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">
@@ -412,8 +422,8 @@ def generate_interactive_html_dashboard(
             type="text"
             id="slate-search"
             oninput="renderSlate()"
-            placeholder="Buscar equipo (ej. PHX, CLE, LAL, BOS)..."
-            class="w-full md:w-64 px-3.5 py-1.5 rounded-lg text-xs bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+            placeholder="Buscar por equipo o sigla (ej. Lakers, Magic, Suns, Celtics, ORL, PHX)..."
+            class="w-full md:w-80 px-3.5 py-1.5 rounded-lg text-xs bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500"
           />
         </div>
       </div>
@@ -426,7 +436,7 @@ def generate_interactive_html_dashboard(
         <div>
           <h2 class="text-base font-bold">🏀 Player Props Engine V7.2 — Proyección Individual & Redistribución de Uso</h2>
           <p class="text-xs text-[var(--muted-foreground)]">
-            Oportunidades +EV detectadas en líneas de Puntos (PTS), Rebotes (REB), Asistencias (AST) y PRA mediante distribuciones Poisson / Gaussiana sobre-dispersada con ajuste dinámico de uso (ΔUSG%) por bajas médicas y dimensionamiento Kelly.
+            Oportunidades +EV detectadas en líneas de Puntos (PTS), Rebotes (REB), Asistencias (AST) y PRA mediante distribuciones Poisson / Gaussiana con ajuste de uso (ΔUSG%) por bajas médicas y dimensionamiento Kelly.
           </p>
         </div>
         <span class="text-xs font-medium px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
@@ -545,7 +555,7 @@ def generate_interactive_html_dashboard(
         <div>
           <h2 class="text-base font-bold">📈 Historial Auditable de Apuestas NBA Reales (ESPN / TheOddsAPI)</h2>
           <p class="text-xs text-[var(--muted-foreground)]">
-            Registro inmutable con verificación de cuota de cierre (CLV Promedio: <strong class="text-emerald-500">+1.17%</strong>).
+            Registro inmutable con nombres completos de equipos y verificación de cuota de cierre (CLV Promedio: <strong class="text-emerald-500">+1.17%</strong>).
           </p>
         </div>
         <div class="flex flex-wrap gap-1.5">
@@ -581,6 +591,62 @@ def generate_interactive_html_dashboard(
     const DASH_DATA = {data_json};
     let currentSlateFilter = 'all';
     let currentHistoryFilter = 'ALL';
+
+    const NBA_TEAM_NAMES = {{
+      "ATL": "Atlanta Hawks",
+      "BOS": "Boston Celtics",
+      "BKN": "Brooklyn Nets",
+      "CHA": "Charlotte Hornets",
+      "CHI": "Chicago Bulls",
+      "CLE": "Cleveland Cavaliers",
+      "DAL": "Dallas Mavericks",
+      "DEN": "Denver Nuggets",
+      "DET": "Detroit Pistons",
+      "GSW": "Golden State Warriors",
+      "HOU": "Houston Rockets",
+      "IND": "Indiana Pacers",
+      "LAC": "LA Clippers",
+      "LAL": "Los Angeles Lakers",
+      "MEM": "Memphis Grizzlies",
+      "MIA": "Miami Heat",
+      "MIL": "Milwaukee Bucks",
+      "MIN": "Minnesota Timberwolves",
+      "NOP": "New Orleans Pelicans",
+      "NYK": "New York Knicks",
+      "OKC": "Oklahoma City Thunder",
+      "ORL": "Orlando Magic",
+      "PHI": "Philadelphia 76ers",
+      "PHX": "Phoenix Suns",
+      "POR": "Portland Trail Blazers",
+      "SAC": "Sacramento Kings",
+      "SAS": "San Antonio Spurs",
+      "TOR": "Toronto Raptors",
+      "UTA": "Utah Jazz",
+      "WAS": "Washington Wizards"
+    }};
+
+    function getTeamFullName(code) {{
+      if (!code) return '';
+      const clean = String(code).trim().toUpperCase();
+      return NBA_TEAM_NAMES[clean] || code;
+    }}
+
+    function formatMatchupString(str) {{
+      if (!str) return '';
+      if (str.includes(' @ ')) {{
+        const parts = str.split(' @ ');
+        let away = parts[0].trim();
+        let home = parts[1].trim();
+        away = away.split('(')[0].trim();
+        home = home.split('(')[0].trim();
+        const awayFull = getTeamFullName(away);
+        const homeFull = getTeamFullName(home);
+        if (awayFull !== away || homeFull !== home) {{
+          return `${{awayFull}} @ ${{homeFull}} (${{away}} @ ${{home}})`;
+        }}
+      }}
+      return str;
+    }}
 
     function initDashboard() {{
       const s = DASH_DATA.summary;
@@ -664,7 +730,8 @@ def generate_interactive_html_dashboard(
         const pendingBets = DASH_DATA.real_bets.filter(b => (b.estado || b.status) === 'PENDING');
         if (pendingBets.length) {{
           container.innerHTML = pendingBets.map(b => {{
-            const partido = b.partido || b.game_id || 'Partido NBA';
+            const rawPartido = b.partido || b.game_id || 'Partido NBA';
+            const partido = formatMatchupString(rawPartido);
             const hora = b.hora_partido_peru || b.matchday_date || 'Hoy';
             const sel = b.seleccion || b.selection || 'Selección';
             const mkt = b.mercado || (b.market === 'moneyline' ? 'Ganador (Moneyline)' : 'Total Puntos') || 'Moneyline';
@@ -684,8 +751,9 @@ def generate_interactive_html_dashboard(
                       <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-600 text-white">APUESTA EN CURSO</span>
                       <span class="text-xs text-[var(--muted-foreground)]">🕒 ${{hora}} (Hora Perú)</span>
                     </div>
-                    <h3 class="text-lg font-bold mt-1.5">${{partido}} — <span class="text-blue-500">${{sel}}</span></h3>
-                    <p class="text-xs text-[var(--muted-foreground)]">Mercado: ${{mkt}} · Mejor cuota en <strong>${{casa}}</strong></p>
+                    <h3 class="text-lg font-bold mt-1.5">${{partido}}</h3>
+                    <div class="text-sm font-bold text-blue-500 mt-1">${{sel}}</div>
+                    <p class="text-xs text-[var(--muted-foreground)] mt-0.5">Mercado: ${{mkt}} · Mejor cuota en <strong>${{casa}}</strong></p>
                   </div>
                   <div class="text-right bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2">
                     <div class="text-xs text-[var(--muted-foreground)]">Cuota Tomada</div>
@@ -722,6 +790,8 @@ def generate_interactive_html_dashboard(
       container.innerHTML = activeGames.map(g => {{
         const b = g.bet_details;
         const st = g.stats;
+        const homeName = g.home_name || getTeamFullName(g.home_team);
+        const awayName = g.away_name || getTeamFullName(g.away_team);
         const mktProb = b.selection_label.includes('Local') ? g.mkt_p_home_pct : g.mkt_p_away_pct;
         const edgeProb = (b.model_prob_pct - mktProb).toFixed(1);
         return `
@@ -733,8 +803,12 @@ def generate_interactive_html_dashboard(
                   <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-600 text-white">APUESTA EN CURSO</span>
                   <span class="text-xs text-[var(--muted-foreground)]">🕒 ${{g.hora_peru}} (Hora Perú)</span>
                 </div>
-                <h3 class="text-lg font-bold mt-1.5">${{g.away_team}} @ ${{g.home_team}} — <span class="text-blue-500">${{b.selection_label}}</span></h3>
-                <p class="text-xs text-[var(--muted-foreground)]">Mercado: Ganador del Partido (Moneyline) · Mejor cuota en <strong>${{b.bookmaker}}</strong></p>
+                <h3 class="text-lg font-bold mt-1.5">
+                  ${{awayName}} @ ${{homeName}}
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] ml-1 font-mono">${{g.away_team}} @ ${{g.home_team}}</span>
+                </h3>
+                <div class="text-sm font-bold text-blue-500 mt-1">${{b.selection_label}}</div>
+                <p class="text-xs text-[var(--muted-foreground)] mt-0.5">Mercado: Ganador del Partido (Moneyline) · Mejor cuota en <strong>${{b.bookmaker}}</strong></p>
               </div>
               <div class="text-right bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2">
                 <div class="text-xs text-[var(--muted-foreground)]">Cuota Tomada</div>
@@ -781,13 +855,13 @@ def generate_interactive_html_dashboard(
               <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">1. Fuerza Elo</div>
-                  <div class="font-bold mt-0.5">${{g.home_team}} ${{st.elo_home}} vs ${{g.away_team}} ${{st.elo_away}}</div>
+                  <div class="font-bold mt-0.5">${{homeName}} (${{st.elo_home}}) vs ${{awayName}} (${{st.elo_away}})</div>
                   <div class="text-[var(--muted-foreground)]">Dif c/ localía: ${{st.elo_diff >= 0 ? '+' : ''}}${{st.elo_diff}}</div>
                 </div>
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">2. OffRtg / DefRtg</div>
-                  <div class="font-bold mt-0.5">${{g.home_team}}: ${{st.home_off}} / ${{st.home_def}}</div>
-                  <div class="text-[var(--muted-foreground)]">${{g.away_team}}: ${{st.away_off}} / ${{st.away_def}}</div>
+                  <div class="font-bold mt-0.5">${{homeName}}: ${{st.home_off}} / ${{st.home_def}}</div>
+                  <div class="text-[var(--muted-foreground)]">${{awayName}}: ${{st.away_off}} / ${{st.away_def}}</div>
                 </div>
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">3. Ritmo y Total Proy.</div>
@@ -796,7 +870,7 @@ def generate_interactive_html_dashboard(
                 </div>
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">4. Descanso / Gira</div>
-                  <div class="font-bold mt-0.5">${{g.home_team}} ${{st.home_rest_days}}d vs ${{g.away_team}} ${{st.away_rest_days}}d</div>
+                  <div class="font-bold mt-0.5">${{homeName}} ${{st.home_rest_days}}d vs ${{awayName}} ${{st.away_rest_days}}d</div>
                   <div class="text-[var(--muted-foreground)]">${{st.first_home_from_road ? '⚠️ 1er juego post-gira' : 'Sin fatiga B2B'}}</div>
                 </div>
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
@@ -807,7 +881,7 @@ def generate_interactive_html_dashboard(
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">6. Monte Carlo (10k)</div>
                   <div class="font-bold mt-0.5">OT: ${{g.overtime_prob_pct}}% · Paliza: ${{g.blowout_prob_pct}}%</div>
-                  <div class="text-[var(--muted-foreground)]">Margen: ${{g.home_team}} ${{g.expected_margin >= 0 ? '+' : ''}}${{g.expected_margin}}</div>
+                  <div class="text-[var(--muted-foreground)]">Margen: ${{homeName}} ${{g.expected_margin >= 0 ? '+' : ''}}${{g.expected_margin}}</div>
                 </div>
               </div>
             </div>
@@ -839,7 +913,18 @@ def generate_interactive_html_dashboard(
     function renderSlate() {{
       const q = (document.getElementById('slate-search').value || '').trim().toUpperCase();
       const filtered = DASH_DATA.slate.filter(g => {{
-        if (q && !g.matchup.toUpperCase().includes(q)) return false;
+        if (q) {{
+          const homeName = (g.home_name || getTeamFullName(g.home_team)).toUpperCase();
+          const awayName = (g.away_name || getTeamFullName(g.away_team)).toUpperCase();
+          const matchCode = (g.matchup || '').toUpperCase().includes(q);
+          const matchHomeCode = (g.home_team || '').toUpperCase().includes(q);
+          const matchAwayCode = (g.away_team || '').toUpperCase().includes(q);
+          const matchHomeName = homeName.includes(q);
+          const matchAwayName = awayName.includes(q);
+          if (!matchCode && !matchHomeCode && !matchAwayCode && !matchHomeName && !matchAwayName) {{
+            return false;
+          }}
+        }}
         if (currentSlateFilter === 'bet') return g.verdict_status === 'APOSTADO';
         if (currentSlateFilter === 'odds') return g.ml_home_odds !== null;
         if (currentSlateFilter === 'nobet') return g.verdict_status !== 'APOSTADO';
@@ -856,10 +941,13 @@ def generate_interactive_html_dashboard(
       container.innerHTML = filtered.map(g => {{
         const st = g.stats;
         const isBet = g.verdict_status === 'APOSTADO';
-        const favTeam = g.expected_margin >= 0 ? g.home_team : g.away_team;
+        const homeName = g.home_name || getTeamFullName(g.home_team);
+        const awayName = g.away_name || getTeamFullName(g.away_team);
+        const favTeamCode = g.expected_margin >= 0 ? g.home_team : g.away_team;
+        const favTeamName = g.expected_margin >= 0 ? homeName : awayName;
         const spreadFair = -Math.abs(g.expected_margin);
         const mlOddsHtml = g.ml_home_odds
-          ? `<div class="font-semibold">Local (${{g.home_team}}): <span class="text-blue-500">${{g.ml_home_odds.toFixed(3)}}</span> · Visita (${{g.away_team}}): <span class="text-blue-500">${{g.ml_away_odds.toFixed(3)}}</span></div>
+          ? `<div class="font-semibold">Local (<strong>${{homeName}}</strong> · ${{g.home_team}}): <span class="text-blue-500 font-bold">${{g.ml_home_odds.toFixed(3)}}</span> · Visita (<strong>${{awayName}}</strong> · ${{g.away_team}}): <span class="text-blue-500 font-bold">${{g.ml_away_odds.toFixed(3)}}</span></div>
              <div class="text-[var(--muted-foreground)]">Casa: ${{g.ml_home_book}} · Implícita: ${{g.mkt_p_home_pct}}% / ${{g.mkt_p_away_pct}}%</div>`
           : `<div class="text-[var(--muted-foreground)] italic">⏳ Cuotas Moneyline aún no publicadas por las casas</div>`;
 
@@ -872,16 +960,19 @@ def generate_interactive_html_dashboard(
         return `
           <div class="bg-[var(--card)] border ${{isBet ? 'border-blue-500/50' : 'border-[var(--border)]'}} rounded-xl p-4 shadow-sm space-y-3">
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div class="min-w-[190px]">
+              <div class="min-w-[240px]">
                 <div class="flex items-center gap-2">
                   <span class="text-xs px-2 py-0.5 rounded font-semibold ${{isBet ? 'bg-blue-600 text-white' : 'bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]'}}">
                     ${{isBet ? '🎯 APOSTADO' : (g.ml_home_odds ? '🛡️ NO APOSTAR' : '⏳ PENDIENTE CUOTAS')}}
                   </span>
                   <span class="text-xs text-[var(--muted-foreground)]">${{g.hora_peru}} Perú</span>
                 </div>
-                <div class="text-base font-bold mt-1">${{g.away_team}} @ ${{g.home_team}}</div>
+                <div class="text-base font-bold mt-1">
+                  ${{awayName}} @ ${{homeName}}
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] ml-1 font-mono">${{g.away_team}} @ ${{g.home_team}}</span>
+                </div>
                 <div class="text-xs text-[var(--muted-foreground)]">
-                  Proyección V7.2: <strong>${{favTeam}} ${{spreadFair.toFixed(1)}} pts</strong> (Local ${{g.model_p_home_pct}}% / Visita ${{g.model_p_away_pct}}%)
+                  Proyección V7.2: <strong>${{favTeamName}} (${{favTeamCode}}) ${{spreadFair.toFixed(1)}} pts</strong> (Local ${{g.model_p_home_pct}}% / Visita ${{g.model_p_away_pct}}%)
                 </div>
               </div>
 
@@ -933,6 +1024,7 @@ def generate_interactive_html_dashboard(
         return;
       }}
       container.innerHTML = props.map(p => {{
+        const teamName = getTeamFullName(p.team);
         const usageBadge = p.usage_bump_pct > 0
           ? `<span class="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">ΔUSG: +${{p.usage_bump_pct.toFixed(1)}}% por bajas</span>`
           : '';
@@ -942,7 +1034,9 @@ def generate_interactive_html_dashboard(
               <div>
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-600 text-white">PLAYER PROP V7.2</span>
-                  <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-[var(--background)] border border-[var(--border)]">${{p.team}}</span>
+                  <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[var(--background)] border border-[var(--border)] text-purple-400">
+                    ${{teamName}} (${{p.team}})
+                  </span>
                   ${{usageBadge}}
                 </div>
                 <h3 class="text-lg font-bold mt-1.5">${{p.player_name}} — <span class="text-purple-500">${{p.prop_category}} ${{p.selection}} ${{p.line_value}}</span></h3>
@@ -1055,7 +1149,8 @@ def generate_interactive_html_dashboard(
       if (!tbody) return;
       tbody.innerHTML = rows.map(b => {{
         const hora = b.hora_partido_peru || b.emitted_at || b.matchday_date || '—';
-        const partido = b.partido || b.game_id || '—';
+        const rawPartido = b.partido || b.game_id || '—';
+        const partido = formatMatchupString(rawPartido);
         const seleccion = b.seleccion || b.selection || '—';
         const mercado = b.mercado || (b.market === 'moneyline' ? 'Ganador (Moneyline)' : (b.market === 'total_points' ? 'Total Puntos' : b.market)) || '—';
         const rawOdds = b.cuota_decimal !== undefined && b.cuota_decimal !== null ? b.cuota_decimal : b.decimal_odds;
@@ -1193,12 +1288,15 @@ def export_bets_and_tracking_dashboard(
             except Exception:
                 start_peru = r["game_start_time"]
 
-            match_label = f"{r['away_team']} @ {r['home_team']}"
+            home_full = NBA_TEAMS.get(r["home_team"], {}).get("full_name", r["home_team"])
+            away_full = NBA_TEAMS.get(r["away_team"], {}).get("full_name", r["away_team"])
+            match_label = f"{away_full} @ {home_full} ({r['away_team']} @ {r['home_team']})"
             if r["market"] == "moneyline":
-                team_picked = r["home_team"] if r["selection"] == "HOME" else r["away_team"]
-                sel_display = f"{r['selection']} ({team_picked} gana)"
+                team_picked_name = home_full if r["selection"] == "HOME" else away_full
+                team_picked_code = r["home_team"] if r["selection"] == "HOME" else r["away_team"]
+                sel_display = f"Gana {team_picked_name} ({team_picked_code})"
             else:
-                sel_display = f"{r['selection']} {r['line_value']}"
+                sel_display = f"{r['selection']} {r['line_value']} ({away_full} @ {home_full})"
 
             raw_prov = str(r["odds_provider"] or "DraftKings")
             book_clean = (
