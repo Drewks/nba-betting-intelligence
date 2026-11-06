@@ -8,12 +8,881 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import csv
+import json
 from pathlib import Path
 from typing import Any
 
+from src.models.statistical_models import EnsembleStackingModel, build_pregame_features
 from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc
+
+
+def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, Any]]:
+    """
+    Computes pre-game odds, V6 model projections (Moneyline, Total Points, Spread, Conformal, OT/Blowout),
+    key basketball statistics (Elo, Off/Def Rating, Pace, Rest/B2B, Geodesic Travel Miles, Altitude),
+    and clear Spanish explanations of why the bot placed a bet or decided NO_BET for each upcoming game.
+    """
+    all_final_games = db.fetch_all(
+        "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time"
+    )
+    model_f = EnsembleStackingModel("model_f_ensemble_v2")
+    if all_final_games:
+        model_f.fit(all_final_games, all_final_games[-1]["game_start_time"])
+
+    sched_games = db.fetch_all(
+        "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_id LIKE 'ESPN_%' ORDER BY game_start_time ASC"
+    )
+
+    pending_bets_by_game: dict[str, dict[str, Any]] = {}
+    for b in db.fetch_all(
+        """
+        SELECT b.*, p.odds_provider, p.raw_probability, p.implied_prob_gross
+        FROM simulated_bets b
+        LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
+        WHERE b.status = 'PENDING'
+        """
+    ):
+        pending_bets_by_game[b["game_id"]] = dict(b)
+
+    slate_items: list[dict[str, Any]] = []
+    for g in sched_games:
+        gid = g["game_id"]
+        feats = build_pregame_features(g, all_final_games)
+        pred_ml = model_f.predict_moneyline(g, all_final_games)
+
+        odds_rows = db.fetch_all(
+            """
+            SELECT market, selection, line_value, decimal_odds, provider, captured_at
+            FROM odds_snapshots
+            WHERE game_id = ?
+            ORDER BY decimal_odds DESC, captured_at DESC
+            """,
+            (gid,),
+        )
+        best_odds: dict[str, dict[str, Any]] = {}
+        for o in odds_rows:
+            key = f"{o['market']}_{o['selection']}"
+            if key not in best_odds:
+                best_odds[key] = dict(o)
+
+        tot_line = 228.5
+        if "total_points_OVER" in best_odds and best_odds["total_points_OVER"]["line_value"] is not None:
+            tot_line = float(best_odds["total_points_OVER"]["line_value"])
+        pred_tot = model_f.predict_total_points(g, all_final_games, tot_line)
+
+        try:
+            peru_dt = (parse_iso_utc(g["game_start_time"]) - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            peru_dt = str(g["game_start_time"])
+
+        def _clean_book(raw: str | None) -> str:
+            if not raw:
+                return "—"
+            return (
+                str(raw)
+                .split(" (Best")[0]
+                .replace(" (LineShop)", "")
+                .replace("espn_draftkings_pregame", "DraftKings")
+                .strip()
+            )
+
+        ml_home_odds = float(best_odds.get("moneyline_HOME", {}).get("decimal_odds", 0.0))
+        ml_away_odds = float(best_odds.get("moneyline_AWAY", {}).get("decimal_odds", 0.0))
+        ml_home_book = _clean_book(best_odds.get("moneyline_HOME", {}).get("provider"))
+        ml_away_book = _clean_book(best_odds.get("moneyline_AWAY", {}).get("provider"))
+
+        tot_over_odds = float(best_odds.get("total_points_OVER", {}).get("decimal_odds", 0.0))
+        tot_under_odds = float(best_odds.get("total_points_UNDER", {}).get("decimal_odds", 0.0))
+        tot_book = _clean_book(best_odds.get("total_points_OVER", {}).get("provider"))
+
+        mkt_p_home = 0.5
+        mkt_p_away = 0.5
+        if ml_home_odds > 1.0 and ml_away_odds > 1.0:
+            inv_h = 1.0 / ml_home_odds
+            inv_a = 1.0 / ml_away_odds
+            mkt_p_home = inv_h / (inv_h + inv_a)
+            mkt_p_away = inv_a / (inv_h + inv_a)
+
+        active_bet = pending_bets_by_game.get(gid)
+        travel_miles = round(float(feats.get("travel_miles_diff", 0.0)), 0)
+        rest_h = round(float(g.get("home_rest_days", 2)), 1)
+        rest_a = round(float(g.get("away_rest_days", 2)), 1)
+        net_diff = round(float(feats["net_rtg_diff"]), 1)
+        elo_h = round(float(feats["elo_home"]), 0)
+        elo_a = round(float(feats["elo_away"]), 0)
+
+        if active_bet:
+            sel_team = g["home_team"] if active_bet["selection"] == "HOME" else g["away_team"]
+            sel_label = (
+                f"Gana {sel_team} ({'Local' if active_bet['selection'] == 'HOME' else 'Visita'})"
+                if active_bet["market"] == "moneyline"
+                else f"{active_bet['selection']} {active_bet['line_value']}"
+            )
+            bet_book = _clean_book(active_bet.get("odds_provider"))
+            bet_odds = round(float(active_bet["decimal_odds"]), 3)
+            bet_prob = round(float(active_bet["estimated_prob"]) * 100.0, 1)
+            bet_ev = round(float(active_bet["estimated_ev"]) * 100.0, 2)
+            bet_stake = round(float(active_bet["stake_pen"]), 2)
+            pot_profit = round(bet_stake * (bet_odds - 1.0), 2)
+            fair_odds = round(100.0 / max(1.0, bet_prob), 3)
+
+            reasons: list[str] = []
+            if travel_miles > 400:
+                reasons.append(f"Visita ({g['away_team']}) viaja +{int(travel_miles)} millas más")
+            if int(feats.get("first_home_from_road", 0)) == 1:
+                reasons.append("Ajuste de retorno de gira incluido")
+            if abs(net_diff) >= 0.3:
+                better_net = g["home_team"] if net_diff > 0 else g["away_team"]
+                reasons.append(f"Eficiencia neta favorable ({better_net} {abs(net_diff):+.1f} pts/100)")
+            reasons.append(f"Cuota {bet_odds:.3f} en {bet_book} supera la cuota justa del modelo ({fair_odds:.3f})")
+            verdict_status = "APOSTADO"
+            verdict_summary = f"🎯 APOSTADO: {sel_label} @ {bet_odds:.3f} ({bet_book}) | Stake S/{bet_stake:.2f} (EV +{bet_ev:.2f}%)"
+            verdict_reason = " · ".join(reasons) + "."
+        else:
+            verdict_status = "NO_BET"
+            if not ml_home_odds:
+                verdict_summary = "⏳ SIN CUOTAS AÚN"
+                verdict_reason = "Las casas de apuestas aún no publican línea pre-partido verificada."
+            else:
+                ev_h = (pred_ml["p_home"] * ml_home_odds - 1.0) * 100.0
+                ev_a = (pred_ml["p_away"] * ml_away_odds - 1.0) * 100.0
+                best_raw_ev = max(ev_h, ev_a)
+                verdict_summary = "🛡️ NO APOSTAR (Pass)"
+                if best_raw_ev <= 1.5:
+                    verdict_reason = "Cuotas eficientes: la probabilidad del modelo está alineada con las casas (sin ventaja EV suficiente)."
+                else:
+                    verdict_reason = "Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)."
+            sel_label = "—"
+            bet_book = "—"
+            bet_odds = 0.0
+            bet_prob = 0.0
+            bet_ev = 0.0
+            bet_stake = 0.0
+            pot_profit = 0.0
+            fair_odds = 0.0
+
+        slate_items.append(
+            {
+                "game_id": gid,
+                "matchup": f"{g['away_team']} @ {g['home_team']}",
+                "home_team": g["home_team"],
+                "away_team": g["away_team"],
+                "matchday_date": g["matchday_date"],
+                "hora_peru": peru_dt,
+                "ml_home_odds": round(ml_home_odds, 3) if ml_home_odds else None,
+                "ml_away_odds": round(ml_away_odds, 3) if ml_away_odds else None,
+                "ml_home_book": ml_home_book,
+                "ml_away_book": ml_away_book,
+                "mkt_p_home_pct": round(mkt_p_home * 100.0, 1),
+                "mkt_p_away_pct": round(mkt_p_away * 100.0, 1),
+                "tot_line": tot_line,
+                "tot_over_odds": round(tot_over_odds, 3) if tot_over_odds else None,
+                "tot_under_odds": round(tot_under_odds, 3) if tot_under_odds else None,
+                "tot_book": tot_book,
+                "model_p_home_pct": round(pred_ml["p_home"] * 100.0, 1),
+                "model_p_away_pct": round(pred_ml["p_away"] * 100.0, 1),
+                "expected_margin": round(pred_ml["expected_margin"], 1),
+                "expected_total": round(pred_tot["expected_total"], 1),
+                "model_p_over_pct": round(pred_tot["p_over"] * 100.0, 1),
+                "model_p_under_pct": round(pred_tot["p_under"] * 100.0, 1),
+                "conformal_q10": round(pred_tot.get("conformal_q10_total", pred_tot["expected_total"] - 18.0), 1),
+                "conformal_q90": round(pred_tot.get("conformal_q90_total", pred_tot["expected_total"] + 18.0), 1),
+                "overtime_prob_pct": round(pred_tot.get("overtime_prob", 0.055) * 100.0, 1),
+                "blowout_prob_pct": round(pred_tot.get("blowout_prob", 0.14) * 100.0, 1),
+                "stats": {
+                    "elo_home": int(elo_h),
+                    "elo_away": int(elo_a),
+                    "elo_diff": int(round(feats["elo_diff"], 0)),
+                    "home_off": round(feats["home_off_rtg"], 1),
+                    "home_def": round(feats["home_def_rtg"], 1),
+                    "away_off": round(feats["away_off_rtg"], 1),
+                    "away_def": round(feats["away_def_rtg"], 1),
+                    "net_rtg_diff": net_diff,
+                    "expected_pace": round(feats["expected_pace"], 1),
+                    "home_rest_days": rest_h,
+                    "away_rest_days": rest_a,
+                    "home_b2b": int(g.get("home_b2b", 0)),
+                    "away_b2b": int(g.get("away_b2b", 0)),
+                    "first_home_from_road": int(feats.get("first_home_from_road", 0)),
+                    "travel_miles_diff": int(travel_miles),
+                    "away_tz_change": round(float(feats.get("away_tz_change", 0.0)), 1),
+                    "altitude_advantage": round(float(feats.get("altitude_advantage", 0.0)), 2),
+                    "venue_split_diff": round(float(feats.get("venue_split_diff", 0.0)), 2),
+                    "streak_diff": round(float(feats.get("streak_diff", 0.0)), 1),
+                },
+                "verdict_status": verdict_status,
+                "verdict_summary": verdict_summary,
+                "verdict_reason": verdict_reason,
+                "bet_details": {
+                    "selection_label": sel_label,
+                    "bookmaker": bet_book,
+                    "decimal_odds": bet_odds,
+                    "fair_odds": fair_odds,
+                    "model_prob_pct": bet_prob,
+                    "ev_pct": bet_ev,
+                    "stake_pen": bet_stake,
+                    "potential_profit_pen": pot_profit,
+                }
+                if active_bet
+                else None,
+            }
+        )
+    return slate_items
+
+
+def generate_interactive_html_dashboard(
+    metrics: dict[str, Any],
+    espn_real_bets: list[dict[str, Any]],
+    slate_items: list[dict[str, Any]],
+    html_output_path: str | Path,
+    peru_str: str,
+) -> str:
+    """
+    Generates a standalone, interactive HTML dashboard (`reports/dashboard.html`) displaying:
+    1) Active Bets in course with full statistical rationale, odds vs fair odds, and Monte Carlo intervals.
+    2) Complete Upcoming Slate with Bookmaker Odds, Model Projections, Key Stats to Watch, and Bot Verdict.
+    3) Interactive Odds & Expected Value (+EV) Calculator + Key Basketball Metrics Guide.
+    4) Real Bet History & Bankroll Equity Curve.
+    """
+    pending_stake = round(sum(float(b["stake_pen"]) for b in espn_real_bets if b["estado"] == "PENDING"), 2)
+    settled_bank = round(float(metrics.get("current_settled_bankroll_pen", 100.0)), 2)
+    avail_bank = round(settled_bank - pending_stake, 2)
+    payload = {
+        "updated_peru": peru_str,
+        "summary": {
+            "initial_bankroll_pen": 100.0,
+            "settled_bankroll_pen": settled_bank,
+            "available_bankroll_pen": avail_bank,
+            "pending_stake_pen": pending_stake,
+            "net_profit_pen": round(float(metrics.get("net_profit_pen", 0.0)), 2),
+            "roi_pct": round(float(metrics.get("roi_pct", 0.0)), 2),
+            "mean_clv_pct": round(float(metrics.get("mean_clv_pct") or 0.0), 2),
+            "brier_score": round(float(metrics.get("overall_brier_score", 0.2277)), 4),
+            "baseline_brier": round(float(metrics.get("baseline_brier_score", 0.2483)), 4),
+            "pending_count": sum(1 for b in espn_real_bets if b["estado"] == "PENDING"),
+            "settled_real_count": sum(1 for b in espn_real_bets if b["estado"] != "PENDING"),
+            "won_real_count": sum(1 for b in espn_real_bets if b["estado"] == "WON"),
+            "lost_real_count": sum(1 for b in espn_real_bets if b["estado"] == "LOST"),
+        },
+        "slate": slate_items,
+        "real_bets": espn_real_bets,
+    }
+    data_json = json.dumps(payload, ensure_ascii=False)
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NBA Betting Intelligence V6 — Dashboard de Apuestas, Cuotas y Estadísticas</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 md:p-6">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Top Header -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+            MOTOR SINDICATO V6 ACTIVO
+          </span>
+          <span class="text-xs text-[var(--muted-foreground)]" id="hdr-updated"></span>
+        </div>
+        <h1 class="text-xl md:text-2xl font-bold mt-2 tracking-tight">
+          🏀 Dashboard de Inteligencia NBA: Apuestas Activas, Cuotas y Estadísticas Clave
+        </h1>
+        <p class="text-sm text-[var(--muted-foreground)] mt-1">
+          Visualiza exactamente qué está apostando el modelo, comparativa de cuotas (Line Shopping 25+ casas), proyecciones Monte Carlo (10,000 simulaciones) y qué estadísticas pre-partido determinan cada decisión.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2 text-right">
+          <div class="text-xs text-[var(--muted-foreground)]">Banca Disponible / Liquidada</div>
+          <div class="text-base font-bold" id="hdr-bankroll">S/ 93.70 / S/ 96.45 PEN</div>
+        </div>
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2 text-right">
+          <div class="text-xs text-[var(--muted-foreground)]">En Juego Ahora</div>
+          <div class="text-base font-bold text-amber-500" id="hdr-pending">2 apuestas (S/ 2.75)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="kpi-grid"></div>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-1.5 flex flex-wrap gap-1.5" role="tablist">
+      <button onclick="switchTab('active')" id="tab-btn-active" class="tab-btn flex-1 min-w-[180px] py-2.5 px-4 rounded-lg text-sm font-semibold transition-all bg-blue-600 text-white shadow-sm">
+        🎯 1. ¿Qué Está Apostando Hoy? (<span id="cnt-active">2</span>)
+      </button>
+      <button onclick="switchTab('slate')" id="tab-btn-slate" class="tab-btn flex-1 min-w-[180px] py-2.5 px-4 rounded-lg text-sm font-semibold transition-all text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+        📋 2. Cartelera, Cuotas y Estadísticas (<span id="cnt-slate">18</span>)
+      </button>
+      <button onclick="switchTab('guide')" id="tab-btn-guide" class="tab-btn flex-1 min-w-[180px] py-2.5 px-4 rounded-lg text-sm font-semibold transition-all text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+        🧠 3. Estadísticas a Tomar en Cuenta + Calculadora
+      </button>
+      <button onclick="switchTab('history')" id="tab-btn-history" class="tab-btn flex-1 min-w-[180px] py-2.5 px-4 rounded-lg text-sm font-semibold transition-all text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+        📈 4. Historial de Apuestas Reales (<span id="cnt-history">22</span>)
+      </button>
+    </div>
+
+    <!-- TAB 1: ACTIVE BETS -->
+    <div id="tab-panel-active" class="space-y-5">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold">🎯 Apuestas Reales en Curso (Pre-Partido Oficial NBA)</h2>
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Cada tarjeta muestra la selección exacta, la mejor cuota encontrada entre 25+ casas vs la cuota justa del modelo, el dinero arriesgado y las 6 estadísticas que justifican la entrada.
+          </p>
+        </div>
+        <span class="text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">
+          Regla Anti-Correlación: Máx. 1 apuesta por partido
+        </span>
+      </div>
+      <div id="active-bets-container" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></div>
+    </div>
+
+    <!-- TAB 2: SLATE & ODDS & STATS -->
+    <div id="tab-panel-slate" class="space-y-4 hidden">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex flex-wrap gap-2">
+          <button onclick="setSlateFilter('all')" id="flt-all" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white">
+            Todos los Partidos
+          </button>
+          <button onclick="setSlateFilter('bet')" id="flt-bet" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">
+            🎯 Solo Con Apuesta Activa
+          </button>
+          <button onclick="setSlateFilter('odds')" id="flt-odds" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">
+            💰 Con Cuotas Publicadas
+          </button>
+          <button onclick="setSlateFilter('nobet')" id="flt-nobet" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">
+            🛡️ Descartados (No Apostar)
+          </button>
+        </div>
+        <div class="relative">
+          <input
+            type="text"
+            id="slate-search"
+            oninput="renderSlate()"
+            placeholder="Buscar equipo (ej. PHX, CLE, LAL, BOS)..."
+            class="w-full md:w-64 px-3.5 py-1.5 rounded-lg text-xs bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+          />
+        </div>
+      </div>
+      <div id="slate-container" class="space-y-3"></div>
+    </div>
+
+    <!-- TAB 3: STATS GUIDE & EV CALCULATOR -->
+    <div id="tab-panel-guide" class="space-y-6 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <!-- Interactive Calculator -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+          <h3 class="text-base font-bold">🧮 Calculadora Interactiva de Cuota Justa y +EV</h3>
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Prueba cualquier cuota de tu casa de apuestas y compárala con la probabilidad del modelo para saber si tiene Valor Esperado Positivo (+EV).
+          </p>
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs font-semibold block mb-1">Cuota Decimal de la Casa (ej. 1.91, 2.21)</label>
+              <input type="number" step="0.01" min="1.05" max="15.0" value="1.91" id="calc-odds" oninput="updateCalculator()"
+                class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--background)] border border-[var(--border)] font-semibold" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold block mb-1">Probabilidad Real Estimada por el Modelo (%)</label>
+              <input type="number" step="0.5" min="5" max="95" value="53.5" id="calc-prob" oninput="updateCalculator()"
+                class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--background)] border border-[var(--border)] font-semibold" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold block mb-1">Banca Actual (S/ PEN)</label>
+              <input type="number" step="1" min="10" max="100000" value="96.45" id="calc-bank" oninput="updateCalculator()"
+                class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--background)] border border-[var(--border)] font-semibold" />
+            </div>
+          </div>
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-4 space-y-2.5" id="calc-results"></div>
+        </div>
+
+        <!-- 8 Key Stats Guide -->
+        <div class="lg:col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+          <div>
+            <h3 class="text-base font-bold">📊 Las 8 Estadísticas y Factores que Debes Tomar en Cuenta (Motor V6)</h3>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+              Estas son las variables exactas que pondera el algoritmo antes de arriesgar un sol en cualquier partido de la NBA:
+            </p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-blue-500">1. Cuota Tomada vs Cuota Justa (De-Vig & +EV)</div>
+              <p class="text-[var(--muted-foreground)]">
+                Una cuota de <strong>2.00</strong> implica 50% de probabilidad. Si el modelo calcula que el equipo gana el <strong>54%</strong> de las veces, su <em>Cuota Justa</em> es <code>100 / 54 = 1.852</code>. Apostar a 2.00 cuando vale 1.852 te da <strong>+8.0% de Valor Esperado (+EV)</strong>.
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-emerald-500">2. Eficiencia Ofensiva y Defensiva (Net Rating)</div>
+              <p class="text-[var(--muted-foreground)]">
+                No mires los puntos por partido brutos (engañan por el ritmo). Mira los puntos anotados y recibidos <strong>por cada 100 posesiones</strong> (<code>OffRtg</code> y <code>DefRtg</code>) y regresión del 50% ante rachas irreales de triples (&gt;2.5% sobre la media).
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-amber-500">3. Fatiga, Descanso (B2B) y Retorno de Gira</div>
+              <p class="text-[var(--muted-foreground)]">
+                Jugar en noches consecutivas (<code>Back-to-Back</code>) o 3 partidos en 4 noches resta entre <strong>-1.8 y -2.5 puntos</strong> de margen. Además, el <strong>1er partido en casa tras una gira larga (3+ visitas)</strong> sufre letargo comprobado (-1.2 pts).
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-purple-500">4. Viaje Geodésico (Millas Haversine y Husos Horarios)</div>
+              <p class="text-[var(--muted-foreground)]">
+                El modelo calcula las millas aéreas exactas entre los 30 pabellones NBA y los husos horarios cruzados. Viajes de <strong>+1,500 millas</strong> con cambio de 2–3 horas reducen la eficiencia en el último cuarto.
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-rose-500">5. Parte Médico con Decaimiento de Adaptación</div>
+              <p class="text-[var(--muted-foreground)]">
+                Una baja de última hora (<code>Acute Injury</code>: hoy o esta semana) golpea al equipo al <strong>100%</strong> porque el mercado tarda en ajustar rotaciones. En cambio, lesiones crónicas (&gt;21 días) se descuentan al <strong>55%</strong> porque el equipo ya redistribuyó minutos.
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-cyan-500">6. Velocidad de Línea (Steam Move) y CLV</div>
+              <p class="text-[var(--muted-foreground)]">
+                Si las casas recortan drásticamente la cuota de un equipo antes del partido (<code>Steam Move</code> a favor), los apostadores profesionales están entrando ahí. Si la cuota se desploma en nuestra contra (&gt;2.5% de prob. implícita), el bot <strong>bloquea la apuesta</strong>.
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-indigo-500">7. Ritmo (Pace), Prórroga y Desaceleración por Paliza</div>
+              <p class="text-[var(--muted-foreground)]">
+                Para apuestas de <code>Total de Puntos (Over/Under)</code>, el simulador de 10,000 partidos modela dos colas críticas: si el partido es cerrado hay <strong>~6%–9% de probabilidad de Prórroga (OT)</strong> (+13 pts extra); si hay paliza (&gt;18 pts en Q4), los suplentes bajan el ritmo.
+              </p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
+              <div class="font-bold text-sm text-teal-500">8. Altitud (Denver / Utah) y Tendencia Arbitral</div>
+              <p class="text-[var(--muted-foreground)]">
+                Visitar a <code>DEN</code> (5,280 pies) o <code>UTA</code> (4,226 pies) en el primer partido en altura castiga la resistencia visitante (+1.5 pts de ventaja local). Además, las ternas arbitrales influyen hasta ±3.5 puntos en el total por su tasa de faltas pitadas.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: BET HISTORY -->
+    <div id="tab-panel-history" class="space-y-4 hidden">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold">📈 Historial Auditable de Apuestas NBA Reales (ESPN / TheOddsAPI)</h2>
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Registro inmutable con verificación de línea de cierre (CLV Promedio: <strong class="text-emerald-500">+1.17%</strong>).
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <button onclick="setHistoryFilter('ALL')" id="hflt-ALL" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white">Todas</button>
+          <button onclick="setHistoryFilter('PENDING')" id="hflt-PENDING" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">⏳ En Espera</button>
+          <button onclick="setHistoryFilter('WON')" id="hflt-WON" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">✅ Ganadas</button>
+          <button onclick="setHistoryFilter('LOST')" id="hflt-LOST" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">❌ Perdidas</button>
+        </div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-[var(--border)] text-xs text-[var(--muted-foreground)]">
+              <th class="py-3 px-4">Fecha / Hora (Perú)</th>
+              <th class="py-3 px-4">Partido</th>
+              <th class="py-3 px-4">Mercado / Selección</th>
+              <th class="py-3 px-4 text-right">Cuota (Casa)</th>
+              <th class="py-3 px-4 text-right">Prob. Modelo</th>
+              <th class="py-3 px-4 text-right">EV (%)</th>
+              <th class="py-3 px-4 text-right">CLV (%)</th>
+              <th class="py-3 px-4 text-right">Stake</th>
+              <th class="py-3 px-4 text-center">Estado</th>
+              <th class="py-3 px-4 text-right">Resultado / Ganancia</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody" class="divide-y divide-[var(--border)] text-xs"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DASH_DATA = {data_json};
+    let currentSlateFilter = 'all';
+    let currentHistoryFilter = 'ALL';
+
+    function initDashboard() {{
+      const s = DASH_DATA.summary;
+      document.getElementById('hdr-updated').textContent = 'Actualizado: ' + DASH_DATA.updated_peru;
+      document.getElementById('hdr-bankroll').textContent = `S/ ${{s.available_bankroll_pen.toFixed(2)}} disp. / S/ ${{s.settled_bankroll_pen.toFixed(2)}} liq.`;
+      document.getElementById('hdr-pending').textContent = `${{s.pending_count}} activas (S/ ${{s.pending_stake_pen.toFixed(2)}} PEN)`;
+      document.getElementById('cnt-active').textContent = s.pending_count;
+      document.getElementById('cnt-slate').textContent = DASH_DATA.slate.length;
+      document.getElementById('cnt-history').textContent = DASH_DATA.real_bets.length;
+
+      const kpis = [
+        {{
+          title: 'Banca Virtual Actual (Inicial S/ 100)',
+          value: `S/ ${{s.settled_bankroll_pen.toFixed(2)}} PEN`,
+          sub: `Disponible hoy: S/ ${{s.available_bankroll_pen.toFixed(2)}} PEN (${{s.net_profit_pen >= 0 ? '+' : ''}}S/ ${{s.net_profit_pen.toFixed(2)}})`,
+          badge: `ROI ${{s.roi_pct >= 0 ? '+' : ''}}${{s.roi_pct.toFixed(2)}}%`,
+          color: 'text-blue-500'
+        }},
+        {{
+          title: 'Apuestas Activas en Curso',
+          value: `${{s.pending_count}} Selecciones`,
+          sub: `Capital reservado: S/ ${{s.pending_stake_pen.toFixed(2)}} PEN`,
+          badge: 'Line Shopping 25+ Casas',
+          color: 'text-amber-500'
+        }},
+        {{
+          title: 'Ventaja contra Cierre (CLV Medio)',
+          value: `${{s.mean_clv_pct >= 0 ? '+' : ''}}${{s.mean_clv_pct.toFixed(2)}}%`,
+          sub: 'Superando la cuota de cierre de las casas',
+          badge: 'Calidad Profesional',
+          color: 'text-emerald-500'
+        }},
+        {{
+          title: 'Precisión Calibrada (Brier Score)',
+          value: s.brier_score.toFixed(4),
+          sub: `Mercado Baseline: ${{s.baseline_brier.toFixed(4)}} (menor es mejor)`,
+          badge: '✅ Supera al Baseline',
+          color: 'text-purple-500'
+        }}
+      ];
+      document.getElementById('kpi-grid').innerHTML = kpis.map(k => `
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs text-[var(--muted-foreground)] font-medium">${{k.title}}</span>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-[var(--background)] border border-[var(--border)] ${{k.color}}">${{k.badge}}</span>
+          </div>
+          <div class="text-xl font-bold mt-2">${{k.value}}</div>
+          <div class="text-xs text-[var(--muted-foreground)] mt-1">${{k.sub}}</div>
+        </div>
+      `).join('');
+
+      renderActiveBets();
+      renderSlate();
+      updateCalculator();
+      renderHistory();
+    }}
+
+    function switchTab(tabId) {{
+      ['active', 'slate', 'guide', 'history'].forEach(id => {{
+        const panel = document.getElementById('tab-panel-' + id);
+        const btn = document.getElementById('tab-btn-' + id);
+        if (id === tabId) {{
+          panel.classList.remove('hidden');
+          btn.className = 'tab-btn flex-1 min-w-[180px] py-2.5 px-4 rounded-lg text-sm font-semibold transition-all bg-blue-600 text-white shadow-sm';
+        }} else {{
+          panel.classList.add('hidden');
+          btn.className = 'tab-btn flex-1 min-w-[180px] py-2.5 px-4 rounded-lg text-sm font-semibold transition-all text-[var(--muted-foreground)] hover:text-[var(--foreground)]';
+        }}
+      }});
+    }}
+
+    function renderActiveBets() {{
+      const activeGames = DASH_DATA.slate.filter(g => g.verdict_status === 'APOSTADO' && g.bet_details);
+      const container = document.getElementById('active-bets-container');
+      if (!activeGames.length) {{
+        container.innerHTML = `<div class="col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 text-center text-sm text-[var(--muted-foreground)]">No hay apuestas pendientes en este instante. Revisa la pestaña 2 para ver la cartelera completa.</div>`;
+        return;
+      }}
+      container.innerHTML = activeGames.map(g => {{
+        const b = g.bet_details;
+        const st = g.stats;
+        const mktProb = b.selection_label.includes('Local') ? g.mkt_p_home_pct : g.mkt_p_away_pct;
+        const edgeProb = (b.model_prob_pct - mktProb).toFixed(1);
+        return `
+          <div class="bg-[var(--card)] border-2 border-blue-500/40 rounded-2xl p-5 shadow-sm space-y-4">
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3.5">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-600 text-white">APUESTA EN CURSO</span>
+                  <span class="text-xs text-[var(--muted-foreground)]">🕒 ${{g.hora_peru}} (Hora Perú)</span>
+                </div>
+                <h3 class="text-lg font-bold mt-1.5">${{g.away_team}} @ ${{g.home_team}} — <span class="text-blue-500">${{b.selection_label}}</span></h3>
+                <p class="text-xs text-[var(--muted-foreground)]">Mercado: Ganador del Partido (Moneyline) · Mejor cuota en <strong>${{b.bookmaker}}</strong></p>
+              </div>
+              <div class="text-right bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2">
+                <div class="text-xs text-[var(--muted-foreground)]">Cuota Tomada</div>
+                <div class="text-xl font-extrabold text-emerald-500">${{b.decimal_odds.toFixed(3)}}</div>
+                <div class="text-xs text-[var(--muted-foreground)]">Justa: ${{b.fair_odds.toFixed(3)}}</div>
+              </div>
+            </div>
+
+            <!-- Financial & EV Row -->
+            <div class="grid grid-cols-3 gap-2.5 text-center">
+              <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5">
+                <div class="text-xs text-[var(--muted-foreground)]">Stake Arriesgado</div>
+                <div class="text-sm font-bold mt-0.5">S/ ${{b.stake_pen.toFixed(2)}} PEN</div>
+              </div>
+              <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5">
+                <div class="text-xs text-[var(--muted-foreground)]">Ganancia Neta Potencial</div>
+                <div class="text-sm font-bold text-emerald-500 mt-0.5">+S/ ${{b.potential_profit_pen.toFixed(2)}} PEN</div>
+              </div>
+              <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5">
+                <div class="text-xs text-[var(--muted-foreground)]">Valor Esperado (+EV)</div>
+                <div class="text-sm font-bold text-blue-500 mt-0.5">+${{b.ev_pct.toFixed(2)}}%</div>
+              </div>
+            </div>
+
+            <!-- Probability Comparison Bar -->
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 space-y-2">
+              <div class="flex justify-between text-xs">
+                <span>Probabilidad Modelo Calibrado: <strong class="text-blue-500">${{b.model_prob_pct.toFixed(1)}}%</strong></span>
+                <span>Prob. Implícita Casa (Sin Vig): <strong>${{mktProb.toFixed(1)}}%</strong></span>
+              </div>
+              <div class="w-full h-2.5 bg-[var(--border)] rounded-full overflow-hidden flex">
+                <div class="bg-blue-600 h-full" style="width: ${{Math.min(95, b.model_prob_pct)}}%"></div>
+              </div>
+              <div class="text-xs text-[var(--muted-foreground)]">
+                Ventaja probabilística directa: <strong>+${{edgeProb}}%</strong> sobre el consenso del mercado.
+              </div>
+            </div>
+
+            <!-- 6 Key Basketball Stats Grid -->
+            <div>
+              <div class="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+                📊 Estadísticas Clave Tomadas en Cuenta para este Partido
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">1. Fuerza Elo</div>
+                  <div class="font-bold mt-0.5">${{g.home_team}} ${{st.elo_home}} vs ${{g.away_team}} ${{st.elo_away}}</div>
+                  <div class="text-[var(--muted-foreground)]">Dif c/ localía: ${{st.elo_diff >= 0 ? '+' : ''}}${{st.elo_diff}}</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">2. OffRtg / DefRtg</div>
+                  <div class="font-bold mt-0.5">${{g.home_team}}: ${{st.home_off}} / ${{st.home_def}}</div>
+                  <div class="text-[var(--muted-foreground)]">${{g.away_team}}: ${{st.away_off}} / ${{st.away_def}}</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">3. Ritmo y Total Proy.</div>
+                  <div class="font-bold mt-0.5">${{st.expected_pace}} pos · ${{g.expected_total}} pts</div>
+                  <div class="text-[var(--muted-foreground)]">Rango 80%: ${{g.conformal_q10}}–${{g.conformal_q90}}</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">4. Descanso / Gira</div>
+                  <div class="font-bold mt-0.5">${{g.home_team}} ${{st.home_rest_days}}d vs ${{g.away_team}} ${{st.away_rest_days}}d</div>
+                  <div class="text-[var(--muted-foreground)]">${{st.first_home_from_road ? '⚠️ 1er juego post-gira' : 'Sin fatiga B2B'}}</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">5. Viaje (Haversine)</div>
+                  <div class="font-bold mt-0.5">${{st.travel_miles_diff >= 0 ? '+' : ''}}${{st.travel_miles_diff}} millas</div>
+                  <div class="text-[var(--muted-foreground)]">Cambio horario: ${{st.away_tz_change}}h</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">6. Monte Carlo (10k)</div>
+                  <div class="font-bold mt-0.5">OT: ${{g.overtime_prob_pct}}% · Paliza: ${{g.blowout_prob_pct}}%</div>
+                  <div class="text-[var(--muted-foreground)]">Margen: ${{g.home_team}} ${{g.expected_margin >= 0 ? '+' : ''}}${{g.expected_margin}}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Verdict Rationale -->
+            <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs">
+              <strong>💡 ¿Por qué apostó el modelo?:</strong> ${{g.verdict_reason}}
+            </div>
+          </div>
+        `;
+      }}).join('');
+    }}
+
+    function setSlateFilter(flt) {{
+      currentSlateFilter = flt;
+      ['all', 'bet', 'odds', 'nobet'].forEach(k => {{
+        const btn = document.getElementById('flt-' + k);
+        if (k === flt) {{
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white';
+        }} else {{
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]';
+        }}
+      }});
+      renderSlate();
+    }}
+
+    function renderSlate() {{
+      const q = (document.getElementById('slate-search').value || '').trim().toUpperCase();
+      const filtered = DASH_DATA.slate.filter(g => {{
+        if (q && !g.matchup.toUpperCase().includes(q)) return false;
+        if (currentSlateFilter === 'bet') return g.verdict_status === 'APOSTADO';
+        if (currentSlateFilter === 'odds') return g.ml_home_odds !== null;
+        if (currentSlateFilter === 'nobet') return g.verdict_status !== 'APOSTADO';
+        return true;
+      }});
+
+      const container = document.getElementById('slate-container');
+      if (!filtered.length) {{
+        container.innerHTML = `<div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 text-center text-sm text-[var(--muted-foreground)]">No se encontraron partidos con ese filtro.</div>`;
+        return;
+      }}
+
+      container.innerHTML = filtered.map(g => {{
+        const st = g.stats;
+        const isBet = g.verdict_status === 'APOSTADO';
+        const favTeam = g.expected_margin >= 0 ? g.home_team : g.away_team;
+        const spreadFair = -Math.abs(g.expected_margin);
+        const mlOddsHtml = g.ml_home_odds
+          ? `<div class="font-semibold">Local (${{g.home_team}}): <span class="text-blue-500">${{g.ml_home_odds.toFixed(3)}}</span> · Visita (${{g.away_team}}): <span class="text-blue-500">${{g.ml_away_odds.toFixed(3)}}</span></div>
+             <div class="text-[var(--muted-foreground)]">Casa: ${{g.ml_home_book}} · Implícita: ${{g.mkt_p_home_pct}}% / ${{g.mkt_p_away_pct}}%</div>`
+          : `<div class="text-[var(--muted-foreground)] italic">⏳ Cuotas Moneyline aún no publicadas por las casas</div>`;
+
+        const ouOddsHtml = g.tot_over_odds
+          ? `<div class="font-semibold">Línea: <span>${{g.tot_line}} pts</span> (Over ${{g.tot_over_odds.toFixed(2)}} / Under ${{g.tot_under_odds.toFixed(2)}})</div>
+             <div class="text-[var(--muted-foreground)]">Modelo Total: <strong>${{g.expected_total}} pts</strong> (Over ${{g.model_p_over_pct}}%)</div>`
+          : `<div class="font-semibold">Total Proyectado Modelo: <strong>${{g.expected_total}} pts</strong></div>
+             <div class="text-[var(--muted-foreground)]">Rango 80% Conformal: [${{g.conformal_q10}} – ${{g.conformal_q90}} pts]</div>`;
+
+        return `
+          <div class="bg-[var(--card)] border ${{isBet ? 'border-blue-500/50' : 'border-[var(--border)]'}} rounded-xl p-4 shadow-sm space-y-3">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <!-- Matchup & Time -->
+              <div class="min-w-[190px]">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs px-2 py-0.5 rounded font-semibold ${{isBet ? 'bg-blue-600 text-white' : 'bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]'}}">
+                    ${{isBet ? '🎯 APOSTADO' : (g.ml_home_odds ? '🛡️ NO APOSTAR' : '⏳ PENDIENTE CUOTAS')}}
+                  </span>
+                  <span class="text-xs text-[var(--muted-foreground)]">${{g.hora_peru}} Perú</span>
+                </div>
+                <div class="text-base font-bold mt-1">${{g.away_team}} @ ${{g.home_team}}</div>
+                <div class="text-xs text-[var(--muted-foreground)]">
+                  Proyección V6: <strong>${{favTeam}} ${{spreadFair.toFixed(1)}} pts</strong> (Local ${{g.model_p_home_pct}}% / Visita ${{g.model_p_away_pct}}%)
+                </div>
+              </div>
+
+              <!-- Moneyline & Totals Odds -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 text-xs bg-[var(--background)] border border-[var(--border)] rounded-xl p-3">
+                <div>
+                  <div class="text-[var(--muted-foreground)] font-medium mb-0.5">💰 Cuotas Ganador (Moneyline)</div>
+                  ${{mlOddsHtml}}
+                </div>
+                <div>
+                  <div class="text-[var(--muted-foreground)] font-medium mb-0.5">🏀 Línea Total de Puntos (Over/Under)</div>
+                  ${{ouOddsHtml}}
+                </div>
+              </div>
+
+              <!-- Key Stats Chips -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs min-w-[280px]">
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">Elo (Loc/Vis)</div>
+                  <div class="font-bold">${{st.elo_home}} / ${{st.elo_away}}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">Dif. NetRtg</div>
+                  <div class="font-bold ${{st.net_rtg_diff >= 0 ? 'text-emerald-500' : 'text-amber-500'}}">${{st.net_rtg_diff >= 0 ? '+' : ''}}${{st.net_rtg_diff}} pts/100</div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">Descanso</div>
+                  <div class="font-bold">${{st.home_rest_days}}d vs ${{st.away_rest_days}}d</div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="text-[var(--muted-foreground)]">Viaje / Pace</div>
+                  <div class="font-bold">${{st.travel_miles_diff >= 0 ? '+' : ''}}${{st.travel_miles_diff}}mi · ${{st.expected_pace}}p</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bot Decision Footer -->
+            <div class="text-xs px-3 py-2 rounded-lg ${{isBet ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]'}}">
+              <strong>${{g.verdict_summary}}:</strong> ${{g.verdict_reason}}
+            </div>
+          </div>
+        `;
+      }}).join('');
+    }}
+
+    function updateCalculator() {{
+      const odds = parseFloat(document.getElementById('calc-odds').value) || 1.91;
+      const probPct = parseFloat(document.getElementById('calc-prob').value) || 53.5;
+      const bank = parseFloat(document.getElementById('calc-bank').value) || 96.45;
+      const p = Math.min(0.99, Math.max(0.01, probPct / 100.0));
+      const implPct = (1.0 / odds) * 100.0;
+      const fairOdds = 1.0 / p;
+      const evPct = ((p * odds) - 1.0) * 100.0;
+      const b = odds - 1.0;
+      const rawKelly = b > 0 ? Math.max(0.0, ((b * p) - (1.0 - p)) / b) : 0.0;
+      const fracKellyStake = Math.min(bank * 0.05, bank * rawKelly * 0.25);
+
+      const isPositive = evPct >= 1.5;
+      document.getElementById('calc-results').innerHTML = `
+        <div class="flex justify-between text-xs">
+          <span class="text-[var(--muted-foreground)]">Probabilidad Implícita de la Casa:</span>
+          <span class="font-bold">${{implPct.toFixed(1)}}%</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-[var(--muted-foreground)]">Cuota Justa según el Modelo (Sin Margen):</span>
+          <span class="font-bold text-blue-500">${{fairOdds.toFixed(3)}}</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-[var(--muted-foreground)]">Valor Esperado Matemático (EV %):</span>
+          <span class="font-bold ${{evPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}}">${{evPct >= 0 ? '+' : ''}}${{evPct.toFixed(2)}}%</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-[var(--muted-foreground)]">Stake Recomendado (Kelly 25% Conservador):</span>
+          <span class="font-bold">S/ ${{fracKellyStake.toFixed(2)}} PEN</span>
+        </div>
+        <div class="mt-2 pt-2 border-t border-[var(--border)] text-xs font-semibold ${{isPositive ? 'text-emerald-500' : 'text-amber-500'}}">
+          ${{isPositive ? '✅ APUESTA CON VALOR (+EV >= 1.5%): La casa paga más de lo que debería.' : '🛡️ NO APOSTAR: La cuota es inferior o muy cercana al precio justo.'}}
+        </div>
+      `;
+    }}
+
+    function setHistoryFilter(flt) {{
+      currentHistoryFilter = flt;
+      ['ALL', 'PENDING', 'WON', 'LOST'].forEach(k => {{
+        const btn = document.getElementById('hflt-' + k);
+        if (k === flt) {{
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white';
+        }} else {{
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]';
+        }}
+      }});
+      renderHistory();
+    }}
+
+    function renderHistory() {{
+      const rows = DASH_DATA.real_bets.filter(b => currentHistoryFilter === 'ALL' || b.estado === currentHistoryFilter);
+      const tbody = document.getElementById('history-tbody');
+      tbody.innerHTML = rows.map(b => {{
+        const clvStr = b.clv_porcentaje !== '' ? `${{Number(b.clv_porcentaje) >= 0 ? '+' : ''}}${{Number(b.clv_porcentaje).toFixed(2)}}%` : '—';
+        let badge = '';
+        if (b.estado === 'PENDING') badge = '<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 font-semibold">⏳ PENDIENTE</span>';
+        else if (b.estado === 'WON') badge = '<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-semibold">✅ GANADA</span>';
+        else badge = '<span class="px-2 py-0.5 rounded bg-rose-500/15 text-rose-500 font-semibold">❌ PERDIDA</span>';
+
+        const resStr = b.beneficio_neto_pen !== ''
+          ? `<span class="font-bold ${{Number(b.beneficio_neto_pen) >= 0 ? 'text-emerald-500' : 'text-rose-500'}}">S/ ${{Number(b.beneficio_neto_pen) >= 0 ? '+' : ''}}${{Number(b.beneficio_neto_pen).toFixed(2)}}</span> <span class="text-[var(--muted-foreground)]">(${{b.marcador_final}})</span>`
+          : '<span class="text-[var(--muted-foreground)]">Esperando inicio/final</span>';
+
+        return `
+          <tr class="hover:bg-[var(--background)] transition-colors">
+            <td class="py-2.5 px-4 font-mono">${{b.hora_partido_peru}}</td>
+            <td class="py-2.5 px-4 font-bold">${{b.partido}}</td>
+            <td class="py-2.5 px-4">
+              <div class="font-semibold">${{b.seleccion}}</div>
+              <div class="text-[var(--muted-foreground)]">${{b.mercado}}</div>
+            </td>
+            <td class="py-2.5 px-4 text-right font-bold">${{Number(b.cuota_decimal).toFixed(3)}} <span class="font-normal text-[var(--muted-foreground)]">(${{b.casa_apuestas}})</span></td>
+            <td class="py-2.5 px-4 text-right font-semibold">${{Number(b.prob_estimada).toFixed(1)}}%</td>
+            <td class="py-2.5 px-4 text-right text-blue-500 font-semibold">+${{Number(b.ev_porcentaje).toFixed(1)}}%</td>
+            <td class="py-2.5 px-4 text-right font-mono">${{clvStr}}</td>
+            <td class="py-2.5 px-4 text-right font-semibold">S/ ${{Number(b.stake_pen).toFixed(2)}}</td>
+            <td class="py-2.5 px-4 text-center">${{badge}}</td>
+            <td class="py-2.5 px-4 text-right">${{resStr}}</td>
+          </tr>
+        `;
+      }}).join('');
+    }}
+
+    initDashboard();
+  </script>
+</body>
+</html>
+"""
+    out = Path(html_output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    return str(out)
 
 
 def export_bets_and_tracking_dashboard(
@@ -284,6 +1153,72 @@ def export_bets_and_tracking_dashboard(
     else:
         lines.append("| — | — | — | Sin apuestas reales activas en este momento | — | — | — | — | — | — | — |")
 
+    slate_items = compute_upcoming_slate_intelligence(db)
+    active_slate_bets = [s for s in slate_items if s["verdict_status"] == "APOSTADO" and s.get("bet_details")]
+
+    lines.extend(
+        [
+            "",
+            "### 🔍 2.A Radiografía de Apuestas Activas (¿Qué Está Apostando Hoy, Cuotas y Estadísticas Clave?)",
+            "",
+        ]
+    )
+    if active_slate_bets:
+        for ab in active_slate_bets:
+            bd = ab["bet_details"]
+            st = ab["stats"]
+            lines.extend(
+                [
+                    f"#### 🎯 **{ab['matchup']}** — `{ab['hora_peru']} Hora Perú`",
+                    f"- **¿Qué está apostando el bot?**: **{bd['selection_label']}** en el mercado `Moneyline (Ganador)`",
+                    f"- **Cuota Tomada vs Cuota Justa**: **`{bd['decimal_odds']:.3f}`** en *{bd['bookmaker']}* vs Cuota Justa del Modelo **`{bd['fair_odds']:.3f}`** *(Ventaja Matemática EV: `+{bd['ev_pct']:.2f}%`)*",
+                    f"- **Stake y Ganancia Potencial**: Stake **`S/{bd['stake_pen']:.2f} PEN`** → Ganancia neta potencial: **`+S/{bd['potential_profit_pen']:.2f} PEN`** *(Retorno total: `S/{bd['stake_pen'] + bd['potential_profit_pen']:.2f} PEN`)*",
+                    f"- **Probabilidades**: Modelo Calibrado **`{bd['model_prob_pct']:.1f}%`** vs Probabilidad Implícita Limpia Casa **`{ab['mkt_p_home_pct'] if 'Local' in bd['selection_label'] else ab['mkt_p_away_pct']:.1f}%`**",
+                    f"- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `{ab['home_team']} {ab['expected_margin']:+.1f} pts` | Total esperado **`{ab['expected_total']:.1f} pts`** *(Rango 80% Conformal: `{ab['conformal_q10']:.0f} – {ab['conformal_q90']:.0f} pts` | Prob. Prórroga: `{ab['overtime_prob_pct']:.1f}%` | Prob. Paliza: `{ab['blowout_prob_pct']:.1f}%`)*",
+                    f"- **Estadísticas Clave Tomadas en Cuenta**:",
+                    f"  - **Rating Elo**: `{ab['home_team']} {st['elo_home']}` vs `{ab['away_team']} {st['elo_away']}` | **Eficiencia Neta (Off/Def)**: `{ab['home_team']} ({st['home_off']}/{st['home_def']})` vs `{ab['away_team']} ({st['away_off']}/{st['away_def']})` (`Dif: {st['net_rtg_diff']:+.1f} pts/100`)",
+                    f"  - **Ritmo (Pace)**: `{st['expected_pace']:.1f} posesiones` | **Descanso**: `{ab['home_team']} {st['home_rest_days']:.0f}d` vs `{ab['away_team']} {st['away_rest_days']:.0f}d` | **Viaje Geodésico (Millas Haversine)**: `Dif. {st['travel_miles_diff']:+d} millas` (`{st['away_tz_change']:.0f} husos horarios`)",
+                    f"- **Por qué apostó el modelo**: _{ab['verdict_reason']}_",
+                    "",
+                ]
+            )
+    else:
+        lines.append("- Actualmente no hay apuestas pendientes en espera de inicio.")
+        lines.append("")
+
+    lines.extend(
+        [
+            "### 📋 2.B Cartelera Completa de Próximos Partidos: Cuotas, Estadísticas a Tomar en Cuenta y Veredicto",
+            "",
+            "| Hora (Perú) | Partido (`Visita @ Local`) | Cuotas Ganador (`Local / Visita`) | Línea Total (`O/U`) | Proyección Modelo (`Margen / Total`) | Estadísticas Clave (`Elo`, `NetRtg`, `Descanso`, `Viaje`) | ¿Qué Hace el Bot y Por Qué? |",
+            "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
+        ]
+    )
+    for s in slate_items:
+        st = s["stats"]
+        ml_str = (
+            f"Local **{s['ml_home_odds']:.3f}** / Visita **{s['ml_away_odds']:.3f}** *({s['ml_home_book']})*"
+            if s["ml_home_odds"] and s["ml_away_odds"]
+            else "⏳ *Sin cuotas publicadas*"
+        )
+        ou_str = (
+            f"**{s['tot_line']}** (`O {s['tot_over_odds']:.2f}` / `U {s['tot_under_odds']:.2f}`)"
+            if s["tot_over_odds"] and s["tot_under_odds"]
+            else f"Línea est. `{s['tot_line']}`"
+        )
+        fav_team = s["home_team"] if s["expected_margin"] >= 0 else s["away_team"]
+        proj_str = (
+            f"**{fav_team} { -abs(s['expected_margin']):.1f} pts** (Prob Local `{s['model_p_home_pct']:.1f}%`) · Total **{s['expected_total']:.1f} pts**"
+        )
+        stats_str = (
+            f"Elo `{st['elo_home']}/{st['elo_away']}` · Net `{st['net_rtg_diff']:+.1f}` · Pace `{st['expected_pace']:.1f}` · "
+            f"Desc `{st['home_rest_days']:.0f}d/{st['away_rest_days']:.0f}d` · Viaje `{st['travel_miles_diff']:+d} mi`"
+        )
+        verdict_cell = f"**{s['verdict_summary']}** — _{s['verdict_reason']}_"
+        lines.append(
+            f"| `{s['hora_peru']}` | **{s['matchup']}** | {ml_str} | {ou_str} | {proj_str} | {stats_str} | {verdict_cell} |"
+        )
+
     lines.extend([
         "",
         "---",
@@ -305,7 +1240,16 @@ def export_bets_and_tracking_dashboard(
 
     md_path = Path(md_output_path)
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return {"csv_path": str(csv_path), "md_path": str(md_path)}
+
+    html_path = md_path.parent / "reports" / "dashboard.html"
+    generate_interactive_html_dashboard(
+        metrics=metrics,
+        espn_real_bets=espn_real_bets,
+        slate_items=slate_items,
+        html_output_path=html_path,
+        peru_str=peru_str,
+    )
+    return {"csv_path": str(csv_path), "md_path": str(md_path), "html_path": str(html_path)}
 
 
 

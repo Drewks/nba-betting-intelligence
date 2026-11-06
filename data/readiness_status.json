@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-11-06T00:07:36Z",
+  "updated_at_utc": "2026-11-06T00:28:32Z",
   "graduation_level": "FASE_0_SIMULACION_Y_CALIBRACION",
   "is_ready_for_real_money": false,
   "is_tier1_micro_bankroll_ready": false,
@@ -17,10 +17,10 @@
   "missing_live_bets_tier1": 180,
   "progress_pct": 4.0,
   "progress_live_pct": 10.0,
-  "pending_bets_count": 2,
+  "pending_bets_count": 3,
   "bankroll_pen": 96.45,
   "roi_pct": -15.03,
-  "yield_pct": -13.46,
+  "yield_pct": -12.53,
   "max_drawdown_pct": 6.09,
   "brier_score": 0.2277,
   "baseline_brier_score": 0.2483,
@@ -40,11 +40,11 @@
     "c8_zero_leakage_and_reconciled": true
   },
   "headline": "🚦 Estado del Modelo: EN CALIBRACIÓN (3/8 Criterios Nivel 1 en VERDE — No usar dinero real aún)",
-  "detail_message": "Muestra Total: 20/500 (4.0%) | Muestra 100% En Vivo: 20/200 (10.0%, 2 en espera hoy) | Bankroll: S/96.45 PEN (ROI -15.03%, MaxDD 6.09%) | Brier: 0.2277 (ECE 0.1449). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
+  "detail_message": "Muestra Total: 20/500 (4.0%) | Muestra 100% En Vivo: 20/200 (10.0%, 3 en espera hoy) | Bankroll: S/96.45 PEN (ROI -15.03%, MaxDD 6.09%) | Brier: 0.2277 (ECE 0.1449). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
   "tier1_notification_sent_at": null,
   "tier2_notification_sent_at": null,
-  "last_daily_pick_sent_date": "2026-11-05",
-  "last_daily_pick_bet_id": "BET_20261106_92B26B33",
-  "last_daily_pick_summary": "ORL @ PHX | HOME (PHX gana) @ 1.910 (Matchbook) — Prob: 53.5%",
+  "last_daily_pick_sent_date": "2026-11-06",
+  "last_daily_pick_bet_id": "BET_20261107_7C4523D5",
+  "last_daily_pick_summary": "OKC @ MEM | AWAY (OKC gana) @ 1.606 (DraftKings) — Prob: 63.5%",
   "last_triggered_channels": []
 }

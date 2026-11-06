@@ -1,23 +1,23 @@
 ---
-date_generated: 2026-11-06T00:07:36Z
+date_generated: 2026-11-06T00:24:48Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-06
-predictions_count: 16
+predictions_count: 20
 simulation_only: true
 ---
 # Informe Diario NBA Betting Intelligence — 2026-11-06
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-06T00:07:36Z`
+- **Fecha de generación (UTC)**: `2026-11-06T00:24:48Z`
 - **Jornada evaluada**: `2026-11-06`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `2`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `16`
+- **Predicciones emitidas**: `20`
 - **Apuestas simuladas registradas en la jornada**: `1` (límite diario: 3, stake máx: S/1.00 PEN)
-- **Decisiones NO_BET registradas**: `15`
-- **Resultados pendientes globales**: `2`
+- **Decisiones NO_BET registradas**: `19`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -30,12 +30,12 @@ simulation_only: true
 | `ORL @ PHX` | `moneyline` | **HOME** | — | 1.910 | 0.5236 | 0.5352 | +2.23% | `Matchbook (Best of 29 books)` |
 | `MIA @ GSW` | `moneyline` | **HOME** | — | 1.621 | 0.6169 | 0.6119 | -0.80% | `DraftKings` |
 | `MIA @ GSW` | `moneyline` | **HOME** | — | 1.621 | 0.6169 | 0.6069 | -1.61% | `DraftKings` |
+| `MIA @ GSW` | `moneyline` | **HOME** | — | 1.599 | 0.6255 | 0.6127 | -2.04% | `DraftKings` |
 | `MIA @ GSW` | `total_points` | **UNDER** | 235.5 | 1.940 | 0.5155 | 0.5023 | -2.56% | `Matchbook (LineShop)` |
 | `MIA @ GSW` | `total_points` | **OVER** | 235.5 | 1.877 | 0.5327 | 0.5186 | -2.65% | `DraftKings` |
 | `MIA @ GSW` | `total_points` | **OVER** | 235.5 | 1.877 | 0.5327 | 0.5172 | -2.91% | `DraftKings` |
+| `MIA @ GSW` | `total_points` | **OVER** | 235.5 | 1.877 | 0.5327 | 0.5172 | -2.91% | `DraftKings` |
 | `ORL @ PHX` | `total_points` | **UNDER** | 224.0 | 1.930 | 0.5181 | 0.5018 | -3.16% | `Pinnacle (LineShop)` |
-| `ORL @ PHX` | `total_points` | **OVER** | 224.0 | 1.930 | 0.5181 | 0.4982 | -3.84% | `Pinnacle (LineShop)` |
-| `ORL @ PHX` | `moneyline` | **AWAY** | — | 2.120 | 0.4717 | 0.4528 | -4.02% | `Unibet (SE) (Best of 29 books)` |
 
 ## 4. Apuestas Simuladas (Paper Trading S/100 PEN) y Resultados Pendientes
 

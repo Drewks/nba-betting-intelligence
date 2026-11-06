@@ -1,8 +1,8 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-05 19:07 (Hora Perú UTC-5)` (`2026-11-06T00:07:36Z`)
+- **Última actualización**: `2026-11-05 19:28 (Hora Perú UTC-5)` (`2026-11-06T00:28:32Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/96.45 PEN`** (`-3.55 PEN`)
-- **ROI Actual**: `-15.03%` | **Yield Actual**: `-13.46%` | **CLV Promedio**: `+1.17%` | **Max Drawdown**: `6.09%` | **Apuestas en espera**: `2` (`S/2.75 PEN` reservados)
+- **ROI Actual**: `-15.03%` | **Yield Actual**: `-12.53%` | **CLV Promedio**: `+1.17%` | **Max Drawdown**: `6.09%` | **Apuestas en espera**: `3` (`S/4.71 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
 - **Modo de Apuesta Activo**: `Kelly-Conviccion Proporcional a la Ventaja (S/1.00 a S/6.00 PEN)` *(Modulado por EV real contra casas sharp, Guardian Activo de CLV que reduce exposicion ante movimientos adversos de linea, y Limite de Anti-Correlacion de 1 apuesta por partido)*.
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
@@ -14,17 +14,17 @@
 
 ### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (3/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
 - **Progreso Muestra Total (Nivel 1)**: `[█░░░░░░░░░░░░░░░░░░░] 20 / 500 apuestas (4.0%)` — *Faltan **480** apuestas.*
-- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[██░░░░░░░░░░░░░░░░░░] 20 / 200 en vivo (10.0%)` — *Tienes **2** apuestas reales en espera hoy.*
+- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[██░░░░░░░░░░░░░░░░░░] 20 / 200 en vivo (10.0%)` — *Tienes **3** apuestas reales en espera hoy.*
 
 Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterios cuantitativos estrictos** divididos en **2 niveles de graduación**:
 
 | # | Criterio Cuantitativo de Auditoría | Estado Hoy | Valor Actual | Meta Nivel 1 (Piloto Micro-Banca 25%) | Meta Nivel 2 (Banca Completa 100%) |
 | :-: | :--- | :---: | :--- | :--- | :--- |
 | 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `20 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
-| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `20 liquidadas (2 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
+| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `20 liquidadas (3 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
 | 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | ✅ VERDE | `Brier 0.2277 vs 0.2483` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |
 | 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.1449 (14.49%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
-| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -15.03% / Yield -13.46%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
+| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -15.03% / Yield -12.53%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
 | 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 6.09% (En vivo: 6.09%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
 | 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-46.5%, +15.2%] / IC95 [-52.6%, +19.7%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | ✅ VERDE | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |
@@ -35,16 +35,17 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 
 ## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)
 
-> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-11-05` — 1 Solo Pick: Mayor Probabilidad de Acierto)
-> - **Partido**: **ORL @ PHX** (`2026-11-05 21:00 Hora Perú`)
-> - **Pick Más Probable**: 🎯 **HOME (PHX gana)** (Ganador (Moneyline)) @ **`1.910`** *(Matchbook)*
-> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`53.5%`** | **EV**: `+2.2%`
+> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-11-06` — 1 Solo Pick: Mayor Probabilidad de Acierto)
+> - **Partido**: **OKC @ MEM** (`2026-11-06 20:00 Hora Perú`)
+> - **Pick Más Probable**: 🎯 **AWAY (OKC gana)** (Ganador (Moneyline)) @ **`1.606`** *(DraftKings)*
+> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`63.5%`** | **EV**: `+2.0%`
 > - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor probabilidad de acierto y sin alerta CLV)*.
 
 Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):
 
 | Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
+| `2026-11-06 20:00` | **OKC @ MEM** | Ganador (Moneyline) | **AWAY (OKC gana)** | **1.606** *(DraftKings)* | 63.5% | `+2.0%` | — | S/1.96 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-06 19:30` | **PHI @ CLE** | Ganador (Moneyline) | **HOME (CLE gana)** | **2.210** *(1xBet)* | 47.9% | `+5.9%` | — | S/1.36 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-05 21:00` | **ORL @ PHX** | Ganador (Moneyline) | **HOME (PHX gana)** | **1.910** *(Matchbook)* | 53.5% | `+2.2%` | — | S/1.39 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-04 21:00` | **TOR @ DEN** | Ganador (Moneyline) | **AWAY (TOR gana)** | **2.900** *(Bovada)* | 37.2% | `+7.9%` | — | S/1.10 | ❌ PERDIDA | S/-1.10 (HOME 128 - AWAY 109 (Total: 237)) |
@@ -67,6 +68,64 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 | `2026-10-28 21:30` | **LAL @ LAC** | Ganador (Moneyline) | **HOME (LAC gana)** | **1.970** *(Matchbook)* | 59.9% | `+17.9%` | `+0.00%` | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 87 - AWAY 103 (Total: 190)) |
 | `2026-10-28 20:30` | **OKC @ DAL** | Ganador (Moneyline) | **HOME (DAL gana)** | **2.760** *(FanDuel)* | 49.8% | `+37.3%` | `+0.00%` | S/1.00 | ✅ GANADA | S/+1.76 (HOME 120 - AWAY 96 (Total: 216)) |
 | `2026-10-28 20:30` | **OKC @ DAL** | Total Puntos (Over/Under) | **UNDER 228.5** | **1.920** *(GTbets)* | 57.0% | `+9.4%` | `+0.00%` | S/1.00 | ✅ GANADA | S/+0.92 (HOME 120 - AWAY 96 (Total: 216)) |
+
+### 🔍 2.A Radiografía de Apuestas Activas (¿Qué Está Apostando Hoy, Cuotas y Estadísticas Clave?)
+
+#### 🎯 **ORL @ PHX** — `2026-11-05 21:00 Hora Perú`
+- **¿Qué está apostando el bot?**: **Gana PHX (Local)** en el mercado `Moneyline (Ganador)`
+- **Cuota Tomada vs Cuota Justa**: **`1.910`** en *Matchbook* vs Cuota Justa del Modelo **`1.869`** *(Ventaja Matemática EV: `+2.23%`)*
+- **Stake y Ganancia Potencial**: Stake **`S/1.39 PEN`** → Ganancia neta potencial: **`+S/1.26 PEN`** *(Retorno total: `S/2.65 PEN`)*
+- **Probabilidades**: Modelo Calibrado **`53.5%`** vs Probabilidad Implícita Limpia Casa **`52.6%`**
+- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `PHX +0.0 pts` | Total esperado **`223.9 pts`** *(Rango 80% Conformal: `201 – 247 pts` | Prob. Prórroga: `9.2%` | Prob. Paliza: `10.3%`)*
+- **Estadísticas Clave Tomadas en Cuenta**:
+  - **Rating Elo**: `PHX 1464` vs `ORL 1499` | **Eficiencia Neta (Off/Def)**: `PHX (113.4/114.6)` vs `ORL (110.6/112.1)` (`Dif: +0.4 pts/100`)
+  - **Ritmo (Pace)**: `99.9 posesiones` | **Descanso**: `PHX 1d` vs `ORL 3d` | **Viaje Geodésico (Millas Haversine)**: `Dif. +1842 millas` (`2 husos horarios`)
+- **Por qué apostó el modelo**: _Visita (ORL) viaja +1842 millas más · Eficiencia neta favorable (PHX +0.4 pts/100) · Cuota 1.910 en Matchbook supera la cuota justa del modelo (1.869)._
+
+#### 🎯 **PHI @ CLE** — `2026-11-06 19:30 Hora Perú`
+- **¿Qué está apostando el bot?**: **Gana CLE (Local)** en el mercado `Moneyline (Ganador)`
+- **Cuota Tomada vs Cuota Justa**: **`2.210`** en *1xBet* vs Cuota Justa del Modelo **`2.088`** *(Ventaja Matemática EV: `+5.91%`)*
+- **Stake y Ganancia Potencial**: Stake **`S/1.36 PEN`** → Ganancia neta potencial: **`+S/1.65 PEN`** *(Retorno total: `S/3.01 PEN`)*
+- **Probabilidades**: Modelo Calibrado **`47.9%`** vs Probabilidad Implícita Limpia Casa **`45.0%`**
+- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `CLE +0.3 pts` | Total esperado **`224.4 pts`** *(Rango 80% Conformal: `202 – 248 pts` | Prob. Prórroga: `9.5%` | Prob. Paliza: `10.2%`)*
+- **Estadísticas Clave Tomadas en Cuenta**:
+  - **Rating Elo**: `CLE 1555` vs `PHI 1564` | **Eficiencia Neta (Off/Def)**: `CLE (115.8/113.7)` vs `PHI (113.0/109.6)` (`Dif: -1.3 pts/100`)
+  - **Ritmo (Pace)**: `99.3 posesiones` | **Descanso**: `CLE 2d` vs `PHI 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. -859 millas` (`0 husos horarios`)
+- **Por qué apostó el modelo**: _Ajuste de retorno de gira incluido · Eficiencia neta favorable (PHI +1.3 pts/100) · Cuota 2.210 en 1xBet supera la cuota justa del modelo (2.088)._
+
+#### 🎯 **OKC @ MEM** — `2026-11-06 20:00 Hora Perú`
+- **¿Qué está apostando el bot?**: **Gana OKC (Visita)** en el mercado `Moneyline (Ganador)`
+- **Cuota Tomada vs Cuota Justa**: **`1.606`** en *DraftKings* vs Cuota Justa del Modelo **`1.575`** *(Ventaja Matemática EV: `+2.03%`)*
+- **Stake y Ganancia Potencial**: Stake **`S/1.96 PEN`** → Ganancia neta potencial: **`+S/1.19 PEN`** *(Retorno total: `S/3.15 PEN`)*
+- **Probabilidades**: Modelo Calibrado **`63.5%`** vs Probabilidad Implícita Limpia Casa **`59.8%`**
+- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `MEM -5.5 pts` | Total esperado **`224.3 pts`** *(Rango 80% Conformal: `202 – 248 pts` | Prob. Prórroga: `8.1%` | Prob. Paliza: `11.6%`)*
+- **Estadísticas Clave Tomadas en Cuenta**:
+  - **Rating Elo**: `MEM 1440` vs `OKC 1658` | **Eficiencia Neta (Off/Def)**: `MEM (114.3/116.3)` vs `OKC (114.1/109.3)` (`Dif: -6.7 pts/100`)
+  - **Ritmo (Pace)**: `98.3 posesiones` | **Descanso**: `MEM 2d` vs `OKC 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. +421 millas` (`0 husos horarios`)
+- **Por qué apostó el modelo**: _Visita (OKC) viaja +421 millas más · Eficiencia neta favorable (OKC +6.7 pts/100) · Cuota 1.606 en DraftKings supera la cuota justa del modelo (1.575)._
+
+### 📋 2.B Cartelera Completa de Próximos Partidos: Cuotas, Estadísticas a Tomar en Cuenta y Veredicto
+
+| Hora (Perú) | Partido (`Visita @ Local`) | Cuotas Ganador (`Local / Visita`) | Línea Total (`O/U`) | Proyección Modelo (`Margen / Total`) | Estadísticas Clave (`Elo`, `NetRtg`, `Descanso`, `Viaje`) | ¿Qué Hace el Bot y Por Qué? |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `2026-11-05 21:00` | **ORL @ PHX** | Local **1.910** / Visita **2.120** *(Matchbook)* | **223.0** (`O 2.01` / `U 2.02`) | **PHX -0.0 pts** (Prob Local `49.7%`) · Total **223.9 pts** | Elo `1464/1499` · Net `+0.4` · Pace `99.9` · Desc `1d/3d` · Viaje `+1842 mi` | **🎯 APOSTADO: Gana PHX (Local) @ 1.910 (Matchbook) | Stake S/1.39 (EV +2.23%)** — _Visita (ORL) viaja +1842 millas más · Eficiencia neta favorable (PHX +0.4 pts/100) · Cuota 1.910 en Matchbook supera la cuota justa del modelo (1.869)._ |
+| `2026-11-05 22:00` | **MIA @ GSW** | Local **1.621** / Visita **3.550** *(DraftKings)* | **234.0** (`O 2.00` / `U 1.94`) | **GSW -4.6 pts** (Prob Local `65.8%`) · Total **237.4 pts** | Elo `1496/1483` · Net `+0.7` · Pace `100.7` · Desc `3d/1d` · Viaje `+348 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
+| `2026-11-06 19:00` | **WAS @ ATL** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **ATL -8.4 pts** (Prob Local `78.2%`) · Total **225.4 pts** | Elo `1532/1350` · Net `+7.0` · Pace `97.7` · Desc `2d/2d` · Viaje `+0 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-06 19:00` | **BOS @ CHA** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **BOS -4.9 pts** (Prob Local `36.5%`) · Total **212.7 pts** | Elo `1481/1604` · Net `-8.8` · Pace `97.9` · Desc `2d/2d` · Viaje `+190 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-06 19:30` | **PHI @ CLE** | Local **2.210** / Visita **1.810** *(1xBet)* | **230.5** (`O 1.99` / `U 1.91`) | **CLE -0.3 pts** (Prob Local `52.7%`) · Total **224.4 pts** | Elo `1555/1564` · Net `-1.3` · Pace `99.3` · Desc `2d/2d` · Viaje `-859 mi` | **🎯 APOSTADO: Gana CLE (Local) @ 2.210 (1xBet) | Stake S/1.36 (EV +5.91%)** — _Ajuste de retorno de gira incluido · Eficiencia neta favorable (PHI +1.3 pts/100) · Cuota 2.210 en 1xBet supera la cuota justa del modelo (2.088)._ |
+| `2026-11-06 20:00` | **UTA @ DAL** | Local **1.407** / Visita **3.080** *(DraftKings)* | **226.5** (`O 1.88` / `U 1.94`) | **DAL -8.2 pts** (Prob Local `75.6%`) · Total **229.6 pts** | Elo `1428/1301` · Net `+7.7` · Pace `97.9` · Desc `2d/2d` · Viaje `+191 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
+| `2026-11-06 20:00` | **OKC @ MEM** | Local **2.390** / Visita **1.606** *(DraftKings)* | **225.5** (`O 1.91` / `U 1.91`) | **OKC -5.5 pts** (Prob Local `30.0%`) · Total **224.3 pts** | Elo `1440/1658` · Net `-6.7` · Pace `98.3` · Desc `2d/2d` · Viaje `+421 mi` | **🎯 APOSTADO: Gana OKC (Visita) @ 1.606 (DraftKings) | Stake S/1.96 (EV +2.03%)** — _Visita (OKC) viaja +421 millas más · Eficiencia neta favorable (OKC +6.7 pts/100) · Cuota 1.606 en DraftKings supera la cuota justa del modelo (1.575)._ |
+| `2026-11-06 20:00` | **TOR @ MIL** | Local **2.970** / Visita **1.450** *(DraftKings)* | **231.5** (`O 1.93` / `U 1.93`) | **TOR -5.7 pts** (Prob Local `32.8%`) · Total **228.1 pts** | Elo `1364/1526` · Net `-9.0` · Pace `100.4` · Desc `2d/2d` · Viaje `+57 mi` | **🛡️ NO APOSTAR (Pass)** — _Cuotas eficientes: la probabilidad del modelo está alineada con las casas (sin ventaja EV suficiente)._ |
+| `2026-11-06 20:00` | **MIN @ NOP** | Local **2.630** / Visita **1.606** *(BetRivers)* | **229.5** (`O 1.95` / `U 1.95`) | **MIN -4.7 pts** (Prob Local `33.7%`) · Total **228.1 pts** | Elo `1436/1612` · Net `-6.6` · Pace `99.5` · Desc `2d/2d` · Viaje `+317 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
+| `2026-11-06 22:00` | **POR @ LAL** | Local **1.781** / Visita **2.080** *(DraftKings)* | **233.5** (`O 1.88` / `U 1.94`) | **LAL -3.8 pts** (Prob Local `63.6%`) · Total **223.3 pts** | Elo `1592/1554` · Net `+1.8` · Pace `99.6` · Desc `2d/2d` · Viaje `-3 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
+| `2026-11-06 22:00` | **SAS @ SAC** | Local **7.380** / Visita **1.111** *(1xBet)* | **228.5** (`O 1.93` / `U 2.07`) | **SAS -12.1 pts** (Prob Local `16.7%`) · Total **225.1 pts** | Elo `1354/1680` · Net `-16.9` · Pace `99.2` · Desc `2d/2d` · Viaje `+1459 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
+| `2026-11-07 17:00` | **DEN @ IND** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **DEN -6.3 pts** (Prob Local `29.7%`) · Total **225.9 pts** | Elo `1360/1556` · Net `-9.0` · Pace `97.7` · Desc `2d/2d` · Viaje `+615 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-07 19:30` | **BKN @ ATL** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **ATL -8.8 pts** (Prob Local `79.2%`) · Total **220.9 pts** | Elo `1532/1342` · Net `+6.9` · Pace `98.6` · Desc `3d/3d` · Viaje `+203 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-07 20:00` | **NYK @ CLE** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **NYK -2.6 pts** (Prob Local `42.1%`) · Total **221.2 pts** | Elo `1555/1659` · Net `-4.8` · Pace `99.4` · Desc `3d/3d` · Viaje `-546 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-07 20:00` | **WAS @ OKC** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **OKC -13.2 pts** (Prob Local `88.1%`) · Total **222.4 pts** | Elo `1658/1350` · Net `+11.3` · Pace `97.7` · Desc `3d/3d` · Viaje `+1150 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-07 20:30` | **ORL @ GSW** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **GSW -3.8 pts** (Prob Local `61.6%`) · Total **224.1 pts** | Elo `1496/1499` · Net `+2.9` · Pace `99.2` · Desc `5d/5d` · Viaje `+2435 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-07 21:00` | **HOU @ PHX** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **HOU -5.4 pts** (Prob Local `33.6%`) · Total **225.6 pts** | Elo `1464/1621` · Net `-8.8` · Pace `100.7` · Desc `3d/3d` · Viaje `+1015 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
+| `2026-11-07 22:00` | **SAS @ POR** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **SAS -2.7 pts** (Prob Local `40.6%`) · Total **220.6 pts** | Elo `1554/1680` · Net `-4.8` · Pace `99.1` · Desc `3d/3d` · Viaje `+714 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
 
 ---
 
