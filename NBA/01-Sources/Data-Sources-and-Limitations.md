@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-06T01:07:19Z
+date_generated: 2026-11-06T01:59:49Z
 component: nba_data_scout
 ---
 # Evaluación de Fuentes de Estadísticas y Cuotas NBA
@@ -17,4 +17,4 @@ component: nba_data_scout
 
 ## 4. Playwright + PixelRAG (`visual_researcher`)
 - Playwright: `OPERATIONAL`.
-- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)` indexando lesiones oficiales de Sportradar, perfiles tácticos de Synergy Basketball NBA y tablas DOM de ESPN.
+- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)` indexando lesiones oficiales de Sportradar, perfiles tácticos de Synergy Basketball NBA y tablas DOM de ESPN.

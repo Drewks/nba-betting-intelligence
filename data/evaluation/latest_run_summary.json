@@ -1,14 +1,15 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-06T01:07:12Z",
+  "mode": "auto",
+  "timestamp_utc": "2026-11-06T01:59:38Z",
   "ingested_dates": [
+    "2026-11-05",
     "2026-11-06",
     "2026-11-07"
   ],
-  "closing_lines_promoted": 0,
+  "closing_lines_promoted": 2,
   "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 1,
+  "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic"
@@ -58,7 +59,10 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-06T01:07:16Z",
+      "browserbase_cli_installed": true,
+      "browserbase_api_key_configured": false,
+      "browserbase_mode": "LOCAL_BROWSE_CLI",
+      "extracted_at": "2026-11-06T01:59:42Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -66,57 +70,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
-    "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-    "indexed_documents_count": 105,
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
+    "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+    "indexed_documents_count": 124,
     "top_retrieved_context": [
+      {
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Jalen Johnson F Nov 6 Day-To-Day Nov 5: Johnson is questionable to suit up for Friday's game against Washington.",
+        "relevance_score": 0.2216,
+        "captured_at": "2026-11-06T01:59:44Z"
+      },
+      {
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
+        "relevance_score": 0.2155,
+        "captured_at": "2026-11-06T01:59:44Z"
+      },
+      {
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
+        "relevance_score": 0.2155,
+        "captured_at": "2026-11-06T01:59:44Z"
+      },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard is Questionable for Friday's (Nov. 6) game against the Hornets.",
-        "relevance_score": 0.2419,
+        "relevance_score": 0.2087,
         "captured_at": "2026-11-05"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
-        "relevance_score": 0.1782,
-        "captured_at": "2026-11-05"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-        "relevance_score": 0.175,
-        "captured_at": "2026-11-04"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-        "relevance_score": 0.1734,
+        "relevance_score": 0.182,
         "captured_at": "2026-11-04"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
+        "relevance_score": 0.1813,
+        "captured_at": "2026-11-04"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
+        "relevance_score": 0.18,
+        "captured_at": "2026-11-05"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
-        "relevance_score": 0.1705,
+        "relevance_score": 0.1782,
         "captured_at": "2026-11-04"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHA Kon Knueppel (SF) Day To Day (Leg): Knueppel did not return to Wednesday's (Nov. 4) game against the Nets.",
-        "relevance_score": 0.1704,
-        "captured_at": "2026-11-04"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen did not return to Wednesday's (Nov. 4) game versus the Thunder.",
-        "relevance_score": 0.1691,
-        "captured_at": "2026-11-04"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Nov. 4) game against Cleveland.",
-        "relevance_score": 0.1415,
-        "captured_at": "2026-11-05"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -129,7 +133,7 @@
     "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
-    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
+    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
   }
 }
