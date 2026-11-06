@@ -1,24 +1,24 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
   "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Jalen Johnson F Nov 6 Day-To-Day Nov 5: Johnson is questionable to suit up for Friday's game against Washington.",
       "relevance_score": 0.2218,
       "captured_at": "2026-11-06T03:55:27Z"
     },
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
       "relevance_score": 0.2154,
       "captured_at": "2026-11-06T03:55:27Z"
     },
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
       "relevance_score": 0.2154,
       "captured_at": "2026-11-06T03:55:27Z"
