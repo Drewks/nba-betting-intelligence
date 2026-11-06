@@ -341,6 +341,32 @@ def generate_interactive_html_dashboard(
           Regla Anti-Correlación: Máx. 1 apuesta por partido
         </span>
       </div>
+      <!-- INJURY SNIPER DUAL-WINDOW BANNER (V7.1 FASE 6) -->
+      <div class="bg-gradient-to-r from-blue-950/40 via-purple-950/30 to-[var(--card)] border border-blue-500/30 rounded-xl p-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-sm text-[var(--foreground)]">🎯 Injury Sniper V7.1 — Monitoreo Pregame Dual-Window</span>
+                <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">T-2h & T-30m Activo</span>
+              </div>
+              <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+                Escaneo automático a las <strong>T-2h</strong> (Injury Report oficial NBA / ruedas de prensa) y <strong>T-30m</strong> (Confirmación de quintetos titulares definitivos). Detección de transiciones y recálculo On-Off RAPM con cuotas en vivo.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-3 py-1 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] font-mono">
+              Ventana 1: T-120 min
+            </span>
+            <span class="px-3 py-1 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] font-mono">
+              Ventana 2: T-30 min
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div id="active-bets-container" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></div>
     </div>
 

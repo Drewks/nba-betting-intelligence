@@ -226,4 +226,26 @@ DDL_STATEMENTS = [
         details_json TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE IF NOT EXISTS sniper_alerts (
+        alert_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        window_type TEXT NOT NULL CHECK (window_type IN ('WINDOW_2H', 'WINDOW_30M', 'FORCE', 'TEST')),
+        minutes_to_tipoff REAL NOT NULL,
+        selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+        decimal_odds REAL NOT NULL,
+        point_prob REAL NOT NULL,
+        conformal_p_low REAL NOT NULL,
+        conformal_p_high REAL NOT NULL,
+        ev_pct REAL NOT NULL,
+        ev_lower_bound_pct REAL NOT NULL,
+        kelly_stake_pen REAL NOT NULL,
+        transitions_json TEXT NOT NULL,
+        synergy_shift REAL NOT NULL,
+        rational TEXT NOT NULL,
+        emitted_at TEXT NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
 ]

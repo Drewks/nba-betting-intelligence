@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       cycle_mode:
-        description: "Modo de ciclo a ejecutar (auto, pregame, settle_and_calibrate)"
+        description: "Modo de ciclo a ejecutar (auto, pregame, settle_and_calibrate, sniper)"
         required: false
         default: "auto"
 
@@ -86,6 +86,13 @@ jobs:
           fi
           echo "Ejecutando ciclo en modo: $CYCLE_MODE (schedule: ${{ github.event.schedule || 'manual' }})"
           uv run python scripts/run_cloud_cycle.py --mode "$CYCLE_MODE"
+
+      - name: 5b. Ejecutar Monitor Dual-Window Injury Sniper (T-2h y T-30m)
+        env:
+          BROWSERBASE_API_KEY: ${{ secrets.BROWSERBASE_API_KEY }}
+          SPORTRADAR_API_KEY: ${{ secrets.SPORTRADAR_API_KEY }}
+        run: |
+          uv run python scripts/run_injury_sniper.py --mode auto
 
       - name: 6. Publicar Tablero de Pronósticos, Semáforo y Auditoría en el Summary de GitHub Actions
         run: |

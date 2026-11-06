@@ -1615,5 +1615,143 @@ def test_31_simultaneous_kelly_portfolio_optimization(tmp_path: Path) -> None:
         assert 1.00 <= b["stake_pen"] <= 6.00
 
 
+def test_32_injury_sniper_pregame_dual_window(tmp_path: Path) -> None:
+    """
+    V7.1 Fase 6 Verification:
+    Tests the automated Injury Sniper Dual-Window Monitor at T-2h and T-30m:
+      1) Temporal classification into WINDOW_2H (90-150m) and WINDOW_30M (15-45m).
+      2) Transition detection for star players (Questionable -> OUT, late scratches).
+      3) Lineup synergy penalty recalculation and Venn-Abers conformal Lower-Bound EV.
+      4) Emission of actionable Sniper Alerts with simultaneous Kelly portfolio stakes.
+      5) Immutable audit logging into the SQLite `sniper_alerts` table.
+    """
+    from datetime import datetime, timezone
+    from src.prediction.injury_sniper import (
+        classify_game_window,
+        detect_injury_status_transitions,
+        InjurySniperMonitor,
+    )
+    from src.storage.db import DatabaseManager
+
+    ref_utc = datetime(2026, 11, 7, 22, 0, 0, tzinfo=timezone.utc)
+
+    # 1. Test Window Classification
+    w_2h, d_2h = classify_game_window("2026-11-08T00:00:00Z", ref_utc)  # 120m
+    assert w_2h == "WINDOW_2H"
+    assert d_2h == 120.0
+
+    w_30m, d_30m = classify_game_window("2026-11-07T22:30:00Z", ref_utc)  # 30m
+    assert w_30m == "WINDOW_30M"
+    assert d_30m == 30.0
+
+    w_imm, d_imm = classify_game_window("2026-11-07T22:10:00Z", ref_utc)  # 10m
+    assert w_imm == "TIPOFF_IMMINENT"
+
+    w_fut, d_fut = classify_game_window("2026-11-08T03:00:00Z", ref_utc)  # 300m
+    assert w_fut == "UPCOMING_FUTURE"
+
+    # 2. Test Injury Transition Detection
+    cached_inj = [
+        {"name": "Luka Doncic", "status": "QUESTIONABLE", "team": "DAL"},
+        {"name": "Rudy Gobert", "status": "DOUBTFUL", "team": "MIN"},
+    ]
+    live_inj = [
+        {"name": "Luka Doncic", "status": "OUT", "team": "DAL", "notes": "Left ankle sprain"},
+        {"name": "Rudy Gobert", "status": "AVAILABLE", "team": "MIN", "notes": "Cleared to play"},
+    ]
+    transitions = detect_injury_status_transitions(cached_inj, live_inj)
+    assert len(transitions) == 2
+
+    luka_t = next(t for t in transitions if t["player_name"] == "Luka Doncic")
+    assert luka_t["old_status"] == "QUESTIONABLE"
+    assert luka_t["new_status"] == "OUT"
+    assert luka_t["tactical_role"] == "PRIMARY_INITIATOR"
+    assert luka_t["severity"] == "CRITICAL"
+    assert luka_t["is_synergy_star"] is True
+
+    rudy_t = next(t for t in transitions if t["player_name"] == "Rudy Gobert")
+    assert rudy_t["old_status"] == "DOUBTFUL"
+    assert rudy_t["new_status"] == "AVAILABLE"
+    assert rudy_t["tactical_role"] == "RIM_ANCHOR"
+    assert rudy_t["severity"] == "HIGH"
+
+    # 3. Test Sniper Opportunity Evaluation & Conformal Lower-Bound EV
+    db_file = tmp_path / "test_sniper.sqlite3"
+    db = DatabaseManager(db_file)
+    # Seed teams & game to satisfy foreign keys
+    db.execute_insert(
+        "INSERT INTO teams (team_id, full_name, conference, division, updated_at) VALUES ('PHX', 'Phoenix Suns', 'West', 'Pacific', '2026-10-01T00:00:00Z');"
+    )
+    db.execute_insert(
+        "INSERT INTO teams (team_id, full_name, conference, division, updated_at) VALUES ('DAL', 'Dallas Mavericks', 'West', 'Southwest', '2026-10-01T00:00:00Z');"
+    )
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team, status,
+            features_available_at, source_provider, ingested_at
+        ) VALUES ('G_SNIPER_TEST', '2026-27', '2026-11-07', '2026-11-08T00:00:00Z', 'PHX', 'DAL', 'SCHEDULED', '2026-11-07T20:00:00Z', 'espn', '2026-11-07T20:00:00Z');
+        """
+    )
+
+    odds_list = [
+        {
+            "odds_id": "O_PHX",
+            "game_id": "G_SNIPER_TEST",
+            "provider": "draftkings",
+            "market": "moneyline",
+            "selection": "HOME",
+            "line_value": None,
+            "decimal_odds": 1.88,
+            "counterpart_decimal_odds": 1.95,
+            "captured_at": "2026-11-07T22:00:00Z",
+        },
+        {
+            "odds_id": "O_DAL",
+            "game_id": "G_SNIPER_TEST",
+            "provider": "draftkings",
+            "market": "moneyline",
+            "selection": "AWAY",
+            "line_value": None,
+            "decimal_odds": 1.95,
+            "counterpart_decimal_odds": 1.88,
+            "captured_at": "2026-11-07T22:00:00Z",
+        },
+    ]
+
+    monitor = InjurySniperMonitor(db=db, min_ev_threshold=0.04)
+    alerts = monitor.evaluate_game_sniper_opportunity(
+        game_id="G_SNIPER_TEST",
+        matchday_date="2026-11-07",
+        game_start_time="2026-11-08T00:00:00Z",
+        home_team="PHX",
+        away_team="DAL",
+        live_injuries=[{"name": "Luka Doncic", "status": "OUT", "team": "DAL", "position": "PG"}],
+        market_odds=odds_list,
+        window_type="WINDOW_2H",
+        minutes_to_tipoff=120.0,
+        cached_injuries=[{"name": "Luka Doncic", "status": "QUESTIONABLE", "team": "DAL"}],
+        bankroll_pen=100.0,
+    )
+
+    # 4. Verify Alert Generation on PHX ML
+    assert len(alerts) >= 1
+    phx_alert = next(a for a in alerts if a["selection"] == "HOME")
+    assert phx_alert["target_team"] == "PHX"
+    assert phx_alert["synergy_shift"] > 3.0  # Away loss of Luka adds >3 pts advantage to Home
+    assert phx_alert["ev_lower_bound_pct"] > 4.0
+    assert 1.00 <= phx_alert["kelly_stake_pen"] <= 6.00
+    assert phx_alert["window_type"] == "WINDOW_2H"
+
+    # 5. Verify SQLite persistence in sniper_alerts
+    persisted = db.fetch_all("SELECT * FROM sniper_alerts WHERE game_id = 'G_SNIPER_TEST'")
+    assert len(persisted) >= 1
+    row = persisted[0]
+    assert row["selection"] == "HOME"
+    assert row["window_type"] == "WINDOW_2H"
+    assert row["ev_lower_bound_pct"] > 4.0
+
+
+
 
 
