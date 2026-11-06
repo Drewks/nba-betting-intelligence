@@ -327,6 +327,61 @@ def generate_interactive_html_dashboard(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NBA Betting Intelligence V7.2 — Dashboard Cuantitativo Institucional (Venn-Abers, Optuna 8P & Props Engine)</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {{
+      --background: #090d16;
+      --card: #111827;
+      --card-hover: #172033;
+      --foreground: #f8fafc;
+      --muted-foreground: #94a3b8;
+      --border: #1e293b;
+      --border-subtle: #2d3748;
+      --primary: #3b82f6;
+      --primary-foreground: #ffffff;
+      --accent: #1e293b;
+      --accent-foreground: #f8fafc;
+      color-scheme: dark;
+    }}
+    html, body {{
+      background-color: #090d16 !important;
+      color: #f8fafc !important;
+      color-scheme: dark;
+      min-height: 100vh;
+    }}
+    /* Custom Scrollbar for sleek dark look */
+    ::-webkit-scrollbar {{
+      width: 8px;
+      height: 8px;
+    }}
+    ::-webkit-scrollbar-track {{
+      background: #090d16;
+    }}
+    ::-webkit-scrollbar-thumb {{
+      background: #1e293b;
+      border-radius: 4px;
+    }}
+    ::-webkit-scrollbar-thumb:hover {{
+      background: #334155;
+    }}
+    /* Inputs, Selects & Buttons */
+    input, select, textarea {{
+      background-color: #111827 !important;
+      color: #f8fafc !important;
+      border-color: #334155 !important;
+    }}
+    select option {{
+      background-color: #111827 !important;
+      color: #f8fafc !important;
+    }}
+    /* Clean tables */
+    table {{
+      border-collapse: separate;
+      border-spacing: 0;
+    }}
+    tbody tr:hover {{
+      background-color: rgba(30, 41, 59, 0.45);
+    }}
+  </style>
 </head>
 <body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 md:p-6">
   <div class="max-w-7xl mx-auto space-y-6">
