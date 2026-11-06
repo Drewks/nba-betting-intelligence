@@ -13,6 +13,14 @@ from pathlib import Path
 from typing import Any
 
 from src.ingestion.normalizer import NBA_TEAMS
+from src.utils.team_dictionary import (
+    format_matchup,
+    format_matchup_string,
+    get_team,
+    get_team_code,
+    get_team_full_name,
+    get_teams_json_for_frontend,
+)
 from src.models.statistical_models import EnsembleStackingModel, build_pregame_features
 from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
 from src.storage.db import DatabaseManager
@@ -114,9 +122,9 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
         elo_h = round(float(feats["elo_home"]), 0)
         elo_a = round(float(feats["elo_away"]), 0)
 
-        home_full = NBA_TEAMS.get(g["home_team"], {}).get("full_name", g["home_team"])
-        away_full = NBA_TEAMS.get(g["away_team"], {}).get("full_name", g["away_team"])
-        matchup_full = f"{away_full} @ {home_full} ({g['away_team']} @ {g['home_team']})"
+        home_full = get_team_full_name(g["home_team"])
+        away_full = get_team_full_name(g["away_team"])
+        matchup_full = format_matchup(g["away_team"], g["home_team"])
 
         if active_bet:
             if active_bet["market"] == "moneyline":
@@ -296,6 +304,7 @@ def generate_interactive_html_dashboard(
         "player_props": player_props or [],
     }
     data_json = json.dumps(payload, ensure_ascii=False)
+    team_dict_json = get_teams_json_for_frontend()
 
     html = f"""<!DOCTYPE html>
 <html lang="es">
@@ -592,60 +601,50 @@ def generate_interactive_html_dashboard(
     let currentSlateFilter = 'all';
     let currentHistoryFilter = 'ALL';
 
-    const NBA_TEAM_NAMES = {{
-      "ATL": "Atlanta Hawks",
-      "BOS": "Boston Celtics",
-      "BKN": "Brooklyn Nets",
-      "CHA": "Charlotte Hornets",
-      "CHI": "Chicago Bulls",
-      "CLE": "Cleveland Cavaliers",
-      "DAL": "Dallas Mavericks",
-      "DEN": "Denver Nuggets",
-      "DET": "Detroit Pistons",
-      "GSW": "Golden State Warriors",
-      "HOU": "Houston Rockets",
-      "IND": "Indiana Pacers",
-      "LAC": "LA Clippers",
-      "LAL": "Los Angeles Lakers",
-      "MEM": "Memphis Grizzlies",
-      "MIA": "Miami Heat",
-      "MIL": "Milwaukee Bucks",
-      "MIN": "Minnesota Timberwolves",
-      "NOP": "New Orleans Pelicans",
-      "NYK": "New York Knicks",
-      "OKC": "Oklahoma City Thunder",
-      "ORL": "Orlando Magic",
-      "PHI": "Philadelphia 76ers",
-      "PHX": "Phoenix Suns",
-      "POR": "Portland Trail Blazers",
-      "SAC": "Sacramento Kings",
-      "SAS": "San Antonio Spurs",
-      "TOR": "Toronto Raptors",
-      "UTA": "Utah Jazz",
-      "WAS": "Washington Wizards"
-    }};
+    const NBA_TEAMS_DATA = {team_dict_json};
 
-    function getTeamFullName(code) {{
-      if (!code) return '';
-      const clean = String(code).trim().toUpperCase();
-      return NBA_TEAM_NAMES[clean] || code;
+    function getTeam(identifier) {{
+      if (!identifier) return null;
+      const clean = String(identifier).trim().toUpperCase();
+      const code = NBA_TEAMS_DATA.aliases[clean] || clean;
+      return NBA_TEAMS_DATA.teams[code] || null;
+    }}
+
+    function getTeamFullName(identifier) {{
+      if (!identifier) return '';
+      const team = getTeam(identifier);
+      if (team) return team.full_name;
+      return String(identifier).trim();
+    }}
+
+    function getTeamCode(identifier) {{
+      if (!identifier) return '';
+      const team = getTeam(identifier);
+      if (team) return team.code;
+      return String(identifier).trim().toUpperCase();
     }}
 
     function formatMatchupString(str) {{
       if (!str) return '';
-      if (str.includes(' @ ')) {{
-        const parts = str.split(' @ ');
-        let away = parts[0].trim();
-        let home = parts[1].trim();
-        away = away.split('(')[0].trim();
-        home = home.split('(')[0].trim();
-        const awayFull = getTeamFullName(away);
-        const homeFull = getTeamFullName(home);
-        if (awayFull !== away || homeFull !== home) {{
-          return `${{awayFull}} @ ${{homeFull}} (${{away}} @ ${{home}})`;
+      const s = String(str).trim();
+      for (const code in NBA_TEAMS_DATA.teams) {{
+        if (s.includes(NBA_TEAMS_DATA.teams[code].full_name)) {{
+          return s;
         }}
       }}
-      return str;
+      if (s.includes(' @ ')) {{
+        const parts = s.split(' @ ');
+        if (parts.length === 2) {{
+          const away = parts[0].trim().replace(/[()]/g, '');
+          const home = parts[1].trim().replace(/[()]/g, '');
+          const awayTeam = getTeam(away);
+          const homeTeam = getTeam(home);
+          if (awayTeam && homeTeam) {{
+            return `${{awayTeam.full_name}} @ ${{homeTeam.full_name}} (${{awayTeam.code}} @ ${{homeTeam.code}})`;
+          }}
+        }}
+      }}
+      return s;
     }}
 
     function initDashboard() {{
@@ -1206,13 +1205,15 @@ def generate_interactive_html_dashboard(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     
-    # Also sync to conversation artifact if directory exists
+    # Also sync to conversation artifact if directory exists and has real data (prevent tests from wiping it)
     artifact_dash = Path(r"C:\Users\faboa\.gemini\antigravity\brain\369616bb-9a6e-460b-be8c-b9c7e1a798b7\nba_dashboard.html")
     if artifact_dash.parent.exists():
-        try:
-            artifact_dash.write_text(html, encoding="utf-8")
-        except Exception:
-            pass
+        has_real_content = (len(slate_items) > 0 or len(espn_real_bets) > 0)
+        if has_real_content:
+            try:
+                artifact_dash.write_text(html, encoding="utf-8")
+            except Exception:
+                pass
 
     return str(out)
 
@@ -1288,9 +1289,9 @@ def export_bets_and_tracking_dashboard(
             except Exception:
                 start_peru = r["game_start_time"]
 
-            home_full = NBA_TEAMS.get(r["home_team"], {}).get("full_name", r["home_team"])
-            away_full = NBA_TEAMS.get(r["away_team"], {}).get("full_name", r["away_team"])
-            match_label = f"{away_full} @ {home_full} ({r['away_team']} @ {r['home_team']})"
+            home_full = get_team_full_name(r["home_team"])
+            away_full = get_team_full_name(r["away_team"])
+            match_label = format_matchup(r["away_team"], r["home_team"])
             if r["market"] == "moneyline":
                 team_picked_name = home_full if r["selection"] == "HOME" else away_full
                 team_picked_code = r["home_team"] if r["selection"] == "HOME" else r["away_team"]
