@@ -1501,3 +1501,45 @@ def test_29_conformal_venn_abers_intervals_and_lower_bound_ev(tmp_path: Path) ->
     assert decisions["no_bet_decisions"][0]["reason_code"] == "CONFORMAL_UNCERTAINTY_TOO_WIDE"
 
 
+# 30. V7 Fase 4: Optimización Bayesiana Walk-Forward de Hiperparámetros (Optuna TPE)
+def test_30_optuna_walk_forward_hyperparameter_optimization(tmp_path: Path) -> None:
+    import json
+    import pytest
+    from src.backtesting.hyperparameter_optimizer import OptunaWalkForwardOptimizer
+    from src.ingestion.adapters import SyntheticFixtureAdapter
+
+    optimizer = OptunaWalkForwardOptimizer(seed=42)
+
+    # 1. Reject insufficient games
+    with pytest.raises(ValueError, match="Insufficient games"):
+        optimizer.optimize(games=[], n_trials=2)
+
+    # 2. Run optimization over deterministic walk-forward schedule
+    adapter = SyntheticFixtureAdapter(seed=42, num_matchdays=30, games_per_day=4)
+    bundle = adapter.fetch_games_and_odds()
+    games = bundle["games"]
+
+    out_json = tmp_path / "optimal_hyperparameters.json"
+    summary = optimizer.optimize(
+        games=games,
+        n_trials=6,
+        eval_slice_size=35,
+        output_json_path=out_json,
+    )
+
+    assert summary["n_trials"] == 6
+    assert summary["eval_sample_size"] == 35
+    assert "best_hyperparameters" in summary
+    assert "best_score" in summary
+    assert "baseline_score" in summary
+    assert out_json.exists()
+
+    loaded = json.loads(out_json.read_text(encoding="utf-8"))
+    assert loaded["best_score"] == summary["best_score"]
+    best_p = summary["best_hyperparameters"]
+    assert 0.025 <= best_p["alpha_slow"] <= 0.075
+    assert 0.080 <= best_p["alpha_fast"] <= 0.170
+    assert 0.20 <= best_p["market_model_weight"] <= 0.45
+
+
+

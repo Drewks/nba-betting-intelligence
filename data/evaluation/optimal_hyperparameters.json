@@ -1,0 +1,17 @@
+{
+  "n_trials": 15,
+  "eval_sample_size": 150,
+  "baseline_score": 0.30573,
+  "baseline_brier": 0.109656,
+  "baseline_log_loss": 0.392152,
+  "best_score": 0.2635,
+  "improvement_pct": 13.81,
+  "best_hyperparameters": {
+    "alpha_slow": 0.05,
+    "alpha_fast": 0.15000000000000002,
+    "tempo_alpha_slow": 0.04,
+    "tempo_alpha_fast": 0.14,
+    "blowout_cap": 28.0,
+    "market_model_weight": 0.2
+  }
+}
