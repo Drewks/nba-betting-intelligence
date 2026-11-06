@@ -6,52 +6,52 @@
   "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Jalen Johnson F Nov 6 Day-To-Day Nov 5: Johnson is questionable to suit up for Friday's game against Washington.",
-      "relevance_score": 0.2218,
-      "captured_at": "2026-11-06T05:24:01Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
-      "relevance_score": 0.2154,
-      "captured_at": "2026-11-06T05:24:01Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
-      "relevance_score": 0.2154,
-      "captured_at": "2026-11-06T05:24:01Z"
-    },
-    {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard is Questionable for Friday's (Nov. 6) game against the Hornets.",
+      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis is Questionable for Friday's (Nov. 6) game against the Hawks.",
       "relevance_score": 0.2087,
       "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.1826,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-      "relevance_score": 0.1813,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
-      "relevance_score": 0.18,
+      "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Friday's (Nov. 6) game against the Wizards.",
+      "relevance_score": 0.2081,
       "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
-      "relevance_score": 0.1782,
+      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Friday's (Nov. 6) game against the 76ers.",
+      "relevance_score": 0.202,
+      "captured_at": "2026-11-05"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
+      "relevance_score": 0.202,
       "captured_at": "2026-11-04"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
+      "relevance_score": 0.2014,
+      "captured_at": "2026-11-06T14:32:48Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
+      "relevance_score": 0.2005,
+      "captured_at": "2026-11-06T14:32:48Z"
+    },
+    {
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
+      "relevance_score": 0.1995,
+      "captured_at": "2026-11-06T14:32:48Z"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabaté is Questionable for Friday's (Nov. 6) game against the Celtics.",
+      "relevance_score": 0.1991,
+      "captured_at": "2026-11-05"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
