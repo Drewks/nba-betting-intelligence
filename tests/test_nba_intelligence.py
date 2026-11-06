@@ -1405,3 +1405,99 @@ def test_28_lineup_synergy_nonlinear_role_penalties() -> None:
     assert (off_healthy - off_syn) > (def_syn - def_healthy) * 2.0
     assert pace_syn < pace_healthy
 
+
+# 29. V7 Fase 3: Predicción Conformal Adaptativa (Venn-Abers Predictor & Conformal Lower-Bound EV)
+def test_29_conformal_venn_abers_intervals_and_lower_bound_ev(tmp_path: Path) -> None:
+    import pytest
+    from src.calibration.calibrator import (
+        VennAbersConformalInterval,
+        conformal_lower_bound_ev,
+    )
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.prediction.ev_calculator import evaluate_market_opportunity
+    from src.storage.db import DatabaseManager
+    from src.validation.validator import TemporalLeakageError
+
+    va = VennAbersConformalInterval(window=500, min_samples=20)
+
+    # 1. Anti-leakage enforcement
+    with pytest.raises(TemporalLeakageError):
+        va.fit(
+            [{"raw_probability": 0.65, "game_start_time": "2026-11-06T00:00:00Z", "outcome": 1}],
+            "2026-11-05T00:00:00Z",
+        )
+
+    # 2. Multi-probabilistic validity & monotonicity
+    records = []
+    for i in range(50):
+        p_raw = 0.30 + (i / 100.0)
+        y = 1 if p_raw > 0.52 else 0
+        records.append({
+            "raw_probability": p_raw,
+            "game_start_time": f"2026-10-{i % 25 + 1:02d}T00:00:00Z",
+            "outcome": y,
+        })
+    fitted = va.fit(records, "2026-10-31T00:00:00Z")
+    assert fitted is True
+    res = va.predict_interval(0.60)
+    assert 0.0 <= res["p0"] <= res["p_va"] <= res["p1"] <= 1.0
+    assert res["width"] == round(res["p1"] - res["p0"], 6)
+
+    # 3. Conformal lower-bound EV
+    lb = conformal_lower_bound_ev(
+        point_prob=0.60,
+        interval_low=res["p0"],
+        market_prob=0.55,
+        model_weight=0.30,
+        decimal_odds=2.00,
+    )
+    assert lb["ev_lower_bound"] <= (0.60 * 2.00 - 1.0)
+    assert lb["p_low_final"] <= 0.60
+
+    # 4. evaluate_market_opportunity integration
+    odds_sample = {
+        "odds_id": "O_TEST_CONF_1",
+        "game_id": "G_TEST_CONF_1",
+        "market": "moneyline",
+        "selection": "HOME",
+        "line_value": None,
+        "decimal_odds": 2.10,
+        "counterpart_decimal_odds": 1.85,
+        "provider": "Pinnacle",
+        "captured_at": "2026-11-04T12:00:00Z",
+    }
+    opp = evaluate_market_opportunity(
+        estimated_prob=0.60,
+        uncertainty_std=0.045,
+        odds_record=odds_sample,
+        game_start_time="2026-11-04T18:00:00Z",
+        model_version_id="model_f_v7",
+        conformal_interval=res,
+    )
+    assert opp["conformal_p_low"] == res["p0"]
+    assert opp["conformal_p_high"] == res["p1"]
+    assert opp["conformal_width"] == res["width"]
+    assert "ev_lower_bound" in opp
+    assert "ev_lower_bound_pct" in opp
+
+    # 5. PaperTradingEngine width guard blocks excessively wide intervals (> 0.22)
+    db = DatabaseManager(tmp_path / "test_p29.sqlite3")
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0, dynamic_conviction_staking=True)
+    wide_candidate = {
+        "prediction_id": "P_WIDE",
+        "game_id": "G_WIDE",
+        "market": "moneyline",
+        "selection": "HOME",
+        "decimal_odds_used": 2.05,
+        "calibrated_probability": 0.58,
+        "ev_unit": 0.08,
+        "ev_pct": 8.0,
+        "model_version_id": "model_f_v7",
+        "conformal_width": 0.28,  # > 0.22 guard
+        "emitted_at": "2026-11-04T12:00:00Z",
+    }
+    decisions = engine.evaluate_and_record_matchday_selections("2026-11-04", [wide_candidate])
+    assert len(decisions["no_bet_decisions"]) == 1
+    assert decisions["no_bet_decisions"][0]["reason_code"] == "CONFORMAL_UNCERTAINTY_TOO_WIDE"
+
+

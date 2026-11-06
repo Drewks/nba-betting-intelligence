@@ -33,7 +33,11 @@ from src.agents.specialized_agents import (
     VisualResearcherAgent,
 )
 from src.backtesting.backtester import WalkForwardBacktester
-from src.calibration.calibrator import ProbabilityCalibrator, compute_reliability_curve
+from src.calibration.calibrator import (
+    ProbabilityCalibrator,
+    VennAbersConformalInterval,
+    compute_reliability_curve,
+)
 from src.features.builder import build_pregame_features
 from src.features.team_ratings import apply_pregame_team_ratings, is_synthetic_game_id
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
@@ -278,8 +282,14 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
 
     ml_cal = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
     tot_cal = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
+    ml_va = VennAbersConformalInterval(window=1200, min_samples=60)
+    tot_va = VennAbersConformalInterval(window=1200, min_samples=60)
     ml_method = ml_cal.fit(resolved_ml_preds, now_str) if resolved_ml_preds else "identity"
     tot_method = tot_cal.fit(resolved_tot_preds, now_str) if resolved_tot_preds else "identity"
+    if resolved_ml_preds:
+        ml_va.fit(resolved_ml_preds, now_str)
+    if resolved_tot_preds:
+        tot_va.fit(resolved_tot_preds, now_str)
 
     if resolved_ml_preds:
         curve_ml = compute_reliability_curve(
@@ -379,17 +389,21 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             pred_f_ml = model_f.predict_moneyline(g, all_final_games)
             raw_p_home = pred_f_ml["p_home"]
             cal_p_home = ml_cal.transform_single(raw_p_home)
+            va_home_int = ml_va.predict_interval(raw_p_home)
 
             tot_odds = [o for o in game_odds if o["market"] == "total_points"]
             line_val = float(tot_odds[0]["line_value"]) if tot_odds else 228.5
             pred_f_tot = model_f.predict_total_points(g, all_final_games, line_val)
             raw_p_over = pred_f_tot["p_over"]
             cal_p_over = tot_cal.transform_single(raw_p_over)
+            va_over_int = tot_va.predict_interval(raw_p_over)
 
             feats["mc_overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
             feats["mc_blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
             feats["mc_conformal_q10_total"] = pred_f_tot.get("conformal_q10_total", 205.0)
             feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
+            feats["va_conformal_home_width"] = va_home_int["width"]
+            feats["va_conformal_over_width"] = va_over_int["width"]
 
             consensus_map = compute_market_consensus(game_odds)
             steam_map = compute_line_steam(raw_game_odds)
@@ -409,11 +423,29 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     cal_p = cal_p_home if sel == "HOME" else round(1.0 - cal_p_home, 6)
                     unc = pred_f_ml["uncertainty_std"]
                     m_ver = model_f.version_id
+                    if sel == "HOME":
+                        conf_int = va_home_int
+                    else:
+                        conf_int = {
+                            "p0": round(1.0 - va_home_int["p1"], 6),
+                            "p1": round(1.0 - va_home_int["p0"], 6),
+                            "p_va": round(1.0 - va_home_int["p_va"], 6),
+                            "width": va_home_int["width"],
+                        }
                 else:
                     raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
                     cal_p = cal_p_over if sel == "OVER" else round(1.0 - cal_p_over, 6)
                     unc = pred_f_tot["uncertainty_std"]
                     m_ver = model_f.version_id
+                    if sel == "OVER":
+                        conf_int = va_over_int
+                    else:
+                        conf_int = {
+                            "p0": round(1.0 - va_over_int["p1"], 6),
+                            "p1": round(1.0 - va_over_int["p0"], 6),
+                            "p_va": round(1.0 - va_over_int["p_va"], 6),
+                            "width": va_over_int["width"],
+                        }
 
                 opp = evaluate_market_opportunity(
                     estimated_prob=cal_p,
@@ -426,6 +458,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     model_weight=DEFAULT_MODEL_WEIGHT,
                     max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
                     steam_delta=s_delta,
+                    conformal_interval=conf_int,
                 )
                 pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{uuid.uuid4().hex[:6].upper()}"
                 db.execute_insert(

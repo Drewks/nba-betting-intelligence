@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from src.calibration.calibrator import conformal_lower_bound_ev
 from src.validation.validator import DataValidationError, validate_odds_record
 
 
@@ -154,11 +155,13 @@ def evaluate_market_opportunity(
     model_weight: float = DEFAULT_MODEL_WEIGHT,
     max_disagreement: float = MAX_MODEL_MARKET_DISAGREEMENT,
     steam_delta: float = 0.0,
+    conformal_interval: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """
     Validates odds + timestamp, estimates fair de-vigged probability when counterpart odds exist,
     modulates model_weight when sharp steam moves are detected, anchors the estimated probability
-    to market consensus (if available), and returns a structured EV evaluation record.
+    to market consensus (if available), computes Venn-Abers conformal lower-bound EV (if conformal interval provided),
+    and returns a structured EV evaluation record.
     """
     validate_odds_record(odds_record, game_start_time, simulated_prediction_time)
     dec_odds = float(odds_record["decimal_odds"])
@@ -187,6 +190,20 @@ def evaluate_market_opportunity(
 
     ev_metrics = calculate_ev(anchored_prob, dec_odds)
 
+    lb_metrics = None
+    if conformal_interval is not None and "p0" in conformal_interval:
+        p_low = float(conformal_interval["p0"])
+        lb_metrics = conformal_lower_bound_ev(
+            point_prob=estimated_prob,
+            interval_low=p_low,
+            market_prob=market_prob,
+            model_weight=eff_weight,
+            decimal_odds=dec_odds,
+        )
+
+    ev_lb_unit = lb_metrics["ev_lower_bound"] if lb_metrics else ev_metrics["ev_unit"]
+    ev_lb_pct = round(ev_lb_unit * 100.0, 4)
+
     return {
         "game_id": odds_record["game_id"],
         "market": odds_record["market"],
@@ -207,4 +224,9 @@ def evaluate_market_opportunity(
         "model_market_disagreement": round(float(disagreement), 6) if disagreement is not None else None,
         "max_model_market_disagreement": max_disagreement,
         "steam_delta": round(s_delta, 6),
+        "conformal_p_low": round(float(conformal_interval["p0"]), 6) if (conformal_interval and "p0" in conformal_interval) else None,
+        "conformal_p_high": round(float(conformal_interval["p1"]), 6) if (conformal_interval and "p1" in conformal_interval) else None,
+        "conformal_width": round(float(conformal_interval["width"]), 6) if (conformal_interval and "width" in conformal_interval) else None,
+        "ev_lower_bound": round(float(ev_lb_unit), 6),
+        "ev_lower_bound_pct": ev_lb_pct,
     }

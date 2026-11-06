@@ -17,6 +17,7 @@ import numpy as np
 
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
+    VennAbersConformalInterval,
     compute_brier_score,
     compute_log_loss,
     compute_reliability_curve,
@@ -312,6 +313,8 @@ class WalkForwardBacktester:
 
         ml_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
         tot_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
+        ml_va = VennAbersConformalInterval(window=1200, min_samples=25)
+        tot_va = VennAbersConformalInterval(window=1200, min_samples=25)
 
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         for m_id, m_fam, mkt in [
@@ -370,8 +373,10 @@ class WalkForwardBacktester:
                 model_f.fit(prior_final_games, cutoff_ts)
                 if len(resolved_ml_cal_records) >= 25:
                     ml_calibrator.fit(resolved_ml_cal_records, cutoff_ts)
+                    ml_va.fit(resolved_ml_cal_records, cutoff_ts)
                 if len(resolved_tot_cal_records) >= 25:
                     tot_calibrator.fit(resolved_tot_cal_records, cutoff_ts)
+                    tot_va.fit(resolved_tot_cal_records, cutoff_ts)
 
             matchday_candidates: list[dict[str, Any]] = []
 
@@ -396,6 +401,7 @@ class WalkForwardBacktester:
                 raw_p_home = pred_f_ml["p_home"]
                 cal_p_home = ml_calibrator.transform_single(raw_p_home)
                 cal_p_away = round(1.0 - cal_p_home, 6)
+                va_home_int = ml_va.predict_interval(raw_p_home)
 
                 tot_line_odds = [o for o in game_odds if o["market"] == "total_points"]
                 line_val = float(tot_line_odds[0]["line_value"]) if tot_line_odds else 228.5
@@ -407,6 +413,7 @@ class WalkForwardBacktester:
                 raw_p_over = pred_f_tot["p_over"]
                 cal_p_over = tot_calibrator.transform_single(raw_p_over)
                 cal_p_under = round(1.0 - cal_p_over, 6)
+                va_over_int = tot_va.predict_interval(raw_p_over)
 
                 for o in game_odds:
                     validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
@@ -418,11 +425,23 @@ class WalkForwardBacktester:
                         cal_p = cal_p_home if sel == "HOME" else cal_p_away
                         unc = pred_f_ml["uncertainty_std"]
                         m_ver = model_f.version_id
+                        conf_int = va_home_int if sel == "HOME" else {
+                            "p0": round(1.0 - va_home_int["p1"], 6),
+                            "p1": round(1.0 - va_home_int["p0"], 6),
+                            "p_va": round(1.0 - va_home_int["p_va"], 6),
+                            "width": va_home_int["width"],
+                        }
                     else:
                         raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
                         cal_p = cal_p_over if sel == "OVER" else cal_p_under
                         unc = pred_f_tot["uncertainty_std"]
                         m_ver = model_f.version_id
+                        conf_int = va_over_int if sel == "OVER" else {
+                            "p0": round(1.0 - va_over_int["p1"], 6),
+                            "p1": round(1.0 - va_over_int["p0"], 6),
+                            "p_va": round(1.0 - va_over_int["p_va"], 6),
+                            "width": va_over_int["width"],
+                        }
 
                     opp = evaluate_market_opportunity(
                         estimated_prob=cal_p,
@@ -431,6 +450,7 @@ class WalkForwardBacktester:
                         game_start_time=g["game_start_time"],
                         model_version_id=m_ver,
                         simulated_prediction_time=pred_ts,
+                        conformal_interval=conf_int,
                     )
 
                     pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{uuid.uuid4().hex[:6].upper()}"

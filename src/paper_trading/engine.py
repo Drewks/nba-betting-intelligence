@@ -220,6 +220,8 @@ class PaperTradingEngine:
         overtime_prob: float = 0.0,
         steam_delta: float = 0.0,
         apply_clv_governor: bool = True,
+        conformal_width: float | None = None,
+        ev_lower_bound: float | None = None,
     ) -> float:
         """
         Calculates contextual Kelly-Conviction stake (S/1.00 to S/6.00 PEN on ~S/100 bankroll):
@@ -227,8 +229,9 @@ class PaperTradingEngine:
         - Medium probability (50% - 58%): S/2.00 - S/3.25 PEN
         - High probability (58% - 65%): S/3.50 - S/4.75 PEN
         - Maximum conviction (>=65%): S/4.80 - S/6.00 PEN
-        Also integrates 10,000-Simulation Monte Carlo Overtime Risk (protects UNDERs when OT risk >= 6.8%)
-        and Conformal Model Agreement bonus.
+        Also integrates 10,000-Simulation Monte Carlo Overtime Risk (protects UNDERs when OT risk >= 6.8%),
+        V7 Venn-Abers Conformal Interval tight-spread bonus / wide-spread discount,
+        and Lower-Bound EV conservatism.
         """
         p = max(0.01, min(0.99, float(calibrated_prob)))
         b = max(0.05, float(decimal_odds) - 1.0)
@@ -272,6 +275,15 @@ class PaperTradingEngine:
             raw_stake *= 0.82
         elif uncertainty_std <= 0.045:
             raw_stake *= 1.08
+
+        # V7 Venn-Abers Conformal Interval & Lower-Bound EV Modulation
+        if conformal_width is not None:
+            if float(conformal_width) <= 0.035:
+                raw_stake *= 1.06
+            elif float(conformal_width) >= 0.080:
+                raw_stake *= 0.88
+        if ev_lower_bound is not None and float(ev_lower_bound) > 0.0:
+            raw_stake *= 1.05
 
         # Sharp Steam Move Modulation (V6)
         if float(steam_delta) >= 0.020:
@@ -464,6 +476,19 @@ class PaperTradingEngine:
                 )
                 continue
 
+            # 2e. Conformal Prediction Interval Width Guard (V7 Fase 3):
+            conf_w = cand.get("conformal_width")
+            if conf_w is not None and float(conf_w) > 0.22:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "CONFORMAL_UNCERTAINTY_TOO_WIDE",
+                        f"Venn-Abers conformal prediction interval width {float(conf_w):.3f} > 0.22; epistemic uncertainty too high.",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
             # 4. Check duplicate in DB
             dup = self.db.fetch_one(
                 """
@@ -549,6 +574,8 @@ class PaperTradingEngine:
                     selection=selection,
                     overtime_prob=float(cand.get("overtime_prob") or 0.0),
                     steam_delta=float(cand.get("steam_delta") or 0.0),
+                    conformal_width=cand.get("conformal_width"),
+                    ev_lower_bound=cand.get("ev_lower_bound"),
                 )
             elif dec_odds > 2.45:
                 bet_stake = round(max(0.50, min(self.max_stake_pen, 1.35 / (dec_odds - 0.35))), 2)

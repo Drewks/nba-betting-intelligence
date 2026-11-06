@@ -213,6 +213,99 @@ class ProbabilityCalibrator:
         return float(self.transform([raw_probability])[0])
 
 
+class VennAbersConformalInterval:
+    """
+    V7 Fase 3 — Inductive Venn-Abers Predictor (conformal family, Vovk & Petej 2014).
+
+    For binary outcomes, split-conformal regression intervals (e.g. MAPIE regressors) are not meaningful on
+    a probability. Venn-Abers is the conformal method designed for probabilistic binary classification:
+    for each new score s it fits two isotonic regressions on the calibration set augmented with (s, y=0)
+    and (s, y=1), producing a probability interval [p0, p1] with a finite-sample multi-probabilistic
+    validity guarantee (one of p0/p1 is perfectly calibrated under exchangeability).
+
+    Temporal adaptation: only the most recent `window` resolved games (strictly before the cutoff) are
+    used, so the interval widens automatically when the model drifts or data are scarce.
+    """
+
+    def __init__(self, window: int = 1200, min_samples: int = 60) -> None:
+        self.window = window
+        self.min_samples = min_samples
+        self.scores: np.ndarray = np.empty(0)
+        self.labels: np.ndarray = np.empty(0, dtype=int)
+        self.cutoff_time_str: str | None = None
+        self.is_fitted = False
+
+    def fit(self, calibration_records: list[dict[str, Any]], calibration_cutoff_time: str) -> bool:
+        cutoff_dt = parse_iso_utc(calibration_cutoff_time)
+        rows: list[tuple[str, float, int]] = []
+        for rec in calibration_records:
+            if parse_iso_utc(rec["game_start_time"]) >= cutoff_dt:
+                raise TemporalLeakageError(
+                    f"Conformal lookahead leakage: game_start_time ({rec['game_start_time']}) "
+                    f">= cutoff ({calibration_cutoff_time})"
+                )
+            res_ts = rec.get("result_recorded_at")
+            if res_ts and parse_iso_utc(res_ts) > cutoff_dt:
+                raise TemporalLeakageError(
+                    f"Conformal lookahead leakage: result_recorded_at ({res_ts}) > cutoff ({calibration_cutoff_time})"
+                )
+            rows.append((str(rec["game_start_time"]), float(rec["raw_probability"]), int(rec["outcome"])))
+
+        rows.sort(key=lambda r: r[0])
+        rows = rows[-self.window:]
+        self.cutoff_time_str = calibration_cutoff_time
+        if len(rows) < self.min_samples or len({r[2] for r in rows}) < 2:
+            self.is_fitted = False
+            return False
+        self.scores = np.asarray([r[1] for r in rows], dtype=float)
+        self.labels = np.asarray([r[2] for r in rows], dtype=int)
+        self.is_fitted = True
+        return True
+
+    def _iso_at(self, score: float, label: int) -> float:
+        x = np.append(self.scores, score)
+        y = np.append(self.labels, label)
+        iso = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
+        iso.fit(x, y)
+        return float(iso.predict([score])[0])
+
+    def predict_interval(self, raw_probability: float) -> dict[str, float]:
+        """
+        Returns {p0, p1, p_va (merged point), width}. When not fitted (insufficient history),
+        returns a deliberately wide non-informative interval around the raw score.
+        """
+        s = float(np.clip(raw_probability, 1e-4, 1.0 - 1e-4))
+        if not self.is_fitted:
+            p0, p1 = max(0.0, s - 0.15), min(1.0, s + 0.15)
+            return {"p0": round(p0, 6), "p1": round(p1, 6), "p_va": round(s, 6), "width": round(p1 - p0, 6)}
+        p0 = self._iso_at(s, 0)
+        p1 = self._iso_at(s, 1)
+        lo, hi = min(p0, p1), max(p0, p1)
+        # Log-loss optimal merge of the Venn-Abers pair
+        p_va = hi / (1.0 - lo + hi) if (1.0 - lo + hi) > 0 else s
+        return {"p0": round(lo, 6), "p1": round(hi, 6), "p_va": round(p_va, 6), "width": round(hi - lo, 6)}
+
+
+def conformal_lower_bound_ev(
+    point_prob: float,
+    interval_low: float,
+    market_prob: float | None,
+    model_weight: float,
+    decimal_odds: float,
+) -> dict[str, float]:
+    """
+    Pessimistic (lower-bound) EV: replaces the model probability with the conservative edge of its
+    Venn-Abers interval (never above the point estimate) before applying the same market anchoring:
+        p_low_final = w * min(p_low, p_point) + (1 - w) * p_market
+        EV_low = p_low_final * O - 1
+    """
+    p_low_model = min(float(interval_low), float(point_prob))
+    w = max(0.0, min(1.0, float(model_weight)))
+    p_low_final = p_low_model if market_prob is None else w * p_low_model + (1.0 - w) * float(market_prob)
+    ev_low = p_low_final * float(decimal_odds) - 1.0
+    return {"p_low_final": round(p_low_final, 6), "ev_lower_bound": round(ev_low, 6)}
+
+
 def evaluate_version_promotion(
     incumbent_probs: list[float],
     candidate_probs: list[float],
