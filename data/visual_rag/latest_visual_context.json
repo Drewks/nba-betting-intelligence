@@ -1,8 +1,8 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
   "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
@@ -36,10 +36,10 @@
       "captured_at": "2026-11-05"
     },
     {
-      "source": "browserbase_cloud_espn_injuries_table",
+      "source": "playwright_espn_injuries_table",
       "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
       "relevance_score": 0.202,
-      "captured_at": "2026-11-06T17:41:56Z"
+      "captured_at": "2026-11-06T17:52:59Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
@@ -48,10 +48,10 @@
       "captured_at": "2026-11-04"
     },
     {
-      "source": "browserbase_cloud_espn_injuries_table",
+      "source": "playwright_espn_injuries_table",
       "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
       "relevance_score": 0.2,
-      "captured_at": "2026-11-06T17:41:56Z"
+      "captured_at": "2026-11-06T17:52:59Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

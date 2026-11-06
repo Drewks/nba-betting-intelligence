@@ -1310,11 +1310,18 @@ def generate_interactive_html_dashboard(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     
-    # Also sync to conversation artifact if directory exists and has real data (prevent tests from wiping it)
-    artifact_dash = Path(r"C:\Users\faboa\.gemini\antigravity\brain\369616bb-9a6e-460b-be8c-b9c7e1a798b7\nba_dashboard.html")
-    if artifact_dash.parent.exists():
-        has_real_content = (len(slate_items) > 0 or len(espn_real_bets) > 0)
-        if has_real_content:
+    # Sync to docs/index.html for automatic GitHub Pages deployment and to conversation artifact
+    has_real_content = (len(slate_items) > 0 or len(espn_real_bets) > 0)
+    if has_real_content:
+        docs_dash = Path("docs/index.html")
+        try:
+            docs_dash.parent.mkdir(parents=True, exist_ok=True)
+            docs_dash.write_text(html, encoding="utf-8")
+        except Exception:
+            pass
+
+        artifact_dash = Path(r"C:\Users\faboa\.gemini\antigravity\brain\369616bb-9a6e-460b-be8c-b9c7e1a798b7\nba_dashboard.html")
+        if artifact_dash.parent.exists():
             try:
                 artifact_dash.write_text(html, encoding="utf-8")
             except Exception:
