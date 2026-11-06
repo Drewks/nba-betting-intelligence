@@ -1846,10 +1846,11 @@ def test_34_peru_sportsbooks_and_odds_comparator() -> None:
 
     # 1. Verify catalog completeness
     catalog = get_peru_sportsbooks_catalog()
-    assert len(catalog) >= 8
+    assert len(catalog) >= 9
     book_ids = {b["id"] for b in catalog}
     assert "betsson_pe" in book_ids
     assert "coolbet_pe" in book_ids
+    assert "retabet_pe" in book_ids
     assert "apuesta_total" in book_ids
     assert "te_apuesto" in book_ids
     assert "doradobet" in book_ids
@@ -1860,6 +1861,11 @@ def test_34_peru_sportsbooks_and_odds_comparator() -> None:
     assert betsson.is_mincetur_licensed is True
     assert "Yape" in betsson.payment_methods
     assert "Plin" in betsson.payment_methods
+
+    retabet = PERU_SPORTSBOOKS["retabet_pe"]
+    assert retabet.is_mincetur_licensed is True
+    assert "Tarjeta RETAbet" in retabet.payment_methods
+    assert "Yape" in retabet.payment_methods
 
     # 2. Verify odds comparison engine
     comp = calculate_peru_odds_comparison(

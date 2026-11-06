@@ -81,6 +81,16 @@ PERU_SPORTSBOOKS: dict[str, PeruSportsbook] = {
         badge_color="#D4AF37",
         description="Amplia presencia en el mercado peruano con depósitos locales rápidos.",
     ),
+    "retabet_pe": PeruSportsbook(
+        id="retabet_pe",
+        name="RETAbet Perú",
+        is_mincetur_licensed=True,
+        payment_methods=["Yape", "Plin", "Tarjeta RETAbet", "PagoEfectivo", "SafetyPay", "Locales Físicos", "BCP", "BBVA"],
+        typical_vig_pct=4.8,
+        website="https://retabet.pe",
+        badge_color="#E50914",
+        description="Regulada MINCETUR en Perú. Especializada en 'Crea tu Apuesta' NBA, retiros al instante con Tarjeta RETAbet y terminales físicas.",
+    ),
     "inkabet": PeruSportsbook(
         id="inkabet",
         name="Inkabet",

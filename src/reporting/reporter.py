@@ -440,7 +440,7 @@ def generate_interactive_html_dashboard(
             🛡️ Descartados (No Apostar)
           </button>
           <button onclick="setSlateFilter('peru')" id="flt-peru" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)]">
-            🇵🇪 Con Cuotas Perú (Betsson/Coolbet/AT)
+            🇵🇪 Con Cuotas Perú (Betsson/Coolbet/RETAbet/AT)
           </button>
         </div>
         <div class="relative">
@@ -916,7 +916,7 @@ def generate_interactive_html_dashboard(
                 </span>
                 <span class="text-[var(--muted-foreground)] text-[11px]">Depósitos inmediatos en Soles (S/.)</span>
               </div>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="font-bold text-orange-500">Betsson Perú</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Yape/Plin</div>
@@ -926,6 +926,11 @@ def generate_interactive_html_dashboard(
                   <div class="font-bold text-cyan-500">Coolbet Perú</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Bajo Margen</div>
                   <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.home_odds || (b.decimal_odds * 0.99).toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.away_odds || (b.decimal_odds * 0.99).toFixed(2))}}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                  <div class="font-bold text-red-600">RETAbet Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Tarjeta RETA</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.home_odds || (b.decimal_odds * 0.985).toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.away_odds || (b.decimal_odds * 0.985).toFixed(2))}}</div>
                 </div>
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="font-bold text-red-500">Apuesta Total</div>
@@ -1067,7 +1072,7 @@ def generate_interactive_html_dashboard(
                   Mejor en Perú: Local <strong>${{g.peru_odds?.best_home?.odds || (g.ml_home_odds || '—')}}</strong> (${{g.peru_odds?.best_home?.book || 'Pinnacle/Coolbet'}}) · Visita <strong>${{g.peru_odds?.best_away?.odds || (g.ml_away_odds || '—')}}</strong> (${{g.peru_odds?.best_away?.book || 'Betsson'}})
                 </span>
               </div>
-              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
                 <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
                   <div class="font-bold text-orange-500">Betsson Perú</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Yape</div>
@@ -1077,6 +1082,11 @@ def generate_interactive_html_dashboard(
                   <div class="font-bold text-cyan-500">Coolbet Perú</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Plin</div>
                   <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.home_odds || '—'}}</span> · Vis: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.away_odds || '—'}}</span></div>
+                </div>
+                <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                  <div class="font-bold text-red-600">RETAbet Perú</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Tarjeta RETA</div>
+                  <div class="font-bold mt-1 text-[11px]">Loc: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.home_odds || '—'}}</span> · Vis: <span class="text-blue-500 font-extrabold">${{g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.away_odds || '—'}}</span></div>
                 </div>
                 <div class="p-2 rounded-lg bg-[var(--card)] border border-[var(--border)]">
                   <div class="font-bold text-red-500">Apuesta Total</div>
