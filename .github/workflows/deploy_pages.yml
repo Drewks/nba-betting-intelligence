@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -21,29 +21,41 @@ concurrency:
 
 jobs:
   deploy-pages:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-24.04
     steps:
       - name: 1. Clonar repositorio
         uses: actions/checkout@v4
 
-      - name: 2. Asegurar existencia de index.html
+      - name: 2. Asegurar existencia de index.html y .nojekyll
         run: |
           mkdir -p docs
           if [ -f "reports/dashboard.html" ] && [ ! -f "docs/index.html" ]; then
             cp reports/dashboard.html docs/index.html
           fi
+          touch docs/.nojekyll
 
-      - name: 3. Configurar GitHub Pages
+      - name: 3. Publicar en rama gh-pages (Compatible con Deploy from a branch)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          keep_files: false
+
+      - name: 4. Configurar GitHub Pages (Compatible con GitHub Actions source)
+        id: pages_config
         uses: actions/configure-pages@v5
+        continue-on-error: true
 
-      - name: 4. Subir artefacto web de Pages
+      - name: 5. Subir artefacto web de Pages
+        if: steps.pages_config.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
         with:
           path: 'docs/'
 
-      - name: 5. Desplegar sitio web institucional
+      - name: 6. Desplegar mediante GitHub Actions
+        if: steps.pages_config.outcome == 'success'
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4

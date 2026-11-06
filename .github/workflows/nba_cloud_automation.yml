@@ -127,6 +127,15 @@ jobs:
             git push origin main
           fi
 
+      - name: 7b. Publicar en rama gh-pages (Fallback automático garantizado)
+        uses: peaceiris/actions-gh-pages@v4
+        continue-on-error: true
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          keep_files: false
+
       - name: 8. Configurar entorno de GitHub Pages
         uses: actions/configure-pages@v5
         continue-on-error: true
