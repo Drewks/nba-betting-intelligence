@@ -127,6 +127,15 @@ jobs:
             git push origin main
           fi
 
+      - name: 7b. Sincronizar rama gh-pages con el nuevo dashboard
+        uses: peaceiris/actions-gh-pages@v4
+        continue-on-error: true
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          keep_files: false
+
   deploy-pages:
     needs: run-nba-intelligence-cycle
     environment:
