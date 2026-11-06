@@ -248,4 +248,32 @@ DDL_STATEMENTS = [
         FOREIGN KEY (game_id) REFERENCES games(game_id)
     );
     """,
+    """
+    CREATE TABLE IF NOT EXISTS player_prop_picks (
+        prop_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        team TEXT NOT NULL,
+        prop_category TEXT NOT NULL CHECK (prop_category IN ('PTS', 'REB', 'AST', 'PRA', '3PM')),
+        line_value REAL NOT NULL,
+        selection TEXT NOT NULL CHECK (selection IN ('OVER', 'UNDER')),
+        decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+        projected_mean REAL NOT NULL,
+        projected_std REAL NOT NULL,
+        model_prob REAL NOT NULL,
+        conformal_p_low REAL NOT NULL,
+        conformal_p_high REAL NOT NULL,
+        ev_pct REAL NOT NULL,
+        ev_lower_bound_pct REAL NOT NULL,
+        kelly_stake_pen REAL NOT NULL,
+        usage_bump_pct REAL NOT NULL DEFAULT 0.0,
+        rationale TEXT NOT NULL,
+        emitted_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+        actual_stat REAL,
+        settled_at TEXT,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
 ]

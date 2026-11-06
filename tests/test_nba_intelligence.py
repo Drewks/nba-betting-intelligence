@@ -1751,7 +1751,74 @@ def test_32_injury_sniper_pregame_dual_window(tmp_path: Path) -> None:
     assert row["window_type"] == "WINDOW_2H"
     assert row["ev_lower_bound_pct"] > 4.0
 
+def test_33_player_props_engine(tmp_path: Path) -> None:
+    """
+    V7.2 Player Props Engine Verification:
+    Tests individual player statistical modeling (PTS, REB, AST, PRA),
+    usage and minutes redistribution upon teammate absences, Poisson & Normal distributions,
+    conformal Lower-Bound EV, and SQLite persistence.
+    """
+    from src.prediction.player_props import PlayerPropsEngine
+    from src.storage.db import DatabaseManager
 
+    db_file = tmp_path / "test_props.sqlite3"
+    db = DatabaseManager(db_file)
+    db.execute_insert(
+        "INSERT INTO teams (team_id, full_name, conference, division, updated_at) VALUES ('DAL', 'Dallas Mavericks', 'West', 'Southwest', '2026-10-01T00:00:00Z');"
+    )
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team, status,
+            features_available_at, source_provider, ingested_at
+        ) VALUES ('G_PROP_TEST', '2026-27', '2026-11-06', '2026-11-07T00:00:00Z', 'DAL', 'PHX', 'SCHEDULED', '2026-11-06T20:00:00Z', 'espn', '2026-11-06T20:00:00Z');
+        """
+    )
 
+    engine = PlayerPropsEngine(db=db, min_ev_threshold=0.00)
 
+    # 1. Test baseline vs usage bump projection
+    base_proj = engine.project_player_stats("Kyrie Irving", "DAL", absent_teammates=[])
+    bump_proj = engine.project_player_stats("Kyrie Irving", "DAL", absent_teammates=["Luka Doncic"])
+
+    assert bump_proj["usage_bump_pct"] > 5.0
+    assert bump_proj["effective_minutes"] > base_proj["effective_minutes"]
+    assert bump_proj["projections"]["PTS"]["mean"] > base_proj["projections"]["PTS"]["mean"]
+
+    # 2. Test exceedance probabilities (Normal for PTS, Poisson for AST)
+    p_over_pts, p_under_pts = engine.compute_exceedance_probabilities("PTS", 26.5, 30.1, 7.46, "normal")
+    assert 0.60 <= p_over_pts <= 0.85
+    assert abs((p_over_pts + p_under_pts) - 1.0) < 0.01
+
+    p_over_ast, p_under_ast = engine.compute_exceedance_probabilities("AST", 5.5, 7.0, 2.65, "poisson")
+    assert 0.60 <= p_over_ast <= 0.85
+
+    # 3. Test prop opportunity evaluation & Kelly stake
+    picks = engine.evaluate_prop_opportunity(
+        player_name="Kyrie Irving",
+        team="DAL",
+        game_id="G_PROP_TEST",
+        matchday_date="2026-11-06",
+        prop_category="PTS",
+        line_value=26.5,
+        over_odds=1.90,
+        under_odds=1.90,
+        absent_teammates=["Luka Doncic"],
+        bankroll_pen=100.0,
+    )
+    assert len(picks) >= 1
+    top_pick = picks[0]
+    assert top_pick["player_name"] == "Kyrie Irving"
+    assert top_pick["selection"] == "OVER"
+    assert top_pick["ev_pct"] > 10.0
+    assert 1.00 <= top_pick["kelly_stake_pen"] <= 5.00
+
+    # 4. Verify SQLite persistence in player_prop_picks
+    persisted = db.fetch_all("SELECT * FROM player_prop_picks WHERE game_id = 'G_PROP_TEST'")
+    assert len(persisted) >= 1
+    row = persisted[0]
+    assert row["player_name"] == "Kyrie Irving"
+    assert row["prop_category"] == "PTS"
+    assert row["selection"] == "OVER"
+    assert row["line_value"] == 26.5
 

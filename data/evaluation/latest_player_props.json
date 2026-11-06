@@ -1,0 +1,25 @@
+[
+  {
+    "prop_id": "PROP_ESPN_401909288_DAL_PHX_Kyrie_Irving_PTS_OVER_bdb5c2",
+    "game_id": "ESPN_401909288_DAL_PHX",
+    "matchday_date": "2026-11-06",
+    "player_name": "Kyrie Irving",
+    "team": "DAL",
+    "prop_category": "PTS",
+    "line_value": 26.5,
+    "selection": "OVER",
+    "decimal_odds": 1.9,
+    "projected_mean": 30.1,
+    "projected_std": 7.46,
+    "model_prob": 0.639,
+    "conformal_p_low": 0.5353,
+    "conformal_p_high": 0.8353,
+    "ev_pct": 21.41,
+    "ev_lower_bound_pct": 0.03,
+    "kelly_stake_pen": 3.5,
+    "kelly_optimal_fraction": 0.05,
+    "usage_bump_pct": 9.9,
+    "rationale": "[PTS OVER 26.5] Kyrie Irving (DAL). Projected PTS: 30.1 (std: 7.5). Model prob: 63.9% vs bookmaker implied 50.0%. Usage bump: +9.9% (absences: Luka Doncic). Lower-Bound EV: +0.03% at 1.90 odds. Suggested Kelly stake: S/ 3.50 PEN.",
+    "emitted_at": "2026-11-06T04:51:58Z"
+  }
+]
