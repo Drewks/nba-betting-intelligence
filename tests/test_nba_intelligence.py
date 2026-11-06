@@ -1077,7 +1077,7 @@ def test_23_persist_closing_lines_and_cycle_modes(tmp_path: Path) -> None:
 
 def test_24_external_workflow_dispatcher() -> None:
     """Validates zero-latency external workflow dispatcher (Improvement #4)."""
-    from scripts.dispatch_cycle import resolve_repository, resolve_token, dispatch_workflow
+    from scripts.dispatch_cycle import resolve_repository, dispatch_workflow
 
     repo = resolve_repository()
     assert "nba-betting-intelligence" in repo

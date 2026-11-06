@@ -40,8 +40,6 @@ from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
 from src.models.statistical_models import (
     BaselineModel,
     EnsembleStackingModel,
-    PointMarginModel,
-    TotalPointsModel,
 )
 from src.orchestrator import Orchestrator
 from src.paper_trading.engine import PaperTradingEngine
@@ -51,7 +49,6 @@ from src.prediction.ev_calculator import (
     compute_line_steam,
     compute_market_consensus,
     evaluate_market_opportunity,
-    market_anchored_probability,
 )
 from src.reporting.reporter import (
     export_bets_and_tracking_dashboard,
@@ -221,7 +218,6 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     )
     model_a.fit(all_final_games, now_str)
     model_f.fit(all_final_games, now_str)
-    model_c = model_f.model_c
 
     # Fit probability calibrators on resolved predictions from the current model version,
     # augmented with strictly out-of-sample walk-forward evaluations when live sample < 50

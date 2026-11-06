@@ -1195,12 +1195,9 @@ class PlaywrightAuthorizedScraper:
 
     def inspect_status(self) -> dict[str, Any]:
         """Checks Playwright Python package and browser binary availability across Windows/Linux."""
+        import importlib.util
         extracted_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        try:
-            import playwright  # noqa: F401
-            pw_installed = True
-        except ImportError:
-            pw_installed = False
+        pw_installed = importlib.util.find_spec("playwright") is not None
 
         browsers_installed = self._find_browser_cache()
         return {

@@ -133,7 +133,6 @@ class PaperTradingEngine:
         Returns the count of newly inserted closing odds rows.
         """
         now_dt = parse_iso_utc(as_of_utc) if as_of_utc else datetime.now(timezone.utc)
-        now_str = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         cutoff_str = (now_dt + timedelta(minutes=45)).strftime("%Y-%m-%dT%H:%M:%SZ")
         games_needing_close = self.db.fetch_all(
             """

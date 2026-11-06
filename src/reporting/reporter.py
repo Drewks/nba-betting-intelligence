@@ -1009,14 +1009,9 @@ def export_bets_and_tracking_dashboard(
     filled_bars = int(round(progress_pct / 5.0))
     progress_bar = "█" * filled_bars + "░" * (20 - filled_bars)
 
-    gates = metrics.get("exit_gates_evaluation", {}).get("gates", {})
     boot = metrics.get("bootstrap_uncertainty", {})
     ci_low = float(boot.get("roi_ci_lower_95_pct", -99.0))
     ci_high = float(boot.get("roi_ci_upper_95_pct", 99.0))
-    brier_ok = gates.get("gate_3_calibration_non_inferior_to_baseline", {}).get("passed", False)
-    roi_ok = gates.get("gate_5_positive_roi_and_yield", {}).get("passed", False)
-    ci_ok = gates.get("gate_6_statistical_uncertainty_excludes_zero_edge", {}).get("passed", False)
-    sample_ok = gates.get("gate_1_min_500_settled_selections", {}).get("passed", False)
 
     readiness_file = csv_path.parent / "readiness_status.json"
     readiness = evaluate_and_notify_readiness(metrics, readiness_file)
@@ -1595,6 +1590,19 @@ def sync_obsidian_vault(
         f"09-Reports/Weekly-Report-{target_date}.md": weekly_report_md,
         "09-Reports/Independent-Audit-Report.md": audit_report_md,
     }
+
+    # Remove stale dated files from previous matchdays so the repository stays clean
+    for subdir, prefix in [
+        ("03-Games", "Matchday-"),
+        ("04-Predictions", "Predictions-Summary-"),
+        ("09-Reports", "Daily-Report-"),
+        ("09-Reports", "Weekly-Report-"),
+    ]:
+        folder = root / subdir
+        if folder.exists():
+            for old_file in folder.glob(f"{prefix}*.md"):
+                if old_file.name != f"{prefix}{target_date}.md":
+                    old_file.unlink(missing_ok=True)
 
     written_paths: dict[str, str] = {}
     for rel_path, content in files_to_write.items():

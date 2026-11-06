@@ -175,42 +175,6 @@ class EloModel:
         self.rest_advantage_per_day = rest_advantage_per_day
         self.ratings: dict[str, float] = {}
 
-    def compute_ratings_as_of(
-        self,
-        historical_games: list[dict[str, Any]],
-        cutoff_time_str: str,
-    ) -> dict[str, float]:
-        prior = _filter_strictly_prior_final_games(historical_games, cutoff_time_str)
-        ratings: dict[str, float] = {}
-        last_dt: dict[str, Any] = {}
-
-        for g in prior:
-            h_team = g["home_team"]
-            a_team = g["away_team"]
-            dt = parse_iso_utc(g["game_start_time"])
-            for t in (h_team, a_team):
-                if t in ratings and t in last_dt and (dt - last_dt[t]).days >= 60:
-                    ratings[t] = self.initial_rating + 0.66 * (ratings[t] - self.initial_rating)
-                last_dt[t] = dt
-
-            r_home = ratings.get(h_team, self.initial_rating)
-            r_away = ratings.get(a_team, self.initial_rating)
-
-            rest_diff = float(g.get("home_rest_days", 2) - g.get("away_rest_days", 2))
-            elo_diff = (r_home + self.home_advantage_elo + self.rest_advantage_per_day * rest_diff) - r_away
-            exp_home = 1.0 / (1.0 + 10.0 ** (-elo_diff / 400.0))
-
-            actual_home = 1.0 if g["home_score"] > g["away_score"] else 0.0
-            margin = min(26.0, abs(float(g["home_score"] - g["away_score"])))
-            mov_multiplier = ((margin + 3.0) ** 0.8) / (7.5 + 0.006 * abs(elo_diff))
-
-            delta = self.k_factor * mov_multiplier * (actual_home - exp_home)
-            ratings[h_team] = r_home + delta
-            ratings[a_team] = r_away - delta
-
-        self.ratings = ratings
-        return ratings
-
     def predict_moneyline(
         self,
         game: dict[str, Any],

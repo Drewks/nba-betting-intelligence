@@ -18,16 +18,6 @@ def calculate_implied_prob_gross(decimal_odds: float) -> float:
     return round(1.0 / float(decimal_odds), 6)
 
 
-def calculate_bookmaker_overround(odds_a: float, odds_b: float) -> float:
-    """
-    Calculates bookmaker margin (overround / vigorish) for a two-way market:
-        overround = (1 / O_a + 1 / O_b) - 1
-    """
-    p_a = calculate_implied_prob_gross(odds_a)
-    p_b = calculate_implied_prob_gross(odds_b)
-    return round((p_a + p_b) - 1.0, 6)
-
-
 def devig_multiplicative(odds_a: float, odds_b: float) -> tuple[float, float, float]:
     """
     Documented multiplicative (proportional) margin removal method.

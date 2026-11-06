@@ -390,7 +390,6 @@ class WalkForwardBacktester:
                 feats = build_pregame_features(g, prior_final_games, market="total_points")
                 pred_a_ml = model_a.predict_moneyline(g, prior_final_games)
                 pred_b_ml = model_b.predict_moneyline(g, prior_final_games)
-                pred_c_ml = model_c.predict_moneyline(g, prior_final_games)
                 pred_e_ml = model_e.predict_moneyline(g, prior_final_games)
                 pred_f_ml = model_f.predict_moneyline(g, prior_final_games)
 
@@ -402,7 +401,6 @@ class WalkForwardBacktester:
                 line_val = float(tot_line_odds[0]["line_value"]) if tot_line_odds else 228.5
 
                 pred_a_tot = model_a.predict_total_points(g, prior_final_games, line_val)
-                pred_d_tot = model_d.predict_total_points(g, prior_final_games, line_val)
                 pred_e_tot = model_e.predict_total_points(g, prior_final_games, line_val)
                 pred_f_tot = model_f.predict_total_points(g, prior_final_games, line_val)
 
@@ -580,7 +578,7 @@ class WalkForwardBacktester:
             )
             base_model = BaselineModel("model_a_baseline_v1")
             reconstructed: list[dict[str, Any]] = []
-            for idx, r in enumerate(ml_rows):
+            for r in ml_rows:
                 gid = r["game_id"]
                 t_row = tot_rows.get(gid)
                 if not t_row:

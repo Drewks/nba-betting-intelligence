@@ -18,14 +18,11 @@ import sqlite3
 from typing import Any
 
 from src.backtesting.backtester import evaluate_simulation_exit_gates
-from src.calibration.calibrator import evaluate_version_promotion
 from src.ingestion.adapters import (
     DataSourceRouter,
     ESPNPublicAdapter,
-    NBAStatsAdapter,
     PlaywrightAuthorizedScraper,
     SportradarAdapter,
-    SyntheticFixtureAdapter,
 )
 from src.ingestion.normalizer import NBA_TEAMS
 from src.paper_trading.engine import PaperTradingEngine
@@ -161,10 +158,6 @@ class NBADataScoutAgent:
             try:
                 validate_odds_record(o, g_start)
                 validated_odds.append(o)
-                has_existing_pred = self.db.fetch_one(
-                    "SELECT prediction_id FROM predictions WHERE game_id = ? LIMIT 1",
-                    (o["game_id"],),
-                )
                 self.db.execute_insert(
                     """
                     INSERT OR IGNORE INTO odds_snapshots (
