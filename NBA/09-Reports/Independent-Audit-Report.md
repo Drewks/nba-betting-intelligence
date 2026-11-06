@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-06T17:42:00Z
+date_generated: 2026-11-06T22:13:02Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-06T17:42:00Z`
+- **Fecha de auditoría (UTC)**: `2026-11-06T22:13:02Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -22,7 +22,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
 | `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.226223, 'baseline_brier': 0.242236, 'model_log_loss': 0.642386, 'baseline_log_loss': 0.677731}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
-| `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -9.1341, 'yield_pct': -7.6112}` | `ROI > 0% and Yield > 0%` |
+| `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -9.1341, 'yield_pct': -6.7155}` | `ROI > 0% and Yield > 0%` |
 | `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -44.4819, 'ci_95_upper_pct': 28.7748, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
@@ -32,7 +32,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Coordinador**: `Gemini Argon` en Google Antigravity (Ejecución secuencial verificada)
 - **Python & Entorno Virtual**: `CPython 3.12 (uv cloud/local runner)`
 - **Fuente Primaria Activa sin Credenciales**: `ESPNPublicAdapter` (`site.api.espn.com` — Calendario, marcadores, estadísticas y cuotas pre-partido DraftKings)
-- **Sportradar (`SportradarAdapter`)**: `OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)`
+- **Sportradar (`SportradarAdapter`)**: `OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)`
 - **NBA.com/stats (`NBAStatsAdapter`)**: `FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION`
 - **Playwright (`PlaywrightAuthorizedScraper`)**: `OPERATIONAL`
 - **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)`
