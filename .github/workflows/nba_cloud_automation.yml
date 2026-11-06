@@ -127,21 +127,12 @@ jobs:
             git push origin main
           fi
 
-      - name: 7b. Publicar en rama gh-pages (Fallback automático garantizado)
-        uses: peaceiris/actions-gh-pages@v4
-        continue-on-error: true
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          publish_branch: gh-pages
-          keep_files: false
-
   deploy-pages:
     needs: run-nba-intelligence-cycle
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: 1. Clonar repositorio
         uses: actions/checkout@v4

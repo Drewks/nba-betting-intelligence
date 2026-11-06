@@ -2,8 +2,7 @@ name: Deploy Dashboard to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
     paths:
       - "docs/**"
       - "reports/dashboard.html"
@@ -11,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -20,16 +19,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy-pages:
+  deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - name: 1. Clonar repositorio
+      - name: 1. Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Asegurar existencia de index.html y .nojekyll
+      - name: 2. Ensure docs/index.html exists
         run: |
           mkdir -p docs
           if [ -f "reports/dashboard.html" ] && [ ! -f "docs/index.html" ]; then
@@ -37,24 +36,14 @@ jobs:
           fi
           touch docs/.nojekyll
 
-      - name: 3. Publicar en rama gh-pages (Compatible con Deploy from a branch)
-        uses: peaceiris/actions-gh-pages@v4
-        continue-on-error: true
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          publish_branch: gh-pages
-          keep_files: false
-
-      - name: 4. Configurar GitHub Pages
-        id: pages_config
+      - name: 3. Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: 5. Subir artefacto web de Pages
+      - name: 4. Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'docs/'
 
-      - name: 6. Desplegar en vivo en GitHub Pages
+      - name: 5. Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
