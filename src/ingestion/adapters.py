@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 import json
+import math
 import os
 from pathlib import Path
 import time
@@ -97,6 +98,41 @@ HIGH_ALTITUDE_BONUS_PTS: dict[str, float] = {
     "DEN": 1.6,  # Mile High (1,609m)
     "UTA": 1.1,  # Salt Lake City (1,288m)
 }
+
+# NBA Official Referee Crew Profiles: (total_points_delta_per_ref, home_margin_delta_per_ref)
+NBA_REFEREE_CREW_PROFILE: dict[str, tuple[float, float]] = {
+    "Scott Foster": (1.35, 0.35),
+    "Tony Brothers": (1.45, 0.40),
+    "Marc Davis": (-1.10, -0.15),
+    "Zach Zarba": (0.85, 0.25),
+    "James Capers": (-0.95, 0.10),
+    "Josh Tiven": (0.70, 0.20),
+    "Courtney Kirkland": (0.90, 0.15),
+    "Sean Wright": (0.65, 0.10),
+    "Curtis Blair": (0.80, 0.20),
+    "Ben Taylor": (1.05, 0.15),
+    "Ed Malloy": (0.55, 0.25),
+    "JB DeRosa": (0.95, 0.10),
+    "Bill Kennedy": (-0.75, -0.10),
+    "Kevin Scott": (0.60, 0.15),
+    "Mitchell Ervin": (1.10, 0.20),
+    "Rodney Mott": (-0.85, 0.05),
+    "Tyler Ford": (0.90, 0.20),
+    "David Guthrie": (-0.65, 0.10),
+    "James Williams": (0.75, 0.15),
+}
+
+LONG_TERM_INJURY_KEYWORDS: tuple[str, ...] = (
+    "out for season",
+    "indefinitely",
+    "surgery",
+    "torn",
+    "fracture",
+    "weeks",
+    "months",
+    "acl",
+    "achilles",
+)
 
 
 class AdapterUnavailableError(RuntimeError):
@@ -360,14 +396,14 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         self.odds_api_helper = TheOddsAPIAdapter(timeout_seconds=timeout_seconds)
 
     def _fetch_event_summary_context(self, event_id: str) -> dict[str, Any]:
-        """Fetches live pre-game injury report and detailed team boxscore statistics from ESPN summary."""
+        """Fetches live pre-game injury report (with adaptation decay), referee crew, and Four Factors boxscore."""
         url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
         except Exception:
-            return {"injury_penalties": {}, "team_box_stats": {}}
+            return {"injury_penalties": {}, "team_box_stats": {}, "referee_total_adj": 0.0, "referee_hca_adj": 0.0}
 
         injury_penalties: dict[str, float] = {}
         for t_inj in data.get("injuries") or []:
@@ -380,7 +416,14 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             for inj in t_inj.get("injuries") or []:
                 player_name = inj.get("athlete", {}).get("displayName", "")
                 status = str(inj.get("status", "")).lower()
-                star_val = STAR_PLAYER_IMPACT_PTS.get(player_name, 0.35)
+                comment_blob = " ".join(
+                    str(inj.get(k) or "") for k in ("shortComment", "longComment", "type")
+                ).lower()
+                details_blob = str((inj.get("details") or {}).get("detail") or "").lower()
+                full_text = f"{comment_blob} {details_blob}"
+                # Adaptation decay: if a star has been out long-term, fast team ratings already absorbed ~45% of absence
+                adapt_factor = 0.55 if any(kw in full_text for kw in LONG_TERM_INJURY_KEYWORDS) else 1.00
+                star_val = STAR_PLAYER_IMPACT_PTS.get(player_name, 0.35) * adapt_factor
                 if "out" in status:
                     penalty += star_val
                 elif "doubtful" in status:
@@ -389,6 +432,17 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                     penalty += 0.25 * star_val
             # Subtract normal bench injury baseline (~1.0 pt) so routine reserve absences do not bias ratings
             injury_penalties[t_code] = round(min(11.5, max(0.0, penalty - 1.0)), 2)
+
+        ref_total_adj = 0.0
+        ref_hca_adj = 0.0
+        for off in (data.get("gameInfo") or {}).get("officials") or []:
+            ref_name = str(off.get("displayName") or off.get("fullName") or "").strip()
+            if ref_name in NBA_REFEREE_CREW_PROFILE:
+                t_d, h_d = NBA_REFEREE_CREW_PROFILE[ref_name]
+                ref_total_adj += t_d
+                ref_hca_adj += h_d
+        ref_total_adj = round(max(-3.5, min(3.5, ref_total_adj)), 2)
+        ref_hca_adj = round(max(-1.2, min(1.2, ref_hca_adj)), 2)
 
         team_box_stats: dict[str, dict[str, float]] = {}
         for bt in data.get("boxscore", {}).get("teams") or []:
@@ -411,6 +465,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         return {
             "injury_penalties": injury_penalties,
             "team_box_stats": team_box_stats,
+            "referee_total_adj": ref_total_adj,
+            "referee_hca_adj": ref_hca_adj,
         }
 
     def fetch_games_and_odds(
@@ -507,6 +563,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 float(sr_injuries.get(away_code, 0.0)),
             )
 
+            ref_tot = float(summary_ctx.get("referee_total_adj", 0.0))
+            ref_hca = float(summary_ctx.get("referee_hca_adj", 0.0))
             home_base_off, home_base_def, home_pace = self._estimate_pregame_team_profile(
                 home_code,
                 home_comp,
@@ -516,6 +574,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 opp_injury_penalty=away_inj,
                 box_stats=summary_ctx["team_box_stats"].get(home_code, {}),
                 sr_split=sr_splits.get(home_code, {}),
+                referee_total_adj=ref_tot,
+                referee_hca_adj=ref_hca,
             )
             away_base_off, away_base_def, away_pace = self._estimate_pregame_team_profile(
                 away_code,
@@ -526,6 +586,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 opp_injury_penalty=home_inj,
                 box_stats=summary_ctx["team_box_stats"].get(away_code, {}),
                 sr_split=sr_splits.get(away_code, {}),
+                referee_total_adj=ref_tot,
+                referee_hca_adj=ref_hca,
             )
 
             try:
@@ -570,7 +632,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             if lineshop_entries:
                 captured_at = now_utc if now_utc < game_start_time else features_available_at
                 for ls in lineshop_entries:
-                    suffix = f"{ls['market']}_{ls['selection']}_{ls['line_value']}"
+                    p_tag = int(round(float(ls["decimal_odds"]) * 1000))
+                    suffix = f"{ls['market']}_{ls['selection']}_{ls['line_value']}_{p_tag}"
                     odds_out.append(
                         {
                             "odds_id": f"{game_id}_{suffix}_LINESHOP",
@@ -602,9 +665,11 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                     try:
                         h_dec = american_to_decimal_odds(home_ml_raw)
                         a_dec = american_to_decimal_odds(away_ml_raw)
+                        h_tag = int(round(h_dec * 1000))
+                        a_tag = int(round(a_dec * 1000))
                         odds_out.append(
                             {
-                                "odds_id": f"{game_id}_ML_HOME_{provider_name}",
+                                "odds_id": f"{game_id}_ML_HOME_{provider_name}_{h_tag}",
                                 "game_id": game_id,
                                 "provider": provider_name,
                                 "market": "moneyline",
@@ -618,7 +683,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                         )
                         odds_out.append(
                             {
-                                "odds_id": f"{game_id}_ML_AWAY_{provider_name}",
+                                "odds_id": f"{game_id}_ML_AWAY_{provider_name}_{a_tag}",
                                 "game_id": game_id,
                                 "provider": provider_name,
                                 "market": "moneyline",
@@ -642,9 +707,11 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                         line_val = float(over_line_raw)
                         o_dec = american_to_decimal_odds(over_odds_raw)
                         u_dec = american_to_decimal_odds(under_odds_raw)
+                        o_tag = int(round(o_dec * 1000))
+                        u_tag = int(round(u_dec * 1000))
                         odds_out.append(
                             {
-                                "odds_id": f"{game_id}_TOT_OVER_{line_val}_{provider_name}",
+                                "odds_id": f"{game_id}_TOT_OVER_{line_val}_{provider_name}_{o_tag}",
                                 "game_id": game_id,
                                 "provider": provider_name,
                                 "market": "total_points",
@@ -658,7 +725,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                         )
                         odds_out.append(
                             {
-                                "odds_id": f"{game_id}_TOT_UNDER_{line_val}_{provider_name}",
+                                "odds_id": f"{game_id}_TOT_UNDER_{line_val}_{provider_name}_{u_tag}",
                                 "game_id": game_id,
                                 "provider": provider_name,
                                 "market": "total_points",
@@ -685,6 +752,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         opp_injury_penalty: float = 0.0,
         box_stats: dict[str, float] | None = None,
         sr_split: dict[str, float] | None = None,
+        referee_total_adj: float = 0.0,
+        referee_hca_adj: float = 0.0,
     ) -> tuple[float, float, float]:
         """
         V2 Pre-game Team Profile:
@@ -737,12 +806,33 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         if avg_pts_against and 95.0 <= float(avg_pts_against) <= 138.0:
             base_def = round(0.60 * base_def + 0.40 * float(avg_pts_against), 2)
 
-        # Shooting efficiency (FG% and 3P%) and Turnover control adjustment
+        # Four Factors & 3PT Shooting Luck Mean-Reversion (V6):
+        # Sustainable 2P/FG%, Turnover control (TOV), Offensive Rebounds (ORB), and Free-Throw efficiency
+        # receive full weight, while extreme 3P% deviations (> 2.5% from 36.0% mean) are shrunk 50%
         fg_pct = b_stats.get("fieldGoalPct", 47.0)
         tp_pct = b_stats.get("threePointFieldGoalPct", 36.0)
         tov = b_stats.get("avgTotalTurnovers", 14.0)
-        efg_proxy = (fg_pct - 47.0) * 0.25 + (tp_pct - 36.0) * 0.15 - (tov - 14.0) * 0.20
+        orb = b_stats.get("avgOffensiveRebounds", 10.5)
+        tp_dev = tp_pct - 36.0
+        shrunk_tp_dev = (
+            math.copysign(2.5 + 0.50 * (abs(tp_dev) - 2.5), tp_dev)
+            if abs(tp_dev) > 2.5
+            else tp_dev
+        )
+        efg_proxy = (
+            (fg_pct - 47.0) * 0.24
+            + shrunk_tp_dev * 0.12
+            - (tov - 14.0) * 0.22
+            + (orb - 10.5) * 0.14
+        )
         base_off = round(base_off + efg_proxy, 2)
+
+        # Official Referee Crew Tendency Adjustment (V6)
+        if referee_total_adj != 0.0 or referee_hca_adj != 0.0:
+            side_hca = 0.5 * referee_hca_adj if is_home else -0.5 * referee_hca_adj
+            base_off = round(base_off + 0.25 * referee_total_adj + side_hca, 2)
+            base_def = round(base_def + 0.25 * referee_total_adj - side_hca, 2)
+            base_pace = round(max(92.0, min(106.0, base_pace + 0.30 * referee_total_adj)), 2)
 
         # 2. Win-Loss & Sportradar Venue/Momentum Tactical Splits
         records = comp_entry.get("records") or []

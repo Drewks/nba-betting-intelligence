@@ -219,6 +219,7 @@ class PaperTradingEngine:
         uncertainty_std: float = 0.05,
         selection: str = "",
         overtime_prob: float = 0.0,
+        steam_delta: float = 0.0,
         apply_clv_governor: bool = True,
     ) -> float:
         """
@@ -272,6 +273,12 @@ class PaperTradingEngine:
             raw_stake *= 0.82
         elif uncertainty_std <= 0.045:
             raw_stake *= 1.08
+
+        # Sharp Steam Move Modulation (V6)
+        if float(steam_delta) >= 0.020:
+            raw_stake *= 1.06
+        elif float(steam_delta) <= -0.020:
+            raw_stake *= 0.85
 
         # Active CLV Governor: scale down if market has been closing against us
         if apply_clv_governor:
@@ -445,6 +452,19 @@ class PaperTradingEngine:
                 )
                 continue
 
+            # 2d. Adverse Sharp Steam Move Guard (V6): block betting into heavy reverse sharp line movement
+            steam_delta = float(cand.get("steam_delta") or 0.0)
+            if steam_delta <= -0.045:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "ADVERSE_SHARP_STEAM_MOVE",
+                        f"Market fair probability moved {steam_delta * 100:.2f}% against this side since opening (<= -4.5%); skipped.",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
             # 4. Check duplicate in DB
             dup = self.db.fetch_one(
                 """
@@ -529,6 +549,7 @@ class PaperTradingEngine:
                     uncertainty_std=float(cand.get("uncertainty_std") or 0.05),
                     selection=selection,
                     overtime_prob=float(cand.get("overtime_prob") or 0.0),
+                    steam_delta=float(cand.get("steam_delta") or 0.0),
                 )
             elif dec_odds > 2.45:
                 bet_stake = round(max(0.50, min(self.max_stake_pen, 1.35 / (dec_odds - 0.35))), 2)
@@ -726,6 +747,18 @@ class PaperTradingEngine:
                 return "PUSH", 0.0, summary
             over_hit = total_pts > float(line_value)
             if (selection == "OVER" and over_hit) or (selection == "UNDER" and not over_hit):
+                net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
+                return "WON", net_profit, summary
+            return "LOST", round(-stake_pen, 4), summary
+
+        if market == "spread":
+            if line_value is None:
+                raise DataValidationError("spread settlement requires line_value")
+            side_margin = float(home_score - away_score) if selection == "HOME" else float(away_score - home_score)
+            adjusted_margin = side_margin + float(line_value)
+            if abs(adjusted_margin) < 1e-6:
+                return "PUSH", 0.0, summary
+            if adjusted_margin > 0.0:
                 net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
                 return "WON", net_profit, summary
             return "LOST", round(-stake_pen, 4), summary

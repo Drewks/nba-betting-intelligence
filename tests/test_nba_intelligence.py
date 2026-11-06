@@ -1210,3 +1210,146 @@ def test_26_v5_geodesic_travel_altitude_acclimation_and_moment_matched_mc() -> N
     assert 0.05 <= sim_out["p_home_mc"] <= 0.95
     assert 0.05 <= sim_out["p_over_mc"] <= 0.95
     assert sim_out["conformal_q10_total"] < sim_out["mc_expected_total"] < sim_out["conformal_q90_total"]
+
+
+
+def test_27_v6_steam_moves_spread_predictions_referees_and_injury_decay(tmp_path: Path) -> None:
+    """Validates V6 Steam Move detection, adverse steam guard, Point Spread prediction/settlement, Referee Crew & 3PT mean-reversion."""
+    from src.ingestion.adapters import ESPNPublicAdapter
+    from src.models.statistical_models import EnsembleStackingModel
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.prediction.ev_calculator import compute_line_steam, evaluate_market_opportunity
+    from src.storage.db import DatabaseManager
+
+    # 1. Steam Move velocity calculation across chronological snapshots
+    snapshots = [
+        {
+            "game_id": "ESPN_STEAM_1",
+            "market": "moneyline",
+            "selection": "HOME",
+            "decimal_odds": 1.95,
+            "counterpart_decimal_odds": 1.95,
+            "captured_at": "2026-11-05T14:00:00Z",
+        },
+        {
+            "game_id": "ESPN_STEAM_1",
+            "market": "moneyline",
+            "selection": "HOME",
+            "decimal_odds": 1.72,
+            "counterpart_decimal_odds": 2.22,
+            "captured_at": "2026-11-05T21:00:00Z",
+        },
+    ]
+    steam_map = compute_line_steam(snapshots)
+    ml_home_steam = steam_map[("moneyline", "HOME")]
+    assert ml_home_steam["steam_delta"] > 0.05  # Implied fair prob rose from 50.0% to ~56.3% (+6.3% sharp steam)
+
+    # Confirming vs adverse steam modulation in evaluate_market_opportunity
+    opp_confirm = evaluate_market_opportunity(
+        estimated_prob=0.62,
+        uncertainty_std=0.04,
+        odds_record={
+            "odds_id": "O_ST_1",
+            "game_id": "ESPN_STEAM_1",
+            "provider": "Pinnacle",
+            "market": "moneyline",
+            "selection": "HOME",
+            "line_value": None,
+            "decimal_odds": 1.85,
+            "counterpart_decimal_odds": 2.05,
+            "captured_at": "2026-11-05T21:00:00Z",
+        },
+        game_start_time="2026-11-05T23:30:00Z",
+        model_version_id="model_f_ensemble_v5",
+        steam_delta=0.035,
+    )
+    opp_adverse = evaluate_market_opportunity(
+        estimated_prob=0.62,
+        uncertainty_std=0.04,
+        odds_record={
+            "odds_id": "O_ST_2",
+            "game_id": "ESPN_STEAM_1",
+            "provider": "Pinnacle",
+            "market": "moneyline",
+            "selection": "HOME",
+            "line_value": None,
+            "decimal_odds": 1.85,
+            "counterpart_decimal_odds": 2.05,
+            "captured_at": "2026-11-05T21:00:00Z",
+        },
+        game_start_time="2026-11-05T23:30:00Z",
+        model_version_id="model_f_ensemble_v5",
+        steam_delta=-0.035,
+    )
+    assert opp_confirm["estimated_probability"] > opp_adverse["estimated_probability"]
+
+    # 2. Adverse Sharp Steam Guard in PaperTradingEngine (blocks bets with steam_delta <= -0.045)
+    db = DatabaseManager(tmp_path / "test_v6.sqlite3")
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0, max_stake_pen=6.0, dynamic_conviction_staking=True)
+    res_steam = engine.evaluate_and_record_matchday_selections(
+        "2026-11-05",
+        [
+            {
+                "prediction_id": "PRED_STEAM_ADV",
+                "game_id": "ESPN_STEAM_1",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 1.95,
+                "calibrated_probability": 0.56,
+                "ev_unit": 0.092,
+                "ev_pct": 9.2,
+                "uncertainty_std": 0.04,
+                "steam_delta": -0.052,
+                "model_version_id": "model_f_ensemble_v5",
+                "emitted_at": "2026-11-05T21:00:00Z",
+            }
+        ],
+    )
+    assert len(res_steam["placed_bets"]) == 0
+    assert res_steam["no_bet_decisions"][0]["reason_code"] == "ADVERSE_SHARP_STEAM_MOVE"
+
+    # 3. Point Spread prediction (predict_spread) and settlement (WON, LOST, PUSH)
+    hist = [
+        {"game_id": "G1", "game_start_time": "2026-10-20T00:00:00Z", "home_team": "BOS", "away_team": "NYK", "status": "FINAL", "home_score": 118, "away_score": 106},
+        {"game_id": "G2", "game_start_time": "2026-10-22T00:00:00Z", "home_team": "BOS", "away_team": "MIA", "status": "FINAL", "home_score": 114, "away_score": 102},
+    ]
+    target = {
+        "game_id": "G3",
+        "game_start_time": "2026-10-25T00:00:00Z",
+        "home_team": "BOS",
+        "away_team": "NYK",
+        "status": "SCHEDULED",
+        "home_off_rtg": 119.0,
+        "home_def_rtg": 110.5,
+        "home_pace": 99.0,
+        "away_off_rtg": 114.5,
+        "away_def_rtg": 113.5,
+        "away_pace": 98.0,
+        "home_rest_days": 2,
+        "away_rest_days": 2,
+        "features_available_at": "2026-10-24T18:00:00Z",
+    }
+    ens = EnsembleStackingModel("model_f_v6_test")
+    sp_half = ens.predict_spread(target, hist, spread_line_home=-5.5)
+    sp_int = ens.predict_spread(target, hist, spread_line_home=-5.0)
+    assert 0.05 <= sp_half["p_cover_home"] <= 0.95
+    assert sp_half["p_push_estimate"] == 0.0
+    assert sp_int["p_push_estimate"] > 0.01
+
+    st_win, prof_win, _ = PaperTradingEngine.calculate_settlement_outcome("spread", "HOME", -5.5, 1.91, 2.0, "FINAL", 112, 105)
+    st_push, prof_push, _ = PaperTradingEngine.calculate_settlement_outcome("spread", "HOME", -7.0, 1.91, 2.0, "FINAL", 112, 105)
+    st_away, prof_away, _ = PaperTradingEngine.calculate_settlement_outcome("spread", "AWAY", 5.5, 1.91, 2.0, "FINAL", 110, 106)
+    assert st_win == "WON" and prof_win == 1.82
+    assert st_push == "PUSH" and prof_push == 0.0
+    assert st_away == "WON" and prof_away == 1.82
+
+    # 4. Referee Crew Tendency & 3PT Shooting Luck Mean-Reversion in _estimate_pregame_team_profile
+    off_high_ref, _, pace_high_ref = ESPNPublicAdapter._estimate_pregame_team_profile(
+        "BOS", {}, is_home=True, box_stats={"threePointFieldGoalPct": 44.0}, referee_total_adj=2.5, referee_hca_adj=0.6
+    )
+    off_low_ref, _, pace_low_ref = ESPNPublicAdapter._estimate_pregame_team_profile(
+        "BOS", {}, is_home=True, box_stats={"threePointFieldGoalPct": 44.0}, referee_total_adj=-2.0, referee_hca_adj=-0.4
+    )
+    assert off_high_ref > off_low_ref
+    assert pace_high_ref > pace_low_ref

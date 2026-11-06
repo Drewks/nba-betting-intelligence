@@ -1,4 +1,4 @@
-"""Expected Value (EV), gross implied probability, and documented de-vigging methods."""
+"""Expected Value (EV), gross implied probability, documented de-vigging, and Steam Move detection."""
 
 from __future__ import annotations
 
@@ -106,6 +106,41 @@ def compute_market_consensus(odds_rows: list[dict[str, Any]]) -> dict[tuple[str,
     return out
 
 
+def compute_line_steam(odds_history: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, float]]:
+    """
+    Computes chronological line movement ("Steam Move" velocity) per (market, selection)
+    across ordered pre-game odds_snapshots:
+        steam_delta = p_fair_latest - p_fair_opening
+    Positive steam_delta (> 0) indicates sharp money steaming toward this selection (implied fair prob rising).
+    Negative steam_delta (< 0) indicates market steaming against this selection.
+    """
+    ordered = sorted(odds_history, key=lambda r: str(r.get("captured_at", "")))
+    by_side: dict[tuple[str, str], list[float]] = {}
+    for o in ordered:
+        dec = o.get("decimal_odds")
+        cp = o.get("counterpart_decimal_odds")
+        if dec is None or float(dec) <= 1.0:
+            continue
+        if cp is not None and float(cp) > 1.0:
+            p_f, _, _ = devig_multiplicative(float(dec), float(cp))
+        else:
+            p_f = calculate_implied_prob_gross(float(dec))
+        key = (str(o.get("market", "")), str(o.get("selection", "")))
+        by_side.setdefault(key, []).append(p_f)
+
+    out: dict[tuple[str, str], dict[str, float]] = {}
+    for key, probs in by_side.items():
+        p_open = probs[0]
+        p_latest = probs[-1]
+        out[key] = {
+            "p_fair_open": round(p_open, 6),
+            "p_fair_latest": round(p_latest, 6),
+            "steam_delta": round(p_latest - p_open, 6),
+            "n_snapshots": float(len(probs)),
+        }
+    return out
+
+
 def market_anchored_probability(
     model_prob: float,
     market_prob: float | None,
@@ -128,11 +163,12 @@ def evaluate_market_opportunity(
     market_consensus_prob: float | None = None,
     model_weight: float = DEFAULT_MODEL_WEIGHT,
     max_disagreement: float = MAX_MODEL_MARKET_DISAGREEMENT,
+    steam_delta: float = 0.0,
 ) -> dict[str, Any]:
     """
     Validates odds + timestamp, estimates fair de-vigged probability when counterpart odds exist,
-    anchors the estimated probability to market consensus (if available),
-    and returns a structured EV evaluation record.
+    modulates model_weight when sharp steam moves are detected, anchors the estimated probability
+    to market consensus (if available), and returns a structured EV evaluation record.
     """
     validate_odds_record(odds_record, game_start_time, simulated_prediction_time)
     dec_odds = float(odds_record["decimal_odds"])
@@ -146,7 +182,18 @@ def evaluate_market_opportunity(
 
     market_prob = market_consensus_prob if market_consensus_prob is not None else p_fair
     disagreement = (float(estimated_prob) - float(market_prob)) if market_prob is not None else None
-    anchored_prob = market_anchored_probability(estimated_prob, market_prob, model_weight=model_weight)
+
+    eff_weight = float(model_weight)
+    s_delta = float(steam_delta or 0.0)
+    if market_prob is not None and s_delta != 0.0:
+        # Adverse steam (>= 2.5% move against our selection): shift weight toward sharp market
+        if s_delta <= -0.025:
+            eff_weight = max(0.15, eff_weight - 0.08)
+        # Confirming steam (>= 2.0% move toward our selection when model also favors this side)
+        elif s_delta >= 0.020 and float(estimated_prob) > float(market_prob):
+            eff_weight = min(0.42, eff_weight + 0.04)
+
+    anchored_prob = market_anchored_probability(estimated_prob, market_prob, model_weight=eff_weight)
 
     ev_metrics = calculate_ev(anchored_prob, dec_odds)
 
@@ -169,4 +216,5 @@ def evaluate_market_opportunity(
         "model_version_id": model_version_id,
         "model_market_disagreement": round(float(disagreement), 6) if disagreement is not None else None,
         "max_model_market_disagreement": max_disagreement,
+        "steam_delta": round(s_delta, 6),
     }

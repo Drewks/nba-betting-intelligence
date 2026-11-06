@@ -48,6 +48,7 @@ from src.paper_trading.engine import PaperTradingEngine
 from src.prediction.ev_calculator import (
     DEFAULT_MODEL_WEIGHT,
     MAX_MODEL_MARKET_DISAGREEMENT,
+    compute_line_steam,
     compute_market_consensus,
     evaluate_market_opportunity,
     market_anchored_probability,
@@ -395,6 +396,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
 
             consensus_map = compute_market_consensus(game_odds)
+            steam_map = compute_line_steam(raw_game_odds)
 
             for o in game_odds:
                 validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
@@ -403,6 +405,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                 line_v = o.get("line_value")
                 cons_entry = consensus_map.get((mkt, sel, line_v))
                 cons_p = cons_entry["p_market"] if cons_entry else None
+                steam_entry = steam_map.get((mkt, sel))
+                s_delta = float(steam_entry["steam_delta"]) if steam_entry else 0.0
 
                 if mkt == "moneyline":
                     raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
@@ -425,6 +429,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     market_consensus_prob=cons_p,
                     model_weight=DEFAULT_MODEL_WEIGHT,
                     max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
+                    steam_delta=s_delta,
                 )
                 pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{uuid.uuid4().hex[:6].upper()}"
                 db.execute_insert(

@@ -321,6 +321,44 @@ class PointMarginModel:
             "uncertainty_std": 0.050,
         }
 
+    def predict_spread(
+        self,
+        game: dict[str, Any],
+        historical_games: list[dict[str, Any]],
+        spread_line_home: float,
+    ) -> dict[str, float]:
+        """
+        Predicts probability of HOME covering spread_line_home (e.g. -5.5 means Home must win by > 5.5 pts;
+        +4.5 means Home covers if Home - Away > -4.5). Handles integer spread push probabilities.
+        """
+        ml_res = self.predict_moneyline(game, historical_games)
+        expected_margin = float(ml_res["expected_margin"])
+        target_diff = -float(spread_line_home)
+        scale = float(self.residual_std)
+
+        is_int_spread = abs(target_diff - round(target_diff)) < 1e-6
+        if is_int_spread:
+            p_cover_raw = 1.0 - norm.cdf(target_diff + 0.5, loc=expected_margin, scale=scale)
+            p_loss_raw = norm.cdf(target_diff - 0.5, loc=expected_margin, scale=scale)
+            p_push = max(0.0, 1.0 - p_cover_raw - p_loss_raw)
+            non_push = max(1e-6, p_cover_raw + p_loss_raw)
+            p_cover_home = float(np.clip(p_cover_raw / non_push, 0.05, 0.95))
+            p_cover_away = float(np.clip(p_loss_raw / non_push, 0.05, 0.95))
+        else:
+            p_push = 0.0
+            p_cover_home = float(np.clip(1.0 - norm.cdf(target_diff, loc=expected_margin, scale=scale), 0.05, 0.95))
+            p_cover_away = round(1.0 - p_cover_home, 6)
+
+        return {
+            "spread_line_home": float(spread_line_home),
+            "expected_margin": round(expected_margin, 3),
+            "margin_std": round(scale, 3),
+            "p_cover_home": round(p_cover_home, 6),
+            "p_cover_away": round(p_cover_away, 6),
+            "p_push_estimate": round(float(p_push), 6),
+            "uncertainty_std": 0.052,
+        }
+
 
 class TotalPointsModel:
     """
@@ -972,5 +1010,46 @@ class EnsembleStackingModel:
             "clutch_foul_prob": mc_res["clutch_foul_prob"],
             "conformal_q10_total": mc_res["conformal_q10_total"],
             "conformal_q90_total": mc_res["conformal_q90_total"],
+            "uncertainty_std": unc_std,
+        }
+
+    def predict_spread(
+        self,
+        game: dict[str, Any],
+        historical_games: list[dict[str, Any]],
+        spread_line_home: float,
+    ) -> dict[str, float]:
+        """
+        Pools PointMarginModel, AdvancedGBMModel, and DeepMonteCarloHybridModel spread cover probabilities
+        for spread_line_home (e.g. -6.5 or +4.0).
+        """
+        c_sp = self.model_c.predict_spread(game, historical_games, spread_line_home)
+        e_ml = self.model_e.predict_moneyline(game, historical_games)
+        mc_res = self.model_g.simulate_matchup(game, historical_games)
+
+        target_diff = -float(spread_line_home)
+        e_mar = float(e_ml.get("expected_margin", c_sp["expected_margin"]))
+        mc_mar = float(mc_res["mc_expected_margin"])
+        scale = float(c_sp["margin_std"])
+
+        p_e_cover = float(np.clip(1.0 - norm.cdf(target_diff, loc=e_mar, scale=scale), 0.05, 0.95))
+        p_mc_cover = float(np.clip(1.0 - norm.cdf(target_diff, loc=mc_mar, scale=scale), 0.05, 0.95))
+
+        p_cover_home = self._pool_probs_log_odds(
+            [c_sp["p_cover_home"], p_e_cover, p_mc_cover],
+            [0.52, 0.24, 0.24],
+        )
+        sub_std = float(np.std([c_sp["p_cover_home"], p_e_cover, p_mc_cover]))
+        unc_std = round(max(0.034, min(0.095, 0.038 + 0.45 * sub_std)), 4)
+
+        return {
+            "spread_line_home": float(spread_line_home),
+            "expected_margin": round(0.55 * c_sp["expected_margin"] + 0.45 * mc_mar, 3),
+            "margin_std": c_sp["margin_std"],
+            "p_cover_home": round(p_cover_home, 6),
+            "p_cover_away": round(1.0 - p_cover_home, 6),
+            "p_push_estimate": c_sp["p_push_estimate"],
+            "conformal_q10_margin": mc_res["conformal_q10_margin"],
+            "conformal_q90_margin": mc_res["conformal_q90_margin"],
             "uncertainty_std": unc_std,
         }

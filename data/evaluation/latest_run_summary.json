@@ -1,9 +1,8 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "auto",
-  "timestamp_utc": "2026-11-05T23:31:18Z",
+  "timestamp_utc": "2026-11-06T00:07:27Z",
   "ingested_dates": [
-    "2026-11-04",
     "2026-11-05",
     "2026-11-06",
     "2026-11-07"
@@ -60,7 +59,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-05T23:31:22Z",
+      "extracted_at": "2026-11-06T00:07:32Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -82,13 +81,13 @@
         "source": "playwright_espn_injuries_table",
         "snippet": "Payton Pritchard G Nov 6 Day-To-Day Nov 5: Pritchard (eye) is questionable for Friday against Charlotte, Taylor Snow of the Celtics' official site reports.",
         "relevance_score": 0.19,
-        "captured_at": "2026-11-05T23:31:24Z"
+        "captured_at": "2026-11-06T00:07:33Z"
       },
       {
         "source": "playwright_espn_injuries_table",
         "snippet": "Tyrese Proctor G Nov 6 Day-To-Day Nov 4: Proctor exited Wednesday's 124-116 loss to the Thunder in the fourth quarter and did not return due to an apparent ankle injury, finishing with 11 points (4-7 FG, 2-3 3Pt, 1-1 FT)",
         "relevance_score": 0.1657,
-        "captured_at": "2026-11-05T23:31:24Z"
+        "captured_at": "2026-11-06T00:07:33Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
@@ -112,7 +111,7 @@
         "source": "playwright_espn_injuries_table",
         "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
         "relevance_score": 0.1621,
-        "captured_at": "2026-11-05T23:31:24Z"
+        "captured_at": "2026-11-06T00:07:33Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
