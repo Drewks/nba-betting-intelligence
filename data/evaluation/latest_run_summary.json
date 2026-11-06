@@ -1,15 +1,14 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "auto",
-  "timestamp_utc": "2026-11-06T00:07:27Z",
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-06T01:07:12Z",
   "ingested_dates": [
-    "2026-11-05",
     "2026-11-06",
     "2026-11-07"
   ],
   "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 0,
+  "new_bets_placed_in_cycle": 1,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic"
@@ -18,10 +17,10 @@
     "initial_bankroll_pen": 100.0,
     "settled_bankroll_pen": 96.4525,
     "cumulative_net_profit_pen": -3.5475,
-    "pending_exposure_pen": 2.75,
-    "available_balance_pen": 93.7025,
+    "pending_exposure_pen": 6.39,
+    "available_balance_pen": 90.0625,
     "settled_bets_count": 20,
-    "pending_bets_count": 2
+    "pending_bets_count": 4
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
@@ -29,7 +28,7 @@
     "current_settled_bankroll_pen": 96.4525,
     "net_profit_pen": -3.5475,
     "roi_pct": -15.0318,
-    "yield_pct": -13.463,
+    "yield_pct": -11.8289,
     "settled_bets_count": 20,
     "won_count": 8,
     "lost_count": 12,
@@ -59,7 +58,7 @@
     "playwright": {
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
-      "extracted_at": "2026-11-06T00:07:32Z",
+      "extracted_at": "2026-11-06T01:07:16Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -67,57 +66,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 124 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
     "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-    "indexed_documents_count": 124,
+    "indexed_documents_count": 105,
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard is Questionable for Friday's (Nov. 6) game against the Hornets.",
-        "relevance_score": 0.2288,
+        "relevance_score": 0.2419,
         "captured_at": "2026-11-05"
-      },
-      {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Payton Pritchard G Nov 6 Day-To-Day Nov 5: Pritchard (eye) is questionable for Friday against Charlotte, Taylor Snow of the Celtics' official site reports.",
-        "relevance_score": 0.19,
-        "captured_at": "2026-11-06T00:07:33Z"
-      },
-      {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Tyrese Proctor G Nov 6 Day-To-Day Nov 4: Proctor exited Wednesday's 124-116 loss to the Thunder in the fourth quarter and did not return due to an apparent ankle injury, finishing with 11 points (4-7 FG, 2-3 3Pt, 1-1 FT)",
-        "relevance_score": 0.1657,
-        "captured_at": "2026-11-06T00:07:33Z"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-        "relevance_score": 0.1642,
-        "captured_at": "2026-11-04"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-        "relevance_score": 0.1636,
-        "captured_at": "2026-11-04"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
-        "relevance_score": 0.1624,
+        "relevance_score": 0.1782,
         "captured_at": "2026-11-05"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
-        "relevance_score": 0.1621,
-        "captured_at": "2026-11-06T00:07:33Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
+        "relevance_score": 0.175,
+        "captured_at": "2026-11-04"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
+        "relevance_score": 0.1734,
+        "captured_at": "2026-11-04"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
-        "relevance_score": 0.1608,
+        "relevance_score": 0.1705,
         "captured_at": "2026-11-04"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHA Kon Knueppel (SF) Day To Day (Leg): Knueppel did not return to Wednesday's (Nov. 4) game against the Nets.",
+        "relevance_score": 0.1704,
+        "captured_at": "2026-11-04"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen did not return to Wednesday's (Nov. 4) game versus the Thunder.",
+        "relevance_score": 0.1691,
+        "captured_at": "2026-11-04"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Nov. 4) game against Cleveland.",
+        "relevance_score": 0.1415,
+        "captured_at": "2026-11-05"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -130,7 +129,7 @@
     "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 124 docs indexed)",
-    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
+    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }

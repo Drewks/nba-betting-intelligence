@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 124 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (PLAYWRIGHT_CHROMIUM_HEADLESS, 105 docs indexed)",
   "playwright_engine_used": "PLAYWRIGHT_CHROMIUM_HEADLESS",
-  "indexed_documents_count": 124,
+  "indexed_documents_count": 105,
   "top_retrieved_context": [
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Jalen Johnson F Nov 6 Day-To-Day Nov 5: Johnson is questionable to suit up for Friday's game against Washington.",
-      "relevance_score": 0.2213,
-      "captured_at": "2026-11-06T00:24:42Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
-      "relevance_score": 0.2153,
-      "captured_at": "2026-11-06T00:24:42Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Dennis Schroder G Nov 6 Day-To-Day Nov 5: Schroder (thigh) is questionable for Friday's game against the Celtics.",
-      "relevance_score": 0.2153,
-      "captured_at": "2026-11-06T00:24:42Z"
-    },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "BOS Payton Pritchard (PG) Day To Day (Eye): Pritchard is Questionable for Friday's (Nov. 6) game against the Hornets.",
-      "relevance_score": 0.2087,
+      "relevance_score": 0.2419,
       "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.1819,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-      "relevance_score": 0.1813,
-      "captured_at": "2026-11-04"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not return to Wednesday's (Nov. 4) game against the Pacers.",
-      "relevance_score": 0.18,
+      "relevance_score": 0.1782,
       "captured_at": "2026-11-05"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
-      "relevance_score": 0.1775,
+      "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
+      "relevance_score": 0.175,
       "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
+      "relevance_score": 0.1734,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "ATL Asa Newell (PF) Day To Day (Toe): Newell did not return to Wednesday's (Nov. 4) game against the Wizards.",
+      "relevance_score": 0.1705,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHA Kon Knueppel (SF) Day To Day (Leg): Knueppel did not return to Wednesday's (Nov. 4) game against the Nets.",
+      "relevance_score": 0.1704,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen did not return to Wednesday's (Nov. 4) game versus the Thunder.",
+      "relevance_score": 0.1691,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Wednesday's (Nov. 4) game against Cleveland.",
+      "relevance_score": 0.1415,
+      "captured_at": "2026-11-05"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

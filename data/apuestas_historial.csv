@@ -1,4 +1,5 @@
 ﻿bet_id,tipo_fuente,fecha_jornada,hora_partido_peru,partido,mercado,seleccion,linea,cuota_decimal,casa_apuestas,clv_porcentaje,prob_estimada,ev_porcentaje,stake_pen,estado,marcador_final,beneficio_neto_pen,bankroll_posterior_pen,modelo
+BET_20261107_7EA0942D,NBA_REAL_ESPN,2026-11-07,2026-11-06 22:00,SAS @ SAC,Total Puntos (Over/Under),UNDER 228.5,228.5,1.93,LowVig.ag,,53.25,2.77,1.68,PENDING,En espera,,,model_f_ensemble_v4
 BET_20261107_7C4523D5,NBA_REAL_ESPN,2026-11-07,2026-11-06 20:00,OKC @ MEM,Ganador (Moneyline),AWAY (OKC gana),,1.606,DraftKings,,63.52,2.03,1.96,PENDING,En espera,,,model_f_ensemble_v4
 BET_20261107_CB5E045A,NBA_REAL_ESPN,2026-11-07,2026-11-06 19:30,PHI @ CLE,Ganador (Moneyline),HOME (CLE gana),,2.21,1xBet,,47.92,5.91,1.36,PENDING,En espera,,,model_f_ensemble_v3
 BET_20261106_92B26B33,NBA_REAL_ESPN,2026-11-06,2026-11-05 21:00,ORL @ PHX,Ganador (Moneyline),HOME (PHX gana),,1.91,Matchbook,,53.52,2.23,1.39,PENDING,En espera,,,model_f_ensemble_v3
