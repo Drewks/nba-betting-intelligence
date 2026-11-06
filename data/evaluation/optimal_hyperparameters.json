@@ -1,17 +1,35 @@
 {
-  "n_trials": 15,
-  "eval_sample_size": 150,
-  "baseline_score": 0.30573,
-  "baseline_brier": 0.109656,
-  "baseline_log_loss": 0.392152,
-  "best_score": 0.2635,
-  "improvement_pct": 13.81,
+  "study_type": "MASSIVE_OPTUNA_TPE_WALK_FORWARD_1000",
+  "optimized_at_utc": "2026-11-06T04:38:42Z",
+  "total_historical_games": 2989,
+  "evaluation_slice_size": 200,
+  "trials_completed": 1000,
+  "elapsed_seconds": 207.76,
+  "baseline": {
+    "score": 0.29791,
+    "brier_score": 0.106225,
+    "log_loss": 0.383374
+  },
+  "optimized": {
+    "score": 0.23655,
+    "brier_score": 0.079041,
+    "log_loss": 0.315009,
+    "improvement_pct": 20.6
+  },
   "best_hyperparameters": {
-    "alpha_slow": 0.05,
-    "alpha_fast": 0.15000000000000002,
-    "tempo_alpha_slow": 0.04,
-    "tempo_alpha_fast": 0.14,
-    "blowout_cap": 28.0,
-    "market_model_weight": 0.2
+    "alpha_slow": 0.02,
+    "alpha_fast": 0.15500000000000003,
+    "tempo_alpha_slow": 0.035,
+    "tempo_alpha_fast": 0.08,
+    "blowout_cap": 26.0,
+    "market_model_weight": 0.15
+  },
+  "parameter_descriptions": {
+    "alpha_slow": "Tasa de aprendizaje estructural de largo plazo para rating ofensivo/defensivo",
+    "alpha_fast": "Tasa de aprendizaje de momentum reciente (rachas calientes/frías)",
+    "tempo_alpha_slow": "Tasa de ajuste de ritmo base de posesiones",
+    "tempo_alpha_fast": "Tasa de ajuste de ritmo de alta frecuencia",
+    "blowout_cap": "Umbral de margen Huber para filtrar minutos basura en palizas",
+    "market_model_weight": "Ponderación bayesiana del modelo vs consenso de mercado de apuestas"
   }
 }
