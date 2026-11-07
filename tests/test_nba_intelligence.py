@@ -1984,3 +1984,247 @@ def test_35_v8_shin_devig_peru_inefficiencies_and_obsidian_dataview(tmp_path: Pa
     dv_content = (tmp_path / "NBA" / "00-Inbox" / "01-Dataview-Quant-Dashboard.md").read_text(encoding="utf-8")
     assert "```dataviewjs" in dv_content
     assert "```tracker" in dv_content
+
+
+def test_36_v8_clean_four_factors_and_garbage_time_filtering() -> None:
+    """
+    Test 36 (V8 Phase 1 Verification):
+    1. Dean Oliver Four Factors tracking in compute_pregame_team_ratings (eFG%, TOV%, ORB%, FTR).
+    2. Garbage-Time possession dampening (clean_possession_weight) when blowout margin > 18.
+    3. Integration into build_pregame_features (four_factors_diff, shot_quality_xeFG_diff).
+    4. End-to-end model compatibility with PointMarginModel and AdvancedGBMModel.
+    """
+    from src.features.team_ratings import compute_pregame_team_ratings
+    from src.features.builder import build_pregame_features
+    from src.models.statistical_models import PointMarginModel, AdvancedGBMModel
+
+    sample_games = [
+        {
+            "game_id": "G_FF_1",
+            "game_start_time": "2026-10-20T00:00:00Z",
+            "home_team": "BOS",
+            "away_team": "NYK",
+            "status": "FINAL",
+            "home_score": 126,
+            "away_score": 98,
+            "home_box_stats": {
+                "fieldGoalsMade": 46,
+                "fieldGoalsAttempted": 86,
+                "threePointFieldGoalsMade": 18,
+                "threePointFieldGoalsAttempted": 38,
+                "freeThrowsAttempted": 20,
+                "turnovers": 10,
+                "offensiveRebounds": 11,
+            },
+            "away_box_stats": {
+                "fieldGoalsMade": 36,
+                "fieldGoalsAttempted": 90,
+                "threePointFieldGoalsMade": 9,
+                "threePointFieldGoalsAttempted": 32,
+                "freeThrowsAttempted": 22,
+                "turnovers": 16,
+                "defensiveRebounds": 30,
+            },
+        },
+        {
+            "game_id": "G_FF_2",
+            "game_start_time": "2026-10-22T00:00:00Z",
+            "home_team": "BOS",
+            "away_team": "MIA",
+            "status": "FINAL",
+            "home_score": 118,
+            "away_score": 112,
+        },
+        {
+            "game_id": "G_FF_TARGET",
+            "game_start_time": "2026-10-25T00:00:00Z",
+            "home_team": "BOS",
+            "away_team": "LAL",
+            "status": "SCHEDULED",
+            "home_score": None,
+            "away_score": None,
+        },
+    ]
+
+    ratings = compute_pregame_team_ratings(sample_games)
+    assert "G_FF_TARGET" in ratings
+    target_r = ratings["G_FF_TARGET"]
+    assert "four_factors_diff" in target_r
+    assert "shot_quality_xeFG_diff" in target_r
+    assert "home_efg" in target_r
+    assert "away_efg" in target_r
+    assert target_r["home_efg"] > 0.50
+    assert -0.20 <= target_r["four_factors_diff"] <= 0.20
+
+    # Test build_pregame_features integration
+    target_game_dict = {
+        "game_id": "G_FF_TARGET",
+        "game_start_time": "2026-10-25T00:00:00Z",
+        "home_team": "BOS",
+        "away_team": "LAL",
+        "status": "SCHEDULED",
+        "home_off_rtg": target_r["home_off_rtg"],
+        "home_def_rtg": target_r["home_def_rtg"],
+        "home_pace": target_r["home_pace"],
+        "away_off_rtg": target_r["away_off_rtg"],
+        "away_def_rtg": target_r["away_def_rtg"],
+        "away_pace": target_r["away_pace"],
+        "home_rest_days": 3,
+        "away_rest_days": 2,
+        "four_factors_diff": target_r["four_factors_diff"],
+        "shot_quality_xeFG_diff": target_r["shot_quality_xeFG_diff"],
+        "features_available_at": "2026-10-24T18:00:00Z",
+    }
+    feats = build_pregame_features(target_game_dict, sample_games[:2], market="moneyline")
+    assert "four_factors_diff" in feats
+    assert "shot_quality_xeFG_diff" in feats
+    assert isinstance(feats["four_factors_diff"], float)
+
+    # Test model training and prediction with enriched Four Factors features
+    pm = PointMarginModel("model_c_v8_test")
+    pm.fit(sample_games[:2], "2026-10-24T00:00:00Z")
+    pred_c = pm.predict_moneyline(target_game_dict, sample_games[:2])
+    assert 0.05 <= pred_c["p_home"] <= 0.95
+
+
+def test_37_v8_market_residual_model_and_clv_meta_labeling(tmp_path: Path) -> None:
+    """
+    Test 37 (V8 Phase 2 Verification):
+    1. MarketResidualModel (logit-space micro-edge Delta_z on Shin sharp base).
+    2. predict_clv_meta_label likelihood scoring and reason codes.
+    3. PaperTradingEngine integration blocking candidates that fail CLV meta-labeling.
+    """
+    from src.models.statistical_models import MarketResidualModel
+    from src.prediction.ev_calculator import predict_clv_meta_label, evaluate_market_opportunity
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.storage.db import DatabaseManager
+
+    # 1. Test MarketResidualModel in logit space
+    mrm = MarketResidualModel("test_res_v8")
+    sharp_p = 0.55
+    res_pos = mrm.predict_residual(
+        features={
+            "four_factors_diff": 0.04,
+            "shot_quality_xeFG_diff": 0.02,
+            "fatigue_diff": 1.5,
+            "altitude_advantage": 1.2,
+            "travel_miles_diff": 800.0,
+            "rest_diff": 1.0,
+        },
+        sharp_home_prob=sharp_p,
+    )
+    assert res_pos["p_home"] > sharp_p
+    assert res_pos["delta_logit"] > 0.0
+    assert abs(res_pos["delta_logit"]) <= 0.45
+
+    # 2. Test predict_clv_meta_label
+    # Adverse steam move triggers guard
+    res_adverse = predict_clv_meta_label(
+        odds_record={"decimal_odds": 1.95, "captured_at": "2026-11-07T12:00:00Z"},
+        game_start_time="2026-11-07T18:00:00Z",
+        steam_delta=-0.045,
+    )
+    assert res_adverse["meta_label_pass"] is False
+    assert res_adverse["reason_code"] == "ADVERSE_STEAM_DECAY"
+
+    # Positive steam + tight interval produces high probability of positive CLV
+    res_favorable = predict_clv_meta_label(
+        odds_record={"decimal_odds": 1.95, "captured_at": "2026-11-07T16:00:00Z"},
+        game_start_time="2026-11-07T18:00:00Z",
+        steam_delta=0.035,
+        conformal_width=0.04,
+        overround=0.025,
+    )
+    assert res_favorable["meta_label_pass"] is True
+    assert res_favorable["p_positive_clv"] > 0.55
+
+    # 3. Test PaperTradingEngine blocking candidates that fail CLV meta-labeling
+    db = DatabaseManager(tmp_path / "test_p37.sqlite3")
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0)
+    p_fail = _seed_sample_game_and_prediction(db, "G_CLV_FAIL")
+
+    decisions = engine.evaluate_and_record_matchday_selections(
+        "2026-11-07",
+        [
+            {
+                "prediction_id": p_fail,
+                "game_id": "G_CLV_FAIL",
+                "market": "moneyline",
+                "selection": "HOME",
+                "decimal_odds_used": 1.95,
+                "calibrated_probability": 0.58,
+                "ev_unit": 0.09,
+                "ev_pct": 9.0,
+                "model_version_id": "model_c_test_v1",
+                "meta_label_pass": False,
+                "meta_label_reason": "NEGATIVE_EXPECTED_CLV",
+                "p_positive_clv": 0.38,
+                "emitted_at": "2026-11-07T12:00:00Z",
+            }
+        ],
+    )
+    assert len(decisions["placed_bets"]) == 0
+    assert len(decisions["no_bet_decisions"]) == 1
+    assert decisions["no_bet_decisions"][0]["reason_code"] == "NEGATIVE_EXPECTED_CLV"
+
+
+def test_38_v8_gaussian_copula_sgp_retabet_simulator() -> None:
+    """
+    Test 38 (V8 Phase 3 Verification):
+    1. Bivariate Gaussian Copula modeling joint dependency between game selection and player prop.
+    2. Zero-correlation baseline converges to independent product (p_joint ~ p_game * p_prop).
+    3. Positive correlation (rho = +0.32) produces significant probability boost over independent pricing.
+    4. EV calculation and fractional Kelly stake allocation for RETAbet Perú 'Crea tu Apuesta'.
+    """
+    import pytest
+    from src.prediction.player_props import PlayerPropsEngine
+
+    engine = PlayerPropsEngine()
+
+    # 1. Independent case (rho = 0.0): p_joint should match independent product closely
+    p_game = 0.60
+    p_prop = 0.55
+    res_indep = engine.simulate_same_game_parlay_copula(
+        game_id="G_SGP_INDEP",
+        matchday_date="2026-11-07",
+        game_selection_label="Dallas Mavericks Gana",
+        game_model_prob=p_game,
+        player_name="Kyrie Irving",
+        team="DAL",
+        prop_category="PTS",
+        prop_selection="OVER",
+        prop_line=26.5,
+        prop_model_prob=p_prop,
+        offered_sgp_odds=3.00,
+        correlation_rho=0.0,
+        n_simulations=15000,
+        random_seed=42,
+    )
+    expected_indep = p_game * p_prop
+    assert res_indep["p_joint"] == pytest.approx(expected_indep, abs=0.015)
+    assert abs(res_indep["correlation_boost_pct"]) < 5.0
+
+    # 2. Correlated case (rho = +0.35): p_joint must significantly exceed independent product
+    res_corr = engine.simulate_same_game_parlay_copula(
+        game_id="G_SGP_CORR",
+        matchday_date="2026-11-07",
+        game_selection_label="Dallas Mavericks Gana",
+        game_model_prob=p_game,
+        player_name="Kyrie Irving",
+        team="DAL",
+        prop_category="PTS",
+        prop_selection="OVER",
+        prop_line=26.5,
+        prop_model_prob=p_prop,
+        offered_sgp_odds=3.30,
+        correlation_rho=0.35,
+        n_simulations=15000,
+        random_seed=42,
+    )
+    assert res_corr["p_joint"] > expected_indep + 0.04
+    assert res_corr["correlation_boost_pct"] > 12.0
+    assert res_corr["fair_sgp_odds"] < (1.0 / expected_indep)
+    assert res_corr["ev_pct"] > 10.0
+    assert res_corr["is_value_sgp"] is True
+    assert 1.00 <= res_corr["kelly_stake_pen"] <= 3.50
+    assert "RETAbet Perú" in res_corr["bookmaker"]

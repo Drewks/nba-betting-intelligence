@@ -44,6 +44,8 @@ FEATURE_COLUMNS: list[str] = [
     "recent_margin_diff",
     "form_surge_diff",
     "recent_total_trend",
+    "four_factors_diff",
+    "shot_quality_xeFG_diff",
     "elo_spread",
     "structural_margin",
     "structural_total",
@@ -54,6 +56,8 @@ MARGIN_FEATURE_COLUMNS: list[str] = [
     "elo_spread",
     "eff_spread",
     "structural_margin",
+    "four_factors_diff",
+    "shot_quality_xeFG_diff",
     "net_rtg_diff",
     "fatigue_diff",
     "altitude_advantage",
@@ -1016,4 +1020,64 @@ class EnsembleStackingModel:
             "conformal_q10_margin": mc_res["conformal_q10_margin"],
             "conformal_q90_margin": mc_res["conformal_q90_margin"],
             "uncertainty_std": unc_std,
+        }
+
+
+class MarketResidualModel:
+    """
+    V8 Phase 2: Logit-Space Market Residual Learning.
+    Anchors directly to the Shin de-vigged sharp market consensus probability:
+        z_0 = logit(p_sharp_shin)
+    and predicts the residual micro-edge Delta_z from situational context:
+        Delta_z = w_ff * four_factors_diff + w_xe * shot_quality_xeFG_diff + w_fatigue * fatigue_diff + w_alt * altitude_advantage + w_travel * (travel_miles_diff / 1000)
+    Bounded by Huber clipping to prevent extreme variance:
+        z_final = z_0 + clip(Delta_z, -0.45, 0.45)
+        p_final = 1 / (1 + exp(-z_final))
+    """
+    model_family = "model_residual_market_v8"
+
+    def __init__(self, version_id: str = "model_residual_v8") -> None:
+        self.version_id = version_id
+        self.weights = {
+            "four_factors": 1.25,
+            "shot_quality": 1.10,
+            "fatigue": 0.08,
+            "altitude": 0.10,
+            "travel": 0.06,
+            "rest": 0.05,
+        }
+
+    def predict_residual(
+        self,
+        features: dict[str, Any],
+        sharp_home_prob: float,
+    ) -> dict[str, float]:
+        p_sharp = float(np.clip(sharp_home_prob, 0.03, 0.97))
+        z_0 = math.log(p_sharp / (1.0 - p_sharp))
+
+        ff_diff = float(features.get("four_factors_diff") or 0.0)
+        xe_diff = float(features.get("shot_quality_xeFG_diff") or 0.0)
+        fatigue = float(features.get("fatigue_diff") or 0.0)
+        alt = float(features.get("altitude_advantage") or 0.0)
+        travel = float(features.get("travel_miles_diff") or 0.0) / 1000.0
+        rest = float(features.get("rest_diff") or 0.0)
+
+        delta_z = (
+            self.weights["four_factors"] * ff_diff
+            + self.weights["shot_quality"] * xe_diff
+            + self.weights["fatigue"] * fatigue
+            + self.weights["altitude"] * alt
+            + self.weights["travel"] * travel
+            + self.weights["rest"] * rest
+        )
+        capped_delta = float(np.clip(delta_z, -0.45, 0.45))
+        z_final = z_0 + capped_delta
+        p_final = float(np.clip(1.0 / (1.0 + math.exp(-z_final)), 0.03, 0.97))
+
+        return {
+            "p_home": round(p_final, 6),
+            "p_away": round(1.0 - p_final, 6),
+            "p_sharp_base": round(p_sharp, 6),
+            "delta_logit": round(capped_delta, 5),
+            "residual_edge": round(p_final - p_sharp, 6),
         }

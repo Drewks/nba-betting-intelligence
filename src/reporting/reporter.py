@@ -2035,6 +2035,19 @@ def sync_obsidian_vault(
             f"- **Bankroll virtual actual**: `S/{metrics['current_settled_bankroll_pen']:.2f} PEN`\n"
             f"- **Dictamen del auditor**: `{metrics['exit_gates_evaluation']['recommendation']}`\n"
             "- **Dashboard Cuantitativo DataviewJS**: [[01-Dataview-Quant-Dashboard]]\n"
+            "- **SGP 'Crea tu Apuesta' RETAbet**: [[02-SGP-Correlated-Parlays]]\n"
+        ),
+        "00-Inbox/02-SGP-Correlated-Parlays.md": (
+            f"---\ndate_generated: {now_str}\ndashboard_type: retabet_sgp_copula_v8\n---\n"
+            "# 🎰 Apuestas Correlacionadas SGP (Crea tu Apuesta — RETAbet Perú)\n\n"
+            "> [!NOTE] Simulación de Cópula Gaussiana Bivariada (V8 Fase 3)\n"
+            "> Modela la interdependencia estocástica entre resultados de equipo y props de jugadores (PTS, REB, AST, PRA) "
+            "para explotar tablas de correlación rígidas en **RETAbet Perú**.\n\n"
+            "```dataview\n"
+            "TABLE bookmaker AS Casa, game_selection AS Partido, player_name AS Jugador, prop_category AS Mercado, fair_sgp_odds AS \"Cuota Justa\", offered_sgp_odds AS \"Cuota RETAbet\", ev_pct AS \"EV (%)\", kelly_stake_pen AS \"Stake (S/.)\"\n"
+            "FROM \"00-Inbox\" OR \"04-Predictions\"\n"
+            "SORT ev_pct DESC\n"
+            "```\n"
         ),
         "00-Inbox/01-Dataview-Quant-Dashboard.md": (
             f"---\ndate_generated: {now_str}\ndashboard_type: obsidian_dataview_quant_v8\n"

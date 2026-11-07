@@ -100,6 +100,11 @@ def _default_team_snapshot(league_ppg: float = LEAGUE_PPG_INIT) -> dict[str, Any
         "margins": (),
         "totals": (),
         "games": 0,
+        "efg": 0.542,
+        "tov": 0.132,
+        "orb": 0.248,
+        "ftr": 0.215,
+        "xefg": 0.540,
     }
 
 
@@ -131,6 +136,11 @@ def _apply_offseason_regression(snap: dict[str, Any], target_start_dt: Any, leag
         "margins": snap["margins"][-4:],
         "totals": snap["totals"][-4:],
         "games": snap["games"],
+        "efg": 0.542 + 0.65 * (snap.get("efg", 0.542) - 0.542),
+        "tov": 0.132 + 0.65 * (snap.get("tov", 0.132) - 0.132),
+        "orb": 0.248 + 0.65 * (snap.get("orb", 0.248) - 0.248),
+        "ftr": 0.215 + 0.65 * (snap.get("ftr", 0.215) - 0.215),
+        "xefg": 0.540 + 0.65 * (snap.get("xefg", 0.540) - 0.540),
     }
 
 
@@ -271,6 +281,11 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
         "margins": (*h_cur["margins"][-14:], raw_mar),
         "totals": (*h_cur["totals"][-14:], raw_tot),
         "games": h_cur["games"] + 1,
+        "efg": h_cur.get("efg", 0.542) + 0.040 * (max(0.42, min(0.66, 0.542 + 0.50 * ((adj_hs - league_ppg) / 100.0))) - h_cur.get("efg", 0.542)),
+        "tov": h_cur.get("tov", 0.132) + 0.040 * (max(0.08, min(0.20, 0.132 - 0.22 * ((adj_hs - league_ppg) / 100.0))) - h_cur.get("tov", 0.132)),
+        "orb": h_cur.get("orb", 0.248) + 0.040 * (max(0.16, min(0.35, 0.248 + 0.18 * ((adj_hs - league_ppg) / 100.0))) - h_cur.get("orb", 0.248)),
+        "ftr": h_cur.get("ftr", 0.215) + 0.040 * (max(0.14, min(0.32, 0.215 + 0.16 * ((adj_hs - league_ppg) / 100.0))) - h_cur.get("ftr", 0.215)),
+        "xefg": h_cur.get("xefg", 0.540) + 0.040 * (max(0.42, min(0.66, 0.542 + 0.50 * ((adj_hs - league_ppg) / 100.0))) - h_cur.get("xefg", 0.540)),
     }
     a_next = {
         "elo_slow": new_a_elo_s,
@@ -292,6 +307,11 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
         "margins": (*a_cur["margins"][-14:], -raw_mar),
         "totals": (*a_cur["totals"][-14:], raw_tot),
         "games": a_cur["games"] + 1,
+        "efg": a_cur.get("efg", 0.542) + 0.040 * (max(0.42, min(0.66, 0.542 + 0.50 * ((adj_as - league_ppg) / 100.0))) - a_cur.get("efg", 0.542)),
+        "tov": a_cur.get("tov", 0.132) + 0.040 * (max(0.08, min(0.20, 0.132 - 0.22 * ((adj_as - league_ppg) / 100.0))) - a_cur.get("tov", 0.132)),
+        "orb": a_cur.get("orb", 0.248) + 0.040 * (max(0.16, min(0.35, 0.248 + 0.18 * ((adj_as - league_ppg) / 100.0))) - a_cur.get("orb", 0.248)),
+        "ftr": a_cur.get("ftr", 0.215) + 0.040 * (max(0.14, min(0.32, 0.215 + 0.16 * ((adj_as - league_ppg) / 100.0))) - a_cur.get("ftr", 0.215)),
+        "xefg": a_cur.get("xefg", 0.540) + 0.040 * (max(0.42, min(0.66, 0.542 + 0.50 * ((adj_as - league_ppg) / 100.0))) - a_cur.get("xefg", 0.540)),
     }
 
     teams[h_code] = h_next
@@ -576,6 +596,8 @@ def build_pregame_features(
         "recent_margin_diff": round(home_recent_net - away_recent_net, 4),
         "form_surge_diff": round(form_surge_diff, 4),
         "recent_total_trend": round(recent_total_trend, 4),
+        "four_factors_diff": round(float(target_game.get("four_factors_diff") if target_game.get("four_factors_diff") is not None else (0.40 * (h_snap.get("efg", 0.542) - a_snap.get("efg", 0.542)) + 0.25 * (a_snap.get("tov", 0.132) - h_snap.get("tov", 0.132)) + 0.20 * (h_snap.get("orb", 0.248) - a_snap.get("orb", 0.248)) + 0.15 * (h_snap.get("ftr", 0.215) - a_snap.get("ftr", 0.215)))), 4),
+        "shot_quality_xeFG_diff": round(float(target_game.get("shot_quality_xeFG_diff") if target_game.get("shot_quality_xeFG_diff") is not None else (h_snap.get("xefg", 0.540) - a_snap.get("xefg", 0.540))), 4),
         "home_recent_win_pct": round(home_win_pct, 4),
         "away_recent_win_pct": round(away_win_pct, 4),
         "elo_home": round(h_snap["elo_slow"], 2),

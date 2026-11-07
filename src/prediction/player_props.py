@@ -361,3 +361,94 @@ class PlayerPropsEngine:
                         pass
 
         return opportunities
+
+    def simulate_same_game_parlay_copula(
+        self,
+        game_id: str,
+        matchday_date: str,
+        game_selection_label: str,
+        game_model_prob: float,
+        player_name: str,
+        team: str,
+        prop_category: str,
+        prop_selection: str,
+        prop_line: float,
+        prop_model_prob: float,
+        offered_sgp_odds: float,
+        correlation_rho: float = 0.28,
+        bankroll_pen: float = 100.0,
+        n_simulations: int = 10000,
+        random_seed: int = 42,
+    ) -> dict[str, Any]:
+        """
+        V8 Phase 3: Bivariate Gaussian Copula Simulator for RETAbet Perú "Crea tu Apuesta" (SGP).
+        Models the non-linear joint dependency between game outcome (spread/moneyline) and
+        player statistical props (PTS, REB, AST, PRA), exploiting retail bookmaker mispricing
+        where soft correlation tables underestimate joint probability.
+        """
+        p_game = float(np.clip(game_model_prob, 0.05, 0.95))
+        p_prop = float(np.clip(prop_model_prob, 0.05, 0.95))
+        rho = float(np.clip(correlation_rho, -0.80, 0.80))
+
+        # Generate correlated bivariate normal draws
+        rng = np.random.default_rng(random_seed)
+        cov_matrix = np.array([[1.0, rho], [rho, 1.0]], dtype=float)
+        z = rng.multivariate_normal(mean=[0.0, 0.0], cov=cov_matrix, size=n_simulations)
+
+        # Marginal uniform transformation via Standard Normal CDF
+        u1 = norm.cdf(z[:, 0])
+        u2 = norm.cdf(z[:, 1])
+
+        # Joint indicator evaluation
+        # Condition 1: Game selection hits (U1 <= p_game)
+        # Condition 2: Prop selection hits (U2 <= p_prop)
+        hits = (u1 <= p_game) & (u2 <= p_prop)
+        p_joint = float(np.clip(np.mean(hits), 0.01, 0.95))
+
+        p_independent = p_game * p_prop
+        corr_boost_pct = round(((p_joint - p_independent) / p_independent) * 100.0, 2)
+        fair_sgp_odds = round(1.0 / p_joint, 3)
+
+        ev_unit = (p_joint * offered_sgp_odds) - 1.0
+        ev_pct = round(ev_unit * 100.0, 2)
+
+        # Kelly allocation with longshot variance shield
+        b = offered_sgp_odds - 1.0
+        f_star = max(0.0, (p_joint * (b + 1.0) - 1.0) / max(0.05, b))
+        eff_f = min(0.04, f_star * 0.35)  # quarter-Kelly for parlays
+        raw_stake = bankroll_pen * eff_f
+        stake_pen = round(max(1.00, min(3.50, raw_stake if raw_stake > 0 else 1.00)), 2)
+
+        is_value = ev_pct >= 5.0 and p_joint >= 0.18
+
+        rationale = (
+            f"[RETAbet Crea tu Apuesta SGP] {game_selection_label} + {player_name} {prop_category} {prop_selection} {prop_line}. "
+            f"Joint Copula Prob: {p_joint * 100:.1f}% (vs Independent {p_independent * 100:.1f}%, boost: +{corr_boost_pct}%). "
+            f"Offered Odds: {offered_sgp_odds:.2f} vs Fair: {fair_sgp_odds:.2f} (EV: {ev_pct:+.1f}%). "
+            f"Recommended Stake: S/ {stake_pen:.2f} PEN."
+        )
+
+        return {
+            "sgp_id": f"SGP_{game_id}_{player_name.replace(' ', '_')}_{prop_category}_{uuid.uuid4().hex[:6]}",
+            "game_id": game_id,
+            "matchday_date": matchday_date,
+            "bookmaker": "RETAbet Perú",
+            "game_selection": game_selection_label,
+            "player_name": player_name,
+            "team": team,
+            "prop_category": prop_category,
+            "prop_selection": prop_selection,
+            "prop_line": prop_line,
+            "p_game": round(p_game, 4),
+            "p_prop": round(p_prop, 4),
+            "p_independent": round(p_independent, 4),
+            "p_joint": round(p_joint, 4),
+            "correlation_rho": rho,
+            "correlation_boost_pct": corr_boost_pct,
+            "fair_sgp_odds": fair_sgp_odds,
+            "offered_sgp_odds": offered_sgp_odds,
+            "ev_pct": ev_pct,
+            "kelly_stake_pen": stake_pen,
+            "is_value_sgp": is_value,
+            "rationale": rationale,
+        }

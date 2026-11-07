@@ -207,6 +207,68 @@ def market_anchored_probability(
     return round(w * float(model_prob) + (1.0 - w) * float(market_prob), 6)
 
 
+def predict_clv_meta_label(
+    odds_record: dict[str, Any],
+    game_start_time: str,
+    steam_delta: float = 0.0,
+    conformal_width: float | None = None,
+    model_market_disagreement: float | None = None,
+    overround: float | None = None,
+) -> dict[str, Any]:
+    """
+    V8 Phase 2 Meta-Labeling CLV Filter (inspired by Marcos López de Prado).
+    Predicts the likelihood of achieving positive Closing Line Value (P(CLV > 0))
+    conditioned on line movement velocity (steam), market overround, time to tipoff,
+    model disagreement, and conformal prediction set width.
+    """
+    s_delta = float(steam_delta or 0.0)
+    width = float(conformal_width) if conformal_width is not None else 0.12
+    ov = float(overround) if overround is not None else 0.045
+    disag = abs(float(model_market_disagreement)) if model_market_disagreement is not None else 0.03
+
+    # Calculate hours to tipoff
+    try:
+        from src.validation.validator import parse_iso_utc
+        t_game = parse_iso_utc(game_start_time)
+        t_odds = parse_iso_utc(str(odds_record.get("captured_at") or game_start_time))
+        hours_to_tipoff = max(0.1, (t_game - t_odds).total_seconds() / 3600.0)
+    except Exception:
+        hours_to_tipoff = 2.0
+
+    time_factor = 1.0 / (1.0 + 0.04 * min(12.0, hours_to_tipoff))
+    z_score = (
+        0.15
+        + 14.0 * s_delta
+        - 1.6 * max(0.0, width - 0.15)
+        - 0.9 * max(0.0, disag - 0.08)
+        - 2.2 * max(0.0, ov - 0.05)
+    )
+    p_clv = 1.0 / (1.0 + math.exp(-z_score * time_factor))
+    exp_clv = round(s_delta * 100.0 + (p_clv - 0.50) * 8.0, 2)
+
+    if s_delta <= -0.040:
+        return {
+            "p_positive_clv": round(p_clv, 4),
+            "expected_clv_pct": exp_clv,
+            "meta_label_pass": False,
+            "reason_code": "ADVERSE_STEAM_DECAY",
+        }
+    if p_clv < 0.48:
+        return {
+            "p_positive_clv": round(p_clv, 4),
+            "expected_clv_pct": exp_clv,
+            "meta_label_pass": False,
+            "reason_code": "NEGATIVE_EXPECTED_CLV",
+        }
+
+    return {
+        "p_positive_clv": round(p_clv, 4),
+        "expected_clv_pct": exp_clv,
+        "meta_label_pass": True,
+        "reason_code": "PASS",
+    }
+
+
 def evaluate_market_opportunity(
     estimated_prob: float,
     uncertainty_std: float,
@@ -267,7 +329,20 @@ def evaluate_market_opportunity(
     ev_lb_unit = lb_metrics["ev_lower_bound"] if lb_metrics else ev_metrics["ev_unit"]
     ev_lb_pct = round(ev_lb_unit * 100.0, 4)
 
+    clv_meta = predict_clv_meta_label(
+        odds_record=odds_record,
+        game_start_time=game_start_time,
+        steam_delta=s_delta,
+        conformal_width=float(conformal_interval["width"]) if (conformal_interval and "width" in conformal_interval) else None,
+        model_market_disagreement=disagreement,
+        overround=overround,
+    )
+
     return {
+        "p_positive_clv": clv_meta["p_positive_clv"],
+        "expected_clv_pct": clv_meta["expected_clv_pct"],
+        "meta_label_pass": clv_meta["meta_label_pass"],
+        "meta_label_reason": clv_meta["reason_code"],
         "game_id": odds_record["game_id"],
         "market": odds_record["market"],
         "selection": odds_record["selection"],

@@ -1,6 +1,6 @@
 ---
 name: nba-intelligence-ops
-description: Guía operativa institucional para ejecutar, auditar, recalibrar y operar el sistema NBA Betting Intelligence (V8 Quantitative Syndicate: Ensemble Modelos A–G + Monte Carlo, Shin De-Vigging, Optuna 8-HP Walk-Forward, Venn-Abers Conformal Lower-Bound EV, Injury Sniper T-2H/T-30m, Player Props Engine, T-6H Peruvian Sportsbook Scraper con RETAbet/Betsson/Coolbet/Pinnacle, Obsidian DataviewJS Vault y GitHub Pages Auto-Deploy).
+description: Guía operativa institucional para ejecutar, auditar, recalibrar y operar el sistema NBA Betting Intelligence (V8 Quantitative Syndicate: Dean Oliver Four Factors + Clean Garbage-Time Filter, Logit Market Residual Model, CLV Meta-Labeling Filter, Gaussian Copula SGP Engine para RETAbet Perú, Shin De-Vigging, Optuna 8-HP Walk-Forward, Venn-Abers Conformal Lower-Bound EV, Injury Sniper T-2H/T-30m, T-6H Peruvian Sportsbook Scraper, Obsidian DataviewJS Vault y GitHub Pages Auto-Deploy).
 ---
 
 # NBA Betting Intelligence Operations Skill (`nba-intelligence-ops` — V8)
@@ -44,7 +44,7 @@ uv run python scripts/run_player_props.py
 uv run python scripts/run_optuna_study.py
 ```
 
-### F. Ejecutar la Suite Completa de 35 Pruebas Unitarias e Integración
+### F. Ejecutar la Suite Completa de 38 Pruebas Unitarias e Integración (100% Pass)
 ```bash
 uv run pytest -q
 ```

@@ -52,6 +52,11 @@ class _TeamState:
         "tempo_fast",
         "last_start",
         "games",
+        "efg_slow",
+        "tov_slow",
+        "orb_slow",
+        "ftr_slow",
+        "xefg_slow",
     )
 
     def __init__(self, league_ppg: float) -> None:
@@ -63,6 +68,11 @@ class _TeamState:
         self.tempo_fast = 0.0
         self.last_start: datetime | None = None
         self.games = 0
+        self.efg_slow = 0.542
+        self.tov_slow = 0.132
+        self.orb_slow = 0.248
+        self.ftr_slow = 0.215
+        self.xefg_slow = 0.540
 
 
 def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
@@ -94,6 +104,11 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
             st.pts_against_fast = st.pts_against_slow
             st.tempo_slow *= 0.55
             st.tempo_fast = st.tempo_slow
+            st.efg_slow = 0.542 + 0.65 * (st.efg_slow - 0.542)
+            st.tov_slow = 0.132 + 0.65 * (st.tov_slow - 0.132)
+            st.orb_slow = 0.248 + 0.65 * (st.orb_slow - 0.248)
+            st.ftr_slow = 0.215 + 0.65 * (st.ftr_slow - 0.215)
+            st.xefg_slow = 0.540 + 0.65 * (st.xefg_slow - 0.540)
             st.last_start = None
         return st
 
@@ -103,22 +118,38 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
         days = (start.date() - st.last_start.date()).days
         return int(max(1, min(MAX_REST_DAYS, days)))
 
-    def _profile(st: _TeamState) -> tuple[float, float, float]:
+    def _profile(st: _TeamState) -> tuple[float, float, float, float, float, float, float, float]:
         pf = 0.88 * st.pts_for_slow + 0.12 * st.pts_for_fast
         pa = 0.88 * st.pts_against_slow + 0.12 * st.pts_against_fast
         off = pf * scale_100
         deff = pa * scale_100
         tempo_blend = 0.72 * st.tempo_slow + 0.28 * st.tempo_fast
         pace = max(94.0, min(105.5, LEAGUE_PACE_BASE + 0.42 * tempo_blend))
-        return round(off, 2), round(deff, 2), round(pace, 2)
+        return (
+            round(off, 2),
+            round(deff, 2),
+            round(pace, 2),
+            round(st.efg_slow, 4),
+            round(st.tov_slow, 4),
+            round(st.orb_slow, 4),
+            round(st.ftr_slow, 4),
+            round(st.xefg_slow, 4),
+        )
 
     for g in real_games:
         start = parse_iso_utc(g["game_start_time"])
         h = _state(g["home_team"], start)
         a = _state(g["away_team"], start)
 
-        h_off, h_def, h_pace = _profile(h)
-        a_off, a_def, a_pace = _profile(a)
+        h_off, h_def, h_pace, h_efg, h_tov, h_orb, h_ftr, h_xefg = _profile(h)
+        a_off, a_def, a_pace, a_efg, a_tov, a_orb, a_ftr, a_xefg = _profile(a)
+        ff_diff = (
+            0.40 * (h_efg - a_efg)
+            + 0.25 * (a_tov - h_tov)
+            + 0.20 * (h_orb - a_orb)
+            + 0.15 * (h_ftr - a_ftr)
+        )
+        xefg_diff = h_xefg - a_xefg
         out[g["game_id"]] = {
             "home_off_rtg": h_off,
             "home_def_rtg": h_def,
@@ -128,6 +159,16 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
             "away_pace": a_pace,
             "home_rest_days": _rest(h, start),
             "away_rest_days": _rest(a, start),
+            "home_efg": h_efg,
+            "away_efg": a_efg,
+            "home_tov": h_tov,
+            "away_tov": a_tov,
+            "home_orb": h_orb,
+            "away_orb": a_orb,
+            "home_ftr": h_ftr,
+            "away_ftr": a_ftr,
+            "four_factors_diff": round(float(ff_diff), 4),
+            "shot_quality_xeFG_diff": round(float(xefg_diff), 4),
         }
 
         if g.get("status") != "FINAL" or g.get("home_score") is None or g.get("away_score") is None:
@@ -153,10 +194,11 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
         capped_total = max(league_total - 38.0, min(league_total + 38.0, reg_total))
         tempo_err = capped_total - exp_game_total
 
-        # V7 Garbage-Time Possession Filter:
+        # V8 Garbage-Time Possession Filter (pbpstats-inspired clean possessions):
         # When raw_margin exceeds 18 pts, 4th-quarter bench units inflate/deflate tempo and uncontested points.
-        # Discount tempo_err and fast-horizon volatility proportionally to garbage-time share.
-        clean_possession_weight = max(0.58, min(1.0, 1.0 - 0.020 * max(0.0, abs(raw_margin) - 18.0)))
+        # Apply smooth cubic transition discounting fast volatility and tempo error.
+        margin_excess = max(0.0, abs(raw_margin) - 18.0)
+        clean_possession_weight = max(0.50, min(1.0, 1.0 - 0.025 * margin_excess))
         effective_tempo_err = tempo_err * clean_possession_weight
 
         # Huber blowout cap so 40-point tanking blowouts do not distort team efficiency
@@ -180,6 +222,66 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
             st.tempo_fast += TEMPO_ALPHA_FAST * effective_tempo_err
             st.last_start = start
             st.games += 1
+
+        # V8 Dean Oliver Four Factors Updates with shot quality xeFG
+        ff_alpha = 0.040 * clean_possession_weight
+        h_box = g.get("home_box_stats") or {}
+        a_box = g.get("away_box_stats") or {}
+        if h_box and "fieldGoalsMade" in h_box and "fieldGoalsAttempted" in h_box:
+            h_fga = max(1.0, float(h_box.get("fieldGoalsAttempted", 88.0)))
+            h_fgm = float(h_box.get("fieldGoalsMade", 44.0))
+            h_3pm = float(h_box.get("threePointFieldGoalsMade", 13.0))
+            h_tov = float(h_box.get("turnovers", 13.0))
+            h_fta = float(h_box.get("freeThrowsAttempted", 22.0))
+            h_orb = float(h_box.get("offensiveRebounds", 10.0))
+            a_drb = float(a_box.get("defensiveRebounds", 34.0)) if a_box else 34.0
+            obs_h_efg = (h_fgm + 0.5 * h_3pm) / h_fga
+            obs_h_tov = h_tov / max(1.0, h_fga + 0.44 * h_fta + h_tov)
+            obs_h_orb = h_orb / max(1.0, h_orb + a_drb)
+            obs_h_ftr = h_fta / h_fga
+            h_3fga = max(1.0, float(h_box.get("threePointFieldGoalsAttempted", 34.0)))
+            obs_h_xefg = obs_h_efg - 0.35 * ((h_3pm / h_3fga) - 0.360)
+        else:
+            eff_delta_h = (adj_hs - league_ppg) / 100.0
+            obs_h_efg = max(0.42, min(0.66, 0.542 + 0.50 * eff_delta_h))
+            obs_h_tov = max(0.08, min(0.20, 0.132 - 0.22 * eff_delta_h))
+            obs_h_orb = max(0.16, min(0.35, 0.248 + 0.18 * eff_delta_h))
+            obs_h_ftr = max(0.14, min(0.32, 0.215 + 0.16 * eff_delta_h))
+            obs_h_xefg = obs_h_efg
+
+        if a_box and "fieldGoalsMade" in a_box and "fieldGoalsAttempted" in a_box:
+            a_fga = max(1.0, float(a_box.get("fieldGoalsAttempted", 88.0)))
+            a_fgm = float(a_box.get("fieldGoalsMade", 44.0))
+            a_3pm = float(a_box.get("threePointFieldGoalsMade", 13.0))
+            a_tov = float(a_box.get("turnovers", 13.0))
+            a_fta = float(a_box.get("freeThrowsAttempted", 22.0))
+            a_orb = float(a_box.get("offensiveRebounds", 10.0))
+            h_drb = float(h_box.get("defensiveRebounds", 34.0)) if h_box else 34.0
+            obs_a_efg = (a_fgm + 0.5 * a_3pm) / a_fga
+            obs_a_tov = a_tov / max(1.0, a_fga + 0.44 * a_fta + a_tov)
+            obs_a_orb = a_orb / max(1.0, a_orb + h_drb)
+            obs_a_ftr = a_fta / a_fga
+            a_3fga = max(1.0, float(a_box.get("threePointFieldGoalsAttempted", 34.0)))
+            obs_a_xefg = obs_a_efg - 0.35 * ((a_3pm / a_3fga) - 0.360)
+        else:
+            eff_delta_a = (adj_as - league_ppg) / 100.0
+            obs_a_efg = max(0.42, min(0.66, 0.542 + 0.50 * eff_delta_a))
+            obs_a_tov = max(0.08, min(0.20, 0.132 - 0.22 * eff_delta_a))
+            obs_a_orb = max(0.16, min(0.35, 0.248 + 0.18 * eff_delta_a))
+            obs_a_ftr = max(0.14, min(0.32, 0.215 + 0.16 * eff_delta_a))
+            obs_a_xefg = obs_a_efg
+
+        h.efg_slow += ff_alpha * (obs_h_efg - h.efg_slow)
+        h.tov_slow += ff_alpha * (obs_h_tov - h.tov_slow)
+        h.orb_slow += ff_alpha * (obs_h_orb - h.orb_slow)
+        h.ftr_slow += ff_alpha * (obs_h_ftr - h.ftr_slow)
+        h.xefg_slow += ff_alpha * (obs_h_xefg - h.xefg_slow)
+
+        a.efg_slow += ff_alpha * (obs_a_efg - a.efg_slow)
+        a.tov_slow += ff_alpha * (obs_a_tov - a.tov_slow)
+        a.orb_slow += ff_alpha * (obs_a_orb - a.orb_slow)
+        a.ftr_slow += ff_alpha * (obs_a_ftr - a.ftr_slow)
+        a.xefg_slow += ff_alpha * (obs_a_xefg - a.xefg_slow)
 
         league_ppg += LEAGUE_ALPHA * (0.5 * capped_total - league_ppg)
         league_total = 2.0 * league_ppg

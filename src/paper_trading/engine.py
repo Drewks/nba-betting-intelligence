@@ -507,6 +507,18 @@ class PaperTradingEngine:
                 )
                 continue
 
+            # 2f. Meta-Labeling CLV Filter Guard (V8 Fase 2):
+            if cand.get("meta_label_pass") is False:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        cand.get("meta_label_reason") or "NEGATIVE_EXPECTED_CLV",
+                        f"Meta-labeling model predicts negative Closing Line Value (P(CLV > 0) = {float(cand.get('p_positive_clv') or 0.0):.2f}); skipped to protect edge.",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
             # 4. Check duplicate in DB
             dup = self.db.fetch_one(
                 """
