@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-07T07:25:00Z
+date_generated: 2026-11-07T21:14:35Z
 dashboard_type: obsidian_dataview_quant_v8
-current_bankroll_pen: 97.72
-roi_pct: -2.35
-brier_score: 0.07180
+current_bankroll_pen: 98.87
+roi_pct: -3.76
+brier_score: 0.21146
 ---
 # 📊 Centro de Comando Cuantitativo (Obsidian DataviewJS & Tracker)
 

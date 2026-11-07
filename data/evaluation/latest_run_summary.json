@@ -1,50 +1,50 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-07T06:34:46Z",
+  "timestamp_utc": "2026-11-07T21:14:29Z",
   "ingested_dates": [
     "2026-11-07",
     "2026-11-08"
   ],
   "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 1,
+  "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
-    "moneyline": "logistic",
-    "total_points": "logistic"
+    "moneyline": "isotonic",
+    "total_points": "isotonic"
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 97.7174,
-    "cumulative_net_profit_pen": -2.2826,
-    "pending_exposure_pen": 10.34,
-    "available_balance_pen": 87.3774,
-    "settled_bets_count": 21,
-    "pending_bets_count": 6
+    "settled_bankroll_pen": 98.871,
+    "cumulative_net_profit_pen": -1.129,
+    "pending_exposure_pen": 5.34,
+    "available_balance_pen": 93.531,
+    "settled_bets_count": 24,
+    "pending_bets_count": 3
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 97.7174,
-    "net_profit_pen": -2.2826,
-    "roi_pct": -9.1341,
-    "yield_pct": -6.4608,
-    "settled_bets_count": 21,
-    "won_count": 9,
-    "lost_count": 12,
+    "current_settled_bankroll_pen": 98.871,
+    "net_profit_pen": -1.129,
+    "roi_pct": -3.7646,
+    "yield_pct": -3.1956,
+    "settled_bets_count": 24,
+    "won_count": 11,
+    "lost_count": 13,
     "push_count": 0,
     "max_drawdown_pen": 6.2575,
-    "overall_brier_score": 0.226223,
-    "baseline_brier_score": 0.242236,
-    "overall_log_loss": 0.642386,
-    "baseline_log_loss": 0.677731,
-    "mean_clv_pct": 1.1727,
+    "overall_brier_score": 0.211465,
+    "baseline_brier_score": 0.248154,
+    "overall_log_loss": 0.610637,
+    "baseline_log_loss": 0.692016,
+    "mean_clv_pct": 1.0276,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 9,
+      "events_found_today": 7,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -61,7 +61,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-07T06:34:51Z",
+      "extracted_at": "2026-11-07T21:14:31Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -69,57 +69,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)",
     "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-    "indexed_documents_count": 105,
+    "indexed_documents_count": 125,
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis is Questionable for Saturday's (Nov. 7) game against the Thunder.",
+        "relevance_score": 0.226,
+        "captured_at": "2026-11-07"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Saturday's (Nov. 7) game against the Nuggets.",
-        "relevance_score": 0.215,
+        "relevance_score": 0.2237,
         "captured_at": "2026-11-06"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "GSW Gui Santos (PF) Day To Day (Knee): Santos is Questionable for Saturday's (Nov. 7) game against the Magic.",
-        "relevance_score": 0.2063,
+        "relevance_score": 0.2126,
         "captured_at": "2026-11-06"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHX Rasheer Fleming (PF) Day To Day (Ankle): Fleming is Questionable for Saturday's (Nov. 7) game against the Suns.",
-        "relevance_score": 0.2044,
+        "relevance_score": 0.2119,
         "captured_at": "2026-11-06"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "GSW Draymond Green (PF) Day To Day (Elbow): Green is Questionable for Saturday's (Nov. 7) game against the Magic.",
-        "relevance_score": 0.2016,
+        "relevance_score": 0.2087,
         "captured_at": "2026-11-06"
       },
       {
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Noah Clowney F Nov 7 Day-To-Day Nov 7: Clowney is listed as questionable for Saturday's game against the Hawks due to an illness.",
+        "relevance_score": 0.2083,
+        "captured_at": "2026-11-07T21:14:32Z"
+      },
+      {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
-        "relevance_score": 0.1744,
+        "snippet": "BKN Noah Clowney (PF) Day To Day (Illness): Clowney is Questionable for Saturday's (Nov. 7) game versus the Hawks.",
+        "relevance_score": 0.2052,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Kelly Oubre Jr. (SF) Day To Day (Calf): Oubre Jr. is Questionable for Saturday's (Nov. 7) game against the Nuggets.",
-        "relevance_score": 0.1716,
-        "captured_at": "2026-11-06"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "GSW Gary Payton II (SG) Day To Day (Calf): Payton II is Questionable for Saturday's (Nov. 7) game against the Magic.",
-        "relevance_score": 0.1707,
-        "captured_at": "2026-11-06"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CLE Sam Merrill (SG) Day To Day (Elbow): Merrill did not return on Friday's (Nov. 6) game against the 76ers.",
-        "relevance_score": 0.1705,
-        "captured_at": "2026-11-07"
+        "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
+        "relevance_score": 0.2032,
+        "captured_at": "2026-11-04"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -132,7 +132,7 @@
     "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)",
     "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }
