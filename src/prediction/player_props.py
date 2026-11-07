@@ -452,3 +452,61 @@ class PlayerPropsEngine:
             "is_value_sgp": is_value,
             "rationale": rationale,
         }
+
+    def scan_retabet_sgp_slate(
+        self,
+        slate_games: list[dict[str, Any]],
+        props_list: list[dict[str, Any]],
+        bankroll_pen: float = 100.0,
+        min_ev_pct: float = 3.0,
+    ) -> list[dict[str, Any]]:
+        """
+        V8 Phase 3: Automated RETAbet SGP Slate Scanner.
+        Pairs available slate game projections with qualified player prop picks to identify
+        statistically correlated Same-Game Parlay value opportunities.
+        """
+        sgp_opportunities: list[dict[str, Any]] = []
+        games_by_id = {g.get("game_id"): g for g in slate_games if g.get("game_id")}
+
+        for prop in props_list:
+            gid = prop.get("game_id")
+            game = games_by_id.get(gid)
+            if not game:
+                continue
+
+            # Determine matching game side
+            team = prop.get("team")
+            is_home = (team == game.get("home_team"))
+            game_prob = float(game.get("model_p_home_pct", 50.0) / 100.0) if is_home else float(game.get("model_p_away_pct", 50.0) / 100.0)
+            sel_label = f"{game.get('home_name' if is_home else 'away_name')} Gana"
+
+            # Correlation prior: Positive between team win and star scorer/passer
+            cat = prop.get("prop_category", "PTS")
+            rho = 0.35 if cat in ("PTS", "AST", "PRA") else 0.18
+
+            # RETAbet retail parlay formula (retail bookmaker offers independent pricing with soft correlation discount)
+            p_p = float(prop.get("model_prob", 0.55))
+            odds_g = 1.0 / max(0.05, game_prob)
+            odds_p = float(prop.get("decimal_odds") or (1.0 / max(0.05, p_p)))
+            sim_offered_odds = round(max(2.15, odds_g * odds_p * 0.94), 2)
+
+            sgp_cand = self.simulate_same_game_parlay_copula(
+                game_id=gid,
+                matchday_date=prop.get("matchday_date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+                game_selection_label=sel_label,
+                game_model_prob=game_prob,
+                player_name=prop.get("player_name", "Player"),
+                team=team or "NBA",
+                prop_category=cat,
+                prop_selection=prop.get("selection", "OVER"),
+                prop_line=float(prop.get("line_value", 20.5)),
+                prop_model_prob=p_p,
+                offered_sgp_odds=sim_offered_odds,
+                correlation_rho=rho,
+                bankroll_pen=bankroll_pen,
+            )
+            if sgp_cand["ev_pct"] >= min_ev_pct and sgp_cand["p_joint"] >= 0.18:
+                sgp_cand["is_value_sgp"] = True
+                sgp_opportunities.append(sgp_cand)
+
+        return sgp_opportunities

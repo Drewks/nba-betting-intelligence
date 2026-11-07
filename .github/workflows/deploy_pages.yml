@@ -31,8 +31,8 @@ jobs:
       - name: 2. Ensure docs/index.html exists
         run: |
           mkdir -p docs
-          if [ -f "reports/dashboard.html" ] && [ ! -f "docs/index.html" ]; then
-            cp reports/dashboard.html docs/index.html
+          if [ -f "reports/dashboard.html" ]; then
+            cp -f reports/dashboard.html docs/index.html
           fi
           touch docs/.nojekyll
 

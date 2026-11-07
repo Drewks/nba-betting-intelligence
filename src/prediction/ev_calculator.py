@@ -376,15 +376,29 @@ def optimize_simultaneous_kelly_portfolio(
     max_total_exposure_fraction: float = 0.15,
     max_individual_fraction: float = 0.06,
     fractional_multiplier: float = 0.50,
+    peak_bankroll_pen: float | None = None,
 ) -> list[dict[str, Any]]:
     """
-    V7 Fase 5: Multi-Bet Simultaneous Kelly Portfolio Optimization (scipy.optimize SLSQP).
+    V8 Multi-Bet Simultaneous Kelly Portfolio Optimization (scipy.optimize SLSQP).
     Maximizes expected logarithmic bankroll growth E[ln(1 + sum(f_i * R_i))] across simultaneous
     independent game outcomes under a convex joint risk constraint, allocating more capital to
     picks with superior EV / Uncertainty trade-offs.
+    V8 Enhancement: High-Water Mark Drawdown Shield (HWM).
+    Contracts the fractional Kelly multiplier during equity drawdowns (d = (peak - current)/peak)
+    via hwm_shield = max(0.40, 1.0 - 2.0 * d) to protect the bankroll geometrically.
     """
     if not candidates or bankroll_pen <= 0.0:
         return candidates
+
+    effective_mult = fractional_multiplier
+    effective_max_indiv = max_individual_fraction
+    effective_max_total = max_total_exposure_fraction
+    if peak_bankroll_pen is not None and peak_bankroll_pen > bankroll_pen > 0.0:
+        drawdown_pct = (peak_bankroll_pen - bankroll_pen) / peak_bankroll_pen
+        hwm_shield = max(0.40, min(1.0, 1.0 - 2.0 * drawdown_pct))
+        effective_mult = fractional_multiplier * hwm_shield
+        effective_max_indiv = max_individual_fraction * hwm_shield
+        effective_max_total = max_total_exposure_fraction * hwm_shield
 
     enriched = [dict(c) for c in candidates]
     k = len(enriched)
@@ -407,7 +421,7 @@ def optimize_simultaneous_kelly_portfolio(
         o_val = o_arr[0]
         b_val = o_val - 1.0
         f_star = max(0.0, (p_val * (b_val + 1.0) - 1.0) / b_val)
-        eff_f = min(max_individual_fraction, f_star * fractional_multiplier)
+        eff_f = min(effective_max_indiv, f_star * effective_mult)
         if p_val < 0.50:
             t_cap, t_min = 1.75, 1.00
         elif p_val < 0.58:
@@ -437,14 +451,14 @@ def optimize_simultaneous_kelly_portfolio(
             return 1e5 + float(np.sum(np.maximum(0.0, 1e-5 - wealth)) * 1e4)
         return -float(np.sum(p_states * np.log(wealth)))
 
-    bounds = [(0.0, max_individual_fraction) for _ in range(k)]
-    constraints = {"type": "ineq", "fun": lambda f: max_total_exposure_fraction - np.sum(f)}
-    init_f = np.full(k, min(max_individual_fraction, max_total_exposure_fraction / max(1, k)))
+    bounds = [(0.0, effective_max_indiv) for _ in range(k)]
+    constraints = {"type": "ineq", "fun": lambda f: effective_max_total - np.sum(f)}
+    init_f = np.full(k, min(effective_max_indiv, effective_max_total / max(1, k)))
 
     res = minimize(objective, init_f, method="SLSQP", bounds=bounds, constraints=constraints)
 
     raw_fractions = res.x if res.success else init_f
-    scaled_fractions = raw_fractions * fractional_multiplier
+    scaled_fractions = raw_fractions * effective_mult
 
     for i, c in enumerate(enriched):
         frac = float(scaled_fractions[i])

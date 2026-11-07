@@ -64,7 +64,7 @@ from src.reporting.reporter import (
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
 
-MODEL_VERSION_ID = "model_f_ensemble_v4"
+MODEL_VERSION_ID = "model_f_ensemble_v8"
 MIN_REAL_GAMES_FOR_TRAINING = 120
 
 

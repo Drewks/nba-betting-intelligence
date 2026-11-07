@@ -141,6 +141,10 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: 1. Clonar repositorio
@@ -148,17 +152,22 @@ jobs:
         with:
           ref: main
 
+      - name: 1b. Asegurar existencia de docs/index.html y .nojekyll
+        run: |
+          mkdir -p docs
+          if [ -f "reports/dashboard.html" ]; then
+            cp reports/dashboard.html docs/index.html
+          fi
+          touch docs/.nojekyll
+
       - name: 2. Configurar entorno de GitHub Pages
         uses: actions/configure-pages@v5
-        continue-on-error: true
 
       - name: 3. Subir artefacto web de Pages
         uses: actions/upload-pages-artifact@v3
-        continue-on-error: true
         with:
           path: 'docs/'
 
       - name: 4. Desplegar en vivo en GitHub Pages
         id: deployment
-        continue-on-error: true
         uses: actions/deploy-pages@v4

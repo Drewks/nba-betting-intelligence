@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-07T21:14:35Z
+date_generated: 2026-11-07T23:21:26Z
 status: PAPER_TRADING_ACTIVE
 bankroll_initial: 100.00
 current_bankroll_pen: 98.87
@@ -11,7 +11,8 @@ settled_bets: 24
 ---
 # NBA Betting Intelligence — Inbox Operativo
 
-- **Última sincronización**: `2026-11-07T21:14:35Z`
+- **Última sincronización**: `2026-11-07T23:21:26Z`
 - **Bankroll virtual actual**: `S/98.87 PEN`
 - **Dictamen del auditor**: `REMAIN_IN_PAPER_TRADING`
 - **Dashboard Cuantitativo DataviewJS**: [[01-Dataview-Quant-Dashboard]]
+- **SGP 'Crea tu Apuesta' RETAbet**: [[02-SGP-Correlated-Parlays]]

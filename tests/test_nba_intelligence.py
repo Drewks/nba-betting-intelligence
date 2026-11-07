@@ -2228,3 +2228,71 @@ def test_38_v8_gaussian_copula_sgp_retabet_simulator() -> None:
     assert res_corr["is_value_sgp"] is True
     assert 1.00 <= res_corr["kelly_stake_pen"] <= 3.50
     assert "RETAbet Perú" in res_corr["bookmaker"]
+
+
+def test_39_v8_drawdown_kelly_shield_and_official_v8_promotion() -> None:
+    """
+    Test 39 (V8 Official Promotion Verification):
+    1. High-Water Mark (HWM) Drawdown Kelly Shield contracts stakes during equity drawdowns.
+    2. scan_retabet_sgp_slate automatically pairs game outcomes with qualified player props.
+    3. Official V8 Model Version ID verification.
+    """
+    from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
+    from src.prediction.player_props import PlayerPropsEngine
+    import scripts.run_cloud_cycle as rcc
+
+    # 1. Test Drawdown Kelly Shield
+    cand = [{"estimated_probability": 0.62, "decimal_odds_used": 1.95}]
+
+    # At all-time high (no drawdown)
+    res_peak = optimize_simultaneous_kelly_portfolio(
+        cand, bankroll_pen=100.0, peak_bankroll_pen=100.0
+    )
+    # Under a 15% drawdown (S/85 vs peak S/100)
+    res_dd15 = optimize_simultaneous_kelly_portfolio(
+        cand, bankroll_pen=85.0, peak_bankroll_pen=100.0
+    )
+    # Under a severe 40% drawdown (S/60 vs peak S/100)
+    res_dd40 = optimize_simultaneous_kelly_portfolio(
+        cand, bankroll_pen=60.0, peak_bankroll_pen=100.0
+    )
+
+    assert res_peak[0]["kelly_optimal_fraction"] > res_dd15[0]["kelly_optimal_fraction"]
+    assert res_dd15[0]["kelly_optimal_fraction"] > res_dd40[0]["kelly_optimal_fraction"]
+    assert res_dd40[0]["kelly_recommended_stake_pen"] >= 1.00  # Stays bounded by floor
+
+    # 2. Test scan_retabet_sgp_slate
+    engine = PlayerPropsEngine()
+    sample_slate = [
+        {
+            "game_id": "G_SGP_SLATE_1",
+            "home_team": "DAL",
+            "away_team": "PHX",
+            "home_name": "Dallas Mavericks",
+            "away_name": "Phoenix Suns",
+            "model_p_home_pct": 62.0,
+            "model_p_away_pct": 38.0,
+        }
+    ]
+    sample_props = [
+        {
+            "game_id": "G_SGP_SLATE_1",
+            "team": "DAL",
+            "player_name": "Kyrie Irving",
+            "prop_category": "PTS",
+            "selection": "OVER",
+            "line_value": 26.5,
+            "model_prob": 0.64,
+            "matchday_date": "2026-11-07",
+        }
+    ]
+    sgp_picks = engine.scan_retabet_sgp_slate(sample_slate, sample_props, bankroll_pen=100.0)
+    assert len(sgp_picks) >= 1
+    top_sgp = sgp_picks[0]
+    assert top_sgp["bookmaker"] == "RETAbet Perú"
+    assert top_sgp["correlation_rho"] > 0.20
+    assert top_sgp["is_value_sgp"] is True
+    assert 1.00 <= top_sgp["kelly_stake_pen"] <= 3.50
+
+    # 3. Verify V8 Official Model Promotion
+    assert rcc.MODEL_VERSION_ID == "model_f_ensemble_v8"

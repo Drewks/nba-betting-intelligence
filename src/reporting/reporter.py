@@ -325,7 +325,7 @@ def generate_interactive_html_dashboard(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NBA Betting Intelligence V7.2 — Dashboard Cuantitativo Institucional (Venn-Abers, Optuna 8P & Props Engine)</title>
+  <title>NBA Betting Intelligence V8 — Sindicato Cuantitativo Institucional (Shin De-Vigging, Four Factors, Cópula SGP & Optuna)</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
     :root {{
@@ -390,12 +390,12 @@ def generate_interactive_html_dashboard(
       <div>
         <div class="flex items-center gap-2.5 flex-wrap">
           <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
-            MOTOR CUANTITATIVO V7.2 ACTIVO (8 HIPERPARÁMETROS OPTUNA · BRIER 0.0718 · +26.53% MEJORA)
+            MOTOR CUANTITATIVO V8 ACTIVO (SHIN DE-VIGGING · DEAN OLIVER FOUR FACTORS · LOGIT RESIDUALS · RETABET SGP)
           </span>
           <span class="text-xs text-[var(--muted-foreground)]" id="hdr-updated"></span>
         </div>
         <h1 class="text-xl md:text-2xl font-bold mt-2 tracking-tight">
-          🏀 Dashboard de Inteligencia NBA V7.2: Apuestas Activas, Cuotas, Sinergia, Kelly y Props Engine
+          🏀 Dashboard de Inteligencia NBA V8: Sindicato Cuantitativo, Cuotas Perú, Kelly Simultáneo con Escudo Drawdown y Cópulas SGP
         </h1>
         <p class="text-xs md:text-sm text-[var(--muted-foreground)] mt-1">
           Visualiza apuestas activas con nombres completos de equipos, cuotas en vivo de 25+ casas, intervalos conformales adaptativos de Venn-Abers, impacto no lineal de quintetos (Lineup Synergy), optimización simultánea de Kelly y proyecciones de Player Props.
@@ -425,7 +425,7 @@ def generate_interactive_html_dashboard(
         📋 2. Cartelera y Estadísticas (<span id="cnt-slate">0</span>)
       </button>
       <button onclick="switchTab('props')" id="tab-btn-props" class="tab-btn flex-1 min-w-[170px] py-2.5 px-3 rounded-lg text-xs md:text-sm font-semibold transition-all text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
-        🏀 3. Player Props V7.2 (<span id="cnt-props">0</span>)
+        🏀 3. Player Props & SGP RETAbet V8 (<span id="cnt-props">0</span>)
       </button>
       <button onclick="switchTab('guide')" id="tab-btn-guide" class="tab-btn flex-1 min-w-[170px] py-2.5 px-3 rounded-lg text-xs md:text-sm font-semibold transition-all text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
         🧠 4. Guía + Calculadora EV
@@ -511,11 +511,11 @@ def generate_interactive_html_dashboard(
       <div id="slate-container" class="space-y-3"></div>
     </div>
 
-    <!-- TAB 3: PLAYER PROPS ENGINE V7.2 -->
+    <!-- TAB 3: PLAYER PROPS & SGP RETABET V8 -->
     <div id="tab-panel-props" class="space-y-4 hidden">
       <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="text-base font-bold">🏀 Player Props Engine V7.2 — Proyección Individual & Redistribución de Uso</h2>
+          <h2 class="text-base font-bold">🏀 Player Props & Cópulas SGP V8 — Proyecciones, Desajustes y 'Crea tu Apuesta' RETAbet</h2>
           <p class="text-xs text-[var(--muted-foreground)]">
             Oportunidades +EV detectadas en líneas de Puntos (PTS), Rebotes (REB), Asistencias (AST) y PRA mediante distribuciones Poisson / Gaussiana con ajuste de uso (ΔUSG%) por bajas médicas y dimensionamiento Kelly.
           </p>
@@ -1082,7 +1082,7 @@ def generate_interactive_html_dashboard(
                   <span class="text-xs font-semibold px-2 py-0.5 rounded bg-[var(--background)] border border-[var(--border)] text-[var(--muted-foreground)] ml-1 font-mono">${{g.away_team}} @ ${{g.home_team}}</span>
                 </div>
                 <div class="text-xs text-[var(--muted-foreground)]">
-                  Proyección V7.2: <strong>${{favTeamName}} (${{favTeamCode}}) ${{spreadFair.toFixed(1)}} pts</strong> (Local ${{g.model_p_home_pct}}% / Visita ${{g.model_p_away_pct}}%)
+                  Proyección V8: <strong>${{favTeamName}} (${{favTeamCode}}) ${{spreadFair.toFixed(1)}} pts</strong> (Local ${{g.model_p_home_pct}}% / Visita ${{g.model_p_away_pct}}%)
                 </div>
               </div>
 
@@ -1192,7 +1192,7 @@ def generate_interactive_html_dashboard(
             <div class="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3.5">
               <div>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-600 text-white">PLAYER PROP V7.2</span>
+                  <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-600 text-white">PROP / SGP V8</span>
                   <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[var(--background)] border border-[var(--border)] text-purple-400">
                     ${{teamName}} (${{p.team}})
                   </span>
