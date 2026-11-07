@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
   "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 124,
+  "indexed_documents_count": 105,
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.3032,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
-      "relevance_score": 0.2959,
-      "captured_at": "2026-11-07T02:23:17Z"
+      "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Saturday's (Nov. 7) game against the Nuggets.",
+      "relevance_score": 0.215,
+      "captured_at": "2026-11-06"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-      "relevance_score": 0.2864,
-      "captured_at": "2026-11-04"
+      "snippet": "GSW Gui Santos (PF) Day To Day (Knee): Santos is Questionable for Saturday's (Nov. 7) game against the Magic.",
+      "relevance_score": 0.2063,
+      "captured_at": "2026-11-06"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DEN DeMar DeRozan (SF) Day To Day (Back): DeRozan did not play on Wednesday's (Nov. 4) game against Toronto.",
-      "relevance_score": 0.2415,
-      "captured_at": "2026-11-05"
+      "snippet": "PHX Rasheer Fleming (PF) Day To Day (Ankle): Fleming is Questionable for Saturday's (Nov. 7) game against the Suns.",
+      "relevance_score": 0.2044,
+      "captured_at": "2026-11-06"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DEN Spencer Jones (SF) Day To Day (Hamstring): Jones did not play on Wednesday's (Nov. 4) game against Toronto.",
-      "relevance_score": 0.2393,
-      "captured_at": "2026-11-05"
+      "snippet": "GSW Draymond Green (PF) Day To Day (Elbow): Green is Questionable for Saturday's (Nov. 7) game against the Magic.",
+      "relevance_score": 0.2016,
+      "captured_at": "2026-11-06"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIL Kam Jones (SG) Day To Day (Ankle): Jones did not play on Wednesday's (Nov. 4) game against Boston.",
-      "relevance_score": 0.2388,
-      "captured_at": "2026-11-05"
+      "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
+      "relevance_score": 0.1744,
+      "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "NYK Josh Hart (SG) Day To Day (Ankle): Hart did not play on Wednesday's (Nov. 4) game against Chicago.",
-      "relevance_score": 0.233,
-      "captured_at": "2026-11-05"
+      "snippet": "IND Kelly Oubre Jr. (SF) Day To Day (Calf): Oubre Jr. is Questionable for Saturday's (Nov. 7) game against the Nuggets.",
+      "relevance_score": 0.1716,
+      "captured_at": "2026-11-06"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Nic Claxton (C) Day To Day (Hamstring): Claxton did not play on Wednesday's (Nov. 4) game against New York.",
-      "relevance_score": 0.2319,
-      "captured_at": "2026-11-05"
+      "snippet": "GSW Gary Payton II (SG) Day To Day (Calf): Payton II is Questionable for Saturday's (Nov. 7) game against the Magic.",
+      "relevance_score": 0.1707,
+      "captured_at": "2026-11-06"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Sam Merrill (SG) Day To Day (Elbow): Merrill did not return on Friday's (Nov. 6) game against the 76ers.",
+      "relevance_score": 0.1705,
+      "captured_at": "2026-11-07"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
