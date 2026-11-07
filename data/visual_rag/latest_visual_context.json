@@ -1,9 +1,9 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
-  "indexed_documents_count": 124,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "indexed_documents_count": 105,
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
