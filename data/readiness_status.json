@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-11-07T07:31:45Z",
+  "updated_at_utc": "2026-11-07T13:13:09Z",
   "graduation_level": "FASE_0_SIMULACION_Y_CALIBRACION",
   "is_ready_for_real_money": false,
   "is_tier1_micro_bankroll_ready": false,
@@ -43,8 +43,8 @@
   "detail_message": "Muestra Total: 122/500 (24.4%) | Muestra 100% En Vivo: 0/200 (0.0%, 3 en espera hoy) | Bankroll: S/104.29 PEN (ROI +3.52%, MaxDD 0.00%) | Brier: 0.2437 (ECE 0.0250). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
   "tier1_notification_sent_at": null,
   "tier2_notification_sent_at": null,
-  "last_daily_pick_sent_date": "2026-11-06",
-  "last_daily_pick_bet_id": "BET_20261107_7C4523D5",
-  "last_daily_pick_summary": "OKC @ MEM | AWAY (OKC gana) @ 1.606 (DraftKings) — Prob: 63.5%",
+  "last_daily_pick_sent_date": "2026-11-07",
+  "last_daily_pick_bet_id": "BET_20261108_458792F8",
+  "last_daily_pick_summary": "Orlando Magic @ Golden State Warriors (ORL @ GSW) | Gana Golden State Warriors (GSW) @ 1.938 (1xBet Perú [T-6H Peru]) — Prob: 54.5%",
   "last_triggered_channels": []
 }

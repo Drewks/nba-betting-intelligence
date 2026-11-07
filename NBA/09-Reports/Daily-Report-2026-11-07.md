@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-07T06:34:55Z
+date_generated: 2026-11-07T13:13:03Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-07
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-07
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-07T06:34:55Z`
+- **Fecha de generación (UTC)**: `2026-11-07T13:13:03Z`
 - **Jornada evaluada**: `2026-11-07`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `10`
@@ -17,7 +17,7 @@ simulation_only: true
 - **Predicciones emitidas**: `170`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `167`
-- **Resultados pendientes globales**: `6`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -41,9 +41,9 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261107_CB5E045A` | `ESPN_401909289_2026-11-07_PHI_AT_CLE` | `moneyline` | **HOME** | 2.210 | 0.4792 | +5.91% | S/1.36 | `PENDING` | PENDIENTE |
-| `BET_20261107_7C4523D5` | `ESPN_401909291_2026-11-07_OKC_AT_MEM` | `moneyline` | **AWAY** | 1.606 | 0.6352 | +2.03% | S/1.96 | `PENDING` | PENDIENTE |
-| `BET_20261107_7EA0942D` | `ESPN_401909295_2026-11-07_SAS_AT_SAC` | `total_points` | **UNDER** | 1.930 | 0.5325 | +2.77% | S/1.68 | `PENDING` | PENDIENTE |
+| `BET_20261107_CB5E045A` | `ESPN_401909289_2026-11-07_PHI_AT_CLE` | `moneyline` | **HOME** | 2.210 | 0.4792 | +5.91% | S/1.36 | `WON` | S/+1.65 |
+| `BET_20261107_7C4523D5` | `ESPN_401909291_2026-11-07_OKC_AT_MEM` | `moneyline` | **AWAY** | 1.606 | 0.6352 | +2.03% | S/1.96 | `WON` | S/+1.19 |
+| `BET_20261107_7EA0942D` | `ESPN_401909295_2026-11-07_SAS_AT_SAC` | `total_points` | **UNDER** | 1.930 | 0.5325 | +2.77% | S/1.68 | `LOST` | S/-1.68 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909292_2026-11-07_TOR_AT_MIL` (`moneyline` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 1.20% <= threshold 2.00%
