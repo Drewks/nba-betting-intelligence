@@ -6,52 +6,52 @@
   "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis is Questionable for Friday's (Nov. 6) game against the Hawks.",
-      "relevance_score": 0.2606,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Friday's (Nov. 6) game against the Wizards.",
-      "relevance_score": 0.2559,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Friday's (Nov. 6) game against the 76ers.",
-      "relevance_score": 0.2497,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Tyrese Proctor (PG) Day To Day (Ankle): Proctor is Questionable for Friday's (Nov. 6) game against the 76ers.",
-      "relevance_score": 0.2488,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Peyton Watson (SF) Day To Day (Hamstring): Watson is Questionable for Friday's (Nov. 6) game against the 76ers.",
-      "relevance_score": 0.2428,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "TOR Immanuel Quickley (PG) Day To Day (Hamstring): Quickley is Questionable for Friday's (Nov. 6) game against the Bucks.",
-      "relevance_score": 0.2407,
-      "captured_at": "2026-11-06"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "TOR Kyle Anderson (SF) Day To Day (Illness): Anderson is Questionable for Friday's (Nov. 6) game against the Bucks.",
-      "relevance_score": 0.2407,
-      "captured_at": "2026-11-05"
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Peyton Watson G Nov 6 Day-To-Day Nov 5: Watson (hamstring) is questionable for Friday's game against the 76ers.",
+      "relevance_score": 0.3108,
+      "captured_at": "2026-11-07T00:18:41Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "SAC De'Andre Hunter (SF) Day To Day (Illness): Hunter is Questionable for Friday's (Nov. 6) game against the Spurs.",
-      "relevance_score": 0.2361,
+      "relevance_score": 0.2976,
       "captured_at": "2026-11-06"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
+      "relevance_score": 0.2563,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
+      "relevance_score": 0.2511,
+      "captured_at": "2026-11-07T00:18:41Z"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
+      "relevance_score": 0.2419,
+      "captured_at": "2026-11-04"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DEN DeMar DeRozan (SF) Day To Day (Back): DeRozan did not play on Wednesday's (Nov. 4) game against Toronto.",
+      "relevance_score": 0.2013,
+      "captured_at": "2026-11-05"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DEN Spencer Jones (SF) Day To Day (Hamstring): Jones did not play on Wednesday's (Nov. 4) game against Toronto.",
+      "relevance_score": 0.1995,
+      "captured_at": "2026-11-05"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MIL Kam Jones (SG) Day To Day (Ankle): Jones did not play on Wednesday's (Nov. 4) game against Boston.",
+      "relevance_score": 0.1995,
+      "captured_at": "2026-11-05"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
