@@ -1888,3 +1888,99 @@ def test_34_peru_sportsbooks_and_odds_comparator() -> None:
     parsed = json.loads(frontend_json)
     assert "sportsbooks" in parsed
     assert len(parsed["sportsbooks"]) == len(PERU_SPORTSBOOKS)
+
+
+
+def test_35_v8_shin_devig_peru_inefficiencies_and_obsidian_dataview(tmp_path: Path) -> None:
+    """
+    Test 35 (V8 Quantitative Upgrades Verification):
+    1. Shin's Method (`devig_shin`) and Power De-Vigging (`devig_power`) properly correct
+       favorite-longshot bias (assigning higher fair prob to heavy favorite and lower fair prob
+       to longshot than naive multiplicative de-vigging, while summing to 1.0).
+    2. Peruvian sportsbook comparator anchors retail books (RETAbet, Betsson, Apuesta Total, Doradobet)
+       to Shin de-vigged benchmark odds even when neutral 0.5/0.5 fair probs are passed.
+    3. `detect_peru_market_inefficiencies` accurately detects cross-bookmaker Surebet/Arbitrage
+       and Soft-Book +EV opportunities in Soles (S/. PEN).
+    4. `sync_obsidian_vault` generates `00-Inbox/01-Dataview-Quant-Dashboard.md` with DataviewJS & Tracker blocks.
+    """
+    import pytest
+    from src.prediction.ev_calculator import devig_multiplicative, devig_power, devig_shin
+    from src.ingestion.peru_sportsbooks import (
+        calculate_peru_odds_comparison,
+        detect_peru_market_inefficiencies,
+    )
+    from src.reporting.reporter import sync_obsidian_vault
+
+    # 1. Favorite-Longshot Bias removal verification (Favorite 1.35 vs Longshot 3.40)
+    p_fav_mult, p_dog_mult, ov_mult = devig_multiplicative(1.35, 3.40)
+    p_fav_shin, p_dog_shin, ov_shin = devig_shin(1.35, 3.40)
+    p_fav_pow, p_dog_pow, ov_pow = devig_power(1.35, 3.40)
+
+    assert p_fav_shin + p_dog_shin == pytest.approx(1.0, abs=1e-5)
+    assert p_fav_pow + p_dog_pow == pytest.approx(1.0, abs=1e-5)
+    assert ov_shin == pytest.approx(ov_mult, abs=1e-5)
+    # Shin and Power both assign higher true probability to the favorite and lower to the longshot
+    assert p_fav_shin > p_fav_mult
+    assert p_dog_shin < p_dog_mult
+    assert p_fav_pow > p_fav_mult
+    assert p_dog_pow < p_dog_mult
+
+    # Even odds symmetry check
+    p1_s, p2_s, _ = devig_shin(1.91, 1.91)
+    assert p1_s == pytest.approx(0.50, abs=1e-5)
+    assert p2_s == pytest.approx(0.50, abs=1e-5)
+
+    # 2. Peruvian comparator with neutral 0.5/0.5 but heavy favorite benchmark (1.38 vs 3.10)
+    comp = calculate_peru_odds_comparison(
+        p_home_fair=0.50,
+        p_away_fair=0.50,
+        benchmark_home_odds=1.38,
+        benchmark_away_odds=3.10,
+    )
+    retabet_row = next(b for b in comp["books"] if b["id"] == "retabet_pe")
+    betsson_row = next(b for b in comp["books"] if b["id"] == "betsson_pe")
+    # Retail books must reflect the heavy favorite (< 1.45) rather than 1.908
+    assert retabet_row["home_odds"] < 1.45
+    assert retabet_row["away_odds"] > 2.65
+    assert betsson_row["home_odds"] < 1.45
+    assert "market_efficiency" in comp
+
+    # 3. Cross-bookmaker Arbitrage (Surebet) & +EV detection
+    mock_books = [
+        {"id": "coolbet_pe", "name": "Coolbet Perú", "is_mincetur_licensed": True, "home_odds": 2.12, "away_odds": 1.80},
+        {"id": "retabet_pe", "name": "RETAbet Perú", "is_mincetur_licensed": True, "home_odds": 1.82, "away_odds": 2.08},
+    ]
+    ineff = detect_peru_market_inefficiencies(mock_books, model_p_home=0.52, model_p_away=0.48, bankroll_pen=100.0)
+    assert ineff["is_surebet_arbitrage"] is True
+    assert ineff["arbitrage_roi_pct"] > 2.0
+    assert ineff["arbitrage_allocation_pen"] is not None
+    assert ineff["arbitrage_allocation_pen"]["guaranteed_profit_pen"] > 2.0
+    assert len(ineff["plus_ev_opportunities"]) >= 1
+
+    # 4. Obsidian DataviewJS & Tracker Vault Generation
+    dummy_metrics = {
+        "current_settled_bankroll_pen": 102.50,
+        "net_profit_pen": 2.50,
+        "roi_pct": 4.20,
+        "mean_clv_pct": 1.45,
+        "overall_brier_score": 0.0718,
+        "baseline_brier_score": 0.1062,
+        "overall_log_loss": 0.2512,
+        "baseline_log_loss": 0.3410,
+        "settled_bets_count": 64,
+        "pending_exposure_pen": 5.00,
+        "exit_gates_evaluation": {"recommendation": "REMAIN_IN_PAPER_TRADING"},
+    }
+    vault_files = sync_obsidian_vault(
+        vault_root=tmp_path / "NBA",
+        daily_report_md="# Daily",
+        weekly_report_md="# Weekly",
+        audit_report_md="# Audit",
+        metrics=dummy_metrics,
+        environment_status={},
+        target_date="2026-11-07",
+    )
+    assert "00-Inbox/01-Dataview-Quant-Dashboard.md" in vault_files
+    dv_content = (tmp_path / "NBA" / "00-Inbox" / "01-Dataview-Quant-Dashboard.md").read_text(encoding="utf-8")
+    assert "```dataviewjs" in dv_content
+    assert "```tracker" in dv_content

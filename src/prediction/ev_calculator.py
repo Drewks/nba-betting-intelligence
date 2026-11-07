@@ -1,4 +1,4 @@
-"""Expected Value (EV), gross implied probability, documented de-vigging, and Steam Move detection."""
+"""Expected Value (EV), gross implied probability, documented de-vigging (Multiplicative, Shin, Power), and Steam Move detection."""
 
 from __future__ import annotations
 
@@ -37,6 +37,64 @@ def devig_multiplicative(odds_a: float, odds_b: float) -> tuple[float, float, fl
     return round(p_a / total_gross, 6), round(p_b / total_gross, 6), overround
 
 
+def devig_shin(odds_a: float, odds_b: float) -> tuple[float, float, float]:
+    """
+    V8 Shin's Method (1991, 1993) de-vigging for two-way markets.
+    Accounts for asymmetric insider trading / favorite-longshot bias (FLB), where
+    bookmakers embed disproportionately higher margin into underdogs/longshots than favorites.
+    Given gross implied probabilities pi_a = 1/O_a, pi_b = 1/O_b and S = pi_a + pi_b:
+      - If S <= 1.000001 (zero or negative margin), falls back to proportional normalization.
+      - Otherwise solves Shin's mapping with insider trading fraction z in (0, 0.25]:
+            u_i(z) = (sqrt(z^2 + 4 * (1 - z) * (pi_i^2 / S)) - z) / (2 * (1 - z))
+        and normalizes p_fair_i = u_i / (u_a + u_b).
+    Returns (p_fair_a, p_fair_b, overround).
+    """
+    pi_a = calculate_implied_prob_gross(odds_a)
+    pi_b = calculate_implied_prob_gross(odds_b)
+    total_gross = pi_a + pi_b
+    overround = round(total_gross - 1.0, 6)
+    if total_gross <= 1.000001 or abs(pi_a - pi_b) < 1e-9:
+        return round(pi_a / total_gross, 6), round(pi_b / total_gross, 6), overround
+
+    z = max(1e-6, min(0.25, total_gross - 1.0))
+    denom = 2.0 * (1.0 - z)
+    u_a = (math.sqrt(z * z + 4.0 * (1.0 - z) * (pi_a * pi_a) / total_gross) - z) / denom
+    u_b = (math.sqrt(z * z + 4.0 * (1.0 - z) * (pi_b * pi_b) / total_gross) - z) / denom
+    u_sum = u_a + u_b
+    if u_sum <= 0.0:
+        return round(pi_a / total_gross, 6), round(pi_b / total_gross, 6), overround
+    return round(u_a / u_sum, 6), round(u_b / u_sum, 6), overround
+
+
+def devig_power(odds_a: float, odds_b: float) -> tuple[float, float, float]:
+    """
+    V8 Power (Logarithmic) de-vigging method.
+    Solves for exponent k > 0 such that (1/O_a)^k + (1/O_b)^k = 1.0 via bisection.
+    Corrects favorite-longshot bias continuously across heavy favorites and longshots.
+    Returns (p_fair_a, p_fair_b, overround).
+    """
+    pi_a = calculate_implied_prob_gross(odds_a)
+    pi_b = calculate_implied_prob_gross(odds_b)
+    total_gross = pi_a + pi_b
+    overround = round(total_gross - 1.0, 6)
+    if abs(total_gross - 1.0) < 1e-7 or abs(pi_a - pi_b) < 1e-9:
+        return round(pi_a / total_gross, 6), round(pi_b / total_gross, 6), overround
+
+    low_k, high_k = 0.5, 5.0
+    for _ in range(40):
+        mid_k = 0.5 * (low_k + high_k)
+        val = (pi_a ** mid_k) + (pi_b ** mid_k)
+        if val > 1.0:
+            low_k = mid_k
+        else:
+            high_k = mid_k
+    k_opt = 0.5 * (low_k + high_k)
+    p_a = pi_a ** k_opt
+    p_b = pi_b ** k_opt
+    s_p = p_a + p_b
+    return round(p_a / s_p, 6), round(p_b / s_p, 6), overround
+
+
 def calculate_ev(estimated_prob: float, decimal_odds: float) -> dict[str, float]:
     """
     Calculates Expected Value per unit staked and percentage EV:
@@ -68,18 +126,20 @@ DEFAULT_MODEL_WEIGHT = 0.30
 MAX_MODEL_MARKET_DISAGREEMENT = 0.15
 
 
-def compute_market_consensus(odds_rows: list[dict[str, Any]]) -> dict[tuple[str, str, float | None], dict[str, Any]]:
+def compute_market_consensus(odds_rows: list[dict[str, Any]], method: str = "shin") -> dict[tuple[str, str, float | None], dict[str, Any]]:
     """
     De-vigged fair probability consensus per (market, selection, line_value).
     Prefers sharp books (Pinnacle, Betfair, Matchbook, LowVig...) and falls back to the median of
     all books. Only rows with a counterpart price (two-way market) are used.
+    Supports method='shin' (default, corrects favorite-longshot bias), 'power', or 'multiplicative'.
     """
+    devig_fn = devig_shin if method == "shin" else (devig_power if method == "power" else devig_multiplicative)
     groups: dict[tuple[str, str, float | None], dict[str, list[float]]] = {}
     for o in odds_rows:
         cp = o.get("counterpart_decimal_odds")
         if cp is None or float(cp) <= 1.0 or float(o.get("decimal_odds") or 0.0) <= 1.0:
             continue
-        p_fair, _, _ = devig_multiplicative(float(o["decimal_odds"]), float(cp))
+        p_fair, _, _ = devig_fn(float(o["decimal_odds"]), float(cp))
         key = (o["market"], o["selection"], o.get("line_value"))
         bucket = groups.setdefault(key, {"sharp": [], "all": []})
         bucket["all"].append(p_fair)
@@ -116,7 +176,7 @@ def compute_line_steam(odds_history: list[dict[str, Any]]) -> dict[tuple[str, st
         if dec is None or float(dec) <= 1.0:
             continue
         if cp is not None and float(cp) > 1.0:
-            p_f, _, _ = devig_multiplicative(float(dec), float(cp))
+            p_f, _, _ = devig_shin(float(dec), float(cp))
         else:
             p_f = calculate_implied_prob_gross(float(dec))
         key = (str(o.get("market", "")), str(o.get("selection", "")))
@@ -161,7 +221,7 @@ def evaluate_market_opportunity(
     conformal_interval: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """
-    Validates odds + timestamp, estimates fair de-vigged probability when counterpart odds exist,
+    Validates odds + timestamp, estimates fair de-vigged probability (Shin's method) when counterpart odds exist,
     modulates model_weight when sharp steam moves are detected, anchors the estimated probability
     to market consensus (if available), computes Venn-Abers conformal lower-bound EV (if conformal interval provided),
     and returns a structured EV evaluation record.
@@ -171,7 +231,7 @@ def evaluate_market_opportunity(
     counterpart = odds_record.get("counterpart_decimal_odds")
 
     if counterpart is not None and counterpart > 1.0:
-        p_fair, _, overround = devig_multiplicative(dec_odds, float(counterpart))
+        p_fair, _, overround = devig_shin(dec_odds, float(counterpart))
     else:
         p_fair = None
         overround = None
@@ -329,4 +389,3 @@ def optimize_simultaneous_kelly_portfolio(
         c["kelly_recommended_stake_pen"] = stake
 
     return enriched
-

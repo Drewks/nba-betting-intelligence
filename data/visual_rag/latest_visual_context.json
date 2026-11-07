@@ -7,51 +7,51 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis is Questionable for Friday's (Nov. 6) game against the Hawks.",
-      "relevance_score": 0.2084,
-      "captured_at": "2026-11-05"
+      "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Saturday's (Nov. 7) game against the Nuggets.",
+      "relevance_score": 0.2199,
+      "captured_at": "2026-11-06"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Jalen Johnson (SF) Day To Day (Ankle): Johnson is Questionable for Friday's (Nov. 6) game against the Wizards.",
-      "relevance_score": 0.2077,
-      "captured_at": "2026-11-05"
+      "snippet": "GSW Gui Santos (PF) Day To Day (Knee): Santos is Questionable for Saturday's (Nov. 7) game against the Magic.",
+      "relevance_score": 0.2106,
+      "captured_at": "2026-11-06"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "PHX Rasheer Fleming (PF) Day To Day (Ankle): Fleming is Questionable for Saturday's (Nov. 7) game against the Suns.",
+      "relevance_score": 0.2087,
+      "captured_at": "2026-11-06"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "GSW Draymond Green (PF) Day To Day (Elbow): Green is Questionable for Saturday's (Nov. 7) game against the Magic.",
+      "relevance_score": 0.2063,
+      "captured_at": "2026-11-06"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
+      "relevance_score": 0.1843,
+      "captured_at": "2026-11-07"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Sam Merrill (SG) Day To Day (Elbow): Merrill did not return on Friday's (Nov. 6) game against the 76ers.",
+      "relevance_score": 0.1812,
+      "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.2035,
+      "relevance_score": 0.1797,
       "captured_at": "2026-11-04"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Tyrese Proctor (PG) Day To Day (Ankle): Proctor is Questionable for Friday's (Nov. 6) game against the 76ers.",
-      "relevance_score": 0.2028,
-      "captured_at": "2026-11-05"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Friday's (Nov. 6) game against the 76ers.",
-      "relevance_score": 0.2027,
-      "captured_at": "2026-11-05"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
-      "relevance_score": 0.202,
-      "captured_at": "2026-11-06T17:52:59Z"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BKN Noah Clowney (PF) Day To Day (Knee): Clowney did not return to Wednesday's (Nov. 4) game against the Hornets.",
-      "relevance_score": 0.2006,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Moussa Diabate F Nov 6 Day-To-Day Nov 5: Diabate (quadriceps) is questionable for Friday's game against the Celtics.",
-      "relevance_score": 0.2,
-      "captured_at": "2026-11-06T17:52:59Z"
+      "relevance_score": 0.1761,
+      "captured_at": "2026-11-07T07:29:54Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
