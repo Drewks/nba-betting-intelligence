@@ -1,7 +1,7 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-07T21:00:13Z",
+  "timestamp_utc": "2026-11-07T21:14:29Z",
   "ingested_dates": [
     "2026-11-07",
     "2026-11-08"
@@ -61,7 +61,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-07T21:00:18Z",
+      "extracted_at": "2026-11-07T21:14:31Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -107,7 +107,7 @@
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Noah Clowney F Nov 7 Day-To-Day Nov 7: Clowney is listed as questionable for Saturday's game against the Hawks due to an illness.",
         "relevance_score": 0.2083,
-        "captured_at": "2026-11-07T21:00:19Z"
+        "captured_at": "2026-11-07T21:14:32Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
