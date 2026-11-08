@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-08T13:32:38Z
+date_generated: 2026-11-08T16:48:08Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-08
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-08
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-08T13:32:38Z`
+- **Fecha de generación (UTC)**: `2026-11-08T16:48:08Z`
 - **Jornada evaluada**: `2026-11-08`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `8`

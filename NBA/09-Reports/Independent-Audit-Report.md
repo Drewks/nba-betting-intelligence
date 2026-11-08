@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-08T13:32:38Z
+date_generated: 2026-11-08T16:48:08Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-08T13:32:38Z`
+- **Fecha de auditoría (UTC)**: `2026-11-08T16:48:08Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -35,7 +35,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Sportradar (`SportradarAdapter`)**: `OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)`
 - **NBA.com/stats (`NBAStatsAdapter`)**: `FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION`
 - **Playwright (`PlaywrightAuthorizedScraper`)**: `OPERATIONAL`
-- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)`
+- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)`
 - **Obsidian Vault (`NBA/`)**: `Operativo en /home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA`
 
 ## 4. Conclusión Estadística del Auditor
