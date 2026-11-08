@@ -281,6 +281,17 @@ DDL_STATEMENTS = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS team_rosters (
+        team_id TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        position TEXT,
+        jersey TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (team_id, player_name)
+    );
+    """,
+    """
     CREATE TRIGGER IF NOT EXISTS prevent_settled_prop_tampering
     BEFORE UPDATE ON player_prop_picks
     FOR EACH ROW

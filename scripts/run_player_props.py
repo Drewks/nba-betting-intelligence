@@ -44,48 +44,20 @@ def main() -> None:
     print(f"Jugadores Mapeados : {len(PLAYER_PROP_BASELINES)} perfiles canónicos (30 equipos NBA)")
     print("-" * 80)
 
+    from src.ingestion.roster_manager import sync_all_nba_rosters
+    print("[*] Sincronizando plantillas oficiales de los 30 equipos NBA desde ESPN...")
+    roster_map = sync_all_nba_rosters(db)
+    print(f"[OK] {len(roster_map)} franquicias sincronizadas exitosamente.")
+
     # 1. Run dynamic slate scanner across all upcoming scheduled games
     all_picks = engine.generate_slate_prop_opportunities(
         bankroll_pen=args.bankroll,
         min_ev_pct=args.min_ev,
     )
 
-    # Fallback to sample candidates if no active slate games are in database
     if not all_picks:
-        sample_market_props = [
-            {
-                "player": "Kyrie Irving", "team": "DAL", "game_id": "ESPN_401909288_DAL_PHX",
-                "date": "2026-11-06", "cat": "PTS", "line": 26.5, "over_odds": 1.90, "under_odds": 1.90,
-                "absent": ["Luka Doncic"], "opp": "PHX",
-            },
-            {
-                "player": "Jamal Murray", "team": "DEN", "game_id": "ESPN_401909289_DEN_IND",
-                "date": "2026-11-07", "cat": "PTS", "line": 21.5, "over_odds": 1.92, "under_odds": 1.88,
-                "absent": ["Nikola Jokic"], "opp": "IND",
-            },
-            {
-                "player": "Derrick White", "team": "BOS", "game_id": "ESPN_401909288_BOS_CHA",
-                "date": "2026-11-06", "cat": "PTS", "line": 15.5, "over_odds": 1.88, "under_odds": 1.92,
-                "absent": ["Kristaps Porzingis"], "opp": "CHA",
-            },
-        ]
-        fallback_picks = []
-        for item in sample_market_props:
-            picks = engine.evaluate_prop_opportunity(
-                player_name=item["player"],
-                team=item["team"],
-                game_id=item["game_id"],
-                matchday_date=item["date"],
-                prop_category=item["cat"],
-                line_value=item["line"],
-                over_odds=item["over_odds"],
-                under_odds=item["under_odds"],
-                absent_teammates=item["absent"],
-                bankroll_pen=args.bankroll,
-                opponent_team=item.get("opp"),
-            )
-            fallback_picks.extend(picks)
-        all_picks = fallback_picks
+        print("\n[i] No hay partidos programados próximos en la pizarra activa.")
+        print("[i] Se omiten props sintéticos o partidos pasados para garantizar integridad temporal total.")
 
     out_file = PROJECT_ROOT / "data" / "evaluation" / "latest_player_props.json"
     out_file.parent.mkdir(parents=True, exist_ok=True)

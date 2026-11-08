@@ -116,13 +116,25 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     else:
         dates_to_ingest = [yesterday_str, today_str, tomorrow_str]
 
-    # Always ensure any dates with unresolved PENDING bets are refreshed so they can settle without waiting
-    pending_matchdays = [
+    # Always ensure any dates with unresolved PENDING bets, pending props, or unfinalized games whose tipoff passed are refreshed
+    extra_matchdays = [
         r["matchday_date"]
-        for r in db.fetch_all("SELECT DISTINCT matchday_date FROM simulated_bets WHERE status = 'PENDING'")
+        for r in db.fetch_all(
+            """
+            SELECT DISTINCT matchday_date FROM games 
+            WHERE status != 'FINAL' AND game_start_time <= ? AND matchday_date IS NOT NULL
+            UNION
+            SELECT DISTINCT matchday_date FROM player_prop_picks 
+            WHERE status = 'PENDING' AND matchday_date IS NOT NULL
+            UNION
+            SELECT DISTINCT matchday_date FROM simulated_bets 
+            WHERE status = 'PENDING' AND matchday_date IS NOT NULL
+            """,
+            (now_str,),
+        )
         if r.get("matchday_date")
     ]
-    for p_date in pending_matchdays:
+    for p_date in extra_matchdays:
         if p_date not in dates_to_ingest:
             dates_to_ingest.append(p_date)
 
@@ -532,18 +544,23 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         "obsidian_vault_path": str(PROJECT_ROOT / "NBA"),
     }
 
-    # 4b. Scan Player Props & RETAbet SGP Opportunities for upcoming games
+    # 4b. Sync live official NBA rosters & Scan Player Props & RETAbet SGP Opportunities for upcoming games
     try:
+        from src.ingestion.roster_manager import sync_all_nba_rosters
         from src.prediction.player_props import PlayerPropsEngine
+        sync_all_nba_rosters(db)
         props_engine = PlayerPropsEngine(db=db, min_ev_threshold=0.03)
         slate_records = db.fetch_all(
-            "SELECT * FROM games WHERE matchday_date = ? AND status != 'FINAL'", (today_str,)
+            """
+            SELECT * FROM games 
+            WHERE status = 'SCHEDULED' 
+              AND game_start_time > ? 
+              AND game_id NOT LIKE 'SYN%'
+            ORDER BY game_start_time ASC 
+            LIMIT 15
+            """,
+            (now_str,),
         )
-        if not slate_records:
-            slate_records = db.fetch_all(
-                "SELECT * FROM games WHERE matchday_date >= ? AND status != 'FINAL' ORDER BY game_start_time LIMIT 10",
-                (today_str,),
-            )
         props_engine.generate_slate_prop_opportunities(
             slate_games=slate_records,
             bankroll_pen=paper_engine.get_bankroll_state()["settled_bankroll_pen"],

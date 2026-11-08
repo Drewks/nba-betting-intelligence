@@ -590,6 +590,48 @@ class PaperTradingEngine:
                 )
                 continue
 
+            # 5b. Check game existence and strict pre-tipoff scheduled validity
+            game_record = self.db.fetch_one(
+                "SELECT game_id, game_start_time, status FROM games WHERE game_id = ?",
+                (game_id,),
+            )
+            if not game_record:
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "NONEXISTENT_GAME",
+                        f"Game {game_id} does not exist in the database.",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
+            if game_record["status"] != "SCHEDULED":
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "GAME_NOT_SCHEDULED",
+                        f"Game {game_id} has status '{game_record['status']}' (must be 'SCHEDULED').",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
+            start_iso = game_record.get("game_start_time")
+            if start_iso:
+                t_emitted = parse_iso_utc(emitted_at)
+                t_start = parse_iso_utc(start_iso)
+                if t_emitted >= t_start:
+                    no_bet_decisions.append(
+                        self._record_decision(
+                            game_id, matchday_date, market, selection, "NO_BET",
+                            "GAME_ALREADY_STARTED",
+                            f"Bet emitted at {emitted_at} is after or at tipoff ({start_iso}). Temporal leakage prevented.",
+                            ev_pct, emitted_at, model_version_id
+                        )
+                    )
+                    continue
+
             # 6. Contextual Kelly-Conviction Stake (or v1 fixed stake) & Available Balance Check
             state = self.get_bankroll_state()
             if proposed_stake_pen is not None:
@@ -924,12 +966,58 @@ class PaperTradingEngine:
     # -------------------------------------------------------------------------
     # V8 Player Props & SGP Paper Trading Settlement & Performance Tracking
     # -------------------------------------------------------------------------
-    def record_player_prop_pick(self, prop_dict: dict[str, Any]) -> str:
+    def record_player_prop_pick(
+        self,
+        prop_dict: dict[str, Any],
+        enforce_scheduled_status: bool = False,
+    ) -> str:
         """
         Records a single player prop or SGP parlay paper bet with PENDING status.
+        Enforces game existence, scheduled status, pre-tipoff timing, and official active roster verification.
         """
         prop_id = prop_dict.get("prop_id") or f"PROP_{uuid.uuid4().hex[:10].upper()}"
         emitted_at = prop_dict.get("emitted_at") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        gid = prop_dict["game_id"]
+
+        # 1. Verify game exists and is SCHEDULED (when enforced)
+        game = self.db.fetch_one("SELECT game_id, game_start_time, status, home_team, away_team FROM games WHERE game_id = ?", (gid,))
+        if not game:
+            raise DataValidationError(f"Cannot record prop on nonexistent game: {gid}")
+        if enforce_scheduled_status and game["status"] != "SCHEDULED":
+            raise DataValidationError(f"Cannot record prop on game {gid} with status '{game['status']}' (must be 'SCHEDULED')")
+
+        # 2. Strict pre-tipoff timing guard
+        start_ts = game.get("game_start_time")
+        if enforce_scheduled_status and start_ts:
+            t_emitted = parse_iso_utc(emitted_at)
+            t_start = parse_iso_utc(start_ts)
+            if t_emitted >= t_start:
+                raise TemporalLeakageError(
+                    f"Temporal leakage violation: prop {prop_id} emitted at {emitted_at} >= game tipoff {start_ts}"
+                )
+
+        # 3. Dynamic roster verification
+        team = prop_dict.get("team", "NBA")
+        player_name = prop_dict.get("player_name", "")
+        cat = prop_dict.get("prop_category", "")
+
+        # If single player prop, verify player belongs to specified team
+        if cat != "SGP" and team != "NBA":
+            roster_rows = self.db.fetch_all("SELECT player_name FROM team_rosters WHERE team_id = ? AND is_active = 1", (team,))
+            if roster_rows:
+                from src.ingestion.roster_manager import normalize_name
+                norm_p = normalize_name(player_name)
+                norm_active = {normalize_name(r["player_name"]) for r in roster_rows}
+                if norm_p not in norm_active:
+                    other_team_row = self.db.fetch_one(
+                        "SELECT team_id FROM team_rosters WHERE (player_name LIKE ? OR ? LIKE ('%' || player_name || '%')) AND is_active = 1",
+                        (f"%{player_name}%", player_name),
+                    )
+                    actual_team = other_team_row["team_id"] if other_team_row else "Unknown"
+                    raise DataValidationError(
+                        f"Roster integrity violation: {player_name} is not on active roster of {team} (currently on {actual_team})"
+                    )
+
         stake_pen = round(float(prop_dict.get("stake_pen") or prop_dict.get("kelly_stake_pen") or 1.00), 2)
         if stake_pen <= 0.0:
             stake_pen = 1.00
@@ -996,7 +1084,7 @@ class PaperTradingEngine:
             raise DataValidationError(f"Associated game {prop['game_id']} not found")
 
         settlement_ts = settled_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        if parse_iso_utc(settlement_ts) <= parse_iso_utc(game["game_start_time"]):
+        if game_status not in ("VOID", "CANCELLED", "POSTPONED") and parse_iso_utc(settlement_ts) <= parse_iso_utc(game["game_start_time"]):
             raise TemporalLeakageError(
                 f"Cannot settle prop {prop_id} at {settlement_ts} before or at game_start_time ({game['game_start_time']})"
             )
@@ -1007,11 +1095,11 @@ class PaperTradingEngine:
         cat = str(prop["prop_category"]).upper()
         sel = str(prop["selection"]).upper()
 
-        if game_status in ("POSTPONED", "CANCELLED"):
+        if game_status in ("POSTPONED", "CANCELLED", "VOID"):
             outcome_status = "VOID"
             net_profit = 0.0
             stat_recorded = 0.0
-            summary = f"Game {game_status}"
+            summary = f"Prop {game_status}"
         else:
             if game_status != "FINAL":
                 raise DataValidationError(f"Cannot settle prop before game is FINAL (status={game_status})")

@@ -1,52 +1,56 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "auto",
-  "timestamp_utc": "2026-11-08T01:29:18Z",
-  "ingested_dates": [],
-  "closing_lines_promoted": 90,
+  "timestamp_utc": "2026-11-08T23:45:37Z",
+  "ingested_dates": [
+    "2026-11-07",
+    "2026-11-08",
+    "2026-11-09"
+  ],
+  "closing_lines_promoted": 60,
   "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 2,
+  "new_bets_placed_in_cycle": 1,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic"
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 98.871,
-    "cumulative_net_profit_pen": -1.129,
-    "pending_exposure_pen": 9.34,
-    "available_balance_pen": 89.531,
-    "settled_bets_count": 24,
-    "pending_bets_count": 5
+    "settled_bankroll_pen": 99.9652,
+    "cumulative_net_profit_pen": -0.0348,
+    "pending_exposure_pen": 5.12,
+    "available_balance_pen": 94.8452,
+    "settled_bets_count": 27,
+    "pending_bets_count": 3
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 98.871,
-    "net_profit_pen": -1.129,
-    "roi_pct": -3.7646,
-    "yield_pct": -2.8706,
-    "settled_bets_count": 24,
-    "won_count": 11,
-    "lost_count": 13,
+    "current_settled_bankroll_pen": 99.9652,
+    "net_profit_pen": -0.0348,
+    "roi_pct": -0.0985,
+    "yield_pct": -0.086,
+    "settled_bets_count": 27,
+    "won_count": 13,
+    "lost_count": 14,
     "push_count": 0,
     "max_drawdown_pen": 6.2575,
-    "overall_brier_score": 0.211465,
-    "baseline_brier_score": 0.248154,
-    "overall_log_loss": 0.610637,
-    "baseline_log_loss": 0.692016,
-    "mean_clv_pct": 1.0276,
+    "overall_brier_score": 0.204929,
+    "baseline_brier_score": 0.250947,
+    "overall_log_loss": 0.596347,
+    "baseline_log_loss": 0.697354,
+    "mean_clv_pct": 6.5063,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 4,
+      "events_found_today": 6,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
       "credentials_configured": true,
-      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
+      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -58,7 +62,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": false,
       "browserbase_mode": "LOCAL_BROWSE_CLI",
-      "extracted_at": "2026-11-08T01:29:23Z",
+      "extracted_at": "2026-11-08T23:45:48Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -72,51 +76,51 @@
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHX Rasheer Fleming (PF) Day To Day (Ankle): Fleming is Questionable for Saturday's (Nov. 7) game against the Suns.",
-        "relevance_score": 0.2564,
-        "captured_at": "2026-11-06"
+        "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
+        "relevance_score": 0.2115,
+        "captured_at": "2026-11-08"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Tobe Awaka F Nov 8 Day-To-Day Nov 7: Awaka (knee) is questionable for Sundays' game against the 76ers.",
-        "relevance_score": 0.2547,
-        "captured_at": "2026-11-08T01:29:33Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "SAC Domantas Sabonis (C) Day To Day (Knee): Sabonis is Questionable for Sunday's (Nov. 8) game against the Heat.",
+        "relevance_score": 0.2023,
+        "captured_at": "2026-11-08"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
+        "relevance_score": 0.1858,
+        "captured_at": "2026-11-08"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
+        "relevance_score": 0.1815,
+        "captured_at": "2026-11-08"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
-        "relevance_score": 0.2176,
+        "relevance_score": 0.1771,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-        "relevance_score": 0.2168,
-        "captured_at": "2026-11-04"
+        "snippet": "MIL Gary Trent Jr. (SG) Day To Day (Illness): Trent Jr. is Questionable for Sunday's (Nov. 8) game against Boston.",
+        "relevance_score": 0.1697,
+        "captured_at": "2026-11-08"
       },
       {
         "source": "playwright_espn_injuries_table",
         "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 7: Diabate (quadriceps) has been ruled out for Friday's game against Boston, according to the Hornets' official injury report.",
-        "relevance_score": 0.2087,
-        "captured_at": "2026-11-08T01:29:33Z"
+        "relevance_score": 0.1617,
+        "captured_at": "2026-11-08T23:45:50Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIN Joan Beringer (PF) Day To Day (Nose): Beringer did not return on Friday's (Nov. 6) game against the Pelicans.",
-        "relevance_score": 0.2052,
-        "captured_at": "2026-11-07"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHA Grant Williams (PF) Day To Day (Hamstring): Williams did not play on Friday's (Nov. 6) game against the Celtics.",
-        "relevance_score": 0.1721,
-        "captured_at": "2026-11-07"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabaté did not play on Friday's (Nov. 6) game against the Celtics.",
-        "relevance_score": 0.1634,
-        "captured_at": "2026-11-07"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Mitchell Robinson C Nov 8 Day-To-Day Nov 8: Robinson (illness) is questionable for Sunday's game versus Milwaukee, Bobby Krivitsky of Forbes.com reports.",
+        "relevance_score": 0.1593,
+        "captured_at": "2026-11-08T23:45:50Z"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -126,7 +130,7 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
+    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
     "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",

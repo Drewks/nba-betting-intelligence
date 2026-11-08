@@ -2580,3 +2580,177 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
     assert len(batch_res) == 1
     assert batch_res[0]["status"] == "WON"
     assert batch_res[0]["actual_stat"] == 6.0
+
+
+def test_42_data_integrity_and_dynamic_roster_audit(tmp_path: Path) -> None:
+    """
+    Test 42: Data Integrity, Tipoff Timing Guards & Dynamic NBA Roster Verification:
+    1. Rejection of candidate bets on nonexistent games (NONEXISTENT_GAME).
+    2. Rejection of candidate bets on already completed/non-scheduled games (GAME_NOT_SCHEDULED).
+    3. Rejection of candidate bets emitted post-tipoff (GAME_ALREADY_STARTED).
+    4. Rejection of player props assigned to incorrect NBA franchises (Roster Integrity Violation).
+    5. Rejection of player props emitted post-tipoff when enforce_scheduled_status=True.
+    6. Dynamic ESPN roster synchronization and team lookup.
+    """
+    import pytest
+    from src.ingestion.roster_manager import ensure_roster_table, get_player_team, normalize_name
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.storage.db import DatabaseManager
+    from src.validation.validator import DataValidationError, TemporalLeakageError
+
+    db = DatabaseManager(tmp_path / "test_audit_42.sqlite3")
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0)
+
+    # Seed sample game with start time 2026-11-10T00:00:00Z
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, home_score, away_score, features_available_at, source_provider, ingested_at
+        ) VALUES ('G_FUTURE_01', '2026-27', '2026-11-10', '2026-11-10T00:00:00Z', 'LAL', 'BOS',
+                  'SCHEDULED', NULL, NULL, '2026-11-09T22:00:00Z', 'ESPN', '2026-11-09T22:00:00Z')
+        """
+    )
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, home_score, away_score, features_available_at, source_provider, ingested_at
+        ) VALUES ('G_FINAL_01', '2026-27', '2026-11-08', '2026-11-08T00:00:00Z', 'DEN', 'MIA',
+                  'FINAL', 110, 105, '2026-11-07T22:00:00Z', 'ESPN', '2026-11-07T22:00:00Z')
+        """
+    )
+
+    # 1. Nonexistent game rejection
+    res_nonexistent = engine.evaluate_and_record_matchday_selections(
+        matchday_date="2026-11-10",
+        candidate_predictions=[
+            {
+                "prediction_id": "PRED_FAKE",
+                "game_id": "G_PHANTOM_999",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 1.95,
+                "calibrated_probability": 0.60,
+                "ev_unit": 0.17,
+                "ev_pct": 17.0,
+                "model_version_id": "model_test",
+                "emitted_at": "2026-11-09T23:00:00Z",
+            }
+        ],
+    )
+    assert len(res_nonexistent["placed_bets"]) == 0
+    assert len(res_nonexistent["no_bet_decisions"]) == 1
+    assert res_nonexistent["no_bet_decisions"][0]["reason_code"] == "NONEXISTENT_GAME"
+
+    # 2. Non-scheduled game rejection (e.g. FINAL)
+    res_final = engine.evaluate_and_record_matchday_selections(
+        matchday_date="2026-11-08",
+        candidate_predictions=[
+            {
+                "prediction_id": "PRED_PAST",
+                "game_id": "G_FINAL_01",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 1.95,
+                "calibrated_probability": 0.60,
+                "ev_unit": 0.17,
+                "ev_pct": 17.0,
+                "model_version_id": "model_test",
+                "emitted_at": "2026-11-07T23:00:00Z",
+            }
+        ],
+    )
+    assert len(res_final["placed_bets"]) == 0
+    assert len(res_final["no_bet_decisions"]) == 1
+    assert res_final["no_bet_decisions"][0]["reason_code"] == "GAME_NOT_SCHEDULED"
+
+    # 3. Post-tipoff bet rejection (temporal leakage)
+    res_late = engine.evaluate_and_record_matchday_selections(
+        matchday_date="2026-11-10",
+        candidate_predictions=[
+            {
+                "prediction_id": "PRED_LATE",
+                "game_id": "G_FUTURE_01",
+                "market": "moneyline",
+                "selection": "HOME",
+                "line_value": None,
+                "decimal_odds_used": 1.95,
+                "calibrated_probability": 0.60,
+                "ev_unit": 0.17,
+                "ev_pct": 17.0,
+                "model_version_id": "model_test",
+                "emitted_at": "2026-11-10T00:05:00Z",  # 5 mins after tipoff!
+            }
+        ],
+    )
+    assert len(res_late["placed_bets"]) == 0
+    assert len(res_late["no_bet_decisions"]) == 1
+    assert res_late["no_bet_decisions"][0]["reason_code"] == "GAME_ALREADY_STARTED"
+
+    # 4. Dynamic Roster Verification & Trade Resolution
+    ensure_roster_table(db)
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO team_rosters (team_id, player_name, position, is_active, updated_at) VALUES ('LAL', 'Luka Doncic', 'PG', 1, '2026-11-08T00:00:00Z')"
+        )
+        conn.execute(
+            "INSERT INTO team_rosters (team_id, player_name, position, is_active, updated_at) VALUES ('BOS', 'Paul George', 'SF', 1, '2026-11-08T00:00:00Z')"
+        )
+        conn.execute(
+            "INSERT INTO team_rosters (team_id, player_name, position, is_active, updated_at) VALUES ('DAL', 'Kyrie Irving', 'PG', 1, '2026-11-08T00:00:00Z')"
+        )
+
+    # Luka Doncic is on LAL, not DAL!
+    assert get_player_team(db, "Luka Doncic") == "LAL"
+    assert get_player_team(db, "Paul George") == "BOS"
+
+    # Attempting to record a prop for Luka on DAL should be rejected
+    with pytest.raises(DataValidationError, match="Roster integrity violation"):
+        engine.record_player_prop_pick({
+            "game_id": "G_FUTURE_01",
+            "matchday_date": "2026-11-10",
+            "player_name": "Luka Doncic",
+            "team": "DAL",  # Wrong team!
+            "prop_category": "PTS",
+            "line_value": 28.5,
+            "selection": "OVER",
+            "decimal_odds": 1.90,
+            "model_prob": 0.58,
+        })
+
+    # Recording on correct team (LAL) succeeds
+    p_valid_id = engine.record_player_prop_pick({
+        "game_id": "G_FUTURE_01",
+        "matchday_date": "2026-11-10",
+        "player_name": "Luka Doncic",
+        "team": "LAL",  # Correct team!
+        "prop_category": "PTS",
+        "line_value": 28.5,
+        "selection": "OVER",
+        "decimal_odds": 1.90,
+        "model_prob": 0.58,
+        "emitted_at": "2026-11-09T23:30:00Z",
+    })
+    assert p_valid_id.startswith("PROP_")
+
+    # 5. Temporal Leakage on Props (enforce_scheduled_status=True)
+    with pytest.raises(TemporalLeakageError, match="Temporal leakage violation"):
+        engine.record_player_prop_pick(
+            {
+                "game_id": "G_FUTURE_01",
+                "matchday_date": "2026-11-10",
+                "player_name": "Luka Doncic",
+                "team": "LAL",
+                "prop_category": "PTS",
+                "line_value": 28.5,
+                "selection": "OVER",
+                "decimal_odds": 1.90,
+                "model_prob": 0.58,
+                "emitted_at": "2026-11-10T00:10:00Z",  # 10 mins post-tipoff!
+            },
+            enforce_scheduled_status=True,
+        )
+

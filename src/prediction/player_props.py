@@ -593,6 +593,11 @@ class PlayerPropsEngine:
                 # Persist to SQLite table player_prop_picks if db provided
                 if self.db is not None:
                     try:
+                        # Guard: strictly prevent recording props for games that are finished or cancelled
+                        g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (prop_pick["game_id"],))
+                        if g_rec and g_rec.get("status") in ("FINAL", "POSTPONED", "CANCELLED"):
+                            continue
+
                         self.db.execute_insert(
                             """
                             INSERT OR IGNORE INTO player_prop_picks (
@@ -775,6 +780,10 @@ class PlayerPropsEngine:
                 sgp_opportunities.append(sgp_cand)
                 if self.db is not None:
                     try:
+                        g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (sgp_cand["game_id"],))
+                        if g_rec and g_rec.get("status") in ("FINAL", "POSTPONED", "CANCELLED"):
+                            continue
+
                         self.db.execute_insert(
                             """
                             INSERT OR IGNORE INTO player_prop_picks (
@@ -824,17 +833,27 @@ class PlayerPropsEngine:
         5. Persists the consolidated results to `data/evaluation/latest_player_props.json`.
         """
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         if slate_games is None and self.db is not None:
             slate_games = self.db.fetch_all(
-                "SELECT * FROM games WHERE matchday_date >= ? AND status != 'FINAL' ORDER BY game_start_time LIMIT 12",
-                (today_str,),
+                """
+                SELECT * FROM games 
+                WHERE status = 'SCHEDULED' 
+                  AND game_start_time > ? 
+                  AND game_id NOT LIKE 'SYN%' 
+                ORDER BY game_start_time ASC 
+                LIMIT 15
+                """,
+                (now_iso,),
             )
-            if not slate_games:
-                slate_games = self.db.fetch_all(
-                    "SELECT * FROM games ORDER BY game_start_time DESC LIMIT 8"
-                )
         slate_games = slate_games or []
+
+        # Strictly enforce upcoming scheduled games only (zero historical/finished games)
+        valid_slate_games = [
+            g for g in slate_games
+            if g.get("status", "SCHEDULED") == "SCHEDULED" and (not g.get("game_start_time") or g.get("game_start_time") > now_iso)
+        ]
 
         # Build injuries mapping if not passed
         team_injuries: dict[str, list[str]] = injuries_by_team or {}
@@ -864,16 +883,17 @@ class PlayerPropsEngine:
 
         qualified_props: list[dict[str, Any]] = []
 
-        # Map canonical players by team for fast lookup
-        players_by_team: dict[str, list[str]] = {}
-        for p_name in PLAYER_PROP_BASELINES:
-            # Match team from our dictionary
-            for t_code in TEAM_DEFENSIVE_MULTIPLIERS:
-                # Approximate membership
+        # Fetch verified official rosters from SQLite (with ESPN sync)
+        active_rosters: dict[str, list[str]] = {}
+        if self.db is not None:
+            try:
+                from src.ingestion.roster_manager import get_all_rosters
+                active_rosters = get_all_rosters(self.db)
+            except Exception:
                 pass
 
-        # Direct team mapping
-        team_roster: dict[str, list[str]] = {
+        # Direct team mapping fallback for offline testing without DB
+        fallback_rosters: dict[str, list[str]] = {
             "DAL": ["Luka Doncic", "Kyrie Irving", "Klay Thompson", "PJ Washington", "Dereck Lively II"],
             "DEN": ["Nikola Jokic", "Jamal Murray", "Michael Porter Jr.", "Aaron Gordon", "Christian Braun"],
             "BOS": ["Jayson Tatum", "Jaylen Brown", "Derrick White", "Jrue Holiday", "Kristaps Porzingis", "Payton Pritchard"],
@@ -906,7 +926,7 @@ class PlayerPropsEngine:
             "NOP": ["Zion Williamson", "Brandon Ingram", "CJ McCollum"],
         }
 
-        for game in slate_games:
+        for game in valid_slate_games:
             gid = game.get("game_id", f"G_SLATE_{uuid.uuid4().hex[:6]}")
             mdate = game.get("matchday_date", today_str)
             home_t = game.get("home_team")
@@ -917,19 +937,31 @@ class PlayerPropsEngine:
             for is_home, team_code, opp_code in [(True, home_t, away_t), (False, away_t, home_t)]:
                 if not team_code:
                     continue
-                team_players = team_roster.get(team_code, [])
+                team_players = active_rosters.get(team_code) or fallback_rosters.get(team_code, [])
                 absent_list = team_injuries.get(team_code, [])
 
-                for p_name in team_players:
-                    # Skip if player is marked absent
-                    if p_name in absent_list:
-                        continue
-
-                    # Evaluate primary stat lines: PTS and PRA for primary scorers, AST for guards, REB for bigs
-                    prof = PLAYER_PROP_BASELINES.get(p_name)
+                for p_raw in team_players:
+                    # Match canonical baseline profile
+                    prof = PLAYER_PROP_BASELINES.get(p_raw)
+                    canonical_name = p_raw
+                    if not prof:
+                        norm_raw = p_raw.replace(".", "").replace("'", "").replace("-", " ").replace(" III", "").replace(" Jr.", "").strip().lower()
+                        for b_name, b_prof in PLAYER_PROP_BASELINES.items():
+                            norm_b = b_name.replace(".", "").replace("'", "").replace("-", " ").replace(" III", "").replace(" Jr.", "").strip().lower()
+                            if norm_raw == norm_b:
+                                prof = b_prof
+                                canonical_name = b_name
+                                break
                     if not prof:
                         continue
 
+                    # Skip if player is marked absent
+                    if canonical_name in absent_list or p_raw in absent_list:
+                        continue
+
+                    p_name = canonical_name
+
+                    # Evaluate primary stat lines: PTS and PRA for primary scorers, AST for guards, REB for bigs
                     categories_to_eval = ["PTS"]
                     if prof[4] >= 0.18:  # Good passer (AST)
                         categories_to_eval.append("AST")
@@ -1001,7 +1033,7 @@ class PlayerPropsEngine:
 
         # Generate RETAbet SGP parlays by pairing with slate game moneyline projections
         sgp_candidates = self.scan_retabet_sgp_slate(
-            slate_games=slate_games,
+            slate_games=valid_slate_games,
             props_list=top_individual_props,
             bankroll_pen=bankroll_pen,
             min_ev_pct=min_ev_pct,
