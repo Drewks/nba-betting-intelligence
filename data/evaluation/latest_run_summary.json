@@ -1,13 +1,14 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-08T06:40:53Z",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-08T13:32:29Z",
   "ingested_dates": [
+    "2026-11-07",
     "2026-11-08",
     "2026-11-09"
   ],
-  "closing_lines_promoted": 18,
-  "bets_settled_in_cycle": 0,
+  "closing_lines_promoted": 0,
+  "bets_settled_in_cycle": 3,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
     "moneyline": "logistic",
@@ -15,30 +16,30 @@
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 98.871,
-    "cumulative_net_profit_pen": -1.129,
-    "pending_exposure_pen": 9.34,
-    "available_balance_pen": 89.531,
-    "settled_bets_count": 24,
-    "pending_bets_count": 5
+    "settled_bankroll_pen": 99.9652,
+    "cumulative_net_profit_pen": -0.0348,
+    "pending_exposure_pen": 4.0,
+    "available_balance_pen": 95.9652,
+    "settled_bets_count": 27,
+    "pending_bets_count": 2
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 98.871,
-    "net_profit_pen": -1.129,
-    "roi_pct": -3.7646,
-    "yield_pct": -2.8706,
-    "settled_bets_count": 24,
-    "won_count": 11,
-    "lost_count": 13,
+    "current_settled_bankroll_pen": 99.9652,
+    "net_profit_pen": -0.0348,
+    "roi_pct": -0.0985,
+    "yield_pct": -0.0885,
+    "settled_bets_count": 27,
+    "won_count": 13,
+    "lost_count": 14,
     "push_count": 0,
     "max_drawdown_pen": 6.2575,
-    "overall_brier_score": 0.211465,
-    "baseline_brier_score": 0.248154,
-    "overall_log_loss": 0.610637,
-    "baseline_log_loss": 0.692016,
-    "mean_clv_pct": 1.0276,
+    "overall_brier_score": 0.204994,
+    "baseline_brier_score": 0.249406,
+    "overall_log_loss": 0.59651,
+    "baseline_log_loss": 0.694068,
+    "mean_clv_pct": 6.5063,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
@@ -61,7 +62,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-08T06:40:57Z",
+      "extracted_at": "2026-11-08T13:32:34Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -69,57 +70,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
     "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-    "indexed_documents_count": 124,
+    "indexed_documents_count": 105,
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "LAL Luka Dončić (PG) Day To Day (Back): Don?i? is Questionable for Sunday's (Nov. 8) game against the Pistons.",
-        "relevance_score": 0.2381,
+        "relevance_score": 0.2315,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Nic Claxton (C) Day To Day (Hamstring): Claxton is Questionable for Sunday's (Nov. 8) game against the 76ers.",
-        "relevance_score": 0.2374,
+        "relevance_score": 0.224,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Tobe Awaka (PF) Day To Day (Knee): Awaka is Questionable for Sunday's (Nov. 8) game against the 76ers.",
-        "relevance_score": 0.2322,
+        "relevance_score": 0.2199,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "SAC Keegan Murray (PF) Day To Day (Ankle): Murray is Questionable for Sunday's (Nov. 8) game against the Heat.",
-        "relevance_score": 0.2256,
+        "relevance_score": 0.2196,
+        "captured_at": "2026-11-07"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MIN Joan Beringer (PF) Day To Day (Nose): Beringer is Questionable for Sunday's (Nov. 8) game against the Jazz.",
+        "relevance_score": 0.2118,
+        "captured_at": "2026-11-07"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "UTA Lauri Markkanen (PF) Day To Day (Wrist): Markkanen is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
+        "relevance_score": 0.2073,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
-        "relevance_score": 0.2183,
+        "relevance_score": 0.2042,
         "captured_at": "2026-11-08"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIN Joan Beringer (PF) Day To Day (Nose): Beringer is Questionable for Sunday's (Nov. 8) game against the Jazz.",
-        "relevance_score": 0.2177,
-        "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
-        "relevance_score": 0.2145,
+        "relevance_score": 0.2005,
         "captured_at": "2026-11-08"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "UTA Lauri Markkanen (PF) Day To Day (Wrist): Markkanen is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
-        "relevance_score": 0.2132,
-        "captured_at": "2026-11-07"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -132,7 +133,7 @@
     "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
     "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }
