@@ -6,51 +6,51 @@
   "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Tobe Awaka F Nov 8 Day-To-Day Nov 7: Awaka (knee) is questionable for Sundays' game against the 76ers.",
-      "relevance_score": 0.2686,
-      "captured_at": "2026-11-08T01:51:04Z"
-    },
-    {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
-      "relevance_score": 0.2207,
+      "snippet": "LAL Luka Dončić (PG) Day To Day (Back): Don?i? is Questionable for Sunday's (Nov. 8) game against the Pistons.",
+      "relevance_score": 0.2381,
       "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-      "relevance_score": 0.2199,
-      "captured_at": "2026-11-04"
-    },
-    {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 7: Diabate (quadriceps) has been ruled out for Friday's game against Boston, according to the Hornets' official injury report.",
-      "relevance_score": 0.2104,
-      "captured_at": "2026-11-08T01:51:04Z"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIN Joan Beringer (PF) Day To Day (Nose): Beringer did not return on Friday's (Nov. 6) game against the Pelicans.",
-      "relevance_score": 0.2077,
+      "snippet": "CHI Nic Claxton (C) Day To Day (Hamstring): Claxton is Questionable for Sunday's (Nov. 8) game against the 76ers.",
+      "relevance_score": 0.2374,
       "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Grant Williams (PF) Day To Day (Hamstring): Williams did not play on Friday's (Nov. 6) game against the Celtics.",
-      "relevance_score": 0.1766,
+      "snippet": "CHI Tobe Awaka (PF) Day To Day (Knee): Awaka is Questionable for Sunday's (Nov. 8) game against the 76ers.",
+      "relevance_score": 0.2322,
       "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabaté did not play on Friday's (Nov. 6) game against the Celtics.",
-      "relevance_score": 0.1682,
+      "snippet": "SAC Keegan Murray (PF) Day To Day (Ankle): Murray is Questionable for Sunday's (Nov. 8) game against the Heat.",
+      "relevance_score": 0.2256,
       "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not play on Friday's (Nov. 6) game against the Thunder.",
-      "relevance_score": 0.168,
+      "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
+      "relevance_score": 0.2183,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MIN Joan Beringer (PF) Day To Day (Nose): Beringer is Questionable for Sunday's (Nov. 8) game against the Jazz.",
+      "relevance_score": 0.2177,
+      "captured_at": "2026-11-07"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
+      "relevance_score": 0.2145,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "UTA Lauri Markkanen (PF) Day To Day (Wrist): Markkanen is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
+      "relevance_score": 0.2132,
       "captured_at": "2026-11-07"
     }
   ],
