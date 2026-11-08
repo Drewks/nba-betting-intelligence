@@ -1,11 +1,14 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "auto",
-  "timestamp_utc": "2026-11-08T01:29:18Z",
-  "ingested_dates": [],
-  "closing_lines_promoted": 90,
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-08T01:51:00Z",
+  "ingested_dates": [
+    "2026-11-08",
+    "2026-11-09"
+  ],
+  "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 2,
+  "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic"
@@ -41,7 +44,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 4,
+      "events_found_today": 3,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -56,9 +59,9 @@
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
       "browserbase_cli_installed": true,
-      "browserbase_api_key_configured": false,
-      "browserbase_mode": "LOCAL_BROWSE_CLI",
-      "extracted_at": "2026-11-08T01:29:23Z",
+      "browserbase_api_key_configured": true,
+      "browserbase_mode": "REMOTE_CLOUD_CDP",
+      "extracted_at": "2026-11-08T01:51:04Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -66,56 +69,56 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
-    "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
     "indexed_documents_count": 124,
     "top_retrieved_context": [
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHX Rasheer Fleming (PF) Day To Day (Ankle): Fleming is Questionable for Saturday's (Nov. 7) game against the Suns.",
-        "relevance_score": 0.2564,
-        "captured_at": "2026-11-06"
-      },
-      {
-        "source": "playwright_espn_injuries_table",
+        "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Tobe Awaka F Nov 8 Day-To-Day Nov 7: Awaka (knee) is questionable for Sundays' game against the 76ers.",
-        "relevance_score": 0.2547,
-        "captured_at": "2026-11-08T01:29:33Z"
+        "relevance_score": 0.2686,
+        "captured_at": "2026-11-08T01:51:04Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
-        "relevance_score": 0.2176,
+        "relevance_score": 0.2207,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Jalen Smith (C) Day To Day (Hand): Smith did not return on Wednesday's (Nov. 4) game against the Knicks.",
-        "relevance_score": 0.2168,
+        "relevance_score": 0.2199,
         "captured_at": "2026-11-04"
       },
       {
-        "source": "playwright_espn_injuries_table",
+        "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 7: Diabate (quadriceps) has been ruled out for Friday's game against Boston, according to the Hornets' official injury report.",
-        "relevance_score": 0.2087,
-        "captured_at": "2026-11-08T01:29:33Z"
+        "relevance_score": 0.2104,
+        "captured_at": "2026-11-08T01:51:04Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MIN Joan Beringer (PF) Day To Day (Nose): Beringer did not return on Friday's (Nov. 6) game against the Pelicans.",
-        "relevance_score": 0.2052,
+        "relevance_score": 0.2077,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHA Grant Williams (PF) Day To Day (Hamstring): Williams did not play on Friday's (Nov. 6) game against the Celtics.",
-        "relevance_score": 0.1721,
+        "relevance_score": 0.1766,
         "captured_at": "2026-11-07"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabaté did not play on Friday's (Nov. 6) game against the Celtics.",
-        "relevance_score": 0.1634,
+        "relevance_score": 0.1682,
+        "captured_at": "2026-11-07"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MEM Isaiah Stewart (C) Day To Day (Knee): Stewart did not play on Friday's (Nov. 6) game against the Thunder.",
+        "relevance_score": 0.168,
         "captured_at": "2026-11-07"
       }
     ],
@@ -129,7 +132,7 @@
     "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (28 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
-    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }

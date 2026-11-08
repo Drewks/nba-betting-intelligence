@@ -1,22 +1,22 @@
 ---
-date_generated: 2026-11-08T01:29:37Z
+date_generated: 2026-11-08T01:51:08Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-08
-predictions_count: 88
+predictions_count: 96
 simulation_only: true
 ---
 # Informe Diario NBA Betting Intelligence — 2026-11-08
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-08T01:29:37Z`
+- **Fecha de generación (UTC)**: `2026-11-08T01:51:08Z`
 - **Jornada evaluada**: `2026-11-08`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `8`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `88`
+- **Predicciones emitidas**: `96`
 - **Apuestas simuladas registradas en la jornada**: `3` (límite diario: 3, stake máx: S/1.00 PEN)
-- **Decisiones NO_BET registradas**: `85`
+- **Decisiones NO_BET registradas**: `93`
 - **Resultados pendientes globales**: `5`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
@@ -28,14 +28,14 @@ simulation_only: true
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- |
 | `WAS @ OKC` | `moneyline` | **HOME** | — | 1.938 | 0.5160 | 0.6156 | +19.30% | `1xBet Perú [T-6H Peru]` |
 | `BKN @ ATL` | `moneyline` | **HOME** | — | 1.938 | 0.5160 | 0.5846 | +13.29% | `1xBet Perú [T-6H Peru]` |
+| `PHI @ CHI` | `moneyline` | **HOME** | — | 3.680 | 0.2717 | 0.2897 | +6.59% | `Draft Kings` |
 | `PHI @ CHI` | `moneyline` | **HOME** | — | 3.633 | 0.2753 | 0.2920 | +6.09% | `1xBet Perú [T-6H Peru]` |
 | `PHI @ CHI` | `total_points` | **UNDER** | 238.5 | 1.885 | 0.5305 | 0.5616 | +5.86% | `DraftKings` |
+| `PHI @ CHI` | `total_points` | **UNDER** | 238.5 | 1.885 | 0.5305 | 0.5616 | +5.86% | `Draft Kings` |
 | `PHI @ CHI` | `total_points` | **UNDER** | 238.5 | 1.885 | 0.5305 | 0.5615 | +5.85% | `DraftKings` |
 | `ORL @ GSW` | `moneyline` | **HOME** | — | 1.938 | 0.5160 | 0.5449 | +5.61% | `1xBet Perú [T-6H Peru]` |
 | `LAL @ DET` | `moneyline` | **HOME** | — | 1.758 | 0.5690 | 0.6002 | +5.50% | `DraftKings` |
 | `LAL @ DET` | `moneyline` | **HOME** | — | 1.758 | 0.5690 | 0.6002 | +5.50% | `Draft Kings` |
-| `PHI @ CHI` | `moneyline` | **HOME** | — | 3.560 | 0.2809 | 0.2960 | +5.36% | `DraftKings` |
-| `HOU @ PHX` | `moneyline` | **AWAY** | — | 1.938 | 0.5160 | 0.5400 | +4.65% | `1xBet Perú [T-6H Peru]` |
 
 ## 4. Apuestas Simuladas (Paper Trading S/100 PEN) y Resultados Pendientes
 
