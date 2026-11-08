@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 105 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
-  "indexed_documents_count": 105,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "indexed_documents_count": 124,
   "top_retrieved_context": [
+    {
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Tobe Awaka F Nov 8 Day-To-Day Nov 7: Awaka (knee) is questionable for Sundays' game against the 76ers.",
+      "relevance_score": 0.2302,
+      "captured_at": "2026-11-08T21:29:26Z"
+    },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "UTA Keyonte George (PG) Day To Day (Illness): George is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
-      "relevance_score": 0.253,
+      "relevance_score": 0.2271,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "UTA Lauri Markkanen (PF) Day To Day (Wrist): Markkanen is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
-      "relevance_score": 0.2489,
+      "relevance_score": 0.2229,
       "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
-      "relevance_score": 0.2131,
+      "relevance_score": 0.2066,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
-      "relevance_score": 0.208,
+      "relevance_score": 0.2018,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
-      "relevance_score": 0.1982,
+      "relevance_score": 0.1963,
       "captured_at": "2026-11-07"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Saturday's (Nov. 7) game against the Wizards.",
-      "relevance_score": 0.1635,
-      "captured_at": "2026-11-08"
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 7: Diabate (quadriceps) has been ruled out for Friday's game against Boston, according to the Hornets' official injury report.",
+      "relevance_score": 0.1863,
+      "captured_at": "2026-11-08T21:29:26Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Saturday's (Nov. 7) game against the Wizards.",
-      "relevance_score": 0.1625,
-      "captured_at": "2026-11-08"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis did not play on Saturday's (Nov. 7) game against the Thunder.",
-      "relevance_score": 0.1567,
-      "captured_at": "2026-11-08"
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Mitchell Robinson C Nov 8 Day-To-Day Nov 8: Robinson (illness) is questionable for Sunday's game versus Milwaukee, Bobby Krivitsky of Forbes.com reports.",
+      "relevance_score": 0.1844,
+      "captured_at": "2026-11-08T21:29:26Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

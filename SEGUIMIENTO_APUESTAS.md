@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-08 16:16 (Hora Perú UTC-5)` (`2026-11-08T21:16:27Z`)
+- **Última actualización**: `2026-11-08 16:29 (Hora Perú UTC-5)` (`2026-11-08T21:29:33Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/104.29 PEN`** (`+4.29 PEN`)
 - **ROI Actual**: `+3.52%` | **Yield Actual**: `+3.52%` | **CLV Promedio**: `+1.17%` | **Max Drawdown**: `0.00%` | **Apuestas en espera**: `3` (`S/4.00 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
@@ -92,7 +92,7 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 - **¿Qué está apostando el bot?**: **Gana Miami Heat (MIA - Visita)** en el mercado `Moneyline (Ganador)`
 - **Cuota Tomada vs Cuota Justa**: **`1.917`** en *1xBet Perú [T-6H Peru]* vs Cuota Justa del Modelo **`1.869`** *(Ventaja Matemática EV: `+2.62%`)*
 - **Stake y Ganancia Potencial**: Stake **`S/2.00 PEN`** → Ganancia neta potencial: **`+S/1.83 PEN`** *(Retorno total: `S/3.83 PEN`)*
-- **Probabilidades**: Modelo Calibrado **`53.5%`** vs Probabilidad Implícita Limpia Casa **`70.4%`**
+- **Probabilidades**: Modelo Calibrado **`53.5%`** vs Probabilidad Implícita Limpia Casa **`71.6%`**
 - **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `SAC -3.8 pts` | Total esperado **`235.1 pts`** *(Rango 80% Conformal: `212 – 259 pts` | Prob. Prórroga: `8.2%` | Prob. Paliza: `11.5%`)*
 - **Estadísticas Clave Tomadas en Cuenta**:
   - **Rating Elo**: `SAC 1350` vs `MIA 1472` | **Eficiencia Neta (Off/Def)**: `SAC (111.3/118.5)` vs `MIA (116.9/116.9)` (`Dif: -7.3 pts/100`)
@@ -103,13 +103,13 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Hora (Perú) | Partido (`Visita @ Local`) | Cuotas Ganador (`Local / Visita`) | Línea Total (`O/U`) | Proyección Modelo (`Margen / Total`) | Estadísticas Clave (`Elo`, `NetRtg`, `Descanso`, `Viaje`) | ¿Qué Hace el Bot y Por Qué? |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `2026-11-08 15:30` | **Philadelphia 76ers @ Chicago Bulls (PHI @ CHI)** | Local **4.350** / Visita **1.315** *(RETAbet Perú [T-6H Peru])* | **238.5** (`O 1.95` / `U 1.91`) | **PHI -3.0 pts** (Prob Local `39.6%`) · Total **229.7 pts** | Elo `1370/1547` · Net `-6.4` · Pace `99.4` · Desc `3d/1d` · Viaje `-404 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
+| `2026-11-08 15:30` | **Philadelphia 76ers @ Chicago Bulls (PHI @ CHI)** | Local **4.350** / Visita **1.315** *(RETAbet Perú [T-6H Peru])* | **238.5** (`O 1.95` / `U 1.91`) | **PHI -2.8 pts** (Prob Local `39.9%`) · Total **229.7 pts** | Elo `1370/1547` · Net `-6.1` · Pace `99.4` · Desc `3d/1d` · Viaje `-404 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
 | `2026-11-08 18:00` | **Los Angeles Lakers @ Detroit Pistons (LAL @ DET)** | Local **1.758** / Visita **3.170** *(Draft Kings)* | **222.5** (`O 1.94` / `U 1.95`) | **DET -6.8 pts** (Prob Local `71.7%`) · Total **220.4 pts** | Elo `1647/1597` · Net `+2.9` · Pace `98.7` · Desc `3d/1d` · Viaje `+1980 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
 | `2026-11-08 19:00` | **Utah Jazz @ Minnesota Timberwolves (UTA @ MIN)** | Local **1.957** / Visita **6.133** *(Pinnacle (Perú Sharp) [T-6H Peru])* | **222.5** (`O 1.95` / `U 1.93`) | **MIN -14.7 pts** (Prob Local `89.5%`) · Total **227.1 pts** | Elo `1617/1296` · Net `+13.1` · Pace `98.4` · Desc `2d/2d` · Viaje `-190 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
 | `2026-11-08 19:30` | **Brooklyn Nets @ Dallas Mavericks (BKN @ DAL)** | Local **1.957** / Visita **4.200** *(Pinnacle (Perú Sharp) [T-6H Peru])* | **222.5** (`O 1.94` / `U 1.94`) | **DAL -7.7 pts** (Prob Local `74.8%`) · Total **220.3 pts** | Elo `1433/1340` · Net `+4.5` · Pace `98.9` · Desc `2d/1d` · Viaje `+720 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
 | `2026-11-08 20:00` | **Boston Celtics @ Milwaukee Bucks (BOS @ MIL)** | Local **6.520** / Visita **1.957** *(Draft Kings)* | **222.5** (`O 1.91` / `U 1.95`) | **BOS -9.1 pts** (Prob Local `22.8%`) · Total **221.2 pts** | Elo `1356/1619` · Net `-12.2` · Pace `99.2` · Desc `2d/2d` · Viaje `+660 mi` | **🛡️ NO APOSTAR (Pass)** — _Bloqueado por filtro de riesgo/anclaje de mercado (dispersión alta o favorito/underdog fuera de rango seguro)._ |
 | `2026-11-08 21:00` | **New Orleans Pelicans @ LA Clippers (NOP @ LAC)** | Local **2.030** / Visita **1.957** *(Pinnacle (Perú Sharp) [T-6H Peru])* | **226.5** (`O 1.93` / `U 1.93`) | **LAC -3.2 pts** (Prob Local `63.6%`) · Total **227.6 pts** | Elo `1470/1431` · Net `-0.5` · Pace `99.7` · Desc `4d/2d` · Viaje `+1674 mi` | **🎯 APOSTADO: Gana LA Clippers (LAC - Local) @ 1.917 (1xBet Perú [T-6H Peru]) | Stake S/2.00 (EV +4.03%)** — _Visita (New Orleans Pelicans) viaja +1674 millas más · Eficiencia neta favorable (New Orleans Pelicans [NOP] +0.5 pts/100) · Cuota 1.917 en 1xBet Perú [T-6H Peru] supera la cuota justa del modelo (1.842)._ |
-| `2026-11-08 21:00` | **Miami Heat @ Sacramento Kings (MIA @ SAC)** | Local **4.660** / Visita **1.957** *(RETAbet Perú [T-6H Peru])* | **238.5** (`O 1.94` / `U 1.94`) | **MIA -3.8 pts** (Prob Local `39.2%`) · Total **235.1 pts** | Elo `1350/1472` · Net `-7.3` · Pace `100.7` · Desc `2d/3d` · Viaje `+74 mi` | **🎯 APOSTADO: Gana Miami Heat (MIA - Visita) @ 1.917 (1xBet Perú [T-6H Peru]) | Stake S/2.00 (EV +2.62%)** — _Eficiencia neta favorable (Miami Heat [MIA] +7.3 pts/100) · Cuota 1.917 en 1xBet Perú [T-6H Peru] supera la cuota justa del modelo (1.869)._ |
+| `2026-11-08 21:00` | **Miami Heat @ Sacramento Kings (MIA @ SAC)** | Local **4.940** / Visita **1.957** *(RETAbet Perú [T-6H Peru])* | **238.5** (`O 1.94` / `U 1.94`) | **MIA -3.8 pts** (Prob Local `39.2%`) · Total **235.1 pts** | Elo `1350/1472` · Net `-7.3` · Pace `100.7` · Desc `2d/3d` · Viaje `+74 mi` | **🎯 APOSTADO: Gana Miami Heat (MIA - Visita) @ 1.917 (1xBet Perú [T-6H Peru]) | Stake S/2.00 (EV +2.62%)** — _Eficiencia neta favorable (Miami Heat [MIA] +7.3 pts/100) · Cuota 1.917 en 1xBet Perú [T-6H Peru] supera la cuota justa del modelo (1.869)._ |
 | `2026-11-09 19:00` | **Los Angeles Lakers @ Atlanta Hawks (LAL @ ATL)** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **LAL -1.3 pts** (Prob Local `47.2%`) · Total **229.7 pts** | Elo `1537/1597` · Net `-3.1` · Pace `99.6` · Desc `2d/3d` · Viaje `+1934 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
 | `2026-11-09 19:00` | **Cleveland Cavaliers @ Charlotte Hornets (CLE @ CHA)** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **CLE -2.8 pts** (Prob Local `43.2%`) · Total **220.9 pts** | Elo `1465/1564` · Net `-6.2` · Pace `98.3` · Desc `3d/2d` · Viaje `+436 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
 | `2026-11-09 19:00` | **Washington Wizards @ Detroit Pistons (WAS @ DET)** | ⏳ *Sin cuotas publicadas* | Línea est. `228.5` | **DET -14.9 pts** (Prob Local `89.6%`) · Total **220.5 pts** | Elo `1647/1344` · Net `+12.0` · Pace `98.1` · Desc `5d/2d` · Viaje `+909 mi` | **⏳ SIN CUOTAS AÚN** — _Las casas de apuestas aún no publican línea pre-partido verificada._ |
@@ -154,7 +154,7 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 - **Tasa de Acierto (Win Rate)**: **`33.3%`** (`15G - 30P - 0E`)
 - **ROI Acumulado en Props**: **`-36.67%`** | **Total Apostado**: `S/157.50 PEN`
 - **Brier Score (Calibración)**: `0.2936` | **Cobertura Conformal**: `33.3%`
-- **Total de Picks Registrados**: `186` (`141` en espera / `45` liquidados)
+- **Total de Picks Registrados**: `192` (`147` en espera / `45` liquidados)
 
 ### 📊 Desglose de Rendimiento por Categoría de Prop
 

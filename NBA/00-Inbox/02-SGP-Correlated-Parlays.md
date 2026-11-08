@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-08T21:16:25Z
+date_generated: 2026-11-08T21:29:31Z
 dashboard_type: retabet_sgp_copula_v8
 ---
 # 🎰 Apuestas Correlacionadas SGP (Crea tu Apuesta — RETAbet Perú)

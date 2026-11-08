@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-08T21:16:25Z
+date_generated: 2026-11-08T21:29:31Z
 status: PAPER_TRADING_ACTIVE
 bankroll_initial: 100.00
 current_bankroll_pen: 99.97
@@ -11,7 +11,7 @@ settled_bets: 27
 ---
 # NBA Betting Intelligence — Inbox Operativo
 
-- **Última sincronización**: `2026-11-08T21:16:25Z`
+- **Última sincronización**: `2026-11-08T21:29:31Z`
 - **Bankroll virtual actual**: `S/99.97 PEN`
 - **Dictamen del auditor**: `REMAIN_IN_PAPER_TRADING`
 - **Dashboard Cuantitativo DataviewJS**: [[01-Dataview-Quant-Dashboard]]
