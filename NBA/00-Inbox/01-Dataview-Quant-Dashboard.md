@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-08T23:46:05Z
+date_generated: 2026-11-08T23:59:51Z
 dashboard_type: obsidian_dataview_quant_v8
 current_bankroll_pen: 99.97
 roi_pct: -0.10
