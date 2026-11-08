@@ -82,9 +82,9 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 - **Probabilidades**: Modelo Calibrado **`54.5%`** vs Probabilidad Implícita Limpia Casa **`63.6%`**
 - **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `GSW +5.0 pts` | Total esperado **`221.8 pts`** *(Rango 80% Conformal: `200 – 245 pts` | Prob. Prórroga: `8.4%` | Prob. Paliza: `11.6%`)*
 - **Estadísticas Clave Tomadas en Cuenta**:
-  - **Rating Elo**: `GSW 1507` vs `ORL 1486` | **Eficiencia Neta (Off/Def)**: `GSW (114.7/112.6)` vs `ORL (110.4/112.9)` (`Dif: +4.6 pts/100`)
+  - **Rating Elo**: `GSW 1507` vs `ORL 1486` | **Eficiencia Neta (Off/Def)**: `GSW (114.7/112.6)` vs `ORL (110.4/112.9)` (`Dif: +4.7 pts/100`)
   - **Ritmo (Pace)**: `99.4 posesiones` | **Descanso**: `GSW 2d` vs `ORL 2d` | **Viaje Geodésico (Millas Haversine)**: `Dif. +651 millas` (`1 husos horarios`)
-- **Por qué apostó el modelo**: _Visita (Orlando Magic) viaja +651 millas más · Eficiencia neta favorable (Golden State Warriors [GSW] +4.6 pts/100) · Cuota 1.938 en 1xBet Perú [T-6H Peru] supera la cuota justa del modelo (1.835)._
+- **Por qué apostó el modelo**: _Visita (Orlando Magic) viaja +651 millas más · Eficiencia neta favorable (Golden State Warriors [GSW] +4.7 pts/100) · Cuota 1.938 en 1xBet Perú [T-6H Peru] supera la cuota justa del modelo (1.835)._
 
 #### 🎯 **Houston Rockets @ Phoenix Suns (HOU @ PHX)** — `2026-11-07 21:00 Hora Perú`
 - **¿Qué está apostando el bot?**: **Gana Houston Rockets (HOU - Visita)** en el mercado `Moneyline (Ganador)`

@@ -1,8 +1,8 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 125 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
   "indexed_documents_count": 125,
   "top_retrieved_context": [
     {
@@ -12,7 +12,7 @@
       "captured_at": "2026-11-06"
     },
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Noah Clowney F Nov 7 Day-To-Day Nov 7: Clowney is listed as questionable for Saturday's game against the Hawks due to an illness.",
       "relevance_score": 0.2584,
       "captured_at": "2026-11-08T00:14:50Z"
@@ -30,7 +30,7 @@
       "captured_at": "2026-11-07"
     },
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Jalen Smith F Nov 8 Day-To-Day Nov 4: Smith (hand) won't return to Wednesday's game against the Knicks.",
       "relevance_score": 0.21,
       "captured_at": "2026-11-08T00:14:50Z"
