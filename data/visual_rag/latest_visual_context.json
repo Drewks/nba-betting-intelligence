@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 125,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 105 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+  "indexed_documents_count": 105,
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Luka Dončić (PG) Day To Day (Back): Don?i? is Questionable for Sunday's (Nov. 8) game against the Pistons.",
-      "relevance_score": 0.2394,
-      "captured_at": "2026-11-07"
+      "snippet": "UTA Keyonte George (PG) Day To Day (Illness): George is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
+      "relevance_score": 0.253,
+      "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Nic Claxton (C) Day To Day (Hamstring): Claxton is Questionable for Sunday's (Nov. 8) game against the 76ers.",
-      "relevance_score": 0.2381,
-      "captured_at": "2026-11-07"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Tobe Awaka (PF) Day To Day (Knee): Awaka is Questionable for Sunday's (Nov. 8) game against the 76ers.",
-      "relevance_score": 0.2328,
-      "captured_at": "2026-11-07"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAC Keegan Murray (PF) Day To Day (Ankle): Murray is Questionable for Sunday's (Nov. 8) game against the Heat.",
-      "relevance_score": 0.2256,
+      "snippet": "UTA Lauri Markkanen (PF) Day To Day (Wrist): Markkanen is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
+      "relevance_score": 0.2489,
       "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
-      "relevance_score": 0.2245,
+      "relevance_score": 0.2131,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
-      "relevance_score": 0.2208,
+      "relevance_score": 0.208,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIN Joan Beringer (PF) Day To Day (Nose): Beringer is Questionable for Sunday's (Nov. 8) game against the Jazz.",
-      "relevance_score": 0.2176,
+      "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller did not return on Friday's (Nov. 6) game against the Celtics.",
+      "relevance_score": 0.1982,
       "captured_at": "2026-11-07"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "UTA Lauri Markkanen (PF) Day To Day (Wrist): Markkanen is Questionable for Sunday's (Nov. 8) game against the Timberwolves.",
-      "relevance_score": 0.2131,
-      "captured_at": "2026-11-07"
+      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Saturday's (Nov. 7) game against the Wizards.",
+      "relevance_score": 0.1635,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Saturday's (Nov. 7) game against the Wizards.",
+      "relevance_score": 0.1625,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis did not play on Saturday's (Nov. 7) game against the Thunder.",
+      "relevance_score": 0.1567,
+      "captured_at": "2026-11-08"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
