@@ -80,6 +80,69 @@ class DatabaseManager:
                         conn.executescript(ddl)
                 conn.execute("PRAGMA foreign_keys = ON;")
 
+            # Auto-migrate legacy player_prop_picks table if it lacks net_profit_pen or has old CHECK constraint
+            p_row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='player_prop_picks'"
+            ).fetchone()
+            if p_row and "net_profit_pen" not in str(p_row["sql"]):
+                conn.execute("PRAGMA foreign_keys = OFF;")
+                conn.executescript(
+                    """
+                    DROP TRIGGER IF EXISTS prevent_settled_prop_tampering;
+                    DROP TRIGGER IF EXISTS prevent_prop_delete;
+                    CREATE TABLE player_prop_picks_v2 (
+                        prop_id TEXT PRIMARY KEY,
+                        game_id TEXT NOT NULL,
+                        matchday_date TEXT NOT NULL,
+                        player_name TEXT NOT NULL,
+                        team TEXT NOT NULL,
+                        prop_category TEXT NOT NULL CHECK (prop_category IN ('PTS', 'REB', 'AST', 'PRA', '3PM', 'PR', 'PA', 'RA', 'SGP')),
+                        line_value REAL NOT NULL,
+                        selection TEXT NOT NULL CHECK (selection IN ('OVER', 'UNDER', 'SGP', 'HOME', 'AWAY')),
+                        decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+                        projected_mean REAL NOT NULL,
+                        projected_std REAL NOT NULL,
+                        model_prob REAL NOT NULL,
+                        conformal_p_low REAL NOT NULL,
+                        conformal_p_high REAL NOT NULL,
+                        ev_pct REAL NOT NULL,
+                        ev_lower_bound_pct REAL NOT NULL,
+                        stake_pen REAL NOT NULL DEFAULT 1.00 CHECK (stake_pen > 0.0),
+                        kelly_stake_pen REAL NOT NULL,
+                        usage_bump_pct REAL NOT NULL DEFAULT 0.0,
+                        rationale TEXT NOT NULL,
+                        emitted_at TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+                        actual_stat REAL,
+                        net_profit_pen REAL,
+                        bankroll_after_pen REAL,
+                        actual_result_summary TEXT,
+                        settled_at TEXT,
+                        FOREIGN KEY (game_id) REFERENCES games(game_id)
+                    );
+                    INSERT INTO player_prop_picks_v2 (
+                        prop_id, game_id, matchday_date, player_name, team, prop_category,
+                        line_value, selection, decimal_odds, projected_mean, projected_std,
+                        model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
+                        stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at,
+                        status, actual_stat, settled_at
+                    )
+                    SELECT
+                        prop_id, game_id, matchday_date, player_name, team, prop_category,
+                        line_value, selection, decimal_odds, projected_mean, projected_std,
+                        model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
+                        COALESCE(kelly_stake_pen, 1.00), kelly_stake_pen, usage_bump_pct, rationale, emitted_at,
+                        status, actual_stat, settled_at
+                    FROM player_prop_picks;
+                    DROP TABLE player_prop_picks;
+                    ALTER TABLE player_prop_picks_v2 RENAME TO player_prop_picks;
+                    """
+                )
+                for ddl in DDL_STATEMENTS:
+                    if "prevent_settled_prop_tampering" in ddl or "prevent_prop_delete" in ddl:
+                        conn.executescript(ddl)
+                conn.execute("PRAGMA foreign_keys = ON;")
+
     def fetch_all(self, query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
         with self.connect() as conn:
             cur = conn.execute(query, params)

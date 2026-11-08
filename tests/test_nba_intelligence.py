@@ -2368,3 +2368,215 @@ def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path)
     assert len(gen_results) >= 1
     types = {r.get("type") for r in gen_results}
     assert "INDIVIDUAL_PROP" in types or "RETABET_SGP" in types
+
+
+def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
+    """
+    Test 41: Dedicated Paper Trading for Player Props & RETAbet SGP:
+    1. Bet placement & persistence in SQLite `player_prop_picks`.
+    2. Accurate settlement of OVER, UNDER, and PUSH individual props.
+    3. Accurate settlement of Same-Game Parlays (SGP) with joint copula probability.
+    4. Anti-tampering immutability triggers (prevent update/delete on settled props).
+    5. Double-settlement prevention.
+    6. Performance metrics: Win Rate %, Net Profit PEN, ROI %, Brier Score calibration.
+    7. Automated batch settlement with game boxscores.
+    """
+    import sqlite3
+    import pytest
+    from src.paper_trading.engine import DoubleSettlementError, PaperTradingEngine
+    from src.storage.db import DatabaseManager
+
+    db = DatabaseManager(tmp_path / "props_pt_test.sqlite3")
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0)
+
+    # Insert a test game
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, home_score, away_score, features_available_at, source_provider, ingested_at
+        ) VALUES ('G_TEST_PROPS_1', '2026', '2026-11-08', '2026-11-08T20:00:00Z', 'LAL', 'DEN',
+                  'FINAL', 112, 108, '2026-11-08T19:00:00Z', 'ESPN', '2026-11-08T19:00:00Z')
+        """
+    )
+
+    # 1. Register Props:
+    # Prop 1: LeBron James PTS OVER 25.5 @ 1.90, stake S/ 2.00
+    prop1_id = engine.record_player_prop_pick({
+        "prop_id": "PROP_LEBRON_PTS",
+        "game_id": "G_TEST_PROPS_1",
+        "matchday_date": "2026-11-08",
+        "player_name": "LeBron James",
+        "team": "LAL",
+        "prop_category": "PTS",
+        "line_value": 25.5,
+        "selection": "OVER",
+        "decimal_odds": 1.90,
+        "projected_mean": 27.5,
+        "projected_std": 6.0,
+        "model_prob": 0.62,
+        "conformal_p_low": 0.52,
+        "conformal_p_high": 0.75,
+        "ev_pct": 17.8,
+        "stake_pen": 2.00,
+        "kelly_stake_pen": 2.00,
+    })
+
+    # Prop 2: Nikola Jokic AST UNDER 9.5 @ 1.85, stake S/ 2.00
+    prop2_id = engine.record_player_prop_pick({
+        "prop_id": "PROP_JOKIC_AST",
+        "game_id": "G_TEST_PROPS_1",
+        "matchday_date": "2026-11-08",
+        "player_name": "Nikola Jokic",
+        "team": "DEN",
+        "prop_category": "AST",
+        "line_value": 9.5,
+        "selection": "UNDER",
+        "decimal_odds": 1.85,
+        "projected_mean": 8.5,
+        "projected_std": 3.0,
+        "model_prob": 0.60,
+        "conformal_p_low": 0.50,
+        "conformal_p_high": 0.72,
+        "ev_pct": 11.0,
+        "stake_pen": 2.00,
+        "kelly_stake_pen": 2.00,
+    })
+
+    # Prop 3: Anthony Davis REB OVER 12.0 @ 1.90 (PUSH scenario), stake S/ 1.00
+    prop3_id = engine.record_player_prop_pick({
+        "prop_id": "PROP_AD_REB",
+        "game_id": "G_TEST_PROPS_1",
+        "matchday_date": "2026-11-08",
+        "player_name": "Anthony Davis",
+        "team": "LAL",
+        "prop_category": "REB",
+        "line_value": 12.0,
+        "selection": "OVER",
+        "decimal_odds": 1.90,
+        "projected_mean": 13.0,
+        "projected_std": 3.5,
+        "model_prob": 0.58,
+        "conformal_p_low": 0.48,
+        "conformal_p_high": 0.68,
+        "ev_pct": 10.2,
+        "stake_pen": 1.00,
+        "kelly_stake_pen": 1.00,
+    })
+
+    # Prop 4: SGP Parlay: LAL Gana + LeBron PTS OVER 25.5 @ 3.50, stake S/ 2.00
+    sgp_id = engine.record_player_prop_pick({
+        "prop_id": "SGP_LAL_LEBRON",
+        "game_id": "G_TEST_PROPS_1",
+        "matchday_date": "2026-11-08",
+        "player_name": "LeBron James + LAL Gana",
+        "team": "LAL",
+        "prop_category": "SGP",
+        "line_value": 25.5,
+        "selection": "SGP",
+        "decimal_odds": 3.50,
+        "projected_mean": 0.0,
+        "projected_std": 0.0,
+        "model_prob": 0.38,
+        "conformal_p_low": 0.30,
+        "conformal_p_high": 0.46,
+        "ev_pct": 33.0,
+        "stake_pen": 2.00,
+        "kelly_stake_pen": 2.00,
+    })
+
+    # Verify initial metrics (all pending)
+    init_metrics = engine.get_player_props_performance_metrics()
+    assert init_metrics["total_picks"] == 4
+    assert init_metrics["pending_picks"] == 4
+    assert init_metrics["settled_picks"] == 0
+    assert init_metrics["current_props_bankroll_pen"] == 100.00
+
+    # 2. Settle Props:
+    settle_time = "2026-11-08T23:00:00Z"
+
+    # Prop 1: LeBron actual PTS = 28.0 > 25.5 -> WON! Net profit = 2.00 * (1.90 - 1) = +1.80
+    res1 = engine.settle_player_prop(prop1_id, actual_stat=28.0, game_status="FINAL", settled_at=settle_time)
+    assert res1["status"] == "WON"
+    assert round(res1["net_profit_pen"], 2) == 1.80
+    assert round(res1["bankroll_after_pen"], 2) == 101.80
+
+    # Prop 2: Jokic actual AST = 11.0 > 9.5 -> UNDER LOST! Net profit = -2.00
+    res2 = engine.settle_player_prop(prop2_id, actual_stat=11.0, game_status="FINAL", settled_at=settle_time)
+    assert res2["status"] == "LOST"
+    assert round(res2["net_profit_pen"], 2) == -2.00
+    assert round(res2["bankroll_after_pen"], 2) == 99.80
+
+    # Prop 3: Davis actual REB = 12.0 == 12.0 -> PUSH! Net profit = 0.00
+    res3 = engine.settle_player_prop(prop3_id, actual_stat=12.0, game_status="FINAL", settled_at=settle_time)
+    assert res3["status"] == "PUSH"
+    assert round(res3["net_profit_pen"], 2) == 0.00
+    assert round(res3["bankroll_after_pen"], 2) == 99.80
+
+    # Prop 4: SGP Hit: actual_stat = 1.0 -> WON! Net profit = 2.00 * (3.50 - 1) = +5.00
+    res4 = engine.settle_player_prop(sgp_id, actual_stat=1.0, game_status="FINAL", settled_at=settle_time)
+    assert res4["status"] == "WON"
+    assert round(res4["net_profit_pen"], 2) == 5.00
+    assert round(res4["bankroll_after_pen"], 2) == 104.80
+
+    # 3. Test Double Settlement Prevention
+    with pytest.raises(DoubleSettlementError):
+        engine.settle_player_prop(prop1_id, actual_stat=28.0, game_status="FINAL", settled_at=settle_time)
+
+    # 4. Test Anti-Tampering SQLite Immutability Triggers
+    with pytest.raises(sqlite3.IntegrityError, match="IMMUTABLE_VIOLATION"):
+        with db.connect() as conn:
+            conn.execute("UPDATE player_prop_picks SET line_value = 99.0 WHERE prop_id = ?", (prop1_id,))
+
+    with pytest.raises(sqlite3.IntegrityError, match="IMMUTABLE_VIOLATION"):
+        with db.connect() as conn:
+            conn.execute("DELETE FROM player_prop_picks WHERE prop_id = ?", (prop1_id,))
+
+    # 5. Test Performance Metrics post-settlement
+    final_metrics = engine.get_player_props_performance_metrics()
+    assert final_metrics["total_picks"] == 4
+    assert final_metrics["pending_picks"] == 0
+    assert final_metrics["settled_picks"] == 4
+    assert final_metrics["won_picks"] == 2
+    assert final_metrics["lost_picks"] == 1
+    assert final_metrics["push_picks"] == 1
+    assert 66.0 <= final_metrics["win_rate_pct"] <= 67.0
+    assert final_metrics["total_staked_pen"] == 6.00
+    assert round(final_metrics["total_net_profit_pen"], 2) == 4.80
+    assert round(final_metrics["current_props_bankroll_pen"], 2) == 104.80
+    assert final_metrics["roi_pct"] == 80.0
+    assert final_metrics["brier_score"] > 0.0
+    assert len(final_metrics["recent_settled"]) == 4
+
+    # 6. Test Automated Batch Boxscore Settlement
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, home_score, away_score, features_available_at, source_provider, ingested_at
+        ) VALUES ('G_TEST_PROPS_2', '2026', '2026-11-08', '2026-11-08T21:00:00Z', 'GSW', 'BOS',
+                  'FINAL', 105, 102, '2026-11-08T20:00:00Z', 'ESPN', '2026-11-08T20:00:00Z')
+        """
+    )
+    p_curry = engine.record_player_prop_pick({
+        "prop_id": "PROP_CURRY_3PM",
+        "game_id": "G_TEST_PROPS_2",
+        "matchday_date": "2026-11-08",
+        "player_name": "Stephen Curry",
+        "team": "GSW",
+        "prop_category": "3PM",
+        "line_value": 4.5,
+        "selection": "OVER",
+        "decimal_odds": 1.95,
+        "model_prob": 0.55,
+        "stake_pen": 1.00,
+    })
+    batch_boxscores = {
+        "G_TEST_PROPS_2": {
+            "Stephen Curry": {"PTS": 32.0, "3PM": 6.0, "AST": 7.0, "REB": 5.0}
+        }
+    }
+    batch_res = engine.settle_pending_player_props(game_boxscores=batch_boxscores, settled_at="2026-11-08T23:59:00Z")
+    assert len(batch_res) == 1
+    assert batch_res[0]["status"] == "WON"
+    assert batch_res[0]["actual_stat"] == 6.0

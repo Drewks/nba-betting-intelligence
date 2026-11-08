@@ -122,6 +122,19 @@ def main() -> None:
         print("  [i] No se encontraron desajustes de Player Props que superen el umbral de EV en este momento.")
     print("=" * 80)
 
+    from src.paper_trading.engine import PaperTradingEngine
+    pt_engine = PaperTradingEngine(db=db)
+    pt_metrics = pt_engine.get_player_props_performance_metrics()
+    print("\n" + "=" * 80)
+    print("📈 SEGUIMIENTO AUDITADO DE PAPER TRADING (PROPS & SGP RETABET)")
+    print("=" * 80)
+    print(f"Banca Props Actual : S/ {pt_metrics['current_props_bankroll_pen']:.2f} PEN (P&L: {pt_metrics['total_net_profit_pen']:+.2f} PEN)")
+    print(f"Tasa de Acierto    : {pt_metrics['win_rate_pct']:.1f}% ({pt_metrics['won_picks']} Ganadas / {pt_metrics['lost_picks']} Perdidas / {pt_metrics['push_picks']} Empates)")
+    print(f"ROI Acumulado      : {pt_metrics['roi_pct']:+.2f}% | Total Apostado: S/ {pt_metrics['total_staked_pen']:.2f} PEN")
+    print(f"Calibración Brier  : {pt_metrics['brier_score']:.4f} | Cobertura Conformal: {pt_metrics['conformal_coverage_pct']:.1f}%")
+    print(f"Picks Totales      : {pt_metrics['total_picks']} ({pt_metrics['pending_picks']} en espera / {pt_metrics['settled_picks']} liquidados)")
+    print("=" * 80)
+
 
 if __name__ == "__main__":
     main()

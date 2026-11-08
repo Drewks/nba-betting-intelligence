@@ -478,6 +478,57 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             "referee_hca_adj": ref_hca_adj,
         }
 
+    def fetch_player_boxscores(self, event_id: str) -> dict[str, dict[str, float]]:
+        """
+        Fetches individual player boxscore statistics from ESPN game summary.
+        Returns a dict mapping canonical/display player names to their stats:
+        { "LeBron James": {"PTS": 28.0, "REB": 8.0, "AST": 10.0, "3PM": 3.0, "PRA": 46.0, ...} }
+        """
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}"
+        player_stats: dict[str, dict[str, float]] = {}
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return player_stats
+
+        for p_team in data.get("boxscore", {}).get("players") or []:
+            for stat_cat in p_team.get("statistics") or []:
+                labels = [str(l).upper() for l in stat_cat.get("labels") or []]
+                for ath in stat_cat.get("athletes") or []:
+                    ath_name = (ath.get("athlete") or {}).get("displayName")
+                    if not ath_name:
+                        continue
+                    stats_vals = ath.get("stats") or []
+                    val_map: dict[str, float] = {}
+                    for lbl, val_str in zip(labels, stats_vals):
+                        try:
+                            if lbl in ("3PT", "3PM") and "-" in str(val_str):
+                                val_map["3PM"] = float(str(val_str).split("-")[0])
+                            elif lbl in ("FG", "FGM-A") and "-" in str(val_str):
+                                val_map["FGM"] = float(str(val_str).split("-")[0])
+                            elif lbl in ("FT", "FTM-A") and "-" in str(val_str):
+                                val_map["FTM"] = float(str(val_str).split("-")[0])
+                            else:
+                                val_map[lbl] = float(val_str)
+                        except (ValueError, TypeError):
+                            pass
+                    pts = val_map.get("PTS", 0.0)
+                    reb = val_map.get("REB", 0.0)
+                    ast = val_map.get("AST", 0.0)
+                    threedm = val_map.get("3PM", val_map.get("3PT", 0.0))
+                    val_map["PTS"] = pts
+                    val_map["REB"] = reb
+                    val_map["AST"] = ast
+                    val_map["3PM"] = threedm
+                    val_map["PRA"] = pts + reb + ast
+                    val_map["PR"] = pts + reb
+                    val_map["PA"] = pts + ast
+                    val_map["RA"] = reb + ast
+                    player_stats[ath_name] = val_map
+        return player_stats
+
     def fetch_games_and_odds(
         self,
         date_str: str | None = None,

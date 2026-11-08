@@ -270,6 +270,7 @@ def generate_interactive_html_dashboard(
     html_output_path: str | Path,
     peru_str: str,
     player_props: list[dict[str, Any]] | None = None,
+    props_paper_trading: dict[str, Any] | None = None,
 ) -> str:
     """
     Generates a standalone, interactive HTML dashboard (`reports/dashboard.html`) displaying:
@@ -316,6 +317,19 @@ def generate_interactive_html_dashboard(
         "real_bets": espn_real_bets,
         "player_props": player_props or [],
     }
+    if props_paper_trading is None:
+        try:
+            db_p = Path(html_output_path).resolve().parent.parent / "data" / "nba_intelligence.sqlite3"
+            if db_p.exists():
+                from src.paper_trading.engine import PaperTradingEngine
+                from src.storage.db import DatabaseManager
+                pt_db = DatabaseManager(db_p)
+                pt_eng = PaperTradingEngine(db=pt_db)
+                props_paper_trading = pt_eng.get_player_props_performance_metrics()
+        except Exception:
+            props_paper_trading = {}
+
+    payload["props_paper_trading"] = props_paper_trading or {}
     data_json = json.dumps(payload, ensure_ascii=False)
     team_dict_json = get_teams_json_for_frontend()
     peru_books_json = get_peru_sportsbooks_json_for_frontend()
@@ -530,6 +544,35 @@ def generate_interactive_html_dashboard(
         </div>
       </div>
 
+      <!-- PROPS PAPER TRADING KPI RIBBON -->
+      <div id="props-pt-summary" class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 text-center">
+          <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground)]">Banca Props (PEN)</div>
+          <div class="text-lg font-black mt-0.5 text-purple-400" id="pt-props-bank">S/ 100.00</div>
+          <div class="text-[10px] text-[var(--muted-foreground)]">Inicial: S/ 100.00</div>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 text-center">
+          <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground)]">Tasa de Acierto</div>
+          <div class="text-lg font-black mt-0.5 text-emerald-400" id="pt-props-winrate">0.0%</div>
+          <div class="text-[10px] text-[var(--muted-foreground)]" id="pt-props-record">0G - 0P - 0E</div>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 text-center">
+          <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground)]">Beneficio Neto / ROI</div>
+          <div class="text-lg font-black mt-0.5 text-emerald-400" id="pt-props-pnl">+S/ 0.00 (0.0%)</div>
+          <div class="text-[10px] text-[var(--muted-foreground)]" id="pt-props-staked">Staked: S/ 0.00</div>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 text-center">
+          <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground)]">Brier Score Props</div>
+          <div class="text-lg font-black mt-0.5 text-blue-400" id="pt-props-brier">0.0000</div>
+          <div class="text-[10px] text-[var(--muted-foreground)]">Calibración Prob.</div>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 text-center">
+          <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground)]">Picks / En Espera</div>
+          <div class="text-lg font-black mt-0.5 text-amber-400" id="pt-props-counts">0 / 0</div>
+          <div class="text-[10px] text-[var(--muted-foreground)]">Auditoría Inmutable</div>
+        </div>
+      </div>
+
       <!-- CATEGORY PILL FILTER BAR -->
       <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         <button onclick="filterPropsCategory('ALL')" id="prop-filter-ALL" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-purple-600 text-white shadow-sm transition-all whitespace-nowrap">⚡ Todas (<span id="cnt-p-all">0</span>)</button>
@@ -542,6 +585,37 @@ def generate_interactive_html_dashboard(
       </div>
 
       <div id="props-container" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></div>
+
+      <!-- PROPS PAPER TRADING AUDIT HISTORY -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 space-y-3 mt-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-base font-bold">📜 Historial Auditado de Paper Trading (Props & SGP)</span>
+            <span class="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30">Garantía Inmutable SQLite</span>
+          </div>
+          <span class="text-xs text-[var(--muted-foreground)]" id="props-history-count">0 apuestas liquidadas</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                <th class="py-2.5 px-3">Fecha / Partido</th>
+                <th class="py-2.5 px-3">Jugador / Combinada</th>
+                <th class="py-2.5 px-3">Cat / Línea</th>
+                <th class="py-2.5 px-3">Pick</th>
+                <th class="py-2.5 px-3 text-right">Cuota</th>
+                <th class="py-2.5 px-3 text-right">Prob.</th>
+                <th class="py-2.5 px-3 text-right">EV (%)</th>
+                <th class="py-2.5 px-3 text-right">Stake</th>
+                <th class="py-2.5 px-3 text-center">Stat Real</th>
+                <th class="py-2.5 px-3 text-center">Estado</th>
+                <th class="py-2.5 px-3 text-right">Beneficio S/</th>
+              </tr>
+            </thead>
+            <tbody id="props-history-tbody" class="divide-y divide-[var(--border)] text-[11px]"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- TAB 4: STATS GUIDE & EV CALCULATOR -->
@@ -1254,6 +1328,63 @@ def generate_interactive_html_dashboard(
       if (document.getElementById('cnt-p-combos')) document.getElementById('cnt-p-combos').textContent = cntCombos;
       if (document.getElementById('cnt-p-sgp')) document.getElementById('cnt-p-sgp').textContent = cntSgp;
 
+      // Populate Paper Trading Metrics Ribbon
+      const pt = DASH_DATA.props_paper_trading || {{}};
+      const ptBank = document.getElementById('pt-props-bank');
+      if (ptBank) ptBank.textContent = 'S/ ' + (Number(pt.current_props_bankroll_pen || 100.0)).toFixed(2);
+      const ptWr = document.getElementById('pt-props-winrate');
+      if (ptWr) ptWr.textContent = (Number(pt.win_rate_pct || 0)).toFixed(1) + '%';
+      const ptRec = document.getElementById('pt-props-record');
+      if (ptRec) ptRec.textContent = `${{pt.won_picks || 0}}G - ${{pt.lost_picks || 0}}P - ${{pt.push_picks || 0}}E`;
+      const ptPnl = document.getElementById('pt-props-pnl');
+      if (ptPnl) {{
+        const net = Number(pt.total_net_profit_pen || 0);
+        const roi = Number(pt.roi_pct || 0);
+        ptPnl.textContent = `${{net >= 0 ? '+' : ''}}S/ ${{net.toFixed(2)}} (${{roi >= 0 ? '+' : ''}}${{roi.toFixed(1)}}%)`;
+        ptPnl.className = `text-lg font-black mt-0.5 ${{net >= 0 ? 'text-emerald-400' : 'text-rose-400'}}`;
+      }}
+      const ptStaked = document.getElementById('pt-props-staked');
+      if (ptStaked) ptStaked.textContent = 'Staked: S/ ' + (Number(pt.total_staked_pen || 0)).toFixed(2);
+      const ptBrier = document.getElementById('pt-props-brier');
+      if (ptBrier) ptBrier.textContent = (Number(pt.brier_score || 0)).toFixed(4);
+      const ptCounts = document.getElementById('pt-props-counts');
+      if (ptCounts) ptCounts.textContent = `${{pt.total_picks || 0}} / ${{pt.pending_picks || 0}}`;
+
+      // Populate Settled Props Audit Table
+      const histTbody = document.getElementById('props-history-tbody');
+      const histCount = document.getElementById('props-history-count');
+      const recentSettled = pt.recent_settled || [];
+      if (histCount) histCount.textContent = `${{recentSettled.length}} apuestas liquidadas`;
+      if (histTbody) {{
+        if (!recentSettled.length) {{
+          histTbody.innerHTML = `<tr><td colspan="11" class="py-4 text-center text-[var(--muted-foreground)]">No hay apuestas de props liquidadas aún en la base de datos inmutable.</td></tr>`;
+        }} else {{
+          histTbody.innerHTML = recentSettled.map(r => {{
+            const isWon = r.status === 'WON';
+            const isLost = r.status === 'LOST';
+            const badgeClass = isWon ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (isLost ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30');
+            const badgeText = isWon ? '✅ WON' : (isLost ? '❌ LOST' : (r.status === 'PUSH' ? '🔄 PUSH' : r.status));
+            const netNum = Number(r.net_profit_pen || 0);
+            const netClass = netNum > 0 ? 'text-emerald-400 font-bold' : (netNum < 0 ? 'text-rose-400 font-bold' : 'text-[var(--muted-foreground)]');
+            return `
+              <tr class="hover:bg-[var(--background)]/50 transition-colors">
+                <td class="py-2 px-3 font-mono text-[10px]">${{r.matchday_date}}<br/><span class="text-[var(--muted-foreground)]">${{r.game_id}}</span></td>
+                <td class="py-2 px-3 font-semibold">${{r.player_name}} <span class="text-[10px] text-[var(--muted-foreground)]">(${{r.team || 'NBA'}})</span></td>
+                <td class="py-2 px-3"><span class="px-1.5 py-0.5 rounded font-mono font-bold bg-[var(--background)] border border-[var(--border)]">${{r.prop_category}}</span> ${{Number(r.line_value || 0).toFixed(1)}}</td>
+                <td class="py-2 px-3 font-bold ${{r.selection === 'OVER' ? 'text-blue-400' : 'text-amber-400'}}">${{r.selection}}</td>
+                <td class="py-2 px-3 text-right font-mono font-semibold">${{Number(r.decimal_odds || 0).toFixed(2)}}</td>
+                <td class="py-2 px-3 text-right font-mono">${{(Number(r.model_prob || 0) * 100).toFixed(1)}}%</td>
+                <td class="py-2 px-3 text-right font-mono text-emerald-400">+${{Number(r.ev_pct || 0).toFixed(1)}}%</td>
+                <td class="py-2 px-3 text-right font-mono">S/ ${{Number(r.stake_pen || 1.0).toFixed(2)}}</td>
+                <td class="py-2 px-3 text-center font-mono font-bold text-purple-300">${{r.actual_stat !== null && r.actual_stat !== undefined ? Number(r.actual_stat).toFixed(1) : '—'}}</td>
+                <td class="py-2 px-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-black ${{badgeClass}}">${{badgeText}}</span></td>
+                <td class="py-2 px-3 text-right font-mono ${{netClass}}">${{netNum >= 0 ? '+' : ''}}S/ ${{netNum.toFixed(2)}}</td>
+              </tr>
+            `;
+          }}).join('');
+        }}
+      }}
+
       let filtered = allProps;
       if (currentPropCategory === 'PTS') filtered = allProps.filter(p => p.prop_category === 'PTS' && p.type !== 'RETABET_SGP' && !p.sgp_id);
       else if (currentPropCategory === 'REB') filtered = allProps.filter(p => p.prop_category === 'REB' && p.type !== 'RETABET_SGP' && !p.sgp_id);
@@ -1948,17 +2079,79 @@ def export_bets_and_tracking_dashboard(
             f"**S/{float(s['beneficio_neto_pen']):+.2f}** | `S/{float(s['bankroll_posterior_pen']):.2f}` |"
         )
 
+    # 4. Section for Player Props & SGP Paper Trading
+    try:
+        from src.paper_trading.engine import PaperTradingEngine
+        pt_eng = PaperTradingEngine(db=db)
+        props_metrics = pt_eng.get_player_props_performance_metrics()
+    except Exception:
+        props_metrics = {}
+
+    if props_metrics:
+        lines.extend([
+            "",
+            "---",
+            "",
+            "## 🎯 4. Seguimiento Oficial de Paper Trading — Player Props & SGP RETAbet V8",
+            "",
+            f"- **Banca Virtual de Props**: `S/100.00 PEN` (Inicial) → **`S/{props_metrics.get('current_props_bankroll_pen', 100.0):.2f} PEN`** (`{props_metrics.get('total_net_profit_pen', 0.0):+.2f} PEN`)",
+            f"- **Tasa de Acierto (Win Rate)**: **`{props_metrics.get('win_rate_pct', 0.0):.1f}%`** (`{props_metrics.get('won_picks', 0)}G - {props_metrics.get('lost_picks', 0)}P - {props_metrics.get('push_picks', 0)}E`)",
+            f"- **ROI Acumulado en Props**: **`{props_metrics.get('roi_pct', 0.0):+.2f}%`** | **Total Apostado**: `S/{props_metrics.get('total_staked_pen', 0.0):.2f} PEN`",
+            f"- **Brier Score (Calibración)**: `{props_metrics.get('brier_score', 0.0):.4f}` | **Cobertura Conformal**: `{props_metrics.get('conformal_coverage_pct', 100.0):.1f}%`",
+            f"- **Total de Picks Registrados**: `{props_metrics.get('total_picks', 0)}` (`{props_metrics.get('pending_picks', 0)}` en espera / `{props_metrics.get('settled_picks', 0)}` liquidados)",
+            "",
+            "### 📊 Desglose de Rendimiento por Categoría de Prop",
+            "",
+            "| Categoría | Liquidadas | Ganadas | Perdidas | Acierto (%) | Total Apostado (S/) | Beneficio Neto (S/) | ROI (%) |",
+            "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+        ])
+        for cat_k, cat_v in (props_metrics.get("category_breakdown") or {}).items():
+            if cat_v.get("total_settled", 0) > 0:
+                lines.append(
+                    f"| **{cat_k}** | {cat_v['total_settled']} | {cat_v['won']} | {cat_v['lost']} | "
+                    f"`{cat_v['win_rate_pct']:.1f}%` | S/{cat_v['total_staked_pen']:.2f} | "
+                    f"**S/{cat_v['net_profit_pen']:+.2f}** | `{cat_v['roi_pct']:+.1f}%` |"
+                )
+
+        recent_settled = props_metrics.get("recent_settled") or []
+        if recent_settled:
+            lines.extend([
+                "",
+                "### 📜 Últimas Apuestas de Props Liquidadas (Auditoría Inmutable)",
+                "",
+                "| Fecha | Partido | Jugador / Combinada | Mercado | Selección | Línea | Cuota | Stat Real | Estado | Beneficio | Bankroll Post. |",
+                "| :--- | :--- | :--- | :--- | :--- | :--- | ---: | ---: | :---: | ---: | ---: |",
+            ])
+            for pr in recent_settled[:15]:
+                b_badge = "✅ WON" if pr["status"] == "WON" else ("❌ LOST" if pr["status"] == "LOST" else pr["status"])
+                stat_disp = f"`{pr['actual_stat']:.1f}`" if pr.get("actual_stat") is not None else "—"
+                lines.append(
+                    f"| `{pr['matchday_date']}` | `{pr['game_id']}` | **{pr['player_name']}** | {pr['prop_category']} | "
+                    f"{pr['selection']} | `{float(pr['line_value']):.1f}` | `{float(pr['decimal_odds']):.2f}` | "
+                    f"{stat_disp} | {b_badge} | **S/{float(pr.get('net_profit_pen') or 0.0):+.2f}** | `S/{float(pr.get('bankroll_after_pen') or 100.0):.2f}` |"
+                )
+
     md_path = Path(md_output_path)
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     html_path = md_path.parent / "reports" / "dashboard.html"
-    generate_interactive_html_dashboard(
+    generated_html = generate_interactive_html_dashboard(
         metrics=metrics,
         espn_real_bets=espn_real_bets,
         slate_items=slate_items,
         html_output_path=html_path,
         peru_str=peru_str,
+        props_paper_trading=props_metrics,
     )
+
+    # Keep docs/index.html in 100% lockstep for GitHub Pages deployment
+    docs_path = md_path.parent / "docs" / "index.html"
+    try:
+        docs_path.parent.mkdir(parents=True, exist_ok=True)
+        docs_path.write_text(generated_html, encoding="utf-8")
+    except Exception:
+        pass
+
     return {"csv_path": str(csv_path), "md_path": str(md_path), "html_path": str(html_path)}
 
 

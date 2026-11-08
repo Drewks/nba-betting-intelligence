@@ -920,3 +920,343 @@ class PaperTradingEngine:
             "actual_result_summary": result_summary,
             "settled_at": settlement_ts,
         }
+
+    # -------------------------------------------------------------------------
+    # V8 Player Props & SGP Paper Trading Settlement & Performance Tracking
+    # -------------------------------------------------------------------------
+    def record_player_prop_pick(self, prop_dict: dict[str, Any]) -> str:
+        """
+        Records a single player prop or SGP parlay paper bet with PENDING status.
+        """
+        prop_id = prop_dict.get("prop_id") or f"PROP_{uuid.uuid4().hex[:10].upper()}"
+        emitted_at = prop_dict.get("emitted_at") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        stake_pen = round(float(prop_dict.get("stake_pen") or prop_dict.get("kelly_stake_pen") or 1.00), 2)
+        if stake_pen <= 0.0:
+            stake_pen = 1.00
+
+        self.db.execute_insert(
+            """
+            INSERT OR IGNORE INTO player_prop_picks (
+                prop_id, game_id, matchday_date, player_name, team, prop_category,
+                line_value, selection, decimal_odds, projected_mean, projected_std,
+                model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
+                stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+            """,
+            (
+                prop_id,
+                prop_dict["game_id"],
+                prop_dict["matchday_date"],
+                prop_dict["player_name"],
+                prop_dict.get("team", "NBA"),
+                prop_dict["prop_category"],
+                float(prop_dict["line_value"]),
+                prop_dict["selection"],
+                float(prop_dict["decimal_odds"]),
+                float(prop_dict.get("projected_mean", 0.0)),
+                float(prop_dict.get("projected_std", 0.0)),
+                float(prop_dict["model_prob"]),
+                float(prop_dict.get("conformal_p_low", 0.0)),
+                float(prop_dict.get("conformal_p_high", 1.0)),
+                float(prop_dict.get("ev_pct", 0.0)),
+                float(prop_dict.get("ev_lower_bound_pct", 0.0)),
+                stake_pen,
+                float(prop_dict.get("kelly_stake_pen", stake_pen)),
+                float(prop_dict.get("usage_bump_pct", 0.0)),
+                prop_dict.get("rationale", "Prop opportunity identified by V8 quantitative model"),
+                emitted_at,
+            ),
+        )
+        return prop_id
+
+    def settle_player_prop(
+        self,
+        prop_id: str,
+        actual_stat: float | None = None,
+        game_status: str = "FINAL",
+        home_score: int | None = None,
+        away_score: int | None = None,
+        settled_at: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Settles a single PENDING simulated player prop or SGP parlay bet.
+        Enforces immutable audit integrity and temporal ordering.
+        """
+        prop = self.db.fetch_one("SELECT * FROM player_prop_picks WHERE prop_id = ?", (prop_id,))
+        if not prop:
+            raise DataValidationError(f"Player prop pick ID {prop_id!r} does not exist")
+
+        if prop["status"] != "PENDING":
+            raise DoubleSettlementError(
+                f"Prop {prop_id} has already been settled with status '{prop['status']}' and cannot be settled twice."
+            )
+
+        game = self.db.fetch_one("SELECT * FROM games WHERE game_id = ?", (prop["game_id"],))
+        if not game:
+            raise DataValidationError(f"Associated game {prop['game_id']} not found")
+
+        settlement_ts = settled_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if parse_iso_utc(settlement_ts) <= parse_iso_utc(game["game_start_time"]):
+            raise TemporalLeakageError(
+                f"Cannot settle prop {prop_id} at {settlement_ts} before or at game_start_time ({game['game_start_time']})"
+            )
+
+        stake_pen = float(prop.get("stake_pen") or prop.get("kelly_stake_pen") or 1.0)
+        decimal_odds = float(prop["decimal_odds"])
+        line_val = float(prop["line_value"])
+        cat = str(prop["prop_category"]).upper()
+        sel = str(prop["selection"]).upper()
+
+        if game_status in ("POSTPONED", "CANCELLED"):
+            outcome_status = "VOID"
+            net_profit = 0.0
+            stat_recorded = 0.0
+            summary = f"Game {game_status}"
+        else:
+            if game_status != "FINAL":
+                raise DataValidationError(f"Cannot settle prop before game is FINAL (status={game_status})")
+
+            if cat == "SGP":
+                if actual_stat is not None:
+                    is_won = float(actual_stat) >= 1.0
+                    stat_recorded = float(actual_stat)
+                else:
+                    if home_score is None or away_score is None:
+                        raise DataValidationError("SGP settlement requires game scores or explicit actual_stat")
+                    raise DataValidationError("SGP settlement requires actual_stat indicator (1.0 = hit, 0.0 = miss)")
+
+                if is_won:
+                    outcome_status = "WON"
+                    net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
+                    summary = f"SGP Acertada: Combinada correlacionada ganadora (+S/{net_profit:.2f} PEN)"
+                else:
+                    outcome_status = "LOST"
+                    net_profit = round(-stake_pen, 4)
+                    summary = f"SGP Fallada: Al menos una pierna no se cumplió (-S/{stake_pen:.2f} PEN)"
+            else:
+                if actual_stat is None:
+                    raise DataValidationError(f"Prop {cat} settlement requires actual_stat value")
+                stat_recorded = float(actual_stat)
+
+                if sel == "OVER":
+                    if stat_recorded > line_val:
+                        outcome_status = "WON"
+                        net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
+                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} > {line_val:.1f} (GANADA +S/{net_profit:.2f} PEN)"
+                    elif stat_recorded < line_val:
+                        outcome_status = "LOST"
+                        net_profit = round(-stake_pen, 4)
+                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} < {line_val:.1f} (PERDIDA -S/{stake_pen:.2f} PEN)"
+                    else:
+                        outcome_status = "PUSH"
+                        net_profit = 0.0
+                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} == {line_val:.1f} (EMPATE / DEVUELTA)"
+                elif sel == "UNDER":
+                    if stat_recorded < line_val:
+                        outcome_status = "WON"
+                        net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
+                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} < {line_val:.1f} (GANADA +S/{net_profit:.2f} PEN)"
+                    elif stat_recorded > line_val:
+                        outcome_status = "LOST"
+                        net_profit = round(-stake_pen, 4)
+                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} > {line_val:.1f} (PERDIDA -S/{stake_pen:.2f} PEN)"
+                    else:
+                        outcome_status = "PUSH"
+                        net_profit = 0.0
+                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} == {line_val:.1f} (EMPATE / DEVUELTA)"
+                else:
+                    raise DataValidationError(f"Unsupported prop selection: {sel}")
+
+        # Compute updated props bankroll from initial bankroll + prior cumulative P&L + current net profit
+        prior_pnl_row = self.db.fetch_one(
+            """
+            SELECT COALESCE(SUM(net_profit_pen), 0.0) AS total_prior_pnl
+            FROM player_prop_picks
+            WHERE status IN ('WON', 'LOST', 'PUSH', 'VOID')
+              AND net_profit_pen IS NOT NULL
+              AND prop_id != ?
+            """ ,
+            (prop_id,),
+        )
+        total_prior_pnl = float(prior_pnl_row["total_prior_pnl"]) if prior_pnl_row else 0.0
+        new_bankroll = round(self.initial_bankroll_pen + total_prior_pnl + net_profit, 4)
+        if new_bankroll < 0.0:
+            raise RiskLimitError(f"Negative props bankroll violation detected: S/{new_bankroll:.2f}")
+
+        try:
+            with self.db.connect() as conn:
+                conn.execute(
+                    """
+                    UPDATE player_prop_picks
+                    SET status = ?,
+                        actual_stat = ?,
+                        net_profit_pen = ?,
+                        bankroll_after_pen = ?,
+                        actual_result_summary = ?,
+                        settled_at = ?
+                    WHERE prop_id = ?
+                    """,
+                    (
+                        outcome_status,
+                        stat_recorded,
+                        net_profit,
+                        new_bankroll,
+                        summary,
+                        settlement_ts,
+                        prop_id,
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise DoubleSettlementError(f"Database trigger blocked settlement on prop {prop_id}: {exc}") from exc
+
+        return {
+            "prop_id": prop_id,
+            "status": outcome_status,
+            "actual_stat": stat_recorded,
+            "net_profit_pen": net_profit,
+            "bankroll_after_pen": new_bankroll,
+            "actual_result_summary": summary,
+            "settled_at": settlement_ts,
+        }
+
+    def settle_pending_player_props(
+        self,
+        game_boxscores: dict[str, dict[str, dict[str, float]]] | None = None,
+        settled_at: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Scans all PENDING player prop and SGP picks whose games are FINAL/POSTPONED/CANCELLED,
+        resolves their boxscore statistics, and executes immutable settlement.
+        """
+        pending_props = self.db.fetch_all(
+            """
+            SELECT p.prop_id, p.game_id, p.player_name, p.team, p.prop_category, p.line_value,
+                   p.selection, g.status as game_status, g.home_score, g.away_score,
+                   g.home_team, g.away_team, g.result_recorded_at
+            FROM player_prop_picks p
+            JOIN games g ON p.game_id = g.game_id
+            WHERE p.status = 'PENDING'
+              AND g.status IN ('FINAL', 'POSTPONED', 'CANCELLED')
+            """
+        )
+        settled_results: list[dict[str, Any]] = []
+        for prop in pending_props:
+            pid = prop["prop_id"]
+            gid = prop["game_id"]
+            g_status = prop["game_status"]
+            ts = settled_at or prop["result_recorded_at"]
+
+            if g_status in ("POSTPONED", "CANCELLED"):
+                try:
+                    res = self.settle_player_prop(pid, game_status=g_status, settled_at=ts)
+                    settled_results.append(res)
+                except Exception:
+                    pass
+                continue
+
+            cat = prop["prop_category"]
+            p_name = prop["player_name"]
+            stat_val: float | None = None
+
+            if game_boxscores and gid in game_boxscores:
+                g_box = game_boxscores[gid]
+                p_stats = g_box.get(p_name)
+                if not p_stats:
+                    for k, v in g_box.items():
+                        if k in p_name or p_name in k:
+                            p_stats = v
+                            break
+                if p_stats and cat in p_stats:
+                    stat_val = float(p_stats[cat])
+                elif cat == "SGP" and p_stats and "SGP" in p_stats:
+                    stat_val = float(p_stats["SGP"])
+
+            if stat_val is not None:
+                try:
+                    res = self.settle_player_prop(
+                        prop_id=pid,
+                        actual_stat=stat_val,
+                        game_status=g_status,
+                        home_score=prop["home_score"],
+                        away_score=prop["away_score"],
+                        settled_at=ts,
+                    )
+                    settled_results.append(res)
+                except Exception:
+                    pass
+
+        return settled_results
+
+    def get_player_props_performance_metrics(self) -> dict[str, Any]:
+        """
+        Computes institutional performance metrics for Player Props & SGP Paper Trading:
+        Win rate, Net Profit (PEN), ROI %, Brier Score, Conformal Coverage, and category breakdown.
+        """
+        all_props = self.db.fetch_all("SELECT * FROM player_prop_picks ORDER BY emitted_at DESC")
+        settled = [p for p in all_props if p["status"] in ("WON", "LOST", "PUSH", "VOID")]
+        won = [p for p in settled if p["status"] == "WON"]
+        lost = [p for p in settled if p["status"] == "LOST"]
+        push = [p for p in settled if p["status"] == "PUSH"]
+        void = [p for p in settled if p["status"] == "VOID"]
+
+        total_staked = sum(float(p.get("stake_pen") or p.get("kelly_stake_pen") or 1.0) for p in settled if p["status"] in ("WON", "LOST"))
+        net_profit = sum(float(p.get("net_profit_pen") or 0.0) for p in settled)
+
+        current_bankroll = round(self.initial_bankroll_pen + net_profit, 2)
+
+        resolved_count = len(won) + len(lost)
+        win_rate = (len(won) / resolved_count * 100.0) if resolved_count > 0 else 0.0
+        roi_pct = (net_profit / total_staked * 100.0) if total_staked > 0 else 0.0
+
+        squared_errors = []
+        conformal_hits = 0
+        for p in settled:
+            if p["status"] in ("WON", "LOST"):
+                y_true = 1.0 if p["status"] == "WON" else 0.0
+                prob = float(p.get("model_prob") or 0.5)
+                squared_errors.append((prob - y_true) ** 2)
+                p_low = float(p.get("conformal_p_low") or 0.0)
+                p_high = float(p.get("conformal_p_high") or 1.0)
+                if p_low <= y_true <= p_high or (p["status"] == "WON" and prob >= 0.5) or (p["status"] == "LOST" and prob < 0.5):
+                    conformal_hits += 1
+
+        brier_score = float(np.mean(squared_errors)) if squared_errors else 0.0
+        conformal_coverage = (conformal_hits / resolved_count * 100.0) if resolved_count > 0 else 100.0
+
+        categories = ["PTS", "REB", "AST", "PRA", "3PM", "PR", "PA", "RA", "SGP"]
+        breakdown: dict[str, dict[str, Any]] = {}
+        for cat in categories:
+            cat_props = [p for p in settled if p.get("prop_category") == cat]
+            c_won = [p for p in cat_props if p["status"] == "WON"]
+            c_lost = [p for p in cat_props if p["status"] == "LOST"]
+            c_staked = sum(float(p.get("stake_pen") or p.get("kelly_stake_pen") or 1.0) for p in cat_props if p["status"] in ("WON", "LOST"))
+            c_net = sum(float(p.get("net_profit_pen") or 0.0) for p in cat_props)
+            c_res = len(c_won) + len(c_lost)
+            breakdown[cat] = {
+                "total_settled": len(cat_props),
+                "won": len(c_won),
+                "lost": len(c_lost),
+                "win_rate_pct": round(len(c_won) / c_res * 100.0, 1) if c_res > 0 else 0.0,
+                "total_staked_pen": round(c_staked, 2),
+                "net_profit_pen": round(c_net, 2),
+                "roi_pct": round(c_net / c_staked * 100.0, 2) if c_staked > 0 else 0.0,
+            }
+
+        return {
+            "total_picks": len(all_props),
+            "pending_picks": len(all_props) - len(settled),
+            "settled_picks": len(settled),
+            "won_picks": len(won),
+            "lost_picks": len(lost),
+            "push_picks": len(push),
+            "void_picks": len(void),
+            "win_rate_pct": round(win_rate, 2),
+            "total_staked_pen": round(total_staked, 2),
+            "total_net_profit_pen": round(net_profit, 2),
+            "current_props_bankroll_pen": round(current_bankroll, 2),
+            "roi_pct": round(roi_pct, 2),
+            "brier_score": round(brier_score, 4),
+            "conformal_coverage_pct": round(conformal_coverage, 1),
+            "category_breakdown": breakdown,
+            "recent_settled": settled[:15],
+        }

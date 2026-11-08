@@ -595,12 +595,12 @@ class PlayerPropsEngine:
                     try:
                         self.db.execute_insert(
                             """
-                            INSERT OR REPLACE INTO player_prop_picks (
+                            INSERT OR IGNORE INTO player_prop_picks (
                                 prop_id, game_id, matchday_date, player_name, team, prop_category,
                                 line_value, selection, decimal_odds, projected_mean, projected_std,
                                 model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
-                                kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                                stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
                             """,
                             (
                                 prop_pick["prop_id"],
@@ -619,6 +619,7 @@ class PlayerPropsEngine:
                                 prop_pick["conformal_p_high"],
                                 prop_pick["ev_pct"],
                                 prop_pick["ev_lower_bound_pct"],
+                                prop_pick["kelly_stake_pen"],
                                 prop_pick["kelly_stake_pen"],
                                 prop_pick["usage_bump_pct"],
                                 prop_pick["rationale"],
@@ -772,6 +773,38 @@ class PlayerPropsEngine:
             if sgp_cand["ev_pct"] >= min_ev_pct and sgp_cand["p_joint"] >= 0.18:
                 sgp_cand["is_value_sgp"] = True
                 sgp_opportunities.append(sgp_cand)
+                if self.db is not None:
+                    try:
+                        self.db.execute_insert(
+                            """
+                            INSERT OR IGNORE INTO player_prop_picks (
+                                prop_id, game_id, matchday_date, player_name, team, prop_category,
+                                line_value, selection, decimal_odds, projected_mean, projected_std,
+                                model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
+                                stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
+                            ) VALUES (?, ?, ?, ?, ?, 'SGP', ?, 'SGP', ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 0.0, ?, ?, 'PENDING')
+                            """,
+                            (
+                                sgp_cand["sgp_id"],
+                                sgp_cand["game_id"],
+                                sgp_cand["matchday_date"],
+                                f"{sgp_cand['player_name']} + {sgp_cand['game_selection']}",
+                                sgp_cand["team"],
+                                float(sgp_cand["prop_line"]),
+                                float(sgp_cand["offered_sgp_odds"]),
+                                float(sgp_cand["p_joint"]),
+                                round(max(0.01, float(sgp_cand["p_joint"]) * 0.85), 4),
+                                round(min(0.99, float(sgp_cand["p_joint"]) * 1.15), 4),
+                                float(sgp_cand["ev_pct"]),
+                                round(float(sgp_cand["ev_pct"]) * 0.8, 2),
+                                float(sgp_cand["kelly_stake_pen"]),
+                                float(sgp_cand["kelly_stake_pen"]),
+                                sgp_cand["rationale"],
+                                datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            ),
+                        )
+                    except Exception:
+                        pass
 
         return sgp_opportunities
 

@@ -255,9 +255,9 @@ DDL_STATEMENTS = [
         matchday_date TEXT NOT NULL,
         player_name TEXT NOT NULL,
         team TEXT NOT NULL,
-        prop_category TEXT NOT NULL CHECK (prop_category IN ('PTS', 'REB', 'AST', 'PRA', '3PM')),
+        prop_category TEXT NOT NULL CHECK (prop_category IN ('PTS', 'REB', 'AST', 'PRA', '3PM', 'PR', 'PA', 'RA', 'SGP')),
         line_value REAL NOT NULL,
-        selection TEXT NOT NULL CHECK (selection IN ('OVER', 'UNDER')),
+        selection TEXT NOT NULL CHECK (selection IN ('OVER', 'UNDER', 'SGP', 'HOME', 'AWAY')),
         decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
         projected_mean REAL NOT NULL,
         projected_std REAL NOT NULL,
@@ -266,14 +266,34 @@ DDL_STATEMENTS = [
         conformal_p_high REAL NOT NULL,
         ev_pct REAL NOT NULL,
         ev_lower_bound_pct REAL NOT NULL,
+        stake_pen REAL NOT NULL DEFAULT 1.00 CHECK (stake_pen > 0.0),
         kelly_stake_pen REAL NOT NULL,
         usage_bump_pct REAL NOT NULL DEFAULT 0.0,
         rationale TEXT NOT NULL,
         emitted_at TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
         actual_stat REAL,
+        net_profit_pen REAL,
+        bankroll_after_pen REAL,
+        actual_result_summary TEXT,
         settled_at TEXT,
         FOREIGN KEY (game_id) REFERENCES games(game_id)
     );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_settled_prop_tampering
+    BEFORE UPDATE ON player_prop_picks
+    FOR EACH ROW
+    WHEN OLD.status IN ('WON', 'LOST', 'PUSH', 'VOID')
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Settled player prop picks cannot be modified.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_prop_delete
+    BEFORE DELETE ON player_prop_picks
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Player prop picks cannot be deleted from audit history.');
+    END;
     """,
 ]

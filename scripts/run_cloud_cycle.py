@@ -162,6 +162,29 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         except Exception:
             pass
 
+    # 2b. Settle any PENDING player prop & SGP bets whose games are now FINAL, POSTPONED, or CANCELLED
+    pending_props = db.fetch_all(
+        """
+        SELECT DISTINCT p.game_id
+        FROM player_prop_picks p
+        JOIN games g ON p.game_id = g.game_id
+        WHERE p.status = 'PENDING'
+          AND g.status IN ('FINAL', 'POSTPONED', 'CANCELLED')
+        """
+    )
+    game_boxscores: dict[str, dict[str, dict[str, float]]] = {}
+    espn_adapter = ESPNPublicAdapter(timeout_seconds=10)
+    for row in pending_props:
+        gid = row["game_id"]
+        ev_id = gid.replace("ESPN_", "").split("_")[0]
+        try:
+            b_stats = espn_adapter.fetch_player_boxscores(ev_id)
+            if b_stats:
+                game_boxscores[gid] = b_stats
+        except Exception:
+            pass
+    settled_props_now = paper_engine.settle_pending_player_props(game_boxscores=game_boxscores, settled_at=now_str)
+
     # 3. Auto-Calibration Step: Fit calibrators & models on all strictly prior FINAL games
     # Refresh current timestamp post-ingestion to encompass recently settled games without temporal leakage
     now_dt = datetime.now(timezone.utc)
