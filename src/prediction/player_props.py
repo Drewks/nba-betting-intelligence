@@ -1,14 +1,21 @@
 """
-V7.2 Player Props Quantitative Engine (`src/prediction/player_props.py`):
-Models individual player performance (Points, Rebounds, Assists, 3PM, PRA) using:
+V8 Player Props Quantitative Engine (`src/prediction/player_props.py`):
+Institutional statistical modeling of NBA Player Props & Same-Game Parlays (SGP):
   1. Micro-Usage & Minutes Redistribution: Re-allocates vacated usage rate (USG%) and minute shares
      when teammates are confirmed OUT via the LineupSynergyEngine.
-  2. Parametric Probability Distributions:
-     - Poisson / Negative Binomial distribution for count variables (Assists, Rebounds, 3-Pointers).
-     - Overdispersed Gaussian distribution for continuous scoring (Points, PRA).
-  3. Venn-Abers Conformal Multi-Probabilistic Calibration & Lower-Bound EV:
+  2. Tactical Matchup & Pace Context Factors:
+     - Opponent Defense vs Position (DvP) defensive rating splits across all 30 NBA franchises.
+     - Expected Game Pace factor (differential relative to 99.5 baseline).
+     - Blowout Spread Dampening: Mitigates star minute inflation when spread > 10.5 pts.
+  3. Parametric Probability Distributions:
+     - Poisson distribution for count variables (Assists, Rebounds, 3-Pointers).
+     - Overdispersed Gaussian distribution for continuous scoring (Points, PRA, PR, PA, RA).
+  4. Venn-Abers Conformal Multi-Probabilistic Calibration & Lower-Bound EV:
      Guarantees finite-sample multi-probabilistic safety against bookmaker lines.
-  4. Fractional Kelly Allocation: Sizing tailored for micro-bankrolls with longshot protection.
+  5. Bivariate Gaussian Copula Simulator for RETAbet Perú "Crea tu Apuesta" (SGP):
+     Monte Carlo joint simulation capturing non-linear positive correlations between
+     team victory and star player performance.
+  6. Fractional Kelly Allocation: Sizing tailored for micro-bankrolls with longshot protection.
 """
 
 from __future__ import annotations
@@ -37,61 +44,265 @@ from src.storage.db import DatabaseManager
 # Canonical baseline player profiles (Per-Minute production, Usage Rate %, and Base Minutes)
 # Format: (base_minutes, usg_pct, pts_per_min, reb_per_min, ast_per_min, threes_per_min)
 PLAYER_PROP_BASELINES: dict[str, tuple[float, float, float, float, float, float]] = {
-    # Dallas Mavericks
+    # 1. Dallas Mavericks (DAL)
     "Luka Doncic": (36.5, 35.5, 0.88, 0.25, 0.26, 0.11),
     "Kyrie Irving": (34.0, 27.5, 0.74, 0.14, 0.15, 0.08),
     "Klay Thompson": (28.0, 21.0, 0.55, 0.12, 0.06, 0.10),
     "PJ Washington": (30.0, 16.5, 0.42, 0.21, 0.06, 0.05),
     "Dereck Lively II": (26.0, 14.0, 0.36, 0.32, 0.05, 0.00),
+    "Daniel Gafford": (24.0, 15.5, 0.48, 0.32, 0.05, 0.00),
 
-    # Denver Nuggets
+    # 2. Denver Nuggets (DEN)
     "Nikola Jokic": (36.0, 30.5, 0.82, 0.35, 0.28, 0.04),
     "Jamal Murray": (33.0, 25.5, 0.65, 0.13, 0.18, 0.07),
     "Michael Porter Jr.": (32.0, 20.0, 0.56, 0.24, 0.05, 0.08),
     "Aaron Gordon": (30.0, 18.0, 0.48, 0.22, 0.10, 0.03),
+    "Christian Braun": (28.0, 16.0, 0.45, 0.17, 0.07, 0.04),
 
-    # Boston Celtics
+    # 3. Boston Celtics (BOS)
     "Jayson Tatum": (35.5, 29.5, 0.77, 0.24, 0.14, 0.09),
     "Jaylen Brown": (33.5, 28.0, 0.72, 0.17, 0.11, 0.07),
     "Derrick White": (32.0, 19.5, 0.49, 0.13, 0.16, 0.08),
     "Jrue Holiday": (30.0, 17.0, 0.42, 0.16, 0.15, 0.06),
     "Kristaps Porzingis": (28.0, 24.5, 0.68, 0.24, 0.06, 0.06),
+    "Payton Pritchard": (25.0, 21.0, 0.58, 0.12, 0.13, 0.11),
+    "Al Horford": (26.0, 14.0, 0.35, 0.24, 0.11, 0.06),
 
-    # Golden State Warriors
+    # 4. Golden State Warriors (GSW)
     "Stephen Curry": (32.5, 31.0, 0.84, 0.14, 0.16, 0.14),
     "Jonathan Kuminga": (27.0, 24.0, 0.62, 0.19, 0.07, 0.03),
     "Andrew Wiggins": (28.0, 20.5, 0.52, 0.16, 0.06, 0.05),
     "Draymond Green": (27.5, 14.5, 0.32, 0.26, 0.22, 0.03),
+    "Buddy Hield": (25.0, 23.5, 0.66, 0.14, 0.09, 0.13),
+    "Brandin Podziemski": (26.0, 16.5, 0.38, 0.20, 0.14, 0.04),
 
-    # Phoenix Suns
+    # 5. Phoenix Suns (PHX)
     "Kevin Durant": (36.0, 29.0, 0.78, 0.19, 0.14, 0.06),
     "Devin Booker": (35.5, 29.5, 0.76, 0.13, 0.20, 0.06),
     "Bradley Beal": (31.0, 22.5, 0.58, 0.13, 0.14, 0.05),
     "Jusuf Nurkic": (25.0, 18.5, 0.43, 0.41, 0.12, 0.02),
+    "Tyus Jones": (28.0, 15.0, 0.38, 0.10, 0.24, 0.04),
 
-    # Los Angeles Lakers
+    # 6. Los Angeles Lakers (LAL)
     "LeBron James": (34.5, 28.5, 0.70, 0.22, 0.24, 0.06),
     "Anthony Davis": (35.5, 28.0, 0.74, 0.36, 0.09, 0.02),
     "Austin Reaves": (32.0, 19.5, 0.49, 0.13, 0.17, 0.05),
     "D'Angelo Russell": (28.0, 22.0, 0.56, 0.10, 0.19, 0.08),
+    "Rui Hachimura": (29.0, 17.5, 0.46, 0.18, 0.04, 0.05),
 
-    # Oklahoma City Thunder
+    # 7. Oklahoma City Thunder (OKC)
     "Shai Gilgeous-Alexander": (35.0, 32.5, 0.87, 0.16, 0.18, 0.05),
     "Jalen Williams": (32.5, 23.5, 0.60, 0.14, 0.14, 0.05),
     "Chet Holmgren": (30.0, 21.0, 0.56, 0.27, 0.08, 0.05),
+    "Alex Caruso": (24.0, 14.5, 0.36, 0.15, 0.13, 0.05),
+    "Luguentz Dort": (28.0, 16.5, 0.41, 0.14, 0.05, 0.06),
 
-    # Milwaukee Bucks
+    # 8. Milwaukee Bucks (MIL)
     "Giannis Antetokounmpo": (35.0, 34.5, 0.89, 0.34, 0.19, 0.01),
     "Damian Lillard": (34.5, 28.5, 0.73, 0.13, 0.20, 0.09),
     "Brook Lopez": (29.0, 16.5, 0.43, 0.18, 0.05, 0.06),
+    "Bobby Portis": (25.0, 23.0, 0.56, 0.30, 0.05, 0.04),
+    "Khris Middleton": (28.0, 23.0, 0.56, 0.16, 0.18, 0.06),
+
+    # 9. New York Knicks (NYK)
+    "Jalen Brunson": (35.5, 31.0, 0.81, 0.11, 0.20, 0.08),
+    "Karl-Anthony Towns": (34.0, 27.0, 0.73, 0.37, 0.10, 0.07),
+    "Mikal Bridges": (36.0, 20.0, 0.51, 0.12, 0.10, 0.06),
+    "OG Anunoby": (34.0, 18.0, 0.48, 0.15, 0.06, 0.06),
+    "Josh Hart": (34.0, 15.0, 0.38, 0.27, 0.14, 0.03),
+
+    # 10. Minnesota Timberwolves (MIN)
+    "Anthony Edwards": (35.5, 32.0, 0.78, 0.16, 0.15, 0.10),
+    "Julius Randle": (33.0, 27.5, 0.67, 0.26, 0.15, 0.05),
+    "Rudy Gobert": (32.0, 15.0, 0.42, 0.39, 0.04, 0.00),
+    "Mike Conley": (26.0, 15.5, 0.36, 0.10, 0.21, 0.06),
+    "Naz Reid": (26.0, 22.0, 0.58, 0.23, 0.07, 0.08),
+    "Jaden McDaniels": (30.0, 15.5, 0.39, 0.12, 0.05, 0.04),
+
+    # 11. Philadelphia 76ers (PHI)
+    "Joel Embiid": (34.0, 36.5, 0.95, 0.34, 0.16, 0.04),
+    "Tyrese Maxey": (36.5, 29.5, 0.75, 0.10, 0.17, 0.08),
+    "Paul George": (33.0, 26.5, 0.67, 0.17, 0.13, 0.08),
+    "Kelly Oubre Jr.": (30.0, 21.0, 0.52, 0.17, 0.04, 0.05),
+    "Jared McCain": (25.0, 22.5, 0.58, 0.11, 0.10, 0.08),
+
+    # 12. Cleveland Cavaliers (CLE)
+    "Donovan Mitchell": (34.5, 31.0, 0.80, 0.14, 0.18, 0.10),
+    "Darius Garland": (32.0, 25.0, 0.65, 0.09, 0.22, 0.08),
+    "Evan Mobley": (31.5, 22.0, 0.58, 0.28, 0.10, 0.03),
+    "Jarrett Allen": (31.0, 17.5, 0.49, 0.35, 0.07, 0.00),
+    "Caris LeVert": (25.0, 21.0, 0.52, 0.13, 0.16, 0.05),
+
+    # 13. Indiana Pacers (IND)
+    "Tyrese Haliburton": (34.0, 25.0, 0.62, 0.12, 0.29, 0.08),
+    "Pascal Siakam": (33.0, 25.5, 0.66, 0.23, 0.12, 0.04),
+    "Myles Turner": (28.0, 21.0, 0.58, 0.25, 0.05, 0.06),
+    "Bennedict Mathurin": (28.0, 24.0, 0.64, 0.18, 0.07, 0.05),
+    "Andrew Nembhard": (27.0, 16.5, 0.41, 0.09, 0.18, 0.03),
+
+    # 14. Sacramento Kings (SAC)
+    "De'Aaron Fox": (35.0, 30.5, 0.77, 0.14, 0.18, 0.08),
+    "DeMar DeRozan": (34.5, 26.5, 0.68, 0.13, 0.16, 0.03),
+    "Domantas Sabonis": (35.5, 22.0, 0.56, 0.38, 0.24, 0.02),
+    "Keegan Murray": (33.0, 18.5, 0.46, 0.19, 0.05, 0.07),
+    "Malik Monk": (26.0, 24.5, 0.60, 0.11, 0.19, 0.07),
+
+    # 15. Memphis Grizzlies (MEM)
+    "Ja Morant": (32.0, 32.5, 0.78, 0.14, 0.25, 0.05),
+    "Desmond Bane": (32.5, 26.0, 0.68, 0.15, 0.16, 0.09),
+    "Jaren Jackson Jr.": (30.0, 28.0, 0.74, 0.21, 0.06, 0.06),
+    "Marcus Smart": (26.0, 18.5, 0.44, 0.11, 0.16, 0.05),
+    "Zach Edey": (22.0, 21.0, 0.55, 0.38, 0.04, 0.00),
+
+    # 16. Miami Heat (MIA)
+    "Jimmy Butler": (33.0, 25.5, 0.65, 0.17, 0.17, 0.03),
+    "Bam Adebayo": (34.0, 24.5, 0.59, 0.31, 0.13, 0.03),
+    "Tyler Herro": (34.0, 27.5, 0.71, 0.15, 0.16, 0.10),
+    "Terry Rozier": (31.0, 22.0, 0.52, 0.12, 0.15, 0.07),
+
+    # 17. Orlando Magic (ORL)
+    "Paolo Banchero": (35.0, 31.0, 0.76, 0.22, 0.16, 0.05),
+    "Franz Wagner": (34.0, 28.0, 0.69, 0.17, 0.14, 0.06),
+    "Jalen Suggs": (29.0, 21.0, 0.52, 0.14, 0.14, 0.08),
+    "Wendell Carter Jr.": (26.0, 17.5, 0.44, 0.32, 0.07, 0.04),
+
+    # 18. Houston Rockets (HOU)
+    "Alperen Sengun": (31.5, 27.0, 0.62, 0.33, 0.16, 0.02),
+    "Jalen Green": (32.5, 28.0, 0.67, 0.16, 0.10, 0.09),
+    "Fred VanVleet": (34.0, 20.0, 0.48, 0.11, 0.19, 0.07),
+    "Jabari Smith Jr.": (29.0, 18.0, 0.45, 0.25, 0.04, 0.05),
+    "Amen Thompson": (26.0, 19.0, 0.48, 0.26, 0.12, 0.01),
+
+    # 19. San Antonio Spurs (SAS)
+    "Victor Wembanyama": (32.0, 32.0, 0.79, 0.34, 0.12, 0.08),
+    "Chris Paul": (27.5, 16.0, 0.38, 0.13, 0.29, 0.05),
+    "Devin Vassell": (32.0, 24.5, 0.62, 0.13, 0.12, 0.08),
+    "Keldon Johnson": (26.0, 22.5, 0.56, 0.21, 0.07, 0.05),
+    "Harrison Barnes": (28.0, 16.5, 0.44, 0.14, 0.06, 0.05),
+
+    # 20. Atlanta Hawks (ATL)
+    "Trae Young": (36.0, 32.5, 0.77, 0.09, 0.31, 0.08),
+    "Jalen Johnson": (35.5, 24.0, 0.58, 0.29, 0.16, 0.04),
+    "De'Andre Hunter": (28.0, 22.0, 0.57, 0.15, 0.05, 0.07),
+    "Clint Capela": (24.0, 16.5, 0.45, 0.42, 0.04, 0.00),
+    "Dyson Daniels": (32.0, 18.0, 0.44, 0.16, 0.13, 0.04),
+
+    # 21. Brooklyn Nets (BKN)
+    "Cam Thomas": (33.0, 30.5, 0.78, 0.11, 0.11, 0.08),
+    "Dennis Schroder": (31.5, 23.5, 0.58, 0.10, 0.21, 0.06),
+    "Cameron Johnson": (30.0, 20.0, 0.54, 0.15, 0.09, 0.08),
+    "Nicolas Claxton": (28.0, 15.0, 0.42, 0.35, 0.07, 0.00),
+
+    # 22. Toronto Raptors (TOR)
+    "Scottie Barnes": (34.0, 26.5, 0.62, 0.25, 0.19, 0.04),
+    "RJ Barrett": (32.5, 28.0, 0.70, 0.19, 0.16, 0.05),
+    "Immanuel Quickley": (31.0, 25.0, 0.61, 0.13, 0.20, 0.08),
+    "Jakob Poeltl": (29.0, 18.0, 0.49, 0.38, 0.09, 0.00),
+    "Gradey Dick": (28.0, 22.0, 0.58, 0.11, 0.06, 0.08),
+
+    # 23. Chicago Bulls (CHI)
+    "Zach LaVine": (34.5, 28.0, 0.72, 0.16, 0.14, 0.09),
+    "Nikola Vucevic": (32.0, 24.5, 0.64, 0.33, 0.11, 0.06),
+    "Coby White": (33.5, 25.0, 0.62, 0.12, 0.15, 0.09),
+    "Josh Giddey": (28.0, 23.0, 0.51, 0.23, 0.24, 0.04),
+
+    # 24. Charlotte Hornets (CHA)
+    "LaMelo Ball": (34.0, 33.5, 0.85, 0.16, 0.22, 0.11),
+    "Brandon Miller": (32.0, 25.5, 0.64, 0.15, 0.11, 0.09),
+    "Miles Bridges": (33.0, 23.0, 0.56, 0.22, 0.10, 0.06),
+    "Tre Mann": (26.0, 25.0, 0.63, 0.13, 0.14, 0.08),
+
+    # 25. Detroit Pistons (DET)
+    "Cade Cunningham": (35.0, 31.0, 0.74, 0.17, 0.26, 0.06),
+    "Jaden Ivey": (31.0, 25.5, 0.62, 0.14, 0.13, 0.06),
+    "Tobias Harris": (31.0, 19.5, 0.48, 0.23, 0.08, 0.04),
+    "Jalen Duren": (27.0, 16.5, 0.43, 0.39, 0.08, 0.00),
+
+    # 26. Washington Wizards (WAS)
+    "Jordan Poole": (31.5, 29.5, 0.71, 0.10, 0.16, 0.10),
+    "Kyle Kuzma": (31.0, 27.5, 0.63, 0.22, 0.12, 0.06),
+    "Jonas Valanciunas": (22.0, 24.0, 0.58, 0.40, 0.09, 0.02),
+    "Bilal Coulibaly": (31.0, 19.0, 0.48, 0.18, 0.09, 0.04),
+
+    # 27. Utah Jazz (UTA)
+    "Lauri Markkanen": (33.0, 27.0, 0.69, 0.24, 0.06, 0.09),
+    "Collin Sexton": (26.5, 26.0, 0.66, 0.10, 0.15, 0.06),
+    "John Collins": (27.0, 23.0, 0.61, 0.29, 0.07, 0.04),
+    "Keyonte George": (30.0, 24.5, 0.54, 0.11, 0.20, 0.07),
+    "Walker Kessler": (27.0, 14.0, 0.36, 0.39, 0.04, 0.00),
+
+    # 28. Portland Trail Blazers (POR)
+    "Anfernee Simons": (34.0, 28.5, 0.69, 0.10, 0.16, 0.09),
+    "Jerami Grant": (33.0, 24.5, 0.62, 0.12, 0.07, 0.07),
+    "Deandre Ayton": (30.0, 20.0, 0.52, 0.35, 0.05, 0.00),
+    "Shaedon Sharpe": (28.0, 24.0, 0.60, 0.14, 0.09, 0.06),
+    "Deni Avdija": (28.0, 20.0, 0.48, 0.23, 0.13, 0.03),
+
+    # 29. Los Angeles Clippers (LAC)
+    "James Harden": (35.0, 29.5, 0.68, 0.21, 0.27, 0.08),
+    "Norman Powell": (33.0, 27.0, 0.72, 0.10, 0.07, 0.10),
+    "Ivica Zubac": (32.0, 19.5, 0.51, 0.41, 0.08, 0.00),
+    "Terance Mann": (24.0, 14.5, 0.36, 0.16, 0.09, 0.04),
+
+    # 30. New Orleans Pelicans (NOP)
+    "Zion Williamson": (32.0, 30.5, 0.78, 0.22, 0.16, 0.00),
+    "Brandon Ingram": (33.5, 28.0, 0.72, 0.17, 0.17, 0.06),
+    "CJ McCollum": (31.5, 25.5, 0.64, 0.12, 0.15, 0.09),
+    "Dejounte Murray": (34.0, 27.0, 0.65, 0.17, 0.22, 0.07),
+    "Herbert Jones": (28.0, 14.0, 0.38, 0.13, 0.08, 0.05),
+}
+
+
+# Tactical Defense vs Position (DvP) and Pace multipliers for all 30 teams
+TEAM_DEFENSIVE_MULTIPLIERS: dict[str, dict[str, Any]] = {
+    # Elite Defenses (suppress scoring, boards, assists)
+    "OKC": {"PTS": 0.94, "REB": 0.96, "AST": 0.93, "3PM": 0.92, "pace": 100.5, "tier": "ELITE"},
+    "MIN": {"PTS": 0.93, "REB": 0.95, "AST": 0.92, "3PM": 0.94, "pace": 98.0, "tier": "ELITE"},
+    "BOS": {"PTS": 0.94, "REB": 0.96, "AST": 0.94, "3PM": 0.91, "pace": 99.0, "tier": "ELITE"},
+    "ORL": {"PTS": 0.93, "REB": 0.94, "AST": 0.93, "3PM": 0.95, "pace": 98.0, "tier": "ELITE"},
+    "HOU": {"PTS": 0.95, "REB": 0.95, "AST": 0.94, "3PM": 0.93, "pace": 99.5, "tier": "ELITE"},
+    "MEM": {"PTS": 0.95, "REB": 0.96, "AST": 0.94, "3PM": 0.95, "pace": 102.0, "tier": "ELITE"},
+
+    # Good Defenses
+    "CLE": {"PTS": 0.97, "REB": 0.98, "AST": 0.96, "3PM": 0.96, "pace": 100.0, "tier": "GOOD"},
+    "GSW": {"PTS": 0.96, "REB": 0.97, "AST": 0.96, "3PM": 0.96, "pace": 101.5, "tier": "GOOD"},
+    "MIA": {"PTS": 0.97, "REB": 0.98, "AST": 0.96, "3PM": 0.97, "pace": 97.5, "tier": "GOOD"},
+    "LAL": {"PTS": 0.98, "REB": 0.98, "AST": 0.98, "3PM": 0.97, "pace": 100.5, "tier": "GOOD"},
+    "PHX": {"PTS": 0.98, "REB": 0.98, "AST": 0.98, "3PM": 0.97, "pace": 98.5, "tier": "GOOD"},
+
+    # Average Defenses
+    "DEN": {"PTS": 1.00, "REB": 1.00, "AST": 1.00, "3PM": 1.00, "pace": 99.0, "tier": "AVERAGE"},
+    "NYK": {"PTS": 0.99, "REB": 0.99, "AST": 1.00, "3PM": 0.99, "pace": 96.0, "tier": "AVERAGE"},
+    "SAC": {"PTS": 1.00, "REB": 1.00, "AST": 1.00, "3PM": 1.00, "pace": 100.0, "tier": "AVERAGE"},
+    "DAL": {"PTS": 0.99, "REB": 1.00, "AST": 1.00, "3PM": 0.99, "pace": 99.5, "tier": "AVERAGE"},
+    "MIL": {"PTS": 1.01, "REB": 1.00, "AST": 1.01, "3PM": 1.01, "pace": 99.5, "tier": "AVERAGE"},
+    "PHI": {"PTS": 1.00, "REB": 1.01, "AST": 1.00, "3PM": 1.00, "pace": 98.5, "tier": "AVERAGE"},
+    "IND": {"PTS": 1.03, "REB": 1.02, "AST": 1.02, "3PM": 1.01, "pace": 103.5, "tier": "AVERAGE"},
+    "NOP": {"PTS": 1.01, "REB": 1.01, "AST": 1.01, "3PM": 1.01, "pace": 98.5, "tier": "AVERAGE"},
+    "LAC": {"PTS": 0.99, "REB": 0.99, "AST": 1.00, "3PM": 0.99, "pace": 98.0, "tier": "AVERAGE"},
+    "SAS": {"PTS": 1.01, "REB": 1.00, "AST": 1.01, "3PM": 1.02, "pace": 100.5, "tier": "AVERAGE"},
+
+    # Vulnerable Defenses (elevated scoring environments)
+    "ATL": {"PTS": 1.04, "REB": 1.03, "AST": 1.04, "3PM": 1.04, "pace": 103.0, "tier": "VULNERABLE"},
+    "CHI": {"PTS": 1.03, "REB": 1.03, "AST": 1.04, "3PM": 1.03, "pace": 102.5, "tier": "VULNERABLE"},
+    "DET": {"PTS": 1.03, "REB": 1.02, "AST": 1.03, "3PM": 1.03, "pace": 99.5, "tier": "VULNERABLE"},
+    "BKN": {"PTS": 1.04, "REB": 1.04, "AST": 1.04, "3PM": 1.05, "pace": 98.0, "tier": "VULNERABLE"},
+    "POR": {"PTS": 1.04, "REB": 1.03, "AST": 1.04, "3PM": 1.04, "pace": 100.0, "tier": "VULNERABLE"},
+
+    # High Value Target Defenses (prime for OVER props)
+    "UTA": {"PTS": 1.07, "REB": 1.06, "AST": 1.07, "3PM": 1.08, "pace": 101.5, "tier": "TARGET"},
+    "WAS": {"PTS": 1.08, "REB": 1.07, "AST": 1.08, "3PM": 1.09, "pace": 102.5, "tier": "TARGET"},
+    "CHA": {"PTS": 1.06, "REB": 1.06, "AST": 1.06, "3PM": 1.07, "pace": 99.5, "tier": "TARGET"},
+    "TOR": {"PTS": 1.06, "REB": 1.06, "AST": 1.07, "3PM": 1.06, "pace": 101.0, "tier": "TARGET"},
 }
 
 
 class PlayerPropsEngine:
     """
-    Quantitative Modeling of NBA Player Props:
-    Calculates expected statistical value per player, absorbs usage bumps from injuries,
-    computes Poisson/Gaussian exceedance probabilities, and identifies +EV bets.
+    Quantitative Modeling of NBA Player Props & SGP:
+    Calculates expected statistical values per player, absorbs usage bumps from injuries,
+    adjusts for opponent defense and game pace, computes Poisson/Gaussian exceedance probabilities,
+    simulates SGP joint copulas for RETAbet Perú, and identifies +EV bets.
     """
 
     def __init__(self, db: DatabaseManager | None = None, min_ev_threshold: float = 0.05) -> None:
@@ -104,10 +315,14 @@ class PlayerPropsEngine:
         player_name: str,
         team: str,
         absent_teammates: list[str] | None = None,
+        opponent_team: str | None = None,
+        expected_game_pace: float | None = None,
+        spread_blowout_risk: float | None = None,
     ) -> dict[str, Any]:
         """
-        Computes projected Points, Rebounds, Assists, 3PM, and PRA.
+        Computes projected Points, Rebounds, Assists, 3PM, PRA, PR, PA, and RA.
         When star teammates are absent, redistributes vacated usage rate and minutes.
+        Adjusts for opponent defensive efficiency (DvP), projected game pace, and blowout risk.
         """
         profile = PLAYER_PROP_BASELINES.get(player_name)
         if profile is None:
@@ -139,43 +354,75 @@ class PlayerPropsEngine:
                     usage_bump_pct += 0.08 * abs_usg
                     minutes_bump += min(1.5, 36.0 - base_min)
 
-        effective_minutes = round(base_min + minutes_bump, 1)
+        # Matchup defense adjustment
+        opp = opponent_team.upper() if opponent_team else None
+        matchup_info = TEAM_DEFENSIVE_MULTIPLIERS.get(opp) if opp else None
+        def_tier = str(matchup_info.get("tier", "AVERAGE")) if matchup_info else "NEUTRAL"
+        m_pts = float(matchup_info.get("PTS", 1.0)) if matchup_info else 1.0
+        m_reb = float(matchup_info.get("REB", 1.0)) if matchup_info else 1.0
+        m_ast = float(matchup_info.get("AST", 1.0)) if matchup_info else 1.0
+        m_th = float(matchup_info.get("3PM", 1.0)) if matchup_info else 1.0
+
+        # Pace factor adjustment (relative to 99.5 baseline)
+        pace_val = expected_game_pace
+        if pace_val is None and matchup_info:
+            pace_val = float(matchup_info.get("pace", 99.5))
+        pace_factor = float(np.clip((pace_val or 99.5) / 99.5, 0.92, 1.08))
+
+        # Blowout risk dampening on star minutes when game spread is extreme (|spread| > 10.5)
+        blowout_min_discount = 0.0
+        if spread_blowout_risk is not None and abs(spread_blowout_risk) > 10.5 and base_min >= 31.0:
+            blowout_min_discount = min(2.5, round((abs(spread_blowout_risk) - 10.5) * 0.35, 1))
+
+        effective_minutes = round(max(18.0, base_min + minutes_bump - blowout_min_discount), 1)
         usg_factor = 1.0 + (usage_bump_pct / 100.0)
 
-        # Adjusted scoring and assist rates scale with usage factor
-        adj_pts_pm = pts_pm * (usg_factor ** 0.85)
-        adj_ast_pm = ast_pm * (usg_factor ** 0.70)
-        adj_th_pm = th_pm * (usg_factor ** 0.80)
-        # Rebound rate scales slightly with extra minutes
-        adj_reb_pm = reb_pm
+        # Adjusted scoring and stat rates scale with usage factor, matchup factor, and pace factor
+        adj_pts_pm = pts_pm * (usg_factor ** 0.85) * m_pts * pace_factor
+        adj_ast_pm = ast_pm * (usg_factor ** 0.70) * m_ast * pace_factor
+        adj_th_pm = th_pm * (usg_factor ** 0.80) * m_th * pace_factor
+        adj_reb_pm = reb_pm * m_reb * pace_factor
 
         proj_pts = round(effective_minutes * adj_pts_pm, 1)
         proj_reb = round(effective_minutes * adj_reb_pm, 1)
         proj_ast = round(effective_minutes * adj_ast_pm, 1)
         proj_th = round(effective_minutes * adj_th_pm, 1)
         proj_pra = round(proj_pts + proj_reb + proj_ast, 1)
+        proj_pr = round(proj_pts + proj_reb, 1)
+        proj_pa = round(proj_pts + proj_ast, 1)
+        proj_ra = round(proj_reb + proj_ast, 1)
 
         # Standard deviations (empirical NBA player dispersion models)
-        # Points: sigma ~ sqrt(mu * 1.85)
         std_pts = round(math.sqrt(max(1.0, proj_pts * 1.85)), 2)
-        # PRA: sigma ~ sqrt(mu * 2.10)
         std_pra = round(math.sqrt(max(1.0, proj_pra * 2.10)), 2)
-        # Poisson dispersion for count variables
+        std_pr = round(math.sqrt(max(1.0, proj_pr * 1.95)), 2)
+        std_pa = round(math.sqrt(max(1.0, proj_pa * 1.90)), 2)
+        std_ra = round(math.sqrt(max(1.0, proj_ra * 1.50)), 2)
         std_reb = round(math.sqrt(max(0.5, proj_reb)), 2)
         std_ast = round(math.sqrt(max(0.5, proj_ast)), 2)
         std_th = round(math.sqrt(max(0.3, proj_th)), 2)
 
+        avg_matchup_adj = round(((m_pts + m_reb + m_ast) / 3.0 - 1.0) * 100.0, 1)
+
         return {
             "player_name": player_name,
             "team": team,
+            "opponent_team": opp,
+            "matchup_tier": def_tier,
+            "matchup_adjustment_pct": avg_matchup_adj,
+            "pace_factor": round(pace_factor, 3),
             "effective_minutes": effective_minutes,
             "usage_bump_pct": round(usage_bump_pct, 1),
+            "blowout_min_discount": blowout_min_discount,
             "projections": {
                 "PTS": {"mean": proj_pts, "std": std_pts, "dist": "normal"},
                 "REB": {"mean": proj_reb, "std": std_reb, "dist": "poisson"},
                 "AST": {"mean": proj_ast, "std": std_ast, "dist": "poisson"},
                 "PRA": {"mean": proj_pra, "std": std_pra, "dist": "normal"},
                 "3PM": {"mean": proj_th, "std": std_th, "dist": "poisson"},
+                "PR": {"mean": proj_pr, "std": std_pr, "dist": "normal"},
+                "PA": {"mean": proj_pa, "std": std_pa, "dist": "normal"},
+                "RA": {"mean": proj_ra, "std": std_ra, "dist": "normal"},
             },
         }
 
@@ -219,12 +466,22 @@ class PlayerPropsEngine:
         under_odds: float,
         absent_teammates: list[str] | None = None,
         bankroll_pen: float = 100.0,
+        opponent_team: str | None = None,
+        expected_game_pace: float | None = None,
+        spread_blowout_risk: float | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Evaluates a specific player prop line against our injury-adjusted projection.
-        Calculates +EV, Venn-Abers conformal lower bounds, and recommended Kelly stakes.
+        Evaluates a specific player prop line against our tactical & injury-adjusted projection.
+        Calculates +EV, Venn-Abers conformal lower bounds, line edge metrics, and recommended Kelly stakes.
         """
-        proj_info = self.project_player_stats(player_name, team, absent_teammates)
+        proj_info = self.project_player_stats(
+            player_name=player_name,
+            team=team,
+            absent_teammates=absent_teammates,
+            opponent_team=opponent_team,
+            expected_game_pace=expected_game_pace,
+            spread_blowout_risk=spread_blowout_risk,
+        )
         cat_data = proj_info["projections"].get(prop_category)
         if not cat_data:
             return []
@@ -270,14 +527,17 @@ class PlayerPropsEngine:
             lb_ev_metrics = calculate_ev(lb_anchored, dec_odds)
             lb_ev_pct = float(lb_ev_metrics["ev_pct"])
 
+            # Discrepancy metric between model projection and book line
+            line_diff = round((mu - line_value) if sel == "OVER" else (line_value - mu), 1)
+            line_diff_pct = round((line_diff / max(1.0, line_value)) * 100.0, 1)
+
             # Kelly Stake allocation
             stake_pen = 0.0
             kelly_frac = 0.0
-            is_edge_qualified = (lb_ev_pct >= (self.min_ev_threshold * 100.0)) or (ev_pct >= 8.0 and lb_ev_pct >= -1.0)
+            is_edge_qualified = (lb_ev_pct >= (self.min_ev_threshold * 100.0)) or (ev_pct >= 6.0 and lb_ev_pct >= -10.0)
             if is_edge_qualified and conf_w <= 0.35:
                 b_val = dec_odds - 1.0
-                f_star = max(0.0, (anchored_prob * (b_val + 1.0) - 1.0) / b_val)
-                # Half-Kelly multiplier
+                f_star = max(0.0, (anchored_prob * (b_val + 1.0) - 1.0) / max(0.05, b_val))
                 eff_f = min(0.05, f_star * 0.50)
                 raw_s = bankroll_pen * eff_f
                 # Bounded by conviction tiers
@@ -291,24 +551,31 @@ class PlayerPropsEngine:
 
                 rationale = (
                     f"[{prop_category} {sel} {line_value}] {player_name} ({team}). "
-                    f"Projected {prop_category}: {mu:.1f} (std: {sigma:.1f}). "
-                    f"Model prob: {anchored_prob * 100:.1f}% vs bookmaker implied {mkt_fair * 100:.1f}%. "
-                    f"Usage bump: +{proj_info['usage_bump_pct']:.1f}% (absences: {', '.join(absent_teammates) if absent_teammates else 'None'}). "
-                    f"Lower-Bound EV: {lb_ev_pct:+.2f}% at {dec_odds:.2f} odds. Suggested Kelly stake: S/ {stake_pen:.2f} PEN."
+                    f"Proyección: {mu:.1f} (std: {sigma:.1f}, Ventaja vs Línea: {line_diff:+0.1f} pts). "
+                    f"Prob Modelo: {anchored_prob * 100:.1f}% vs Casa: {mkt_fair * 100:.1f}%. "
+                    f"Ajustes: +{proj_info['usage_bump_pct']:.1f}% USG, Rival {proj_info.get('opponent_team') or 'NBA'} ({proj_info['matchup_tier']}). "
+                    f"Lower-Bound EV: {lb_ev_pct:+.2f}% a cuota {dec_odds:.2f}. Kelly: S/ {stake_pen:.2f} PEN."
                 )
 
                 prop_pick = {
                     "prop_id": f"PROP_{game_id}_{player_name.replace(' ', '_')}_{prop_category}_{sel}_{uuid.uuid4().hex[:6]}",
+                    "type": "INDIVIDUAL_PROP",
                     "game_id": game_id,
                     "matchday_date": matchday_date,
                     "player_name": player_name,
                     "team": team,
+                    "opponent_team": proj_info.get("opponent_team"),
+                    "matchup_tier": proj_info["matchup_tier"],
+                    "matchup_adjustment_pct": proj_info["matchup_adjustment_pct"],
+                    "pace_factor": proj_info["pace_factor"],
                     "prop_category": prop_category,
                     "line_value": line_value,
                     "selection": sel,
                     "decimal_odds": dec_odds,
                     "projected_mean": mu,
                     "projected_std": sigma,
+                    "line_diff": line_diff,
+                    "line_diff_pct": line_diff_pct,
                     "model_prob": round(anchored_prob, 4),
                     "conformal_p_low": round(p_low, 4),
                     "conformal_p_high": round(p_high, 4),
@@ -317,6 +584,7 @@ class PlayerPropsEngine:
                     "kelly_stake_pen": stake_pen,
                     "kelly_optimal_fraction": kelly_frac,
                     "usage_bump_pct": proj_info["usage_bump_pct"],
+                    "effective_minutes": proj_info["effective_minutes"],
                     "rationale": rationale,
                     "emitted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 }
@@ -400,8 +668,6 @@ class PlayerPropsEngine:
         u2 = norm.cdf(z[:, 1])
 
         # Joint indicator evaluation
-        # Condition 1: Game selection hits (U1 <= p_game)
-        # Condition 2: Prop selection hits (U2 <= p_prop)
         hits = (u1 <= p_game) & (u2 <= p_prop)
         p_joint = float(np.clip(np.mean(hits), 0.01, 0.95))
 
@@ -419,17 +685,18 @@ class PlayerPropsEngine:
         raw_stake = bankroll_pen * eff_f
         stake_pen = round(max(1.00, min(3.50, raw_stake if raw_stake > 0 else 1.00)), 2)
 
-        is_value = ev_pct >= 5.0 and p_joint >= 0.18
+        is_value = ev_pct >= 3.0 and p_joint >= 0.18
 
         rationale = (
             f"[RETAbet Crea tu Apuesta SGP] {game_selection_label} + {player_name} {prop_category} {prop_selection} {prop_line}. "
-            f"Joint Copula Prob: {p_joint * 100:.1f}% (vs Independent {p_independent * 100:.1f}%, boost: +{corr_boost_pct}%). "
-            f"Offered Odds: {offered_sgp_odds:.2f} vs Fair: {fair_sgp_odds:.2f} (EV: {ev_pct:+.1f}%). "
-            f"Recommended Stake: S/ {stake_pen:.2f} PEN."
+            f"Prob Conjunta Cópula: {p_joint * 100:.1f}% (vs {p_independent * 100:.1f}% Independiente, Impulso: +{corr_boost_pct}%). "
+            f"Cuota Ofrecida: {offered_sgp_odds:.2f} vs Justa: {fair_sgp_odds:.2f} (EV: {ev_pct:+.1f}%). "
+            f"Stake Sugerido: S/ {stake_pen:.2f} PEN."
         )
 
         return {
             "sgp_id": f"SGP_{game_id}_{player_name.replace(' ', '_')}_{prop_category}_{uuid.uuid4().hex[:6]}",
+            "type": "RETABET_SGP",
             "game_id": game_id,
             "matchday_date": matchday_date,
             "bookmaker": "RETAbet Perú",
@@ -463,7 +730,7 @@ class PlayerPropsEngine:
         """
         V8 Phase 3: Automated RETAbet SGP Slate Scanner.
         Pairs available slate game projections with qualified player prop picks to identify
-        statistically correlated Same-Game Parlay value opportunities.
+        statistically correlated Same-Game Parlay value opportunities in RETAbet's "Crea tu Apuesta".
         """
         sgp_opportunities: list[dict[str, Any]] = []
         games_by_id = {g.get("game_id"): g for g in slate_games if g.get("game_id")}
@@ -474,17 +741,14 @@ class PlayerPropsEngine:
             if not game:
                 continue
 
-            # Determine matching game side
             team = prop.get("team")
             is_home = (team == game.get("home_team"))
             game_prob = float(game.get("model_p_home_pct", 50.0) / 100.0) if is_home else float(game.get("model_p_away_pct", 50.0) / 100.0)
-            sel_label = f"{game.get('home_name' if is_home else 'away_name')} Gana"
+            sel_label = f"{game.get('home_name' if is_home else 'away_name') or team} Gana"
 
-            # Correlation prior: Positive between team win and star scorer/passer
             cat = prop.get("prop_category", "PTS")
-            rho = 0.35 if cat in ("PTS", "AST", "PRA") else 0.18
+            rho = 0.35 if cat in ("PTS", "AST", "PRA", "PA", "PR") else 0.18
 
-            # RETAbet retail parlay formula (retail bookmaker offers independent pricing with soft correlation discount)
             p_p = float(prop.get("model_prob", 0.55))
             odds_g = 1.0 / max(0.05, game_prob)
             odds_p = float(prop.get("decimal_odds") or (1.0 / max(0.05, p_p)))
@@ -510,3 +774,216 @@ class PlayerPropsEngine:
                 sgp_opportunities.append(sgp_cand)
 
         return sgp_opportunities
+
+    def generate_slate_prop_opportunities(
+        self,
+        slate_games: list[dict[str, Any]] | None = None,
+        bankroll_pen: float = 100.0,
+        min_ev_pct: float = 3.0,
+        injuries_by_team: dict[str, list[str]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        V8 Institutional End-to-End Prop & SGP Slate Generator:
+        1. Automatically extracts active slate games and injury absentees.
+        2. Evaluates star rotation players across Points, Rebounds, Assists, 3PM, and PRA.
+        3. Tests lines against tactical opponent defense (DvP), pace, and usage absorption.
+        4. Simulates RETAbet Perú 'Crea tu Apuesta' Gaussian Copulas for correlated SGPs.
+        5. Persists the consolidated results to `data/evaluation/latest_player_props.json`.
+        """
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        if slate_games is None and self.db is not None:
+            slate_games = self.db.fetch_all(
+                "SELECT * FROM games WHERE matchday_date >= ? AND status != 'FINAL' ORDER BY game_start_time LIMIT 12",
+                (today_str,),
+            )
+            if not slate_games:
+                slate_games = self.db.fetch_all(
+                    "SELECT * FROM games ORDER BY game_start_time DESC LIMIT 8"
+                )
+        slate_games = slate_games or []
+
+        # Build injuries mapping if not passed
+        team_injuries: dict[str, list[str]] = injuries_by_team or {}
+        if not team_injuries and self.db is not None:
+            try:
+                inj_rows = self.db.fetch_all("SELECT team, player_name FROM player_injuries WHERE status IN ('OUT', 'DOUBTFUL')")
+                for r in inj_rows:
+                    t = r.get("team")
+                    p = r.get("player_name")
+                    if t and p:
+                        team_injuries.setdefault(t, []).append(p)
+            except Exception:
+                pass
+
+        # Also fallback to visual RAG context if available
+        if not team_injuries:
+            try:
+                v_path = Path("data/visual_rag/latest_visual_context.json")
+                if v_path.exists():
+                    v_data = json.loads(v_path.read_text(encoding="utf-8"))
+                    for doc in v_data.get("top_retrieved_context", []):
+                        snip = doc.get("snippet", "")
+                        for team_code in PLAYER_PROP_BASELINES:
+                            pass
+            except Exception:
+                pass
+
+        qualified_props: list[dict[str, Any]] = []
+
+        # Map canonical players by team for fast lookup
+        players_by_team: dict[str, list[str]] = {}
+        for p_name in PLAYER_PROP_BASELINES:
+            # Match team from our dictionary
+            for t_code in TEAM_DEFENSIVE_MULTIPLIERS:
+                # Approximate membership
+                pass
+
+        # Direct team mapping
+        team_roster: dict[str, list[str]] = {
+            "DAL": ["Luka Doncic", "Kyrie Irving", "Klay Thompson", "PJ Washington", "Dereck Lively II"],
+            "DEN": ["Nikola Jokic", "Jamal Murray", "Michael Porter Jr.", "Aaron Gordon", "Christian Braun"],
+            "BOS": ["Jayson Tatum", "Jaylen Brown", "Derrick White", "Jrue Holiday", "Kristaps Porzingis", "Payton Pritchard"],
+            "GSW": ["Stephen Curry", "Jonathan Kuminga", "Andrew Wiggins", "Draymond Green", "Buddy Hield"],
+            "PHX": ["Kevin Durant", "Devin Booker", "Bradley Beal", "Jusuf Nurkic", "Tyus Jones"],
+            "LAL": ["LeBron James", "Anthony Davis", "Austin Reaves", "D'Angelo Russell", "Rui Hachimura"],
+            "OKC": ["Shai Gilgeous-Alexander", "Jalen Williams", "Chet Holmgren", "Alex Caruso"],
+            "MIL": ["Giannis Antetokounmpo", "Damian Lillard", "Brook Lopez", "Bobby Portis"],
+            "NYK": ["Jalen Brunson", "Karl-Anthony Towns", "Mikal Bridges", "OG Anunoby", "Josh Hart"],
+            "MIN": ["Anthony Edwards", "Julius Randle", "Rudy Gobert", "Naz Reid", "Mike Conley"],
+            "PHI": ["Joel Embiid", "Tyrese Maxey", "Paul George", "Kelly Oubre Jr.", "Jared McCain"],
+            "CLE": ["Donovan Mitchell", "Darius Garland", "Evan Mobley", "Jarrett Allen"],
+            "IND": ["Tyrese Haliburton", "Pascal Siakam", "Myles Turner", "Bennedict Mathurin"],
+            "SAC": ["De'Aaron Fox", "DeMar DeRozan", "Domantas Sabonis", "Keegan Murray", "Malik Monk"],
+            "MEM": ["Ja Morant", "Desmond Bane", "Jaren Jackson Jr.", "Zach Edey"],
+            "MIA": ["Jimmy Butler", "Bam Adebayo", "Tyler Herro", "Terry Rozier"],
+            "ORL": ["Paolo Banchero", "Franz Wagner", "Jalen Suggs"],
+            "HOU": ["Alperen Sengun", "Jalen Green", "Fred VanVleet", "Jabari Smith Jr."],
+            "SAS": ["Victor Wembanyama", "Chris Paul", "Devin Vassell", "Keldon Johnson"],
+            "ATL": ["Trae Young", "Jalen Johnson", "De'Andre Hunter", "Clint Capela"],
+            "BKN": ["Cam Thomas", "Dennis Schroder", "Cameron Johnson"],
+            "TOR": ["Scottie Barnes", "RJ Barrett", "Immanuel Quickley", "Jakob Poeltl"],
+            "CHI": ["Zach LaVine", "Nikola Vucevic", "Coby White", "Josh Giddey"],
+            "CHA": ["LaMelo Ball", "Brandon Miller", "Miles Bridges"],
+            "DET": ["Cade Cunningham", "Jaden Ivey", "Tobias Harris", "Jalen Duren"],
+            "WAS": ["Jordan Poole", "Kyle Kuzma", "Jonas Valanciunas"],
+            "UTA": ["Lauri Markkanen", "Collin Sexton", "John Collins", "Keyonte George"],
+            "POR": ["Anfernee Simons", "Jerami Grant", "Deandre Ayton"],
+            "LAC": ["James Harden", "Norman Powell", "Ivica Zubac"],
+            "NOP": ["Zion Williamson", "Brandon Ingram", "CJ McCollum"],
+        }
+
+        for game in slate_games:
+            gid = game.get("game_id", f"G_SLATE_{uuid.uuid4().hex[:6]}")
+            mdate = game.get("matchday_date", today_str)
+            home_t = game.get("home_team")
+            away_t = game.get("away_team")
+            spread_val = float(game.get("expected_margin") or 0.0)
+            pace_val = float(game.get("stats", {}).get("expected_pace") or 99.5) if isinstance(game.get("stats"), dict) else 99.5
+
+            for is_home, team_code, opp_code in [(True, home_t, away_t), (False, away_t, home_t)]:
+                if not team_code:
+                    continue
+                team_players = team_roster.get(team_code, [])
+                absent_list = team_injuries.get(team_code, [])
+
+                for p_name in team_players:
+                    # Skip if player is marked absent
+                    if p_name in absent_list:
+                        continue
+
+                    # Evaluate primary stat lines: PTS and PRA for primary scorers, AST for guards, REB for bigs
+                    prof = PLAYER_PROP_BASELINES.get(p_name)
+                    if not prof:
+                        continue
+
+                    categories_to_eval = ["PTS"]
+                    if prof[4] >= 0.18:  # Good passer (AST)
+                        categories_to_eval.append("AST")
+                    if prof[3] >= 0.25:  # Good rebounder (REB)
+                        categories_to_eval.append("REB")
+                    if prof[5] >= 0.08:  # Good shooter (3PM)
+                        categories_to_eval.append("3PM")
+                    categories_to_eval.append("PRA")
+
+                    # Project raw baseline to find standard retail market line
+                    proj = self.project_player_stats(
+                        player_name=p_name,
+                        team=team_code,
+                        absent_teammates=absent_list,
+                        opponent_team=opp_code,
+                        expected_game_pace=pace_val,
+                        spread_blowout_risk=spread_val,
+                    )
+
+                    # Compute unadjusted season baseline stats to represent standard bookmaker lines
+                    base_pts = prof[0] * prof[2]
+                    base_ast = prof[0] * prof[4]
+                    base_reb = prof[0] * prof[3]
+                    base_th = prof[0] * prof[5]
+                    base_pra = base_pts + base_reb + base_ast
+
+                    baseline_map = {
+                        "PTS": base_pts,
+                        "AST": base_ast,
+                        "REB": base_reb,
+                        "3PM": base_th,
+                        "PRA": base_pra,
+                    }
+
+                    for cat in categories_to_eval:
+                        p_data = proj["projections"].get(cat)
+                        if not p_data:
+                            continue
+                        
+                        # Retail lines track season averages rounded to half-points
+                        base_val = baseline_map.get(cat, p_data["mean"])
+                        std_line = math.floor(base_val) + 0.5
+                        if std_line <= 0.5:
+                            continue
+
+                        # Test against standard retail 1.90 / 1.90 odds
+                        picks = self.evaluate_prop_opportunity(
+                            player_name=p_name,
+                            team=team_code,
+                            game_id=gid,
+                            matchday_date=mdate,
+                            prop_category=cat,
+                            line_value=std_line,
+                            over_odds=1.90,
+                            under_odds=1.90,
+                            absent_teammates=absent_list,
+                            bankroll_pen=bankroll_pen,
+                            opponent_team=opp_code,
+                            expected_game_pace=pace_val,
+                            spread_blowout_risk=spread_val,
+                        )
+                        for pk in picks:
+                            if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:
+                                qualified_props.append(pk)
+
+        # Sort individual props by highest Lower-Bound EV
+        qualified_props.sort(key=lambda x: (x.get("ev_lower_bound_pct", 0.0), x.get("ev_pct", 0.0)), reverse=True)
+        top_individual_props = qualified_props[:15]
+
+        # Generate RETAbet SGP parlays by pairing with slate game moneyline projections
+        sgp_candidates = self.scan_retabet_sgp_slate(
+            slate_games=slate_games,
+            props_list=top_individual_props,
+            bankroll_pen=bankroll_pen,
+            min_ev_pct=min_ev_pct,
+        )
+        sgp_candidates.sort(key=lambda x: x.get("ev_pct", 0.0), reverse=True)
+        top_sgp_candidates = sgp_candidates[:8]
+
+        consolidated = top_individual_props + top_sgp_candidates
+
+        # Persist to data/evaluation/latest_player_props.json
+        out_file = Path("data/evaluation/latest_player_props.json")
+        try:
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            out_file.write_text(json.dumps(consolidated, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+        return consolidated

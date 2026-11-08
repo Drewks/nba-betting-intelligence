@@ -509,6 +509,25 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         "obsidian_vault_path": str(PROJECT_ROOT / "NBA"),
     }
 
+    # 4b. Scan Player Props & RETAbet SGP Opportunities for upcoming games
+    try:
+        from src.prediction.player_props import PlayerPropsEngine
+        props_engine = PlayerPropsEngine(db=db, min_ev_threshold=0.03)
+        slate_records = db.fetch_all(
+            "SELECT * FROM games WHERE matchday_date = ? AND status != 'FINAL'", (today_str,)
+        )
+        if not slate_records:
+            slate_records = db.fetch_all(
+                "SELECT * FROM games WHERE matchday_date >= ? AND status != 'FINAL' ORDER BY game_start_time LIMIT 10",
+                (today_str,),
+            )
+        props_engine.generate_slate_prop_opportunities(
+            slate_games=slate_records,
+            bankroll_pen=paper_engine.get_bankroll_state()["settled_bankroll_pen"],
+        )
+    except Exception:
+        pass
+
     daily_md = generate_daily_report(db, target_date=today_str)
     weekly_md = generate_weekly_report(metrics, promo_eval)
     audit_md = generate_audit_report(audit_res, env_status)

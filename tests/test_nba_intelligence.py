@@ -2296,3 +2296,75 @@ def test_39_v8_drawdown_kelly_shield_and_official_v8_promotion() -> None:
 
     # 3. Verify V8 Official Model Promotion
     assert rcc.MODEL_VERSION_ID == "model_f_ensemble_v8"
+
+
+def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path) -> None:
+    """
+    Test 40 (V8 Upgraded Player Props and Tactical Matchup Verification):
+    1. Canonical coverage: > 100 players mapped across all 30 NBA teams.
+    2. Defense vs Position (DvP): Opponent defensive rating splits modulate projections.
+    3. Game Pace and Blowout Dampening: High pace accelerates scoring, heavy spreads dampen star minutes.
+    4. Combo markets: Supports PR, PA, RA, and PRA.
+    5. Automated Slate Generator: Produces qualified individual props and RETAbet SGPs.
+    """
+    from src.prediction.player_props import (
+        PLAYER_PROP_BASELINES,
+        TEAM_DEFENSIVE_MULTIPLIERS,
+        PlayerPropsEngine,
+    )
+    from src.storage.db import DatabaseManager
+
+    # 1. Canonical coverage test
+    assert len(PLAYER_PROP_BASELINES) >= 100
+    assert len(TEAM_DEFENSIVE_MULTIPLIERS) == 30
+
+    engine = PlayerPropsEngine(min_ev_threshold=0.03)
+
+    # 2. Matchup defense impact test: Tatum vs WAS (TARGET) vs Tatum vs MIN (ELITE)
+    proj_tatum_vs_was = engine.project_player_stats("Jayson Tatum", "BOS", opponent_team="WAS")
+    proj_tatum_vs_min = engine.project_player_stats("Jayson Tatum", "BOS", opponent_team="MIN")
+
+    assert proj_tatum_vs_was["projections"]["PTS"]["mean"] > proj_tatum_vs_min["projections"]["PTS"]["mean"]
+    assert proj_tatum_vs_was["matchup_tier"] == "TARGET"
+    assert proj_tatum_vs_min["matchup_tier"] == "ELITE"
+
+    # 3. Pace factor impact test
+    proj_fast_pace = engine.project_player_stats("Stephen Curry", "GSW", expected_game_pace=104.0)
+    proj_slow_pace = engine.project_player_stats("Stephen Curry", "GSW", expected_game_pace=96.0)
+    assert proj_fast_pace["projections"]["PTS"]["mean"] > proj_slow_pace["projections"]["PTS"]["mean"]
+
+    # 4. Blowout spread dampening test
+    proj_tight = engine.project_player_stats("Luka Doncic", "DAL", spread_blowout_risk=2.5)
+    proj_blowout = engine.project_player_stats("Luka Doncic", "DAL", spread_blowout_risk=14.5)
+    assert proj_tight["effective_minutes"] > proj_blowout["effective_minutes"]
+    assert proj_blowout["blowout_min_discount"] > 0.0
+
+    # 5. Combo markets test
+    proj_combos = engine.project_player_stats("Nikola Jokic", "DEN")
+    for combo in ["PRA", "PR", "PA", "RA"]:
+        assert combo in proj_combos["projections"]
+        assert proj_combos["projections"][combo]["mean"] > 0.0
+        assert proj_combos["projections"][combo]["std"] > 0.0
+
+    # 6. Automated Slate Generator test
+    test_db = DatabaseManager(tmp_path / "test_slate.sqlite3")
+    sample_slate = [
+        {
+            "game_id": "G_TEST_SLATE_1",
+            "home_team": "IND",
+            "away_team": "WAS",
+            "matchday_date": "2026-11-08",
+            "expected_margin": 4.5,
+            "stats": {"expected_pace": 103.0},
+            "model_p_home_pct": 65.0,
+            "model_p_away_pct": 35.0,
+        }
+    ]
+    gen_results = engine.generate_slate_prop_opportunities(
+        slate_games=sample_slate,
+        bankroll_pen=100.0,
+        min_ev_pct=3.0,
+    )
+    assert len(gen_results) >= 1
+    types = {r.get("type") for r in gen_results}
+    assert "INDIVIDUAL_PROP" in types or "RETABET_SGP" in types

@@ -517,13 +517,30 @@ def generate_interactive_html_dashboard(
         <div>
           <h2 class="text-base font-bold">🏀 Player Props & Cópulas SGP V8 — Proyecciones, Desajustes y 'Crea tu Apuesta' RETAbet</h2>
           <p class="text-xs text-[var(--muted-foreground)]">
-            Oportunidades +EV detectadas en líneas de Puntos (PTS), Rebotes (REB), Asistencias (AST) y PRA mediante distribuciones Poisson / Gaussiana con ajuste de uso (ΔUSG%) por bajas médicas y dimensionamiento Kelly.
+            Oportunidades +EV detectadas en líneas individuales (PTS, REB, AST, 3PM, PRA) y combinadas correlacionadas para casas peruanas mediante Cópulas Gaussianas y Calibración Conformal Venn-Abers.
           </p>
         </div>
-        <span class="text-xs font-medium px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
-          Filtro Conformal: Lower-Bound EV > 5%
-        </span>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30">
+            🇵🇪 RETAbet SGP Activo
+          </span>
+          <span class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-purple-500/15 text-purple-400 border border-purple-500/30">
+            Filtro Conformal: Lower-Bound EV > 3%
+          </span>
+        </div>
       </div>
+
+      <!-- CATEGORY PILL FILTER BAR -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        <button onclick="filterPropsCategory('ALL')" id="prop-filter-ALL" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-purple-600 text-white shadow-sm transition-all whitespace-nowrap">⚡ Todas (<span id="cnt-p-all">0</span>)</button>
+        <button onclick="filterPropsCategory('PTS')" id="prop-filter-PTS" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all whitespace-nowrap">🏀 Puntos (<span id="cnt-p-pts">0</span>)</button>
+        <button onclick="filterPropsCategory('REB')" id="prop-filter-REB" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all whitespace-nowrap">💪 Rebotes (<span id="cnt-p-reb">0</span>)</button>
+        <button onclick="filterPropsCategory('AST')" id="prop-filter-AST" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all whitespace-nowrap">🎯 Asistencias (<span id="cnt-p-ast">0</span>)</button>
+        <button onclick="filterPropsCategory('3PM')" id="prop-filter-3PM" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all whitespace-nowrap">🏹 Triples (<span id="cnt-p-3pm">0</span>)</button>
+        <button onclick="filterPropsCategory('COMBOS')" id="prop-filter-COMBOS" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-all whitespace-nowrap">🔥 PRA & Combos (<span id="cnt-p-combos">0</span>)</button>
+        <button onclick="filterPropsCategory('SGP')" id="prop-filter-SGP" class="prop-filter-btn px-3.5 py-2 rounded-xl font-bold bg-[var(--card)] border border-amber-500/40 text-amber-400 hover:text-amber-300 transition-all whitespace-nowrap">🇵🇪 RETAbet SGP (<span id="cnt-p-sgp">0</span>)</button>
+      </div>
+
       <div id="props-container" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></div>
     </div>
 
@@ -1174,37 +1191,225 @@ def generate_interactive_html_dashboard(
       }}).join('');
     }}
 
+    let currentPropCategory = 'ALL';
+
+    function filterPropsCategory(cat) {{
+      currentPropCategory = cat;
+      document.querySelectorAll('.prop-filter-btn').forEach(btn => {{
+        btn.classList.remove('bg-purple-600', 'text-white', 'shadow-sm');
+        btn.classList.add('bg-[var(--card)]', 'text-[var(--muted-foreground)]', 'border-[var(--border)]');
+      }});
+      const activeBtn = document.getElementById(`prop-filter-${{cat}}`);
+      if (activeBtn) {{
+        activeBtn.classList.remove('bg-[var(--card)]', 'text-[var(--muted-foreground)]', 'border-[var(--border)]');
+        activeBtn.classList.add('bg-purple-600', 'text-white', 'shadow-sm');
+      }}
+      renderProps();
+    }}
+
+    function copyToClipboard(text, elemId) {{
+      navigator.clipboard.writeText(text).then(() => {{
+        const el = document.getElementById(elemId);
+        if (el) {{
+          const orig = el.innerHTML;
+          el.innerHTML = '✅ ¡Copiado!';
+          setTimeout(() => {{ el.innerHTML = orig; }}, 1800);
+        }}
+      }}).catch(() => {{
+        // Fallback for non-secure contexts
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        const el = document.getElementById(elemId);
+        if (el) {{
+          const orig = el.innerHTML;
+          el.innerHTML = '✅ ¡Copiado!';
+          setTimeout(() => {{ el.innerHTML = orig; }}, 1800);
+        }}
+      }});
+    }}
+
     function renderProps() {{
       const container = document.getElementById('props-container');
-      const props = DASH_DATA.player_props || [];
+      const allProps = DASH_DATA.player_props || [];
       if (!container) return;
-      if (!props.length) {{
-        container.innerHTML = `<div class="col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-xl p-8 text-center text-sm text-[var(--muted-foreground)]">No hay desajustes de Player Props que superen el umbral de Lower-Bound EV (> 5%) en este momento.</div>`;
+
+      // Update counters
+      const cntAll = allProps.length;
+      const cntPts = allProps.filter(p => p.prop_category === 'PTS' && p.type !== 'RETABET_SGP' && !p.sgp_id).length;
+      const cntReb = allProps.filter(p => p.prop_category === 'REB' && p.type !== 'RETABET_SGP' && !p.sgp_id).length;
+      const cntAst = allProps.filter(p => p.prop_category === 'AST' && p.type !== 'RETABET_SGP' && !p.sgp_id).length;
+      const cnt3pm = allProps.filter(p => p.prop_category === '3PM' && p.type !== 'RETABET_SGP' && !p.sgp_id).length;
+      const cntCombos = allProps.filter(p => ['PRA', 'PR', 'PA', 'RA'].includes(p.prop_category) && p.type !== 'RETABET_SGP' && !p.sgp_id).length;
+      const cntSgp = allProps.filter(p => p.type === 'RETABET_SGP' || p.sgp_id).length;
+
+      if (document.getElementById('cnt-p-all')) document.getElementById('cnt-p-all').textContent = cntAll;
+      if (document.getElementById('cnt-p-pts')) document.getElementById('cnt-p-pts').textContent = cntPts;
+      if (document.getElementById('cnt-p-reb')) document.getElementById('cnt-p-reb').textContent = cntReb;
+      if (document.getElementById('cnt-p-ast')) document.getElementById('cnt-p-ast').textContent = cntAst;
+      if (document.getElementById('cnt-p-3pm')) document.getElementById('cnt-p-3pm').textContent = cnt3pm;
+      if (document.getElementById('cnt-p-combos')) document.getElementById('cnt-p-combos').textContent = cntCombos;
+      if (document.getElementById('cnt-p-sgp')) document.getElementById('cnt-p-sgp').textContent = cntSgp;
+
+      let filtered = allProps;
+      if (currentPropCategory === 'PTS') filtered = allProps.filter(p => p.prop_category === 'PTS' && p.type !== 'RETABET_SGP' && !p.sgp_id);
+      else if (currentPropCategory === 'REB') filtered = allProps.filter(p => p.prop_category === 'REB' && p.type !== 'RETABET_SGP' && !p.sgp_id);
+      else if (currentPropCategory === 'AST') filtered = allProps.filter(p => p.prop_category === 'AST' && p.type !== 'RETABET_SGP' && !p.sgp_id);
+      else if (currentPropCategory === '3PM') filtered = allProps.filter(p => p.prop_category === '3PM' && p.type !== 'RETABET_SGP' && !p.sgp_id);
+      else if (currentPropCategory === 'COMBOS') filtered = allProps.filter(p => ['PRA', 'PR', 'PA', 'RA'].includes(p.prop_category) && p.type !== 'RETABET_SGP' && !p.sgp_id);
+      else if (currentPropCategory === 'SGP') filtered = allProps.filter(p => p.type === 'RETABET_SGP' || p.sgp_id);
+
+      if (!filtered.length) {{
+        container.innerHTML = `<div class="col-span-2 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-8 text-center text-sm text-[var(--muted-foreground)]">No hay desajustes en esta categoría que superen el umbral de Lower-Bound EV (> 3%) en este momento.</div>`;
         return;
       }}
-      container.innerHTML = props.map(p => {{
+
+      container.innerHTML = filtered.map((p, idx) => {{
+        const isSgp = (p.type === 'RETABET_SGP' || Boolean(p.sgp_id));
+
+        if (isSgp) {{
+          const copyTicketText = `${{p.bookmaker || 'RETAbet Perú'}} Crea tu Apuesta: ${{p.game_selection}} + ${{p.player_name}} ${{p.prop_category}} ${{p.prop_selection}} ${{p.prop_line}} @ cuota ${{Number(p.offered_sgp_odds).toFixed(2)}}`;
+          return `
+            <div class="bg-gradient-to-br from-purple-950/30 via-[var(--card)] to-amber-950/25 border-2 border-amber-500/50 rounded-2xl p-5 shadow-md space-y-4">
+              <div class="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3.5">
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2.5 py-0.5 rounded-md text-xs font-extrabold bg-gradient-to-r from-amber-500 to-yellow-600 text-black shadow-sm">
+                      🇵🇪 CREA TU APUESTA · RETABET PERÚ
+                    </span>
+                    <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      Cópula Bivariada (ρ = ${{p.correlation_rho || 0.35}})
+                    </span>
+                    <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      Boost: +${{Number(p.correlation_boost_pct || 0).toFixed(1)}}%
+                    </span>
+                  </div>
+                  <h3 class="text-base sm:text-lg font-bold mt-2 text-[var(--foreground)]">
+                    ${{p.game_selection}} <span class="text-amber-400">+</span> ${{p.player_name}} ${{p.prop_category}} ${{p.prop_selection}} ${{p.prop_line}}
+                  </h3>
+                  <p class="text-xs text-[var(--muted-foreground)]">Partido: <strong>${{p.game_id}}</strong> · Fecha: ${{p.matchday_date}}</p>
+                </div>
+                <div class="text-right bg-[var(--background)] border border-amber-500/30 rounded-xl px-3.5 py-2 shrink-0">
+                  <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground)]">Cuota RETAbet</div>
+                  <div class="text-xl font-black text-amber-400">${{Number(p.offered_sgp_odds).toFixed(2)}}</div>
+                  <div class="text-[11px] text-[var(--muted-foreground)]">Justa: <span class="text-blue-400 font-mono">${{Number(p.fair_sgp_odds).toFixed(2)}}</span></div>
+                </div>
+              </div>
+
+              <!-- Two-Leg Visual Architecture -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[var(--background)]/80 border border-[var(--border)] rounded-xl p-3 text-xs">
+                <div class="flex items-center gap-2.5 p-2 rounded-lg bg-[var(--card)]/60 border border-[var(--border)]">
+                  <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-extrabold flex items-center justify-center shrink-0">1</span>
+                  <div>
+                    <div class="text-[10px] text-[var(--muted-foreground)] uppercase font-semibold">Pata 1 (Resultado)</div>
+                    <div class="font-bold text-emerald-400">${{p.game_selection}}</div>
+                    <div class="text-[10px] text-[var(--muted-foreground)]">Prob: ${{(Number(p.p_game) * 100).toFixed(1)}}%</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2.5 p-2 rounded-lg bg-[var(--card)]/60 border border-[var(--border)]">
+                  <span class="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 text-xs font-extrabold flex items-center justify-center shrink-0">2</span>
+                  <div>
+                    <div class="text-[10px] text-[var(--muted-foreground)] uppercase font-semibold">Pata 2 (Jugador)</div>
+                    <div class="font-bold text-purple-400">${{p.player_name}} ${{p.prop_category}} ${{p.prop_selection}} ${{p.prop_line}}</div>
+                    <div class="text-[10px] text-[var(--muted-foreground)]">Prob: ${{(Number(p.p_prop) * 100).toFixed(1)}}%</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Metrics Grid -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
+                  <div class="text-[var(--muted-foreground)]">Prob. Conjunta</div>
+                  <div class="text-base font-bold mt-0.5 text-amber-400">${{(Number(p.p_joint) * 100).toFixed(1)}}%</div>
+                  <div class="text-[10px] text-[var(--muted-foreground)]">Indep: ${{(Number(p.p_independent) * 100).toFixed(1)}}%</div>
+                </div>
+                <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
+                  <div class="text-[var(--muted-foreground)]">Impulso Correlación</div>
+                  <div class="text-base font-bold mt-0.5 text-emerald-400">+${{Number(p.correlation_boost_pct).toFixed(1)}}%</div>
+                  <div class="text-[10px] text-[var(--muted-foreground)]">Cópula Gaussiana</div>
+                </div>
+                <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
+                  <div class="text-[var(--muted-foreground)]">Valor Esperado</div>
+                  <div class="text-base font-bold mt-0.5 text-purple-400">+${{Number(p.ev_pct).toFixed(1)}}% EV</div>
+                  <div class="text-[10px] text-[var(--muted-foreground)]">Edge Sintético</div>
+                </div>
+                <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
+                  <div class="text-[var(--muted-foreground)]">Kelly Stake Sugerido</div>
+                  <div class="text-base font-bold mt-0.5 text-yellow-400">S/ ${{Number(p.kelly_stake_pen).toFixed(2)}} PEN</div>
+                  <div class="text-[10px] text-[var(--muted-foreground)]">Banca Virtual S/100</div>
+                </div>
+              </div>
+
+              <!-- Rationale and Copy Button -->
+              <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-[var(--foreground)]">
+                <strong>💡 Justificación Cuantitativa:</strong> ${{p.rationale}}
+              </div>
+
+              <div class="flex items-center justify-between gap-3 pt-1">
+                <span class="text-[11px] text-[var(--muted-foreground)]">Boleto optimizado para RETAbet Perú</span>
+                <button id="copy-sgp-${{idx}}" onclick="copyToClipboard('${{copyTicketText.replace(/'/g, "\\'") }}', 'copy-sgp-${{idx}}')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-black hover:bg-amber-400 transition-all flex items-center gap-1.5 shadow-sm">
+                  📋 Copiar Selección
+                </button>
+              </div>
+            </div>
+          `;
+        }}
+
+        // Render Upgraded Individual Prop Card
         const teamName = getTeamFullName(p.team);
         const usageBadge = p.usage_bump_pct > 0
-          ? `<span class="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">ΔUSG: +${{p.usage_bump_pct.toFixed(1)}}% por bajas</span>`
+          ? `<span class="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">ΔUSG: +${{Number(p.usage_bump_pct).toFixed(1)}}% por bajas</span>`
           : '';
+        const matchupBadge = p.opponent_team
+          ? `<span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">vs ${{p.opponent_team}} (${{p.matchup_tier || 'AVG'}})</span>`
+          : '';
+        const paceBadge = (p.pace_factor && p.pace_factor !== 1.0)
+          ? `<span class="px-2 py-0.5 rounded text-xs font-bold bg-teal-500/15 text-teal-400 border border-teal-500/30">Ritmo: x${{Number(p.pace_factor).toFixed(2)}}</span>`
+          : '';
+
+        const lineDiffNum = Number(p.line_diff !== undefined ? p.line_diff : (p.projected_mean - p.line_value));
+        const lineDiffPct = Number(p.line_diff_pct !== undefined ? p.line_diff_pct : ((lineDiffNum / Math.max(1, p.line_value)) * 100));
+        const isFavorableOver = (p.selection === 'OVER' && lineDiffNum >= 0) || (p.selection === 'UNDER' && lineDiffNum >= 0);
+        const edgeColor = isFavorableOver ? 'text-emerald-400' : 'text-blue-400';
+        const copyPropText = `${{p.player_name}} (${{p.team}}) — ${{p.prop_category}} ${{p.selection}} ${{p.line_value}} @ cuota ${{Number(p.decimal_odds).toFixed(2)}} (EV: +${{Number(p.ev_pct).toFixed(1)}}%)`;
+
         return `
           <div class="bg-[var(--card)] border-2 border-purple-500/40 rounded-2xl p-5 shadow-sm space-y-4">
             <div class="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3.5">
               <div>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-600 text-white">PROP / SGP V8</span>
+                  <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-600 text-white">${{p.prop_category}} PROP V8</span>
                   <span class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[var(--background)] border border-[var(--border)] text-purple-400">
                     ${{teamName}} (${{p.team}})
                   </span>
                   ${{usageBadge}}
+                  ${{matchupBadge}}
+                  ${{paceBadge}}
                 </div>
-                <h3 class="text-lg font-bold mt-1.5">${{p.player_name}} — <span class="text-purple-500">${{p.prop_category}} ${{p.selection}} ${{p.line_value}}</span></h3>
+                <h3 class="text-base sm:text-lg font-bold mt-1.5">${{p.player_name}} — <span class="text-purple-400">${{p.prop_category}} ${{p.selection}} ${{p.line_value}}</span></h3>
                 <p class="text-xs text-[var(--muted-foreground)]">Partido: <strong>${{p.game_id}}</strong> · Fecha: ${{p.matchday_date}}</p>
               </div>
-              <div class="text-right bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2">
-                <div class="text-xs text-[var(--muted-foreground)]">Cuota Ofrecida</div>
-                <div class="text-xl font-extrabold text-emerald-500">${{Number(p.decimal_odds).toFixed(2)}}</div>
-                <div class="text-xs text-[var(--muted-foreground)]">Línea: ${{p.line_value}}</div>
+              <div class="text-right bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2 shrink-0">
+                <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground)]">Cuota Ofrecida</div>
+                <div class="text-xl font-extrabold text-emerald-400">${{Number(p.decimal_odds).toFixed(2)}}</div>
+                <div class="text-xs text-[var(--muted-foreground)]">Línea: <strong class="text-[var(--foreground)]">${{p.line_value}}</strong></div>
+              </div>
+            </div>
+
+            <!-- Visual Edge Discrepancy Gauge -->
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 space-y-2 text-xs">
+              <div class="flex justify-between items-center">
+                <span>Línea Casa: <strong class="font-mono text-amber-400">${{p.line_value}}</strong></span>
+                <span class="font-bold ${{edgeColor}}">
+                  Ventaja Modelo: ${{lineDiffNum >= 0 ? '+' : ''}}${{lineDiffNum.toFixed(1)}} pts (${{lineDiffPct >= 0 ? '+' : ''}}${{lineDiffPct.toFixed(1)}}%)
+                </span>
+                <span>Media Modelo: <strong class="font-mono text-blue-400">${{Number(p.projected_mean).toFixed(1)}}</strong></span>
+              </div>
+              <div class="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden flex">
+                <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full" style="width: ${{Math.min(95, Math.max(15, (Number(p.projected_mean) / (p.line_value * 1.35)) * 100))}}%"></div>
               </div>
             </div>
 
@@ -1212,23 +1417,23 @@ def generate_interactive_html_dashboard(
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
               <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
                 <div class="text-[var(--muted-foreground)]">Media Proyectada</div>
-                <div class="text-base font-bold mt-0.5 text-blue-500">${{Number(p.projected_mean).toFixed(1)}}</div>
-                <div class="text-[var(--muted-foreground)]">σ = ${{Number(p.projected_std).toFixed(1)}}</div>
+                <div class="text-base font-bold mt-0.5 text-blue-400">${{Number(p.projected_mean).toFixed(1)}}</div>
+                <div class="text-[10px] text-[var(--muted-foreground)]">σ = ${{Number(p.projected_std).toFixed(1)}}</div>
               </div>
               <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
-                <div class="text-[var(--muted-foreground)]">Probabilidad Modelo</div>
-                <div class="text-base font-bold mt-0.5 text-emerald-500">${{(Number(p.model_prob) * 100).toFixed(1)}}%</div>
-                <div class="text-[var(--muted-foreground)]">Implícita: ${{((1.0 / Number(p.decimal_odds)) * 100).toFixed(1)}}%</div>
+                <div class="text-[var(--muted-foreground)]">Prob. Modelo</div>
+                <div class="text-base font-bold mt-0.5 text-emerald-400">${{(Number(p.model_prob) * 100).toFixed(1)}}%</div>
+                <div class="text-[10px] text-[var(--muted-foreground)]">Implícita: ${{((1.0 / Number(p.decimal_odds)) * 100).toFixed(1)}}%</div>
               </div>
               <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
                 <div class="text-[var(--muted-foreground)]">Lower-Bound EV</div>
-                <div class="text-base font-bold mt-0.5 text-purple-500">+${{Number(p.ev_lower_bound_pct).toFixed(2)}}%</div>
-                <div class="text-[var(--muted-foreground)]">Nominal: +${{Number(p.ev_pct).toFixed(1)}}%</div>
+                <div class="text-base font-bold mt-0.5 text-purple-400">+${{Number(p.ev_lower_bound_pct).toFixed(2)}}%</div>
+                <div class="text-[10px] text-[var(--muted-foreground)]">Nominal: +${{Number(p.ev_pct).toFixed(1)}}%</div>
               </div>
               <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
                 <div class="text-[var(--muted-foreground)]">Kelly Stake Sugerido</div>
-                <div class="text-base font-bold mt-0.5 text-amber-500">S/ ${{Number(p.kelly_stake_pen).toFixed(2)}} PEN</div>
-                <div class="text-[var(--muted-foreground)]">${{(Number(p.kelly_optimal_fraction) * 100).toFixed(1)}}% de banca</div>
+                <div class="text-base font-bold mt-0.5 text-amber-400">S/ ${{Number(p.kelly_stake_pen).toFixed(2)}} PEN</div>
+                <div class="text-[10px] text-[var(--muted-foreground)]">${{(Number(p.kelly_optimal_fraction) * 100).toFixed(1)}}% de banca</div>
               </div>
             </div>
 
@@ -1236,15 +1441,22 @@ def generate_interactive_html_dashboard(
             <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 space-y-1.5 text-xs">
               <div class="flex justify-between">
                 <span>Intervalo Conformal Venn-Abers: <strong>[${{(Number(p.conformal_p_low) * 100).toFixed(1)}}%, ${{(Number(p.conformal_p_high) * 100).toFixed(1)}}%]</strong></span>
-                <span class="text-purple-500 font-semibold">Cota Inferior Garantizada</span>
+                <span class="text-purple-400 font-semibold">Cota Inferior Garantizada</span>
               </div>
-              <div class="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden flex">
+              <div class="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden flex">
                 <div class="bg-purple-600 h-full rounded-full" style="width: ${{Math.min(95, Number(p.model_prob) * 100)}}%"></div>
               </div>
             </div>
 
-            <div class="p-3 rounded-xl bg-purple-500/10 border border-purple-500/25 text-xs">
+            <div class="p-3 rounded-xl bg-purple-500/10 border border-purple-500/25 text-xs text-[var(--foreground)]">
               <strong>💡 Justificación Cuantitativa:</strong> ${{p.rationale}}
+            </div>
+
+            <div class="flex items-center justify-between gap-3 pt-1">
+              <span class="text-[11px] text-[var(--muted-foreground)]">Puntaje de convicción conformal validado</span>
+              <button id="copy-prop-${{idx}}" onclick="copyToClipboard('${{copyPropText.replace(/'/g, "\\'") }}', 'copy-prop-${{idx}}')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-500 transition-all flex items-center gap-1.5 shadow-sm">
+                📋 Copiar Selección
+              </button>
             </div>
           </div>
         `;
