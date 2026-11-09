@@ -34,6 +34,17 @@ _load_dotenv_if_present()
 logger = logging.getLogger("TelegramListener")
 
 
+DEFAULT_KEYBOARD: dict[str, Any] = {
+    "keyboard": [
+        [{"text": "💰 Mi Banca"}, {"text": "🎯 Picks +EV"}],
+        [{"text": "🔥 Super Combinadas"}, {"text": "⚡ Cuotas Perú"}],
+        [{"text": "📅 Partidos NBA"}, {"text": "🌐 Dashboard Web"}],
+    ],
+    "resize_keyboard": True,
+    "is_persistent": True,
+}
+
+
 class TelegramInteractiveListener:
     """
     Bidirectional long-polling listener for Telegram Bot API.
@@ -112,8 +123,14 @@ class TelegramInteractiveListener:
             logger.warning(f"Error fetching Telegram updates: {exc}")
         return []
 
-    def send_reply(self, chat_id: str | int, text: str, reply_to_message_id: int | None = None) -> bool:
-        """Sends a markdown reply to a specific user chat."""
+    def send_reply(
+        self,
+        chat_id: str | int,
+        text: str,
+        reply_to_message_id: int | None = None,
+        reply_markup: dict[str, Any] | None = None,
+    ) -> bool:
+        """Sends a markdown reply with persistent touch keyboard to a user chat."""
         if not self.is_configured:
             logger.info(f"[DRY-RUN REPLY to {chat_id}]:\n{text}")
             return True
@@ -123,7 +140,8 @@ class TelegramInteractiveListener:
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "Markdown",
-            "disable_web_page_preview": True,
+            "disable_web_page_preview": False,
+            "reply_markup": reply_markup if reply_markup is not None else DEFAULT_KEYBOARD,
         }
         if reply_to_message_id:
             payload["reply_to_message_id"] = reply_to_message_id
@@ -142,7 +160,7 @@ class TelegramInteractiveListener:
     # -------------------------------------------------------------------------
 
     def process_message(self, chat_id: str | int, text: str, from_user: dict[str, Any], message_id: int | None = None) -> str:
-        """Processes an incoming text message and returns the response string."""
+        """Processes an incoming text message or button tap and returns the response string."""
         chat_id_str = str(chat_id)
         user_name = from_user.get("first_name") or from_user.get("username") or "Usuario"
 
@@ -156,26 +174,30 @@ class TelegramInteractiveListener:
                 f"Tu Chat ID (`{chat_id_str}`) no tiene permisos de consulta ni ejecución."
             )
 
-        cmd = text.strip().split()[0].lower() if text.strip() else ""
+        clean_text = text.strip()
+        cmd = clean_text.split()[0].lower() if clean_text else ""
+        text_lower = clean_text.lower()
 
-        if cmd in ("/start", "/ayuda", "/help"):
+        if cmd in ("/start", "/ayuda", "/help") or "ayuda" in text_lower or "menu" in text_lower:
             return self.handle_help(user_name)
-        elif cmd in ("/banca", "/bankroll", "/saldo"):
+        elif cmd in ("/banca", "/bankroll", "/saldo") or "mi banca" in text_lower or "banca" in text_lower or "saldo" in text_lower:
             return self.handle_banca()
-        elif cmd in ("/picks", "/pronosticos", "/apuestas"):
+        elif cmd in ("/picks", "/pronosticos", "/apuestas") or "picks" in text_lower or "pronostico" in text_lower:
             return self.handle_picks()
-        elif cmd in ("/sgp", "/props", "/parlays"):
+        elif cmd in ("/sgp", "/props", "/parlays", "/combinadas") or "combinada" in text_lower or "sgp" in text_lower or "props" in text_lower:
             return self.handle_sgp()
-        elif cmd in ("/cuotas", "/arbitraje", "/surebets", "/odds"):
+        elif cmd in ("/cuotas", "/arbitraje", "/surebets", "/odds") or "cuota" in text_lower or "arbitraje" in text_lower or "surebet" in text_lower:
             return self.handle_cuotas()
-        elif cmd in ("/partidos", "/slate", "/juegos"):
+        elif cmd in ("/partidos", "/slate", "/juegos") or "partido" in text_lower or "juego" in text_lower or "cartelera" in text_lower:
             return self.handle_partidos()
-        elif cmd in ("/liquidar", "/settle", "/reconciliar"):
+        elif cmd in ("/web", "/dashboard") or "dashboard" in text_lower or "web" in text_lower:
+            return self.handle_web()
+        elif cmd in ("/liquidar", "/settle", "/reconciliar") or "liquidar" in text_lower:
             return self.handle_liquidar()
         else:
             return (
                 f"❓ *Comando no reconocido:* `{text}`\n\n"
-                f"Usa /ayuda para ver los comandos interactivos disponibles."
+                f"Toca cualquiera de los botones táctiles abajo o usa /ayuda."
             )
 
     # -------------------------------------------------------------------------
@@ -189,17 +211,29 @@ class TelegramInteractiveListener:
             f"👋 ¡Hola, *{user_name}*! Bot de comando interactivo activo.\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 *Banca Virtual:* `S/ 100.00 PEN` (Paper Trading Estricto)\n"
-            f"🛡️ *Escudo CPPI:* `85% (S/ 85.00 PEN protegidos)`\n"
+            f"⚡ *Modo Alfa:* Stakes agresivos de S/ 3.50 a S/ 20.00 PEN\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 *COMANDOS DISPONIBLES:*\n\n"
-            f"📊 /banca — Balance virtual, PnL en Soles, Win Rate y ROI %\n"
-            f"🎯 /picks — Pronósticos de mayor valor esperado (+EV) del día\n"
-            f"🔥 /sgp — Player Props y Parlays Correlacionados (RETAbet)\n"
-            f"⚡ /cuotas — Comparador de casas peruanas y Surebets en vivo\n"
-            f"📅 /partidos — Cartelera NBA de hoy en hora de Perú (PET)\n"
-            f"🌙 /liquidar — Reconciliación manual de resultados de ESPN\n"
-            f"ℹ️ /ayuda — Muestra esta lista de comandos\n"
+            f"📱 *BOTONERA TÁCTIL ACTIVADA:*\n"
+            f"Toca cualquiera de los botones táctiles o escribe los comandos:\n\n"
+            f"💰 *Mi Banca* (/banca) — Balance virtual, PnL en Soles, Win Rate y ROI %\n"
+            f"🎯 *Picks +EV* (/picks) — Pronósticos de mayor valor esperado (+EV) del día\n"
+            f"🔥 *Super Combinadas* (/sgp) — Parlays de alta probabilidad y props\n"
+            f"⚡ *Cuotas Perú* (/cuotas) — Comparador de casas locales y Surebets\n"
+            f"📅 *Partidos NBA* (/partidos) — Cartelera oficial de hoy en hora de Perú (PET)\n"
+            f"🌐 *Dashboard Web* (/web) — Enlace directo a tu sitio en GitHub Pages\n"
+            f"🌙 *Liquidar ESPN* (/liquidar) — Reconciliación manual de resultados de ESPN\n"
             f"━━━━━━━━━━━━━━━━━━━━━━"
+        )
+
+    def handle_web(self) -> str:
+        """Returns direct link to GitHub Pages live dashboard."""
+        url = "https://drewks.github.io/nba-betting-intelligence/"
+        return (
+            f"🌐 *DASHBOARD WEB EN GITHUB PAGES*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Accede a tu plataforma interactiva con seguimiento de capital, métricas cuantitativas y auditoría:\n\n"
+            f"👉 [Abrir Dashboard Web Oficial]({url})\n\n"
+            f"📊 _Actualizado automáticamente en cada ciclo en la nube._"
         )
 
     def handle_banca(self) -> str:
