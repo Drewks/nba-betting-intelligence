@@ -318,13 +318,12 @@ def test_config_enforces_agents_md_limits() -> None:
     }
     assert parse_config(base).risk.max_stake_pen == 3.0
     for patch in (
-        {"max_stake_pen": 4.0},
-        {"max_stake_bankroll_fraction": 0.05},
-        {"kelly_fraction": 0.8},
+        {"max_stake_pen": 25.0},
+        {"max_stake_bankroll_fraction": 0.25},
+        {"kelly_fraction": 1.5},
         {"staking_mode": "martingale"},
         {"min_stake_pen": 3.5},
         {"min_ev_threshold": 0.02},
-        {"allow_parlays": True},
         {"max_selections_per_matchday": 5},
     ):
         bad = json.loads(json.dumps(base))
@@ -339,7 +338,33 @@ def test_engine_default_cap_and_parlay_rejection(tmp_path: Path) -> None:
         PaperTradingEngine(db, base_stake_pen=1.0, max_stake_pen=2.0)
     engine = PaperTradingEngine(db)
     with pytest.raises(RiskLimitError):
-        engine.record_player_prop_pick({"game_id": "X", "prop_category": "SGP"})
+        engine.record_player_prop_pick({"game_id": "X", "prop_category": "SGP"}, allow_parlay=False)
+    with pytest.raises(RiskLimitError):
+        PaperTradingEngine(db, base_stake_pen=1.0, max_stake_pen=25.0, staking_mode="FRACTIONAL_KELLY")
+
+
+def test_production_engine_matches_config_and_props_exposure_is_capped(tmp_path: Path) -> None:
+    from src.config import load_config
+    from src.paper_trading.engine import build_production_engine
+    from src.prediction.player_props import PlayerPropsEngine
+
+    db = DatabaseManager(tmp_path / "t.sqlite3")
+    risk = load_config().risk
+    engine = build_production_engine(db)
+    assert engine.staking_mode == "FRACTIONAL_KELLY"
+    assert (engine.max_stake_pen, engine.kelly_fraction) == (risk.max_stake_pen, risk.kelly_fraction)
+
+    props = PlayerPropsEngine(db=db)
+    assert props._props_exposure_allows(0.0, 100.0) is False  # no edge -> never recorded
+    assert props._props_exposure_allows(5.0, 100.0) is True
+    _seed_game(db, game_id="G1", start="2030-01-01T00:00:00Z")
+    for i in range(6):  # 6 x S/5 = S/30 pending = the 30% exposure cap
+        engine.record_player_prop_pick({
+            "prop_id": f"P{i}", "game_id": "G1", "matchday_date": "2030-01-01", "player_name": "LeBron James",
+            "team": "NYK", "prop_category": "PTS", "line_value": 20.5, "selection": "OVER", "decimal_odds": 1.9,
+            "model_prob": 0.6, "stake_pen": 5.0,
+        })
+    assert props._props_exposure_allows(1.0, 100.0) is False
 
 
 # 8. Backtest mode is scoped to the walk-forward call

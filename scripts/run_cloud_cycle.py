@@ -52,7 +52,7 @@ from src.models.statistical_models import (
     EnsembleStackingModel,
 )
 from src.orchestrator import Orchestrator
-from src.paper_trading.engine import PaperTradingEngine
+from src.paper_trading.engine import build_production_engine
 from src.prediction.ev_calculator import (
     MAX_MODEL_MARKET_DISAGREEMENT,
     compute_line_steam,
@@ -91,25 +91,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         return {"cycle_type": "INITIAL_BOOTSTRAP_AND_LIVE_SYNC", "run_id": init_res["run_id"]}
 
     db = DatabaseManager(db_path)
-    risk_cfg = load_config().risk
-    # AGENTS.md: stake grows with the model's calibrated probability (fractional Kelly, S/0.50-S/3.00,
-    # max 3% of bankroll), max 3 selections per matchday, EV > 5%; see config/model_config.yaml.
-    paper_engine = PaperTradingEngine(
-        db=db,
-        initial_bankroll_pen=risk_cfg.virtual_bankroll_initial_pen,
-        base_stake_pen=risk_cfg.base_stake_pen,
-        max_stake_pen=risk_cfg.max_stake_pen,
-        max_selections_per_matchday=risk_cfg.max_selections_per_matchday,
-        min_ev_threshold=risk_cfg.min_ev_threshold,
-        dynamic_conviction_staking=False,
-        enable_cppi_shield=True,
-        staking_mode="FRACTIONAL_KELLY" if risk_cfg.staking_mode == "fractional_kelly" else "CONSERVATIVE",
-        exclude_synthetic=True,
-        max_portfolio_exposure_pct=risk_cfg.max_portfolio_exposure_pct,
-        kelly_fraction=risk_cfg.kelly_fraction,
-        min_stake_pen=risk_cfg.min_stake_pen,
-        max_stake_bankroll_fraction=risk_cfg.max_stake_bankroll_fraction,
-    )
+    # Stake sizing, caps and EV threshold come from config/model_config.yaml (see AGENTS.md).
+    paper_engine = build_production_engine(db)
     scout = NBADataScoutAgent(db)
     visual = VisualResearcherAgent()
     calibrator_agent = ModelCalibratorAgent()

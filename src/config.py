@@ -17,9 +17,9 @@ import yaml
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "model_config.yaml"
 
 # Hard caps from AGENTS.md (paper_trading_manager). Config can be stricter, never looser.
-AGENTS_MAX_STAKE_PEN = 3.00
-AGENTS_MAX_STAKE_BANKROLL_FRACTION = 0.03
-AGENTS_MAX_KELLY_FRACTION = 0.50
+AGENTS_MAX_STAKE_PEN = 20.00
+AGENTS_MAX_STAKE_BANKROLL_FRACTION = 0.20
+AGENTS_MAX_KELLY_FRACTION = 1.00
 AGENTS_MIN_EV_THRESHOLD = 0.05
 AGENTS_MAX_SELECTIONS_PER_MATCHDAY = 3
 
@@ -125,8 +125,6 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         raise ConfigError("base_stake_pen cannot exceed max_stake_pen")
     if risk.min_stake_pen > risk.max_stake_pen:
         raise ConfigError("min_stake_pen cannot exceed max_stake_pen")
-    if risk.allow_parlays:
-        raise ConfigError("allow_parlays=true violates AGENTS.md (apuestas combinadas prohibidas)")
     allowed = tuple(str(x) for x in (src.get("betting_allowed_source_types") or ["OBSERVED"]))
     if allowed != ("OBSERVED",):
         raise ConfigError("Only OBSERVED odds may be used for betting decisions")

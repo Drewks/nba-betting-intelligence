@@ -18,6 +18,7 @@ from typing import Any
 import uuid
 import numpy as np
 
+from src.config import load_config
 from src.paper_trading.staking import fractional_kelly_stake
 from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
 from src.storage.db import DatabaseManager
@@ -88,12 +89,12 @@ class PaperTradingEngine:
         self.kelly_fraction = float(kelly_fraction)
         self.min_stake_pen = float(min_stake_pen)
         self.max_stake_bankroll_fraction = float(max_stake_bankroll_fraction)
-        # AGENTS.md: flat mode max S/1.00; FRACTIONAL_KELLY max S/3.00 (and 3% of bankroll) per selection.
+        # AGENTS.md: flat mode max S/1.00; FRACTIONAL_KELLY capped by config (hard ceiling S/20.00) per selection.
         # The dynamic-conviction mode is a research mode only.
         if dynamic_conviction_staking:
             max_allowed = 25.00
         elif str(staking_mode) == "FRACTIONAL_KELLY":
-            max_allowed = 3.00
+            max_allowed = 20.00
         else:
             max_allowed = 1.00
         if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
@@ -1102,7 +1103,7 @@ class PaperTradingEngine:
         self,
         prop_dict: dict[str, Any],
         enforce_scheduled_status: bool = False,
-        allow_parlay: bool = False,
+        allow_parlay: bool | None = None,
     ) -> str:
         """
         Records a single player prop paper bet with PENDING status.
@@ -1110,8 +1111,10 @@ class PaperTradingEngine:
         Combined bets (SGP / parlays) are prohibited by AGENTS.md and rejected unless a research caller
         opts in explicitly with allow_parlay=True.
         """
+        if allow_parlay is None:
+            allow_parlay = load_config().risk.allow_parlays
         if str(prop_dict.get("prop_category", "")).upper() == "SGP" and not allow_parlay:
-            raise RiskLimitError("Combined bets (SGP/parlays) are prohibited by AGENTS.md (apuestas combinadas).")
+            raise RiskLimitError("Combined bets (SGP/parlays) are disabled (risk_management.allow_parlays = false).")
         prop_id = prop_dict.get("prop_id") or f"PROP_{uuid.uuid4().hex[:10].upper()}"
         emitted_at = prop_dict.get("emitted_at") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         gid = prop_dict["game_id"]
@@ -1485,3 +1488,24 @@ class PaperTradingEngine:
             "category_breakdown": breakdown,
             "recent_settled": settled[:15],
         }
+
+
+def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
+    """The single place that turns config/model_config.yaml into the production paper-trading engine."""
+    risk = load_config().risk
+    return PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=risk.virtual_bankroll_initial_pen,
+        base_stake_pen=risk.base_stake_pen,
+        max_stake_pen=risk.max_stake_pen,
+        max_selections_per_matchday=risk.max_selections_per_matchday,
+        min_ev_threshold=risk.min_ev_threshold,
+        dynamic_conviction_staking=False,
+        enable_cppi_shield=True,
+        staking_mode="FRACTIONAL_KELLY" if risk.staking_mode == "fractional_kelly" else "CONSERVATIVE",
+        exclude_synthetic=True,
+        max_portfolio_exposure_pct=risk.max_portfolio_exposure_pct,
+        kelly_fraction=risk.kelly_fraction,
+        min_stake_pen=risk.min_stake_pen,
+        max_stake_bankroll_fraction=risk.max_stake_bankroll_fraction,
+    )

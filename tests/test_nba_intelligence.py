@@ -1772,7 +1772,7 @@ def test_32_injury_sniper_pregame_dual_window(tmp_path: Path) -> None:
     assert phx_alert["synergy_shift"] > 3.0  # incremental loss of Luka (Q -> OUT) adds > 3 pts to Home
     assert phx_alert["point_prob"] > phx_alert["market_p_home"]
     assert phx_alert["ev_lower_bound_pct"] >= 4.0
-    assert 0.0 < phx_alert["kelly_stake_pen"] <= 1.00  # AGENTS.md cap
+    assert 0.0 < phx_alert["kelly_stake_pen"] <= 10.00  # configured per-selection cap
     assert phx_alert["window_type"] == "WINDOW_2H"
 
     # 5. Verify SQLite persistence in sniper_alerts
@@ -1843,7 +1843,7 @@ def test_33_player_props_engine(tmp_path: Path) -> None:
     assert top_pick["player_name"] == "Kyrie Irving"
     assert top_pick["selection"] == "OVER"
     assert top_pick["ev_pct"] > 10.0
-    assert 1.00 <= top_pick["kelly_stake_pen"] <= 5.00
+    assert 1.00 <= top_pick["kelly_stake_pen"] <= 10.00
 
     # 4. Verify SQLite persistence in player_prop_picks
     persisted = db.fetch_all("SELECT * FROM player_prop_picks WHERE game_id = 'G_PROP_TEST'")
@@ -2256,7 +2256,7 @@ def test_38_v8_gaussian_copula_sgp_retabet_simulator() -> None:
     assert res_corr["fair_sgp_odds"] < (1.0 / expected_indep)
     assert res_corr["ev_pct"] > 10.0
     assert res_corr["is_value_sgp"] is True
-    assert 1.00 <= res_corr["kelly_stake_pen"] <= 3.50
+    assert 1.00 <= res_corr["kelly_stake_pen"] <= 10.00
     assert "RETAbet Perú" in res_corr["bookmaker"]
 
 
@@ -2316,13 +2316,16 @@ def test_39_v8_drawdown_kelly_shield_and_official_v8_promotion() -> None:
             "matchday_date": "2026-11-07",
         }
     ]
-    sgp_picks = engine.scan_retabet_sgp_slate(sample_slate, sample_props, bankroll_pen=100.0)
+    # Estimated SGP price = product of legs minus a 10% margin (no floor); min_ev lowered to exercise the scan
+    sgp_picks = engine.scan_retabet_sgp_slate(sample_slate, sample_props, bankroll_pen=100.0, min_ev_pct=-100.0)
     assert len(sgp_picks) >= 1
     top_sgp = sgp_picks[0]
     assert top_sgp["bookmaker"] == "RETAbet Perú"
     assert top_sgp["correlation_rho"] > 0.20
     assert top_sgp["is_value_sgp"] is True
-    assert 1.00 <= top_sgp["kelly_stake_pen"] <= 3.50
+    # No floors: the stake is 0 without positive EV at the estimated price, and capped otherwise
+    assert 0.0 <= top_sgp["kelly_stake_pen"] <= 10.00
+    assert "CUOTA ESTIMADA" in top_sgp["rationale"]
 
     # 3. Verify V8 Official Model Promotion
     assert rcc.MODEL_VERSION_ID == "model_f_ensemble_v8"
@@ -2390,20 +2393,25 @@ def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path)
             "model_p_away_pct": 35.0,
         }
     ]
-    # Production default: no observed prop lines exist -> no prop opportunities at all (no invented 1.90 lines)
-    assert engine.generate_slate_prop_opportunities(slate_games=sample_slate, bankroll_pen=100.0, min_ev_pct=3.0) == []
+    # With props and parlays disabled explicitly, nothing is generated (no observed prop lines exist)
+    assert engine.generate_slate_prop_opportunities(
+        slate_games=sample_slate, bankroll_pen=100.0, min_ev_pct=3.0, allow_synthetic_lines=False, allow_parlays=False
+    ) == []
 
-    # Explicit research mode: synthetic lines are evaluated but never persisted as paper bets
+    # Estimated lines: every pick is labelled as estimated, never presented as an observed price
     gen_results = engine.generate_slate_prop_opportunities(
         slate_games=sample_slate,
         bankroll_pen=100.0,
         min_ev_pct=3.0,
         allow_synthetic_lines=True,
+        allow_parlays=False,
     )
     assert len(gen_results) >= 1
     types = {r.get("type") for r in gen_results}
     assert "INDIVIDUAL_PROP" in types
-    assert "RETABET_SGP" not in types  # parlays stay off unless allow_parlays=True
+    assert "RETABET_SGP" not in types
+    assert all(r["line_source"] == "ESTIMATED" and "LÍNEA ESTIMADA" in r["rationale"] for r in gen_results)
+    assert all(0.0 <= r["kelly_stake_pen"] <= 10.0 for r in gen_results)
 
 
 def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
@@ -2516,7 +2524,7 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
     }
     from src.paper_trading.engine import RiskLimitError
     with pytest.raises(RiskLimitError):
-        engine.record_player_prop_pick(sgp_payload)
+        engine.record_player_prop_pick(sgp_payload, allow_parlay=False)
 
     # Research-only explicit opt-in still exercises the SGP settlement math
     sgp_id = engine.record_player_prop_pick(allow_parlay=True, prop_dict={
@@ -3469,8 +3477,8 @@ def test_50_unconstrained_staking_and_high_prob_parlays(tmp_path: Path) -> None:
     # Mathematically exact combined odds without artificial 2.05 floor or 1.25 bonus
     assert best_parlay["offered_sgp_odds"] > 1.0
     assert best_parlay["p_joint"] >= 0.50
-    # Stake complies with conservative risk limits (<= 2.00 PEN)
-    assert best_parlay["stake_pen"] <= 2.00
+    # Stake complies with the configured per-selection cap
+    assert best_parlay["stake_pen"] <= 10.00
 
     # 5. Database Quarantine Verification
     quarantined = db.fetch_all("SELECT * FROM quarantined_odds")

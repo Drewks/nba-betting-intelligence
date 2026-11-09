@@ -34,6 +34,7 @@ import numpy as np
 from scipy.stats import norm, poisson
 
 from src.calibration.calibrator import VennAbersConformalInterval
+from src.config import load_config
 from src.prediction.ev_calculator import (
     calculate_ev,
     devig_multiplicative,
@@ -311,9 +312,24 @@ class PlayerPropsEngine:
     def __init__(self, db: DatabaseManager | None = None, min_ev_threshold: float = 0.05) -> None:
         self.db = db
         self.min_ev_threshold = min_ev_threshold
+        risk = load_config().risk
+        self.risk = risk
+        self.kelly_fraction = risk.kelly_fraction
+        self.max_stake_pen = risk.max_stake_pen
+        self.max_bankroll_fraction = risk.max_stake_bankroll_fraction
         self.calibrator = VennAbersConformalInterval(window=1200)
         self.minutes_engine = MinutesProjectionEngine()
         self.vine_copula_engine = VineCopulaSGP()
+
+    def _props_exposure_allows(self, stake_pen: float, bankroll_pen: float) -> bool:
+        """Props/SGP ledger exposure cap: pending stakes may not exceed max_portfolio_exposure_pct of bankroll."""
+        if stake_pen <= 0.0:
+            return False
+        if self.db is None:
+            return True
+        row = self.db.fetch_one("SELECT COALESCE(SUM(stake_pen), 0.0) AS s FROM player_prop_picks WHERE status = 'PENDING'")
+        pending = float(row["s"]) if row else 0.0
+        return (pending + stake_pen) <= self.risk.max_portfolio_exposure_pct * max(0.0, bankroll_pen) + 0.01
 
     def project_player_stats(
         self,
@@ -488,6 +504,7 @@ class PlayerPropsEngine:
         expected_game_pace: float | None = None,
         spread_blowout_risk: float | None = None,
         persist: bool = True,
+        line_source: str = "OBSERVED",
     ) -> list[dict[str, Any]]:
         """
         Evaluates a specific player prop line against our tactical & injury-adjusted projection.
@@ -558,17 +575,18 @@ class PlayerPropsEngine:
             if is_edge_qualified and conf_w <= 0.35:
                 b_val = dec_odds - 1.0
                 f_star = max(0.0, (anchored_prob * (b_val + 1.0) - 1.0) / max(0.05, b_val))
-                eff_f = min(0.05, f_star * 0.50)
+                eff_f = min(self.max_bankroll_fraction, f_star * self.kelly_fraction)
                 raw_s = bankroll_pen * eff_f
                 # Respect quarter-Kelly without artificial floors
                 if eff_f <= 0.0 or ev_pct <= 0.0:
                     stake_pen = 0.00
                 else:
-                    stake_pen = round(max(0.0, min(2.00, raw_s)), 2)
+                    stake_pen = round(max(0.0, min(self.max_stake_pen, raw_s)), 2)
                 kelly_frac = round(eff_f, 4)
 
                 rationale = (
-                    f"[{prop_category} {sel} {line_value}] {player_name} ({team}). "
+                    ("" if line_source == "OBSERVED" else "[LÍNEA ESTIMADA, no observada] ")
+                    + f"[{prop_category} {sel} {line_value}] {player_name} ({team}). "
                     f"Proyección: {mu:.1f} (std: {sigma:.1f}, Ventaja vs Línea: {line_diff:+0.1f} pts). "
                     f"Prob Modelo: {anchored_prob * 100:.1f}% vs Casa: {mkt_fair * 100:.1f}%. "
                     f"Ajustes: +{proj_info['usage_bump_pct']:.1f}% USG, Rival {proj_info.get('opponent_team') or 'NBA'} ({proj_info['matchup_tier']}). "
@@ -604,12 +622,13 @@ class PlayerPropsEngine:
                     "usage_bump_pct": proj_info["usage_bump_pct"],
                     "effective_minutes": proj_info["effective_minutes"],
                     "rationale": rationale,
+                    "line_source": line_source,
                     "emitted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 }
                 opportunities.append(prop_pick)
 
                 # Persist to SQLite table player_prop_picks if db provided
-                if self.db is not None and persist:
+                if self.db is not None and persist and self._props_exposure_allows(float(prop_pick.get("kelly_stake_pen") or 0.0), bankroll_pen):
                     try:
                         # Guard: strictly prevent recording props for games that are finished or cancelled
                         g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (prop_pick["game_id"],))
@@ -733,19 +752,14 @@ class PlayerPropsEngine:
         # Kelly allocation with longshot variance shield
         b = offered_sgp_odds - 1.0
         f_star = max(0.0, (p_joint * (b + 1.0) - 1.0) / max(0.05, b))
-        if pure_alpha:
-            eff_f = min(0.18, f_star * 0.70)
-            raw_stake = bankroll_pen * eff_f
-            stake_pen = round(max(3.50, min(18.00, raw_stake if raw_stake > 0 else 5.00)), 2)
-        else:
-            eff_f = min(0.04, f_star * 0.35)
-            raw_stake = bankroll_pen * eff_f
-            stake_pen = round(max(1.00, min(3.50, raw_stake if raw_stake > 0 else 1.00)), 2)
+        # Fractional Kelly from config; no floors: without positive EV the stake is 0
+        eff_f = min(self.max_bankroll_fraction, f_star * self.kelly_fraction) if ev_unit > 0.0 else 0.0
+        stake_pen = round(min(self.max_stake_pen, bankroll_pen * eff_f), 2)
 
         is_value = ev_pct >= 3.0 and p_joint >= 0.18
 
         rationale = (
-            f"[RETAbet Crea tu Apuesta SGP] {game_selection_label} + {player_name} {prop_category} {prop_selection} {prop_line}. "
+            f"[SGP — CUOTA ESTIMADA, no observada] {game_selection_label} + {player_name} {prop_category} {prop_selection} {prop_line}. "
             f"Prob Conjunta Cópula: {p_joint * 100:.1f}% (vs {p_independent * 100:.1f}% Independiente, Impulso: +{corr_boost_pct}%). "
             f"Cuota Ofrecida: {offered_sgp_odds:.2f} vs Justa: {fair_sgp_odds:.2f} (EV: {ev_pct:+.1f}%). "
             f"Stake Sugerido: S/ {stake_pen:.2f} PEN."
@@ -811,7 +825,8 @@ class PlayerPropsEngine:
             p_p = float(prop.get("model_prob", 0.55))
             odds_g = 1.0 / max(0.05, game_prob)
             odds_p = float(prop.get("decimal_odds") or (1.0 / max(0.05, p_p)))
-            sim_offered_odds = round(max(2.15, odds_g * odds_p * 0.94), 2)
+            # ESTIMATED SGP price: independent product of the legs minus a 10% combined margin (no floor).
+            sim_offered_odds = round(max(1.01, odds_g * odds_p * 0.90), 2)
 
             sgp_cand = self.simulate_same_game_parlay_copula(
                 game_id=gid or "NBA_GAME",
@@ -831,7 +846,7 @@ class PlayerPropsEngine:
             if sgp_cand["ev_pct"] >= min_ev_pct and sgp_cand["p_joint"] >= 0.18:
                 sgp_cand["is_value_sgp"] = True
                 sgp_opportunities.append(sgp_cand)
-                if self.db is not None and persist:
+                if self.db is not None and persist and self._props_exposure_allows(float(sgp_cand.get("kelly_stake_pen") or 0.0), bankroll_pen):
                     try:
                         g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (sgp_cand["game_id"],))
                         if g_rec and g_rec.get("status") in ("FINAL", "POSTPONED", "CANCELLED"):
@@ -966,8 +981,8 @@ class PlayerPropsEngine:
                     suggested_stake = 0.00
                 else:
                     f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / b)
-                    eff_f = min(0.02, f_k * 0.25)
-                    suggested_stake = round(max(0.0, min(2.00, bankroll_pen * eff_f)), 2)
+                    eff_f = min(self.max_bankroll_fraction, f_k * self.kelly_fraction)
+                    suggested_stake = round(max(0.0, min(self.max_stake_pen, bankroll_pen * eff_f)), 2)
 
                 parlays.append({
                     "parlay_id": f"HP_SGP_{gid}_{uuid.uuid4().hex[:6]}",
@@ -1033,8 +1048,8 @@ class PlayerPropsEngine:
                 suggested_stake = 0.00
             else:
                 f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / max(0.05, b))
-                eff_f = min(0.02, f_k * 0.25)
-                suggested_stake = round(max(0.0, min(2.00, bankroll_pen * eff_f)), 2)
+                eff_f = min(self.max_bankroll_fraction, f_k * self.kelly_fraction)
+                suggested_stake = round(max(0.0, min(self.max_stake_pen, bankroll_pen * eff_f)), 2)
 
             parlays.append({
                 "parlay_id": f"HP_POWER_PARLAY_{uuid.uuid4().hex[:6]}",
@@ -1068,8 +1083,8 @@ class PlayerPropsEngine:
         min_ev_pct: float = 3.0,
         injuries_by_team: dict[str, list[str]] | None = None,
         output_file: Path | str | None = None,
-        allow_synthetic_lines: bool = False,
-        allow_parlays: bool = False,
+        allow_synthetic_lines: bool | None = None,
+        allow_parlays: bool | None = None,
     ) -> list[dict[str, Any]]:
         """
         V8 Institutional End-to-End Prop & SGP Slate Generator:
@@ -1081,6 +1096,11 @@ class PlayerPropsEngine:
         """
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Defaults come from config: props / parlays are paper-traded on ESTIMATED lines (labelled as such)
+        if allow_synthetic_lines is None:
+            allow_synthetic_lines = self.risk.allow_player_props_betting
+        if allow_parlays is None:
+            allow_parlays = self.risk.allow_parlays
 
         if slate_games is None and self.db is not None:
             slate_games = self.db.fetch_all(
@@ -1249,10 +1269,9 @@ class PlayerPropsEngine:
                             continue
 
                         # Strict Data Integrity: Require observed prop lines unless allow_synthetic_lines=True
-                        # Strict data integrity: synthetic lines ONLY when a research caller asks for them
-                        # explicitly, and even then they are never persisted as paper bets.
-                        # (The odds schema cannot store a 'player_prop' market yet, so in production there
-                        # are no observed prop lines and therefore no prop picks at all.)
+                        # Observed prop lines are preferred. When none exist (no bookmaker prop prices are
+                        # captured), an ESTIMATED line (season baseline, 1.90/1.90) is used if enabled, and the
+                        # pick is labelled "LÍNEA ESTIMADA" so it is never mistaken for an observed price.
                         use_synthetic = bool(allow_synthetic_lines)
 
                         observed_quotes: list[dict[str, Any]] = []
@@ -1298,7 +1317,8 @@ class PlayerPropsEngine:
                                 opponent_team=opp_code,
                                 expected_game_pace=pace_val,
                                 spread_blowout_risk=spread_val,
-                                persist=bool(observed_quotes),
+                                persist=True,
+                                line_source="OBSERVED" if observed_quotes else "ESTIMATED",
                             )
                             for pk in picks:
                                 if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:
@@ -1308,8 +1328,8 @@ class PlayerPropsEngine:
         qualified_props.sort(key=lambda x: (x.get("ev_lower_bound_pct", 0.0), x.get("ev_pct", 0.0)), reverse=True)
         top_individual_props = qualified_props[:15]
 
-        # Combined bets (SGP / parlays) are prohibited by AGENTS.md and their offered prices are not
-        # observed anywhere, so they are only generated when a research caller opts in explicitly.
+        # Combined bets (SGP / parlays): prices are ESTIMATED (no bookmaker SGP price is captured) and
+        # labelled as such; enabled by risk_management.allow_parlays.
         top_sgp_candidates: list[dict[str, Any]] = []
         high_prob_parlays: list[dict[str, Any]] = []
         if allow_parlays:
@@ -1318,7 +1338,7 @@ class PlayerPropsEngine:
                 props_list=top_individual_props,
                 bankroll_pen=bankroll_pen,
                 min_ev_pct=min_ev_pct,
-                persist=False,
+                persist=True,
             )
             sgp_candidates.sort(key=lambda x: x.get("ev_pct", 0.0), reverse=True)
             top_sgp_candidates = sgp_candidates[:8]

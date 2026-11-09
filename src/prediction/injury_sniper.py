@@ -25,6 +25,7 @@ import numpy as np
 from scipy.stats import norm
 
 from src.calibration.calibrator import VennAbersConformalInterval
+from src.config import load_config
 from src.features.team_ratings import (
     PLAYER_ON_OFF_SYNERGY_PROFILES,
     compute_lineup_synergy_penalty,
@@ -165,10 +166,10 @@ class InjurySniperMonitor:
         playwright_scraper: PlaywrightAuthorizedScraper | None = None,
         sportradar_adapter: SportradarAdapter | None = None,
         min_ev_threshold: float = 0.05,
-        max_stake_pen: float = 1.00,
+        max_stake_pen: float | None = None,
     ) -> None:
         self.db = db
-        self.max_stake_pen = float(max_stake_pen)
+        self.max_stake_pen = float(max_stake_pen if max_stake_pen is not None else load_config().risk.max_stake_pen)
         self.espn_adapter = espn_adapter or ESPNPublicAdapter()
         self.playwright_scraper = playwright_scraper or PlaywrightAuthorizedScraper()
         self.sportradar_adapter = sportradar_adapter
@@ -282,7 +283,7 @@ class InjurySniperMonitor:
                     max_individual_fraction=0.06,
                 )
                 recommended_frac = kelly_res[0]["kelly_optimal_fraction"]
-                # Alerts never suggest more than the AGENTS.md cap (S/1.00); zero if Kelly says no edge.
+                # Alerts never suggest more than the configured per-selection cap; zero if Kelly says no edge.
                 recommended_stake = round(min(float(kelly_res[0]["kelly_recommended_stake_pen"]), self.max_stake_pen), 2)
 
                 # Build rationale
