@@ -1,23 +1,23 @@
 ---
-date_generated: 2026-11-09T16:54:25Z
+date_generated: 2026-11-09T23:48:10Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-09
-predictions_count: 16
+predictions_count: 34
 simulation_only: true
 ---
 # Informe Diario NBA Betting Intelligence — 2026-11-09
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-09T16:54:25Z`
+- **Fecha de generación (UTC)**: `2026-11-09T23:48:10Z`
 - **Jornada evaluada**: `2026-11-09`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `5`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `16`
+- **Predicciones emitidas**: `34`
 - **Apuestas simuladas registradas en la jornada**: `0` (límite diario: 3, stake máx: S/1.00 PEN)
 - **Decisiones NO_BET registradas**: `32`
-- **Resultados pendientes globales**: `1`
+- **Resultados pendientes globales**: `3`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -31,11 +31,11 @@ simulation_only: true
 | `BKN @ DAL` | `moneyline` | **HOME** | — | 1.917 | 0.5216 | 0.5587 | +7.10% | `1xBet Perú [T-6H Peru]` |
 | `NOP @ LAC` | `moneyline` | **HOME** | — | 1.917 | 0.5216 | 0.5427 | +4.03% | `1xBet Perú [T-6H Peru]` |
 | `MIA @ SAC` | `moneyline` | **AWAY** | — | 1.917 | 0.5216 | 0.5353 | +2.62% | `1xBet Perú [T-6H Peru]` |
+| `UTA @ MIN` | `total_points` | **OVER** | 222.5 | 1.909 | 0.5238 | 0.5243 | +0.10% | `Draft Kings` |
 | `UTA @ MIN` | `total_points` | **OVER** | 222.5 | 1.909 | 0.5238 | 0.5243 | +0.09% | `DraftKings` |
-| `BKN @ DAL` | `total_points` | **UNDER** | 223.5 | 1.893 | 0.5283 | 0.5221 | -1.16% | `DraftKings` |
-| `BOS @ MIL` | `total_points` | **UNDER** | 221.5 | 1.885 | 0.5305 | 0.5081 | -4.23% | `DraftKings` |
-| `BOS @ MIL` | `total_points` | **OVER** | 221.5 | 1.935 | 0.5169 | 0.4919 | -4.83% | `DraftKings` |
-| `BKN @ DAL` | `total_points` | **OVER** | 223.5 | 1.926 | 0.5192 | 0.4779 | -7.97% | `DraftKings` |
+| `UTA @ MIN` | `moneyline` | **HOME** | — | 1.143 | 0.8750 | 0.8717 | -0.37% | `Draft Kings` |
+| `UTA @ MIN` | `moneyline` | **HOME** | — | 1.143 | 0.8750 | 0.8714 | -0.41% | `DraftKings` |
+| `BKN @ DAL` | `moneyline` | **HOME** | — | 1.328 | 0.7531 | 0.7448 | -1.09% | `DraftKings` |
 
 ## 4. Apuestas Simuladas (Paper Trading S/100 PEN) y Resultados Pendientes
 
