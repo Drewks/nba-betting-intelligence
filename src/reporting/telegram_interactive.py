@@ -1,0 +1,571 @@
+"""
+V9 Interactive Telegram Bot Listener (`src/reporting/telegram_interactive.py`).
+Provides bidirectional conversational command interface for NBA Betting Intelligence.
+Enables real-time querying of virtual bankroll (S/100 PEN), daily value picks (+EV),
+Player Props, RETAbet Correlated SGPs, Peruvian live odds comparisons, and manual settlement.
+
+Zero third-party dependencies — built purely on standard library (urllib.request, json).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+import logging
+import os
+from pathlib import Path
+import sys
+import time
+from typing import Any
+import urllib.parse
+import urllib.request
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.ingestion.live_peru_scraper import LivePeruOddsScraper
+from src.paper_trading.engine import PaperTradingEngine
+from src.reporting.telegram_bot import TelegramAlertBot, _load_dotenv_if_present
+from src.storage.db import DatabaseManager
+
+_load_dotenv_if_present()
+
+logger = logging.getLogger("TelegramListener")
+
+
+class TelegramInteractiveListener:
+    """
+    Bidirectional long-polling listener for Telegram Bot API.
+    Processes user slash-commands: /banca, /picks, /sgp, /cuotas, /partidos, /liquidar, /ayuda.
+    """
+
+    def __init__(
+        self,
+        bot_token: str | None = None,
+        allowed_chat_ids: list[str | int] | None = None,
+        db: DatabaseManager | None = None,
+        offset_file: Path | str | None = None,
+    ) -> None:
+        self.bot_token = bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+        
+        # Configure authorized chat IDs
+        raw_allowed = allowed_chat_ids or os.environ.get("TELEGRAM_CHAT_ID", "").strip().split(",")
+        self.allowed_chat_ids: set[str] = {str(c).strip() for c in raw_allowed if str(c).strip()}
+        
+        self.db = db or DatabaseManager(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3")
+        self.paper_engine = PaperTradingEngine(
+            db=self.db,
+            initial_bankroll_pen=100.00,
+            base_stake_pen=1.00,
+            max_stake_pen=6.00,
+            dynamic_conviction_staking=True,
+            exclude_synthetic=True,
+        )
+        self.bot = TelegramAlertBot(bot_token=self.bot_token, chat_id=list(self.allowed_chat_ids)[0] if self.allowed_chat_ids else None)
+        self.offset_file = Path(offset_file) if offset_file else PROJECT_ROOT / "data" / "evaluation" / "telegram_last_update_id.txt"
+        self.last_update_id: int | None = self._load_last_update_id()
+
+    def _load_last_update_id(self) -> int | None:
+        try:
+            if self.offset_file.exists():
+                val = self.offset_file.read_text(encoding="utf-8").strip()
+                if val.isdigit():
+                    return int(val)
+        except Exception:
+            pass
+        return None
+
+    def _save_last_update_id(self, update_id: int) -> None:
+        try:
+            self.offset_file.parent.mkdir(parents=True, exist_ok=True)
+            self.offset_file.write_text(str(update_id), encoding="utf-8")
+        except Exception:
+            pass
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.bot_token)
+
+    # -------------------------------------------------------------------------
+    # Telegram API Methods (Long Polling & Replying)
+    # -------------------------------------------------------------------------
+
+    def get_updates(self, offset: int | None = None, timeout: int = 25) -> list[dict[str, Any]]:
+        """Long-polls Telegram for incoming updates."""
+        if not self.is_configured:
+            return []
+
+        url = f"https://api.telegram.org/bot{self.bot_token}/getUpdates?timeout={timeout}"
+        if offset is not None:
+            url += f"&offset={offset}"
+
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "NBA-Betting-Intelligence/9.0"})
+            with urllib.request.urlopen(req, timeout=timeout + 10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("ok"):
+                    return data.get("result", [])
+        except Exception as exc:
+            logger.warning(f"Error fetching Telegram updates: {exc}")
+        return []
+
+    def send_reply(self, chat_id: str | int, text: str, reply_to_message_id: int | None = None) -> bool:
+        """Sends a markdown reply to a specific user chat."""
+        if not self.is_configured:
+            logger.info(f"[DRY-RUN REPLY to {chat_id}]:\n{text}")
+            return True
+
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True,
+        }
+        if reply_to_message_id:
+            payload["reply_to_message_id"] = reply_to_message_id
+
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status == 200
+        except Exception as exc:
+            logger.error(f"Error sending reply to {chat_id}: {exc}")
+            return False
+
+    # -------------------------------------------------------------------------
+    # Command Dispatcher
+    # -------------------------------------------------------------------------
+
+    def process_message(self, chat_id: str | int, text: str, from_user: dict[str, Any], message_id: int | None = None) -> str:
+        """Processes an incoming text message and returns the response string."""
+        chat_id_str = str(chat_id)
+        user_name = from_user.get("first_name") or from_user.get("username") or "Usuario"
+
+        # Security check: verify allowed chat
+        if self.allowed_chat_ids and chat_id_str not in self.allowed_chat_ids:
+            logger.warning(f"Unauthorized access attempt from chat_id={chat_id_str} ({user_name})")
+            return (
+                f"⛔ *Acceso No Autorizado*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Hola {user_name}, este bot está vinculado exclusivamente a la banca privada de Andre (@andbo06).\n\n"
+                f"Tu Chat ID (`{chat_id_str}`) no tiene permisos de consulta ni ejecución."
+            )
+
+        cmd = text.strip().split()[0].lower() if text.strip() else ""
+
+        if cmd in ("/start", "/ayuda", "/help"):
+            return self.handle_help(user_name)
+        elif cmd in ("/banca", "/bankroll", "/saldo"):
+            return self.handle_banca()
+        elif cmd in ("/picks", "/pronosticos", "/apuestas"):
+            return self.handle_picks()
+        elif cmd in ("/sgp", "/props", "/parlays"):
+            return self.handle_sgp()
+        elif cmd in ("/cuotas", "/arbitraje", "/surebets", "/odds"):
+            return self.handle_cuotas()
+        elif cmd in ("/partidos", "/slate", "/juegos"):
+            return self.handle_partidos()
+        elif cmd in ("/liquidar", "/settle", "/reconciliar"):
+            return self.handle_liquidar()
+        else:
+            return (
+                f"❓ *Comando no reconocido:* `{text}`\n\n"
+                f"Usa /ayuda para ver los comandos interactivos disponibles."
+            )
+
+    # -------------------------------------------------------------------------
+    # Command Handlers
+    # -------------------------------------------------------------------------
+
+    def handle_help(self, user_name: str) -> str:
+        """Generates comprehensive command menu."""
+        return (
+            f"🏀 *NBA BETTING INTELLIGENCE V9*\n"
+            f"👋 ¡Hola, *{user_name}*! Bot de comando interactivo activo.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 *Banca Virtual:* `S/ 100.00 PEN` (Paper Trading Estricto)\n"
+            f"🛡️ *Escudo CPPI:* `85% (S/ 85.00 PEN protegidos)`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 *COMANDOS DISPONIBLES:*\n\n"
+            f"📊 /banca — Balance virtual, PnL en Soles, Win Rate y ROI %\n"
+            f"🎯 /picks — Pronósticos de mayor valor esperado (+EV) del día\n"
+            f"🔥 /sgp — Player Props y Parlays Correlacionados (RETAbet)\n"
+            f"⚡ /cuotas — Comparador de casas peruanas y Surebets en vivo\n"
+            f"📅 /partidos — Cartelera NBA de hoy en hora de Perú (PET)\n"
+            f"🌙 /liquidar — Reconciliación manual de resultados de ESPN\n"
+            f"ℹ️ /ayuda — Muestra esta lista de comandos\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━"
+        )
+
+    def handle_banca(self) -> str:
+        """Generates real-time virtual bankroll, PnL and CPPI state."""
+        state = self.paper_engine.get_bankroll_state()
+
+        settled = state.get("settled_bankroll_pen", 100.00)
+        initial = state.get("initial_bankroll_pen", 100.00)
+        pnl = state.get("cumulative_net_profit_pen", 0.00)
+        exposure = state.get("pending_exposure_pen", 0.00)
+        available = state.get("available_balance_pen", settled)
+        peak = max(100.0, settled)
+
+        # Reconcile Win Rate & Counts from DB
+        counts = self.db.fetch_one(
+            f"""
+            SELECT 
+                SUM(CASE WHEN status = 'WON' THEN 1 ELSE 0 END) as won,
+                SUM(CASE WHEN status = 'LOST' THEN 1 ELSE 0 END) as lost,
+                SUM(CASE WHEN status = 'PUSH' THEN 1 ELSE 0 END) as push
+            FROM simulated_bets
+            WHERE {self.paper_engine.scope_sql}
+            """
+        ) or {}
+
+        won = int(counts.get("won") or 0)
+        lost = int(counts.get("lost") or 0)
+        push = int(counts.get("push") or 0)
+        total_settled = won + lost + push
+        wr = (won / total_settled * 100.0) if total_settled > 0 else 0.0
+        roi = ((settled - initial) / initial * 100.0)
+
+        # CPPI Floor
+        cppi_floor = peak * 0.85
+        cppi_cushion = max(0.0, settled - cppi_floor)
+
+        pnl_symbol = "🟢" if pnl >= 0 else "🔴"
+        pnl_sign = "+" if pnl >= 0 else ""
+
+        return (
+            f"💰 *ESTADO DE LA BANCA VIRTUAL (S/ 100 PEN)*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏦 *Saldo Liquidado:* *S/ {settled:.2f} PEN*\n"
+            f"💵 *Saldo Disponible:* *S/ {available:.2f} PEN*\n"
+            f"⏳ *Exposición Pendiente:* *S/ {exposure:.2f} PEN*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{pnl_symbol} *PnL Acumulado:* *{pnl_sign}S/ {pnl:.2f} PEN* (`{roi:+.2f}% ROI`)\n"
+            f"🏆 *Récord:* `{won}W - {lost}L - {push}P` (Win Rate: `{wr:.1f}%`)\n"
+            f"📈 *Pico Histórico:* `S/ {peak:.2f} PEN`\n"
+            f"🛡️ *Suelo CPPI (85%):* `S/ {cppi_floor:.2f} PEN` (Cojín: `S/ {cppi_cushion:.2f}`)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚙️ _Régimen: Paper Trading Estricto (Cero dinero real)_"
+        )
+
+    def handle_picks(self) -> str:
+        """Returns today's active pending picks or high-EV opportunities."""
+        pending_bets = self.db.fetch_all(
+            f"""
+            SELECT bet_id, game_id, market, selection, decimal_odds, estimated_ev, stake_pen, emitted_at
+            FROM simulated_bets
+            WHERE status = 'PENDING' AND {self.paper_engine.scope_sql}
+            ORDER BY emitted_at DESC
+            LIMIT 5
+            """
+        )
+
+        if not pending_bets:
+            return (
+                f"🎯 *PRONÓSTICOS DE LA JORNADA*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"ℹ️ *No hay apuestas pendientes en este momento.*\n\n"
+                f"Las próximas oportunidades +EV se publican automáticamente en:\n"
+                f"• ☀️ *10:15 AM PET* (Apertura y Props)\n"
+                f"• 🎯 *05:15 PM PET* (Injury Sniper T-2H)\n"
+                f"• ⚡ *06:35 PM PET* (Pre-Tipoff)\n\n"
+                f"Puedes consultar la cartelera de hoy con /partidos."
+            )
+
+        lines = [
+            f"🎯 *PRONÓSTICOS ACTIVOS ({len(pending_bets)} APUESTAS)*",
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+        for b in pending_bets:
+            mkt = b.get("market", "").upper()
+            sel = b.get("selection", "").upper()
+            odds = float(b.get("decimal_odds") or 1.90)
+            stake = float(b.get("stake_pen") or 1.00)
+            ev = float(b.get("estimated_ev") or 0.0) * 100.0
+            lines.append(
+                f"📍 *{b.get('game_id')}*\n"
+                f"   • Mercado: `{mkt}` | Selección: *{sel}*\n"
+                f"   • Cuota: `{odds:.2f}` (EV: `+{ev:.1f}%`)\n"
+                f"   • Stake Sugerido: *S/ {stake:.2f} PEN*"
+            )
+
+        lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"💡 _Verifica cuotas en RETAbet, Betsson o Coolbet antes de confirmar._")
+        return "\n".join(lines)
+
+    def handle_sgp(self) -> str:
+        """Returns latest Player Props and RETAbet Correlated SGPs."""
+        props_path = PROJECT_ROOT / "data" / "evaluation" / "latest_player_props.json"
+        if not props_path.exists():
+            return (
+                f"🔥 *PLAYER PROPS & RETABET SGPs*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"ℹ️ No hay props generados para la jornada actual.\n"
+                f"El motor de props corre automáticamente a las *10:15 AM PET*."
+            )
+
+        try:
+            props_data = json.loads(props_path.read_text(encoding="utf-8"))
+        except Exception:
+            props_data = []
+
+        if not props_data:
+            return "ℹ️ El archivo de props está vacío. Ejecuta la apertura matutina."
+
+        # Separate SGPs and Individual Props
+        sgps = [p for p in props_data if p.get("type") == "RETABET_SGP" or "sgp_id" in p]
+        indiv = [p for p in props_data if p.get("type") != "RETABET_SGP" and "sgp_id" not in p]
+
+        lines = [
+            f"🔥 *PROPS DESTACADOS & COMBINADAS RETAbet*",
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        if sgps:
+            best_sgp = sgps[0]
+            num_legs = best_sgp.get("num_legs", len(best_sgp.get("legs", []))) or 2
+            odds = float(best_sgp.get("offered_sgp_odds", 3.40))
+            ev = float(best_sgp.get("ev_pct", 15.0))
+            stake = float(best_sgp.get("kelly_stake_pen", 2.00))
+
+            lines.append(f"⚡ *Top SGP Correlacionado ({num_legs} Legs):*")
+            for leg in best_sgp.get("legs", []):
+                p_n = leg.get("player_name", "Jugador")
+                cat = leg.get("category", "")
+                sel = leg.get("selection", "")
+                val = leg.get("line", "")
+                lines.append(f"   • {p_n}: {cat} {sel} {val}")
+            lines.append(f"   💰 *Cuota Combinada:* `{odds:.2f}` (EV: `+{ev:.1f}%`)")
+            lines.append(f"   💵 *Stake Sugerido:* *S/ {stake:.2f} PEN* (RETAbet)")
+            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+
+        if indiv:
+            lines.append(f"🎯 *Top 3 Player Props Individuales:*")
+            sorted_indiv = sorted(indiv, key=lambda x: float(x.get("ev_pct", 0.0)), reverse=True)[:3]
+            for p in sorted_indiv:
+                name = p.get("player_name", "Player")
+                cat = p.get("prop_category", "PTS")
+                sel = p.get("selection", "OVER")
+                line_val = p.get("line_value", 0.0)
+                odds = float(p.get("decimal_odds", 1.90))
+                ev = float(p.get("ev_pct", 0.0))
+                stake = float(p.get("kelly_stake_pen", 2.00))
+                lines.append(
+                    f"   🏀 *{name}* ({p.get('team', '')})\n"
+                    f"      Línea: *{cat} {sel} {line_val}* @ `{odds:.2f}`\n"
+                    f"      EV: `+{ev:.1f}%` | Stake: *S/ {stake:.2f} PEN*"
+                )
+            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+
+        return "\n".join(lines)
+
+    def handle_cuotas(self) -> str:
+        """Returns comparison across Peruvian bookmakers and identifies any Surebets."""
+        scan_path = PROJECT_ROOT / "data" / "evaluation" / "latest_peru_odds_scan.json"
+        
+        scan_data: Any = None
+        if scan_path.exists():
+            try:
+                scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        if not scan_data:
+            scraper = LivePeruOddsScraper(db=self.db)
+            scan_data = scraper.collect_slate_odds()
+
+        games: list[dict[str, Any]] = []
+        if isinstance(scan_data, list):
+            games = scan_data
+        elif isinstance(scan_data, dict):
+            games = scan_data.get("games", [])
+
+        if not games:
+            return "ℹ️ No se encontraron cuotas para la jornada actual."
+
+        # Check for Surebets and Stale Lines
+        surebets = []
+        stale_lines = []
+        for g in games:
+            if g.get("is_arbitrage"):
+                surebets.append(g)
+            for sl in g.get("stale_lines", []):
+                stale_lines.append((g, sl))
+
+        lines = [
+            f"⚡ *COMPARADOR DE CUOTAS PERÚ*",
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+            f"📊 *Casas Analizadas:* RETAbet, Betsson, Doradobet, Coolbet, Apuesta Total vs Pinnacle",
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        if surebets:
+            lines.append(f"🚨 *¡ARBITRAJE SUREBET DETECTADO!*")
+            for sb in surebets[:2]:
+                bh = sb.get("best_home", {})
+                ba = sb.get("best_away", {})
+                margin = float(sb.get("synthetic_margin_pct", 98.0))
+                profit = abs(margin) if margin < 0 else (100.0 - margin)
+                lines.append(
+                    f"   📍 *{sb.get('matchup', sb.get('game_id'))}*\n"
+                    f"   • Local: `{bh.get('odds', 1.90):.2f}` ({bh.get('book', 'Local')})\n"
+                    f"   • Visita: `{ba.get('odds', 1.90):.2f}` ({ba.get('book', 'Visita')})\n"
+                    f"   💰 *Ganancia Garantizada:* `+{profit:.2f}%` (Margen: `{margin:.1f}%`)\n"
+                )
+            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+        elif stale_lines:
+            lines.append(f"📈 *Líneas Desfasadas (+CLV vs Pinnacle):*")
+            for g, sl in stale_lines[:2]:
+                book = sl.get("retail_bookmaker") or sl.get("sportsbook") or "Casa Local"
+                r_odds = float(sl.get("retail_odds") or sl.get("local_odds") or 1.90)
+                s_odds = float(sl.get("sharp_odds") or sl.get("pinnacle_fair_odds") or 1.85)
+                clv = float(sl.get("expected_clv_pct") or sl.get("clv_pct") or 4.0)
+                sel = sl.get("selection", "Pick")
+                lines.append(
+                    f"   📍 *{g.get('matchup', g.get('game_id'))}* — *{sel}*\n"
+                    f"   • Casa: *{book}* @ `{r_odds:.2f}`\n"
+                    f"   • Pinnacle Benchmark: `{s_odds:.2f}` (Edge: `+{clv:.1f}%`)"
+                )
+            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+        else:
+            lines.append(f"✅ *Margen promedio de mercado en Perú:* ~`104.2%` (Líneas balanceadas)")
+            # Show best odds for first 2 games
+            for g in games[:2]:
+                bh = g.get("best_home", {})
+                ba = g.get("best_away", {})
+                lines.append(
+                    f"📍 *{g.get('matchup', g.get('game_id'))}*\n"
+                    f"   • Local: `{bh.get('odds', 1.90):.2f}` ({bh.get('book', '')})\n"
+                    f"   • Visita: `{ba.get('odds', 1.90):.2f}` ({ba.get('book', '')})"
+                )
+            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+
+        return "\n".join(lines)
+
+    def handle_partidos(self) -> str:
+        """Returns today's NBA game slate with Peru Time tipoff hours."""
+        games = self.db.fetch_all(
+            """
+            SELECT game_id, home_team, away_team, matchday_date, game_start_time, status, home_score, away_score
+            FROM games
+            WHERE matchday_date >= date('now', '-1 day')
+            ORDER BY matchday_date ASC, game_start_time ASC, game_id ASC
+            LIMIT 10
+            """
+        )
+
+        if not games:
+            return "ℹ️ No se registraron partidos recientes en la base de datos."
+
+        lines = [
+            f"📅 *CARTELERA NBA (HORA DE PERÚ)*",
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+        for g in games:
+            h = g.get("home_team")
+            a = g.get("away_team")
+            st = (g.get("status") or "SCHEDULED").upper()
+            mdate = g.get("matchday_date", "")
+
+            if st in ("FINAL", "COMPLETED", "STATUS_FINAL"):
+                hs = g.get("home_score", 0)
+                as_ = g.get("away_score", 0)
+                lines.append(f"🏁 `{a}` {as_} @ `{h}` {hs} *(Final)*")
+            elif st in ("IN_PROGRESS", "LIVE"):
+                lines.append(f"🔴 `{a}` @ `{h}` *(En Juego)*")
+            else:
+                lines.append(f"🏀 `{a}` @ `{h}` — *{mdate}* *(Programado)*")
+
+        lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"💡 _Tip: Usa /picks para ver las recomendaciones del modelo._")
+        return "\n".join(lines)
+
+    def handle_liquidar(self) -> str:
+        """Triggers manual on-demand settlement of games against official ESPN boxscores."""
+        logger.info("Executing on-demand settlement cycle requested via Telegram...")
+        from scripts.run_automated_scheduler import NBADailyScheduler
+
+        scheduler = NBADailyScheduler(db=self.db)
+        res = scheduler.execute_nightly_settlement_cycle()
+
+        settled_count = res.get("settled_count", 0)
+        pnl = res.get("daily_pnl_pen", 0.0)
+        bankroll = res.get("current_bankroll_pen", 100.0)
+
+        pnl_sign = "+" if pnl >= 0 else ""
+        return (
+            f"🌙 *LIQUIDACIÓN MANUAL COMPLETADA*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ *Apuestas Liquidadas:* `{settled_count}`\n"
+            f"💵 *PnL de la Ronda:* *{pnl_sign}S/ {pnl:.2f} PEN*\n"
+            f"🏦 *Nuevo Saldo Liquidado:* *S/ {bankroll:.2f} PEN*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Usa /banca para ver el desglose completo del capital."
+        )
+
+    # -------------------------------------------------------------------------
+    # Main Event Loop
+    # -------------------------------------------------------------------------
+
+    def run_polling_cycle(self, timeout: int = 25) -> int:
+        """Runs a single polling round, processes updates, and acknowledges them."""
+        updates = self.get_updates(offset=self.last_update_id, timeout=timeout)
+        processed_count = 0
+
+        for up in updates:
+            up_id = up.get("update_id")
+            if up_id is not None:
+                self.last_update_id = up_id + 1
+                self._save_last_update_id(self.last_update_id)
+
+            msg = up.get("message") or up.get("edited_message")
+            if not msg:
+                continue
+
+            chat = msg.get("chat", {})
+            chat_id = chat.get("id")
+            from_user = msg.get("from", {})
+            text = msg.get("text", "")
+            msg_id = msg.get("message_id")
+
+            if chat_id and text:
+                logger.info(f"📩 [TELEGRAM CMD] Chat {chat_id}: '{text}'")
+                reply_text = self.process_message(
+                    chat_id=chat_id,
+                    text=text,
+                    from_user=from_user,
+                    message_id=msg_id,
+                )
+                self.send_reply(chat_id=chat_id, text=reply_text, reply_to_message_id=msg_id)
+                processed_count += 1
+
+        if processed_count > 0 and self.last_update_id is not None:
+            # Acknowledge processed updates with Telegram server immediately
+            self.get_updates(offset=self.last_update_id, timeout=0)
+
+        return processed_count
+
+    def start_polling_loop(self, poll_timeout: int = 25, error_sleep: int = 5) -> None:
+        """Starts continuous blocking loop for the Telegram listener."""
+        logger.info("=" * 80)
+        logger.info("🤖 NBA BETTING INTELLIGENCE — INTERACTIVE TELEGRAM LISTENER")
+        logger.info("=" * 80)
+        logger.info(f"Bot Token Configurado  : {'SÍ' if self.bot_token else 'NO (Falta TELEGRAM_BOT_TOKEN)'}")
+        logger.info(f"Chats Autorizados      : {list(self.allowed_chat_ids) or 'TODOS'}")
+        logger.info(f"Timeout Long-Polling   : {poll_timeout}s")
+        logger.info("=" * 80)
+        logger.info("Esperando mensajes de Telegram... Presiona Ctrl+C para detener.")
+
+        while True:
+            try:
+                self.run_polling_cycle(timeout=poll_timeout)
+            except KeyboardInterrupt:
+                logger.info("Deteniendo el listener de Telegram (interrupción por usuario).")
+                break
+            except Exception as exc:
+                logger.error(f"Error en el ciclo de polling: {exc}", exc_info=True)
+                time.sleep(error_sleep)

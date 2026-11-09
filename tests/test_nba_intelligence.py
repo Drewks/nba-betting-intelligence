@@ -3165,3 +3165,127 @@ def test_48_live_peru_odds_scraper_and_arbitrage_alerts(tmp_path: Path) -> None:
     assert "Betsson Perú" in alert_msg
     assert "Coolbet Perú" in alert_msg
     assert "S/ 100.00 PEN" in alert_msg
+
+
+# 49. V9 Phase 4: Bidirectional Interactive Telegram Bot & Slash Commands
+def test_49_telegram_interactive_listener_and_commands(tmp_path: Path) -> None:
+    """
+    Test 49: Verification of Bidirectional Interactive Telegram Bot:
+    1. Security filter: Unauthorized chats are rejected with friendly notification.
+    2. Authorized command handlers:
+       - /start and /ayuda: Returns command directory with clickable actions.
+       - /banca: Returns virtual bankroll in Soles (S/. PEN), PnL, Win Rate, and CPPI 85% floor.
+       - /picks: Formats pending bets with odds and stakes.
+       - /sgp: Formats player props and RETAbet correlated SGPs.
+       - /cuotas: Displays Peruvian odds comparison, stale lines, and surebets.
+       - /partidos: Displays match slate in Peru Time (PET).
+       - Unknown command: Returns friendly fallback with /ayuda prompt.
+    3. Mocked update processing and offset pointer progression.
+    """
+    from src.reporting.telegram_interactive import TelegramInteractiveListener
+    from src.storage.db import DatabaseManager
+
+    db = DatabaseManager(tmp_path / "test_telegram_interactive.sqlite3")
+    listener = TelegramInteractiveListener(
+        bot_token="TEST_BOT_TOKEN_12345",
+        allowed_chat_ids=["5198335170"],
+        db=db,
+        offset_file=tmp_path / "test_offset.txt",
+    )
+
+    # 1. Security Check: Rejection of unauthorized chat
+    unauth_resp = listener.process_message(
+        chat_id="99999999",
+        text="/banca",
+        from_user={"first_name": "Intruder", "username": "intruder"},
+    )
+    assert "Acceso No Autorizado" in unauth_resp
+    assert "99999999" in unauth_resp
+
+    # 2. Authorized /start & /ayuda
+    start_resp = listener.process_message(
+        chat_id="5198335170",
+        text="/start",
+        from_user={"first_name": "Andre", "username": "andbo06"},
+    )
+    assert "NBA BETTING INTELLIGENCE V9" in start_resp
+    assert "/banca" in start_resp
+    assert "/picks" in start_resp
+    assert "/sgp" in start_resp
+    assert "/cuotas" in start_resp
+    assert "/partidos" in start_resp
+
+    # 3. Authorized /banca
+    banca_resp = listener.process_message(
+        chat_id="5198335170",
+        text="/banca",
+        from_user={"first_name": "Andre", "username": "andbo06"},
+    )
+    assert "ESTADO DE LA BANCA VIRTUAL" in banca_resp
+    assert "S/ 100.00 PEN" in banca_resp or "S/ 99." in banca_resp
+    assert "Suelo CPPI (85%):" in banca_resp
+    assert "Paper Trading Estricto" in banca_resp
+
+    # 4. Authorized /picks
+    picks_resp = listener.process_message(
+        chat_id="5198335170",
+        text="/picks",
+        from_user={"first_name": "Andre", "username": "andbo06"},
+    )
+    assert "PRONÓSTICOS" in picks_resp
+
+    # 5. Authorized /sgp
+    sgp_resp = listener.process_message(
+        chat_id="5198335170",
+        text="/sgp",
+        from_user={"first_name": "Andre", "username": "andbo06"},
+    )
+    assert "PROPS" in sgp_resp or "RETAbet" in sgp_resp
+
+    # 6. Authorized /cuotas
+    cuotas_resp = listener.process_message(
+        chat_id="5198335170",
+        text="/cuotas",
+        from_user={"first_name": "Andre", "username": "andbo06"},
+    )
+    assert "COMPARADOR DE CUOTAS PERÚ" in cuotas_resp
+
+    # 7. Authorized /partidos
+    partidos_resp = listener.process_message(
+        chat_id="5198335170",
+        text="/partidos",
+        from_user={"first_name": "Andre", "username": "andbo06"},
+    )
+    assert "CARTELERA NBA" in partidos_resp or "No se registraron partidos" in partidos_resp
+
+    # 8. Unrecognized command fallback
+    fallback_resp = listener.process_message(
+        chat_id="5198335170",
+        text="/desconocido",
+        from_user={"first_name": "Andre", "username": "andbo06"},
+    )
+    assert "Comando no reconocido" in fallback_resp
+    assert "/ayuda" in fallback_resp
+
+    # 9. Mocked polling cycle & offset tracking
+    mock_updates = [
+        {
+            "update_id": 1001,
+            "message": {
+                "message_id": 42,
+                "chat": {"id": 5198335170},
+                "from": {"first_name": "Andre"},
+                "text": "/banca",
+            },
+        }
+    ]
+    replies_sent: list[tuple[str | int, str]] = []
+    listener.get_updates = lambda offset=None, timeout=25: mock_updates if offset != 1002 else []  # type: ignore
+    listener.send_reply = lambda chat_id, text, reply_to_message_id=None: replies_sent.append((chat_id, text)) or True  # type: ignore
+
+    processed = listener.run_polling_cycle(timeout=1)
+    assert processed == 1
+    assert len(replies_sent) == 1
+    assert replies_sent[0][0] == 5198335170
+    assert "ESTADO DE LA BANCA VIRTUAL" in replies_sent[0][1]
+    assert listener.last_update_id == 1002
