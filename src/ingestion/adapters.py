@@ -187,7 +187,14 @@ class TheOddsAPIAdapter:
             f"?apiKey={self.api_key}&regions=us,eu&markets=h2h,totals&oddsFormat=decimal"
         )
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "x-api-key": self.api_key,
+                    "apiKey": self.api_key,
+                },
+            )
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 events = json.loads(resp.read().decode("utf-8"))
         except Exception:
@@ -326,6 +333,7 @@ class TheOddsAPIAdapter:
                             "counterpart_decimal_odds": round(h_counter, 4),
                             "captured_at": now_utc,
                             "is_closing_line": 0,
+                            "source_type": "OBSERVED",
                         },
                         {
                             "provider": best_away_book,
@@ -336,6 +344,7 @@ class TheOddsAPIAdapter:
                             "counterpart_decimal_odds": round(a_counter, 4),
                             "captured_at": now_utc,
                             "is_closing_line": 0,
+                            "source_type": "OBSERVED",
                         },
                     ]
                 )
@@ -709,6 +718,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                             "counterpart_decimal_odds": ls["counterpart_decimal_odds"],
                             "captured_at": captured_at,
                             "is_closing_line": 0,
+                            "source_type": "OBSERVED",
                         }
                     )
                 continue
@@ -983,7 +993,7 @@ class SportradarAdapter(BaseNBADataAdapter):
         # 1. Official League Injuries (1 request)
         inj_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/league/injuries.json?api_key={self.api_key}"
         try:
-            req = urllib.request.Request(inj_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+            req = urllib.request.Request(inj_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "api_key": self.api_key, "x-api-key": self.api_key})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 inj_data = json.loads(resp.read().decode("utf-8"))
             for t_obj in inj_data.get("teams") or []:
@@ -1026,7 +1036,7 @@ class SportradarAdapter(BaseNBADataAdapter):
         # 2. Official Seasonal Standings & Tactical Splits (1 request)
         std_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/seasons/2026/REG/standings.json?api_key={self.api_key}"
         try:
-            req = urllib.request.Request(std_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+            req = urllib.request.Request(std_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "api_key": self.api_key, "x-api-key": self.api_key})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 std_data = json.loads(resp.read().decode("utf-8"))
             for conf in std_data.get("conferences") or []:
@@ -1544,6 +1554,7 @@ class SyntheticFixtureAdapter(BaseNBADataAdapter):
                             "counterpart_decimal_odds": away_ml_odds,
                             "captured_at": odds_str,
                             "is_closing_line": 0,
+                            "source_type": "SYNTHETIC",
                         },
                         {
                             "odds_id": f"{game_id}_ML_AWAY_OPEN",
@@ -1556,6 +1567,7 @@ class SyntheticFixtureAdapter(BaseNBADataAdapter):
                             "counterpart_decimal_odds": home_ml_odds,
                             "captured_at": odds_str,
                             "is_closing_line": 0,
+                            "source_type": "SYNTHETIC",
                         },
                         {
                             "odds_id": f"{game_id}_ML_HOME_CLOSE",
@@ -1568,6 +1580,7 @@ class SyntheticFixtureAdapter(BaseNBADataAdapter):
                             "counterpart_decimal_odds": close_away_odds,
                             "captured_at": close_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                             "is_closing_line": 1,
+                            "source_type": "SYNTHETIC",
                         },
                         {
                             "odds_id": f"{game_id}_ML_AWAY_CLOSE",
@@ -1580,6 +1593,7 @@ class SyntheticFixtureAdapter(BaseNBADataAdapter):
                             "counterpart_decimal_odds": close_home_odds,
                             "captured_at": close_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                             "is_closing_line": 1,
+                            "source_type": "SYNTHETIC",
                         },
                     ]
                 )
@@ -1604,6 +1618,7 @@ class SyntheticFixtureAdapter(BaseNBADataAdapter):
                             "counterpart_decimal_odds": under_odds,
                             "captured_at": odds_str,
                             "is_closing_line": 0,
+                            "source_type": "SYNTHETIC",
                         },
                         {
                             "odds_id": f"{game_id}_TOT_UNDER_{market_line}_OPEN",
@@ -1616,6 +1631,7 @@ class SyntheticFixtureAdapter(BaseNBADataAdapter):
                             "counterpart_decimal_odds": over_odds,
                             "captured_at": odds_str,
                             "is_closing_line": 0,
+                            "source_type": "SYNTHETIC",
                         },
                     ]
                 )
