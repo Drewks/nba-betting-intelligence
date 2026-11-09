@@ -18,10 +18,16 @@ model:
   tempo_alpha_fast: 0.130
   market_anchor_model_weight: 0.30   # p_final = 0.30 * p_model + 0.70 * p_market (de-vigged)
 
-risk_management:                     # AGENTS.md section 4 (paper_trading_manager), version 1 rules
+risk_management:                     # AGENTS.md section 4 (paper_trading_manager)
   virtual_bankroll_initial_pen: 100.00
-  base_stake_pen: 1.00               # Stake base S/1.00
-  max_stake_pen: 1.00                # Stake maximo S/1.00 por seleccion
+  # Stake grows with the model's calibrated, market-anchored win probability for a given price
+  # (fractional Kelly). It is 0 when EV <= threshold and never rounded up to a floor.
+  staking_mode: "fractional_kelly"   # "fractional_kelly" | "flat"
+  kelly_fraction: 0.25               # 25% of full Kelly (p is an estimate with error)
+  min_stake_pen: 0.50                # smaller Kelly stakes are skipped
+  max_stake_pen: 3.00                # hard cap per selection (AGENTS.md)
+  max_stake_bankroll_fraction: 0.03  # hard cap per selection as % of bankroll (AGENTS.md)
+  base_stake_pen: 1.00               # only used when staking_mode = "flat"
   max_selections_per_matchday: 3
   min_ev_threshold: 0.05             # EV > 5%
   max_portfolio_exposure_pct: 0.20

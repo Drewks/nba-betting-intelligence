@@ -89,8 +89,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
 
     db = DatabaseManager(db_path)
     risk_cfg = load_config().risk
-    # AGENTS.md v1: flat S/1.00 stake, max 3 selections per matchday, EV > 5%. Flat staking stays
-    # until there is out-of-sample evidence of edge (CLV vs. the sharp close); see config/model_config.yaml.
+    # AGENTS.md: stake grows with the model's calibrated probability (fractional Kelly, S/0.50-S/3.00,
+    # max 3% of bankroll), max 3 selections per matchday, EV > 5%; see config/model_config.yaml.
     paper_engine = PaperTradingEngine(
         db=db,
         initial_bankroll_pen=risk_cfg.virtual_bankroll_initial_pen,
@@ -100,9 +100,12 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         min_ev_threshold=risk_cfg.min_ev_threshold,
         dynamic_conviction_staking=False,
         enable_cppi_shield=True,
-        staking_mode="CONSERVATIVE",
+        staking_mode="FRACTIONAL_KELLY" if risk_cfg.staking_mode == "fractional_kelly" else "CONSERVATIVE",
         exclude_synthetic=True,
         max_portfolio_exposure_pct=risk_cfg.max_portfolio_exposure_pct,
+        kelly_fraction=risk_cfg.kelly_fraction,
+        min_stake_pen=risk_cfg.min_stake_pen,
+        max_stake_bankroll_fraction=risk_cfg.max_stake_bankroll_fraction,
     )
     scout = NBADataScoutAgent(db)
     visual = VisualResearcherAgent()

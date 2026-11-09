@@ -25,6 +25,6 @@ Este repositorio implementa un sistema cuantitativo multiagente de predicción, 
 - [`nba_data_scout`](.agents/agents/nba_data_scout.md): Ingestión mediante adaptadores intercambiables, normalización y validación temporal/estructural.
 - [`visual_researcher`](.agents/agents/visual_researcher.md): Inspección documental/visual (con verificación de estado de PixelRAG/Playwright) y registro de confianza.
 - [`nba_quant`](.agents/agents/nba_quant.md): Modelos estadísticos A–E (`Baseline`, `Elo`, `PointMargin`, `TotalPoints` con covarianza, `LightGBM`), de-vigging y cálculo de EV.
-- [`paper_trading_manager`](.agents/agents/paper_trading_manager.md): Gestión conservadora del bankroll virtual de S/100 PEN (stake S/1, máx. 3 selecciones/jornada, EV > 5%, liquidación auditable).
+- [`paper_trading_manager`](.agents/agents/paper_trading_manager.md): Gestión conservadora del bankroll virtual de S/100 PEN (stake variable por Kelly fraccional 25% según la probabilidad calibrada del modelo, S/0.50–S/3.00 y máx. 3% de la banca por selección; stake 0 si EV ≤ 5%; máx. 3 selecciones/jornada; liquidación auditable).
 - [`model_calibrator`](.agents/agents/model_calibrator.md): Seguimiento de Brier Score, Log Loss, calibración logística/isotónica y promoción walk-forward.
 - [`nba_auditor`](.agents/agents/nba_auditor.md): Auditoría independiente de fugas temporales, reconciliación contable, intervalos de confianza y puertas de validación (500 apuestas mínimas).

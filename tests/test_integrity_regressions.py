@@ -309,13 +309,24 @@ def test_config_enforces_agents_md_limits() -> None:
     base = {
         "model": {"version_id": "v", "ewma_alpha_slow": 0.045, "ewma_alpha_fast": 0.11, "tempo_alpha_slow": 0.055,
                   "tempo_alpha_fast": 0.13, "market_anchor_model_weight": 0.3},
-        "risk_management": {"virtual_bankroll_initial_pen": 100.0, "base_stake_pen": 1.0, "max_stake_pen": 1.0,
+        "risk_management": {"virtual_bankroll_initial_pen": 100.0, "staking_mode": "fractional_kelly",
+                            "kelly_fraction": 0.25, "min_stake_pen": 0.5, "max_stake_bankroll_fraction": 0.03,
+                            "base_stake_pen": 1.0, "max_stake_pen": 3.0,
                             "max_selections_per_matchday": 3, "min_ev_threshold": 0.05, "max_portfolio_exposure_pct": 0.2,
                             "allow_parlays": False, "allow_player_props_betting": False},
         "sources": {"betting_allowed_source_types": ["OBSERVED"]},
     }
-    assert parse_config(base).risk.max_stake_pen == 1.0
-    for patch in ({"max_stake_pen": 2.0}, {"min_ev_threshold": 0.02}, {"allow_parlays": True}, {"max_selections_per_matchday": 5}):
+    assert parse_config(base).risk.max_stake_pen == 3.0
+    for patch in (
+        {"max_stake_pen": 4.0},
+        {"max_stake_bankroll_fraction": 0.05},
+        {"kelly_fraction": 0.8},
+        {"staking_mode": "martingale"},
+        {"min_stake_pen": 3.5},
+        {"min_ev_threshold": 0.02},
+        {"allow_parlays": True},
+        {"max_selections_per_matchday": 5},
+    ):
         bad = json.loads(json.dumps(base))
         bad["risk_management"].update(patch)
         with pytest.raises(ConfigError):
@@ -352,3 +363,95 @@ def test_cloud_cycle_uses_configured_model_identity_and_anchor_weight() -> None:
     cfg = load_config()
     assert cycle.MODEL_VERSION_ID == cfg.model.version_id
     assert cycle.MARKET_ANCHOR_MODEL_WEIGHT == cfg.model.market_anchor_model_weight
+
+
+# 10. Variable stake: grows with the model's probability for a given price, zero without edge
+def test_fractional_kelly_stake_properties() -> None:
+    from src.paper_trading.staking import fractional_kelly_stake
+
+    odds = 1.90
+    stakes = [fractional_kelly_stake(p, odds, 100.0) for p in (0.50, 0.55, 0.58, 0.62, 0.70)]
+    assert stakes[0] == 0.0  # 0.50 * 1.90 < 1: negative EV -> no bet
+    assert stakes[1:] == sorted(stakes[1:]) and stakes[2] > stakes[1]  # higher probability -> larger stake
+    assert max(stakes) <= 3.00  # absolute cap
+    assert fractional_kelly_stake(0.70, 1.90, 50.0) <= 1.50  # 3% of a S/50 bankroll
+    assert fractional_kelly_stake(0.53, 1.90, 100.0) == 0.0  # tiny edge -> below S/0.50 minimum, skipped
+    assert fractional_kelly_stake(0.66, 1.40, 100.0) == 0.0  # the old tiers staked S/4.80 here (EV -7.6%)
+
+
+def test_engine_fractional_kelly_mode_places_variable_stake(tmp_path: Path) -> None:
+    db = DatabaseManager(tmp_path / "t.sqlite3")
+    _seed_game(db, game_id="G1", start="2030-01-01T00:00:00Z")
+    db.execute_insert(
+        "INSERT INTO model_versions (model_version_id, model_family, market, train_start_date, train_end_date, trained_at, "
+        "hyperparameters_json, approved_by) VALUES ('m', 'f', 'moneyline', 'a', 'b', 'c', '{}', 'test')"
+    )
+    for pid in ("P_HI", "P_LO"):
+        db.execute_insert(
+            """
+            INSERT INTO predictions (prediction_id, game_id, market, selection, model_version_id, raw_probability,
+                calibrated_probability, uncertainty_std, implied_prob_gross, decimal_odds_used, odds_provider,
+                odds_captured_at, ev_unit, ev_pct, emitted_at, features_snapshot_json)
+            VALUES (?, 'G1', 'moneyline', 'HOME', 'm', 0.6, 0.6, 0.05, 0.5, 1.9, 'Pinnacle',
+                    '2029-12-31T12:00:00Z', 0.1, 10.0, '2029-12-31T12:00:00Z', '{}')
+            """,
+            (pid,),
+        )
+    engine = PaperTradingEngine(db, base_stake_pen=1.0, max_stake_pen=3.0, staking_mode="FRACTIONAL_KELLY")
+
+    def _cand(pid: str, prob: float) -> dict[str, Any]:
+        ev = prob * 1.90 - 1.0
+        return {
+            "game_id": "G1", "market": "moneyline", "selection": "HOME", "line_value": None,
+            "decimal_odds_used": 1.90, "calibrated_probability": prob, "ev_unit": ev, "ev_pct": 100 * ev,
+            "model_version_id": "m", "prediction_id": pid, "emitted_at": "2029-12-31T12:00:00Z",
+            "model_market_disagreement": 0.05, "max_model_market_disagreement": 0.15,
+        }
+
+    res = engine.evaluate_and_record_matchday_selections("2030-01-01", [_cand("P_HI", 0.60)])
+    assert len(res["placed_bets"]) == 1
+    stake = res["placed_bets"][0]["stake_pen"]
+    assert stake == pytest.approx(min(3.0, 100.0 * min(0.03, 0.25 * (0.60 * 1.90 - 1) / 0.90)), abs=0.01)
+    assert 1.0 < stake <= 3.0
+
+
+# 11. Real-odds backtest pipeline mechanics (synthetic stand-in data, no network)
+def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> None:
+    from src.backtesting.real_odds_backtest import match_market_to_games, run_real_odds_backtest
+    from src.ingestion.adapters import SyntheticFixtureAdapter
+    from src.prediction.ev_calculator import devig_multiplicative
+
+    bundle = SyntheticFixtureAdapter(seed=11, num_matchdays=45, games_per_day=5).fetch_games_and_odds()
+    games = [dict(g, game_id=g["game_id"].replace("SYN_", "TST_")) for g in bundle["games"]]
+    by_id = {g["game_id"]: g for g in games}
+    markets: list[dict[str, Any]] = []
+    opens = {o["game_id"].replace("SYN_", "TST_"): o for o in bundle["odds"]
+             if o["market"] == "moneyline" and o["selection"] == "HOME" and not o["is_closing_line"]}
+    closes = {o["game_id"].replace("SYN_", "TST_"): o for o in bundle["odds"]
+              if o["market"] == "moneyline" and o["selection"] == "HOME" and o["is_closing_line"]}
+    totals = {o["game_id"].replace("SYN_", "TST_"): o for o in bundle["odds"]
+              if o["market"] == "total_points" and o["selection"] == "OVER"}
+    for gid, g in by_id.items():
+        p_open = devig_multiplicative(opens[gid]["decimal_odds"], opens[gid]["counterpart_decimal_odds"])[0]
+        p_close = devig_multiplicative(closes[gid]["decimal_odds"], closes[gid]["counterpart_decimal_odds"])[0]
+        line = float(totals[gid]["line_value"])
+        pts = g["home_score"] + g["away_score"]
+        markets.append({
+            "market_game_id": gid, "season": g["season"], "start_time_utc": g["game_start_time"],
+            "home_team": g["home_team"], "away_team": g["away_team"],
+            "open_home_win_prob": p_open, "close_home_win_prob": p_close,
+            "open_total": line, "close_total": line, "close_over_prob": 0.5,
+            "moneyline_winner": "home" if g["home_score"] > g["away_score"] else "away",
+            "total_result_open": "push" if pts == line else ("over" if pts > line else "under"),
+            "bookmakers": 1,
+        })
+    assert len(match_market_to_games(markets, games)) == len(games)
+
+    res = run_real_odds_backtest(games, markets, start_date="2026-02-01", retrain_every_days=7)
+    q = res["moneyline_quality"]
+    assert set(q) >= {"model_raw", "model_calibrated", "market_open", "market_close"}
+    assert q["market_open"]["n"] == res["config"]["test_games"]
+    b = res["betting"]
+    assert b["bets"] <= 3 * len({g["matchday_date"] for g in games})
+    for bet in res["bets_sample"]:
+        assert bet["ev_unit"] > 0.05 and bet["kelly_stake_pen"] <= 3.0
