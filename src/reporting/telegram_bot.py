@@ -183,3 +183,79 @@ class TelegramAlertBot:
             f"⏳ _Aprovechar antes de que el bookmaker actualice la línea._"
         )
         return msg
+
+    def format_daily_settlement_report(
+        self,
+        matchday_date: str,
+        settled_bets: list[dict[str, Any]],
+        settled_props: list[dict[str, Any]],
+        current_bankroll_pen: float,
+        initial_bankroll_pen: float = 100.0,
+        peak_bankroll_pen: float | None = None,
+        cppi_multiplier: float = 1.0,
+    ) -> str:
+        """
+        Formats comprehensive end-of-day settlement summary in Soles (S/. PEN).
+        Displays won/lost counts, daily net profit, win rate %, updated bankroll,
+        and CPPI capital preservation shield status.
+        """
+        all_items = settled_bets + settled_props
+        total_count = len(all_items)
+        if total_count == 0:
+            return (
+                f"🌙 *RESUMEN DIARIO DE LIQUIDACIÓN | NBA INTELLIGENCE*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📅 *Fecha:* `{matchday_date}`\n"
+                f"ℹ️ _No hubo apuestas ni props pendientes de liquidar en esta jornada._\n"
+                f"💰 *Bankroll Actual:* `S/ {current_bankroll_pen:.2f} PEN`\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━"
+            )
+
+        won_count = sum(1 for x in all_items if str(x.get("status")).upper() == "WON")
+        lost_count = sum(1 for x in all_items if str(x.get("status")).upper() == "LOST")
+        push_count = sum(1 for x in all_items if str(x.get("status")).upper() == "PUSH")
+
+        daily_profit = sum(float(x.get("net_profit_pen") or 0.0) for x in all_items)
+        total_staked = sum(float(x.get("stake_pen") or x.get("stake") or 0.0) for x in all_items)
+        win_rate = (won_count / max(1, won_count + lost_count)) * 100.0
+        daily_roi = (daily_profit / max(0.01, total_staked)) * 100.0
+
+        pnl_symbol = "📈" if daily_profit >= 0 else "📉"
+        pnl_sign = "+" if daily_profit >= 0 else ""
+
+        peak = peak_bankroll_pen or max(initial_bankroll_pen, current_bankroll_pen)
+        cppi_floor = peak * 0.85
+
+        items_detail = ""
+        for i, item in enumerate(all_items[:8], 1):
+            st = str(item.get("status")).upper()
+            icon = "✅" if st == "WON" else ("❌" if st == "LOST" else "⏸️")
+            pnl_item = float(item.get("net_profit_pen") or 0.0)
+            sign_item = "+" if pnl_item >= 0 else ""
+            desc = item.get("player_name") or f"{item.get('game_id', 'Game')} {item.get('market', '')} {item.get('selection', '')}"
+            cat = item.get("prop_category") or ""
+            line = item.get("line_value") or ""
+            sel = item.get("selection") or ""
+            target = f"{cat} {sel} {line}".strip()
+            detail_line = f"  {i}. {icon} {desc} {target} ({sign_item}S/ {pnl_item:.2f})\n"
+            items_detail += detail_line
+
+        if total_count > 8:
+            items_detail += f"  ... y {total_count - 8} selecciones más.\n"
+
+        msg = (
+            f"🌙 *RESUMEN DIARIO DE LIQUIDACIÓN | NBA INTELLIGENCE*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📅 *Jornada:* `{matchday_date}`\n"
+            f"💰 *Bankroll Actual:* `S/ {current_bankroll_pen:.2f} PEN` (Pico: `S/ {peak:.2f}`)\n"
+            f"🛡️ *Escudo CPPI:* `{cppi_multiplier * 100:.1f}%` (Piso 85%: `S/ {cppi_floor:.2f} PEN`)\n\n"
+            f"📊 *Balance de la Jornada:*\n"
+            f"  • Total Selecciones: `{total_count}`\n"
+            f"  • {won_count} Ganadas ✅ | {lost_count} Perdidas ❌ | {push_count} PUSH ⏸️\n"
+            f"  • *Win Rate:* `{win_rate:.1f}%`\n"
+            f"  • {pnl_symbol} *Resultado Neto:* `{pnl_sign}S/ {daily_profit:.2f} PEN` (ROI: `{pnl_sign}{daily_roi:.1f}%`)\n\n"
+            f"📋 *Desglose de Resultados:*\n{items_detail}"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔒 _Historial y balance auditado e inmutable en SQLite._"
+        )
+        return msg

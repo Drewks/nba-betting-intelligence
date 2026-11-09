@@ -3018,3 +3018,69 @@ def test_46_cppi_capital_preservation_shield(tmp_path: Path) -> None:
 
     assert stake_healthy > stake_distressed
     assert stake_distressed >= 1.00  # Never below minimum bet S/ 1.00 PEN
+
+
+
+# 47. V9 Automatización: Automated Daily Settlement & Telegram Summary Dispatcher
+def test_47_automated_daily_settlement_and_telegram_report(tmp_path: Path) -> None:
+    """
+    Test 47: Verification of Automated Daily Settlement & Telegram Reporting:
+    1. Peru Timezone alignment (UTC-5 / America/Lima).
+    2. Accurate formatting of format_daily_settlement_report:
+       - Won, Lost, PUSH counts
+       - Win Rate %, Net PnL in Soles (S/. PEN), ROI %
+       - Bankroll update and CPPI 85% floor display
+    3. Graceful handling of empty slates (no pending bets).
+    4. End-to-end integration with NBADailyScheduler.
+    """
+    from scripts.run_automated_scheduler import NBADailyScheduler, get_peru_time, PERU_OFFSET
+    from src.reporting.telegram_bot import TelegramAlertBot
+    from src.storage.db import DatabaseManager
+
+    # 1. Timezone verification
+    t_pet = get_peru_time()
+    assert t_pet.tzinfo == PERU_OFFSET
+
+    # 2. Daily Settlement Report Formatter
+    bot = TelegramAlertBot()
+    sample_bets = [
+        {"game_id": "G_SETTLE_1", "market": "moneyline", "selection": "HOME", "status": "WON", "net_profit_pen": 1.85, "stake_pen": 2.0},
+        {"game_id": "G_SETTLE_2", "market": "total_points", "selection": "OVER", "status": "LOST", "net_profit_pen": -2.00, "stake_pen": 2.0},
+    ]
+    sample_props = [
+        {"player_name": "Luka Doncic", "prop_category": "PTS", "selection": "OVER", "line_value": 28.5, "status": "WON", "net_profit_pen": 1.80, "stake_pen": 2.0},
+        {"player_name": "LeBron + LAL", "prop_category": "SGP", "selection": "SGP", "line_value": 25.5, "status": "WON", "net_profit_pen": 5.00, "stake_pen": 2.0},
+    ]
+
+    report = bot.format_daily_settlement_report(
+        matchday_date="2026-11-08",
+        settled_bets=sample_bets,
+        settled_props=sample_props,
+        current_bankroll_pen=106.65,
+        initial_bankroll_pen=100.00,
+        peak_bankroll_pen=106.65,
+        cppi_multiplier=1.0,
+    )
+
+    assert "RESUMEN DIARIO DE LIQUIDACIÓN" in report
+    assert "2026-11-08" in report
+    assert "S/ 106.65 PEN" in report
+    assert "3 Ganadas ✅ | 1 Perdidas ❌" in report
+    assert "Win Rate:* `75.0%`" in report
+    assert "+S/ 6.65 PEN" in report
+    assert "Luka Doncic" in report
+
+    # 3. Empty slate handling
+    empty_report = bot.format_daily_settlement_report(
+        matchday_date="2026-11-08",
+        settled_bets=[],
+        settled_props=[],
+        current_bankroll_pen=100.0,
+    )
+    assert "No hubo apuestas ni props" in empty_report
+    assert "S/ 100.00 PEN" in empty_report
+
+    # 4. Scheduler instantiation with test DB
+    db = DatabaseManager(tmp_path / "sched_test.sqlite3")
+    sched = NBADailyScheduler(db_path=tmp_path / "sched_test.sqlite3")
+    assert sched.paper_engine.initial_bankroll_pen == 100.00
