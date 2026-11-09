@@ -19,6 +19,26 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 
+def _load_dotenv_if_present() -> None:
+    """Loads local .env file into os.environ if present without overwriting existing env vars."""
+    env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+    if env_path.exists():
+        try:
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                cleaned = line.strip()
+                if cleaned and not cleaned.startswith("#") and "=" in cleaned:
+                    k, v = cleaned.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'").strip('"')
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+        except Exception:
+            pass
+
+
+_load_dotenv_if_present()
+
+
 class TelegramAlertBot:
     """
     Automated Telegram notification dispatcher for NBA Betting Intelligence.
