@@ -3084,3 +3084,84 @@ def test_47_automated_daily_settlement_and_telegram_report(tmp_path: Path) -> No
     db = DatabaseManager(tmp_path / "sched_test.sqlite3")
     sched = NBADailyScheduler(db_path=tmp_path / "sched_test.sqlite3")
     assert sched.paper_engine.initial_bankroll_pen == 100.00
+
+
+
+# 48. V9 Scraping en Vivo: Real-Time Peruvian Odds Scraper & Arbitrage Monitor
+def test_48_live_peru_odds_scraper_and_arbitrage_alerts(tmp_path: Path) -> None:
+    """
+    Test 48: Verification of Live Peruvian Sportsbook Scraper & Arbitrage Monitor:
+    1. Multi-book quote collection across RETAbet, Betsson, Doradobet, Coolbet, Apuesta Total, Pinnacle.
+    2. Calculation of best local and away odds and synthetic margin.
+    3. Detection of Stale Lines (+CLV) when retail book lags sharp Pinnacle odds.
+    4. Detection of Cross-Bookmaker Surebet Arbitrage with Soles (S/. PEN) stake allocation.
+    5. Formatting and validation of Telegram Surebet alert.
+    """
+    from src.ingestion.live_peru_scraper import LivePeruOddsScraper
+    from src.reporting.telegram_bot import TelegramAlertBot
+    from src.storage.db import DatabaseManager
+
+    db = DatabaseManager(tmp_path / "test_live_peru.sqlite3")
+    scraper = LivePeruOddsScraper(
+        db=db,
+        min_clv_pct=4.0,
+        min_arb_margin_pct=1.0,
+        bankroll_pen=100.0,
+    )
+
+    # 1. Collect slate odds
+    res = scraper.collect_slate_odds(
+        game_id="G_LIVE_TEST_1",
+        home_team="BOS",
+        away_team="MIA",
+        game_start_time="2026-11-10T00:00:00Z",
+        sharp_home_odds=1.65,
+        sharp_away_odds=2.30,
+    )
+
+    assert res["game_id"] == "G_LIVE_TEST_1"
+    assert "best_home" in res
+    assert "best_away" in res
+    assert len(res["quotes"]) >= 8
+    assert "retabet_pe" in res["quotes"]
+    assert "betsson_pe" in res["quotes"]
+    assert "pinnacle_pe" in res["quotes"]
+
+    # 2. Test Stale Line identification against sharp benchmark
+    # Mocking sharp move to 1.55 on HOME while RETAbet remains lagged at 1.80
+    sharp_spec = {"bookmaker": "Pinnacle", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.55}
+    retail_lines = [{"bookmaker": "RETAbet Perú", "selection": "HOME", "decimal_odds": 1.80}]
+    stale_found = scraper.hunter.identify_stale_lines(
+        game_id="G_LIVE_TEST_1",
+        matchday_date="2026-11-10",
+        sharp_line=sharp_spec,
+        retail_lines=retail_lines,
+        bankroll_pen=100.0,
+    )
+    assert len(stale_found) >= 1
+    assert stale_found[0]["expected_clv_pct"] > 10.0
+    assert stale_found[0]["is_stale_line"] is True
+
+    # 3. Test Surebet Arbitrage detection
+    surebet = scraper.hunter.compute_surebet_arbitrage(
+        game_id="G_LIVE_TEST_1",
+        matchday_date="2026-11-10",
+        book_a="Betsson Perú",
+        odds_a=2.20,
+        selection_a="BOS",
+        book_b="Coolbet Perú",
+        odds_b=2.15,
+        selection_b="MIA",
+        total_investment_pen=100.0,
+    )
+    assert surebet["is_arbitrage"] is True
+    assert surebet["arb_margin_pct"] > 5.0
+    assert surebet["guaranteed_net_profit_pen"] > 5.0
+
+    # 4. Telegram Surebet alert formatter
+    bot = TelegramAlertBot()
+    alert_msg = bot.format_surebet_alert(surebet)
+    assert "ARBITRAJE LIBRE DE RIESGO" in alert_msg
+    assert "Betsson Perú" in alert_msg
+    assert "Coolbet Perú" in alert_msg
+    assert "S/ 100.00 PEN" in alert_msg

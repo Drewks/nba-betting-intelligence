@@ -29,6 +29,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 from scripts.run_cloud_cycle import run_incremental_cloud_cycle
+from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.prediction.injury_sniper import InjurySniperMonitor
 from src.prediction.player_props import PlayerPropsEngine
 from src.reporting.telegram_bot import TelegramAlertBot
@@ -159,11 +160,22 @@ class NBADailyScheduler:
                 alerts_sent += 1
             logger.info(f"📲 [TELEGRAM] {alerts_sent} alertas de Injury Sniper enviadas a tu chat.")
 
+        # Escaneo en tiempo real de cuotas peruanas (Stale Lines & Arbitraje Surebet)
+        live_res: dict[str, Any] = {}
+        try:
+            live_scraper = LivePeruOddsScraper(db=self.db)
+            live_res = live_scraper.scan_and_alert_entire_slate(min_clv_pct=4.0, max_alerts=3)
+            alerts_sent += int(live_res.get("stale_lines_found", 0)) + int(live_res.get("surebets_found", 0))
+            logger.info(f"📊 [LIVE ODDS] {live_res.get('games_scanned', 0)} partidos escaneados para casas peruanas.")
+        except Exception as exc:
+            logger.warning(f"Error escaneando cuotas en vivo en el scheduler: {exc}")
+
         return {
             "status": "COMPLETED",
             "window": "SNIPER",
             "executed_at_pet": now_pet.strftime("%Y-%m-%dT%H:%M:%S"),
             "sniper_results": sniper_res,
+            "live_odds_results": live_res,
             "alerts_dispatched": alerts_sent,
         }
 

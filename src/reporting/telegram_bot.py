@@ -184,6 +184,41 @@ class TelegramAlertBot:
         )
         return msg
 
+    def format_surebet_alert(self, surebet: dict[str, Any]) -> str:
+        """Formats a risk-free cross-bookmaker surebet arbitrage opportunity in Soles."""
+        b_a = surebet.get("book_a", "Casa A")
+        sel_a = surebet.get("selection_a", "HOME")
+        odds_a = float(surebet.get("odds_a", 2.10))
+        stake_a = float(surebet.get("stake_a_pen", 50.0))
+
+        b_b = surebet.get("book_b", "Casa B")
+        sel_b = surebet.get("selection_b", "AWAY")
+        odds_b = float(surebet.get("odds_b", 2.05))
+        stake_b = float(surebet.get("stake_b_pen", 50.0))
+
+        tot_invest = float(surebet.get("total_staked_pen", 100.0))
+        guaranteed_pnl = float(surebet.get("guaranteed_net_profit_pen", surebet.get("guaranteed_pnl_pen", 4.50)))
+        margin = float(surebet.get("arb_margin_pct", surebet.get("arbitrage_margin_pct", 4.5)))
+
+        msg = (
+            f"💰 *ARBITRAJE LIBRE DE RIESGO (SUREBET PERÚ)*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚡ *Retorno Matemático Garantizado!*\n"
+            f"🏦 *Apuesta 1:* {b_a}\n"
+            f"  • Selección: *{sel_a}* @ `{odds_a:.2f}`\n"
+            f"  • Inversión: *S/ {stake_a:.2f} PEN*\n"
+            f"🏦 *Apuesta 2:* {b_b}\n"
+            f"  • Selección: *{sel_b}* @ `{odds_b:.2f}`\n"
+            f"  • Inversión: *S/ {stake_b:.2f} PEN*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Inversión Total:* `S/ {tot_invest:.2f} PEN`\n"
+            f"📈 *Margen de Arbitraje:* `+{margin:.2f}%`\n"
+            f"🏆 *Beneficio Neto Seguro:* *+S/ {guaranteed_pnl:.2f} PEN*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ _Colocar ambas apuestas simultáneamente antes de que se ajusten las líneas._"
+        )
+        return msg
+
     def format_daily_settlement_report(
         self,
         matchday_date: str,
