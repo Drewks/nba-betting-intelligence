@@ -16,8 +16,10 @@ import yaml
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "model_config.yaml"
 
-# Hard caps from AGENTS.md (paper_trading_manager, version 1). Config can be stricter, never looser.
-AGENTS_MAX_STAKE_PEN = 1.00
+# Hard caps from AGENTS.md (paper_trading_manager). Config can be stricter, never looser.
+AGENTS_MAX_STAKE_PEN = 3.00
+AGENTS_MAX_STAKE_BANKROLL_FRACTION = 0.03
+AGENTS_MAX_KELLY_FRACTION = 0.50
 AGENTS_MIN_EV_THRESHOLD = 0.05
 AGENTS_MAX_SELECTIONS_PER_MATCHDAY = 3
 
@@ -39,6 +41,10 @@ class ModelConfig:
 @dataclass(frozen=True)
 class RiskConfig:
     virtual_bankroll_initial_pen: float
+    staking_mode: str
+    kelly_fraction: float
+    min_stake_pen: float
+    max_stake_bankroll_fraction: float
     base_stake_pen: float
     max_stake_pen: float
     max_selections_per_matchday: int
@@ -82,9 +88,21 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
             "market_anchor_model_weight", _require(m, "market_anchor_model_weight", "model"), 0.0, 1.0
         ),
     )
+    staking_mode = str(_require(r, "staking_mode", "risk_management"))
+    if staking_mode not in ("fractional_kelly", "flat"):
+        raise ConfigError(f"staking_mode must be 'fractional_kelly' or 'flat', got {staking_mode!r}")
     risk = RiskConfig(
         virtual_bankroll_initial_pen=_in_range(
             "virtual_bankroll_initial_pen", _require(r, "virtual_bankroll_initial_pen", "risk_management"), 1.0, 1e6
+        ),
+        staking_mode=staking_mode,
+        kelly_fraction=_in_range("kelly_fraction", _require(r, "kelly_fraction", "risk_management"), 0.01, AGENTS_MAX_KELLY_FRACTION),
+        min_stake_pen=_in_range("min_stake_pen", _require(r, "min_stake_pen", "risk_management"), 0.01, AGENTS_MAX_STAKE_PEN),
+        max_stake_bankroll_fraction=_in_range(
+            "max_stake_bankroll_fraction",
+            _require(r, "max_stake_bankroll_fraction", "risk_management"),
+            0.001,
+            AGENTS_MAX_STAKE_BANKROLL_FRACTION,
         ),
         base_stake_pen=_in_range("base_stake_pen", _require(r, "base_stake_pen", "risk_management"), 0.01, AGENTS_MAX_STAKE_PEN),
         max_stake_pen=_in_range("max_stake_pen", _require(r, "max_stake_pen", "risk_management"), 0.01, AGENTS_MAX_STAKE_PEN),
@@ -105,6 +123,8 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     )
     if risk.base_stake_pen > risk.max_stake_pen:
         raise ConfigError("base_stake_pen cannot exceed max_stake_pen")
+    if risk.min_stake_pen > risk.max_stake_pen:
+        raise ConfigError("min_stake_pen cannot exceed max_stake_pen")
     if risk.allow_parlays:
         raise ConfigError("allow_parlays=true violates AGENTS.md (apuestas combinadas prohibidas)")
     allowed = tuple(str(x) for x in (src.get("betting_allowed_source_types") or ["OBSERVED"]))

@@ -18,6 +18,7 @@ from typing import Any
 import uuid
 import numpy as np
 
+from src.paper_trading.staking import fractional_kelly_stake
 from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
 from src.storage.db import DatabaseManager
 from src.validation.validator import (
@@ -78,11 +79,23 @@ class PaperTradingEngine:
         staking_mode: str = "CONSERVATIVE",
         is_backtest: bool = False,
         max_portfolio_exposure_pct: float = 0.20,
+        kelly_fraction: float = 0.25,
+        min_stake_pen: float = 0.50,
+        max_stake_bankroll_fraction: float = 0.03,
     ) -> None:
         self.is_backtest = is_backtest
         self.max_portfolio_exposure_pct = max_portfolio_exposure_pct
-        # AGENTS.md v1: max S/1.00 per selection. The dynamic-conviction mode is a research mode only.
-        max_allowed = 25.00 if dynamic_conviction_staking else 1.00
+        self.kelly_fraction = float(kelly_fraction)
+        self.min_stake_pen = float(min_stake_pen)
+        self.max_stake_bankroll_fraction = float(max_stake_bankroll_fraction)
+        # AGENTS.md: flat mode max S/1.00; FRACTIONAL_KELLY max S/3.00 (and 3% of bankroll) per selection.
+        # The dynamic-conviction mode is a research mode only.
+        if dynamic_conviction_staking:
+            max_allowed = 25.00
+        elif str(staking_mode) == "FRACTIONAL_KELLY":
+            max_allowed = 3.00
+        else:
+            max_allowed = 1.00
         if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
             raise RiskLimitError(
                 f"Stake limits must satisfy 0 < base_stake <= max_stake <= S/{max_allowed:.2f} PEN."
@@ -721,6 +734,27 @@ class PaperTradingEngine:
             state = self.get_bankroll_state()
             if proposed_stake_pen is not None:
                 bet_stake = stake
+            elif self.staking_mode == "FRACTIONAL_KELLY":
+                # Stake grows with the calibrated, market-anchored probability for this price; 0 = no edge.
+                bet_stake = fractional_kelly_stake(
+                    prob=float(cal_prob),
+                    decimal_odds=dec_odds,
+                    bankroll_pen=state["settled_bankroll_pen"],
+                    kelly_fraction=self.kelly_fraction,
+                    min_stake_pen=self.min_stake_pen,
+                    max_stake_pen=self.max_stake_pen,
+                    max_bankroll_fraction=self.max_stake_bankroll_fraction,
+                )
+                if bet_stake <= 0.0:
+                    no_bet_decisions.append(
+                        self._record_decision(
+                            game_id, matchday_date, market, selection, "NO_BET",
+                            "KELLY_STAKE_BELOW_MINIMUM",
+                            f"Fractional Kelly stake below S/{self.min_stake_pen:.2f} (no material edge at {dec_odds:.3f}).",
+                            ev_pct, emitted_at, model_version_id
+                        )
+                    )
+                    continue
             elif self.dynamic_conviction_staking:
                 if cand.get("kelly_recommended_stake_pen") is not None:
                     bet_stake = round(float(cand["kelly_recommended_stake_pen"]), 2)
