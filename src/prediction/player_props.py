@@ -487,9 +487,11 @@ class PlayerPropsEngine:
         opponent_team: str | None = None,
         expected_game_pace: float | None = None,
         spread_blowout_risk: float | None = None,
+        persist: bool = True,
     ) -> list[dict[str, Any]]:
         """
         Evaluates a specific player prop line against our tactical & injury-adjusted projection.
+        `persist=False` evaluates without recording a paper bet (used for unobserved/research lines).
         Calculates +EV, Venn-Abers conformal lower bounds, line edge metrics, and recommended Kelly stakes.
         """
         proj_info = self.project_player_stats(
@@ -607,7 +609,7 @@ class PlayerPropsEngine:
                 opportunities.append(prop_pick)
 
                 # Persist to SQLite table player_prop_picks if db provided
-                if self.db is not None:
+                if self.db is not None and persist:
                     try:
                         # Guard: strictly prevent recording props for games that are finished or cancelled
                         g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (prop_pick["game_id"],))
@@ -781,9 +783,11 @@ class PlayerPropsEngine:
         props_list: list[dict[str, Any]],
         bankroll_pen: float = 100.0,
         min_ev_pct: float = 3.0,
+        persist: bool = False,
     ) -> list[dict[str, Any]]:
         """
-        V8 Phase 3: Automated RETAbet SGP Slate Scanner.
+        V8 Phase 3: Automated RETAbet SGP Slate Scanner (RESEARCH ONLY: offered SGP prices are simulated,
+        not observed, and combined bets are prohibited by AGENTS.md; never persisted unless persist=True).
         Pairs available slate game projections with qualified player prop picks to identify
         statistically correlated Same-Game Parlay value opportunities in RETAbet's "Crea tu Apuesta".
         """
@@ -827,7 +831,7 @@ class PlayerPropsEngine:
             if sgp_cand["ev_pct"] >= min_ev_pct and sgp_cand["p_joint"] >= 0.18:
                 sgp_cand["is_value_sgp"] = True
                 sgp_opportunities.append(sgp_cand)
-                if self.db is not None:
+                if self.db is not None and persist:
                     try:
                         g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (sgp_cand["game_id"],))
                         if g_rec and g_rec.get("status") in ("FINAL", "POSTPONED", "CANCELLED"):
@@ -1065,6 +1069,7 @@ class PlayerPropsEngine:
         injuries_by_team: dict[str, list[str]] | None = None,
         output_file: Path | str | None = None,
         allow_synthetic_lines: bool = False,
+        allow_parlays: bool = False,
     ) -> list[dict[str, Any]]:
         """
         V8 Institutional End-to-End Prop & SGP Slate Generator:
@@ -1244,11 +1249,11 @@ class PlayerPropsEngine:
                             continue
 
                         # Strict Data Integrity: Require observed prop lines unless allow_synthetic_lines=True
-                        has_db_props = False
-                        if self.db:
-                            row_check = self.db.fetch_one("SELECT 1 FROM v_observed_odds_snapshots WHERE market = 'player_prop' LIMIT 1")
-                            has_db_props = bool(row_check)
-                        use_synthetic = allow_synthetic_lines or (not has_db_props)
+                        # Strict data integrity: synthetic lines ONLY when a research caller asks for them
+                        # explicitly, and even then they are never persisted as paper bets.
+                        # (The odds schema cannot store a 'player_prop' market yet, so in production there
+                        # are no observed prop lines and therefore no prop picks at all.)
+                        use_synthetic = bool(allow_synthetic_lines)
 
                         observed_quotes: list[dict[str, Any]] = []
                         if self.db and gid:
@@ -1293,6 +1298,7 @@ class PlayerPropsEngine:
                                 opponent_team=opp_code,
                                 expected_game_pace=pace_val,
                                 spread_blowout_risk=spread_val,
+                                persist=bool(observed_quotes),
                             )
                             for pk in picks:
                                 if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:
@@ -1302,22 +1308,25 @@ class PlayerPropsEngine:
         qualified_props.sort(key=lambda x: (x.get("ev_lower_bound_pct", 0.0), x.get("ev_pct", 0.0)), reverse=True)
         top_individual_props = qualified_props[:15]
 
-        # Generate RETAbet SGP parlays by pairing with slate game moneyline projections
-        sgp_candidates = self.scan_retabet_sgp_slate(
-            slate_games=valid_slate_games,
-            props_list=top_individual_props,
-            bankroll_pen=bankroll_pen,
-            min_ev_pct=min_ev_pct,
-        )
-        sgp_candidates.sort(key=lambda x: x.get("ev_pct", 0.0), reverse=True)
-        top_sgp_candidates = sgp_candidates[:8]
-
-        # Generate High-Probability Multi-Leg "Lock Builder" Parlays (Pure Alpha Mode)
-        high_prob_parlays = self.generate_high_probability_parlays(
-            slate_games=valid_slate_games,
-            props_list=top_individual_props,
-            bankroll_pen=bankroll_pen,
-        )
+        # Combined bets (SGP / parlays) are prohibited by AGENTS.md and their offered prices are not
+        # observed anywhere, so they are only generated when a research caller opts in explicitly.
+        top_sgp_candidates: list[dict[str, Any]] = []
+        high_prob_parlays: list[dict[str, Any]] = []
+        if allow_parlays:
+            sgp_candidates = self.scan_retabet_sgp_slate(
+                slate_games=valid_slate_games,
+                props_list=top_individual_props,
+                bankroll_pen=bankroll_pen,
+                min_ev_pct=min_ev_pct,
+                persist=False,
+            )
+            sgp_candidates.sort(key=lambda x: x.get("ev_pct", 0.0), reverse=True)
+            top_sgp_candidates = sgp_candidates[:8]
+            high_prob_parlays = self.generate_high_probability_parlays(
+                slate_games=valid_slate_games,
+                props_list=top_individual_props,
+                bankroll_pen=bankroll_pen,
+            )
 
         consolidated = high_prob_parlays + top_sgp_candidates + top_individual_props
 

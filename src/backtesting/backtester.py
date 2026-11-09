@@ -14,6 +14,7 @@ import json
 from typing import Any
 import numpy as np
 
+from src.evaluation.clv import summarize_clv
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
     VennAbersConformalInterval,
@@ -142,21 +143,31 @@ def evaluate_simulation_exit_gates(
     metrics: dict[str, Any],
     leakage_violations: int = 0,
     integrity_errors: int = 0,
-    reproducibility_verified: bool = True,
-    auditor_approved: bool = True,
+    reproducibility_verified: bool = False,
+    auditor_approved: bool = False,
     min_settled_required: int = 500,
 ) -> dict[str, Any]:
     """
-    Evaluates the 9 pre-defined validation gates from Section 11.
+    Evaluates the pre-defined validation gates from Section 11 plus a market benchmark gate.
+    Fail-closed: a missing metric FAILS its gate (it is never replaced by a passing default).
     Never modifies acceptance criteria retroactively and never automates transition to real money.
     """
-    settled_count = int(metrics.get("settled_bets_count", 0))
-    oos_periods = int(metrics.get("oos_seasons_evaluated", 0))
-    model_brier = float(metrics.get("overall_brier_score", 1.0))
-    base_brier = float(metrics.get("baseline_brier_score", 1.0))
-    model_ll = float(metrics.get("overall_log_loss", 10.0))
-    base_ll = float(metrics.get("baseline_log_loss", 10.0))
-    roi_pct = float(metrics.get("roi_pct", 0.0))
+
+    def _f(key: str) -> float | None:
+        val = metrics.get(key)
+        return None if val is None else float(val)
+
+    settled_count = int(metrics.get("settled_bets_count") or 0)
+    oos_periods = int(metrics.get("oos_seasons_evaluated") or 0)
+    model_brier = _f("overall_brier_score")
+    base_brier = _f("baseline_brier_score")
+    model_ll = _f("overall_log_loss")
+    base_ll = _f("baseline_log_loss")
+    mkt_brier = _f("market_brier_score")
+    mkt_ll = _f("market_log_loss")
+    model_brier_sub = _f("model_brier_on_market_subset")
+    model_ll_sub = _f("model_log_loss_on_market_subset")
+    roi_pct = float(metrics.get("roi_pct") or 0.0)
     yield_pct = float(metrics.get("yield_pct", 0.0))
     ci_info = metrics.get("bootstrap_uncertainty", {})
     ci_excludes_zero = not bool(ci_info.get("compatible_with_zero_edge", True))
@@ -173,7 +184,11 @@ def evaluate_simulation_exit_gates(
             "required": ">= 2 temporal periods/seasons",
         },
         "gate_3_calibration_non_inferior_to_baseline": {
-            "passed": (model_brier <= base_brier) and (model_ll <= base_ll),
+            "passed": (
+                None not in (model_brier, base_brier, model_ll, base_ll)
+                and model_brier <= base_brier  # type: ignore[operator]
+                and model_ll <= base_ll  # type: ignore[operator]
+            ),
             "observed": {"model_brier": model_brier, "baseline_brier": base_brier, "model_log_loss": model_ll, "baseline_log_loss": base_ll},
             "required": "model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss",
         },
@@ -211,6 +226,21 @@ def evaluate_simulation_exit_gates(
             "observed": bool(auditor_approved),
             "required": True,
         },
+        "gate_10_non_inferior_to_devigged_market": {
+            "passed": (
+                None not in (mkt_brier, mkt_ll, model_brier_sub, model_ll_sub)
+                and model_brier_sub <= mkt_brier  # type: ignore[operator]
+                and model_ll_sub <= mkt_ll  # type: ignore[operator]
+            ),
+            "observed": {
+                "model_brier": model_brier_sub,
+                "market_brier": mkt_brier,
+                "model_log_loss": model_ll_sub,
+                "market_log_loss": mkt_ll,
+                "sample_size": metrics.get("market_comparison_sample_size"),
+            },
+            "required": "model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games",
+        },
     }
 
     all_passed = all(g["passed"] for g in gates.values())
@@ -244,7 +274,6 @@ class WalkForwardBacktester:
     ) -> None:
         self.db = db
         self.paper_engine = paper_engine
-        self.paper_engine.is_backtest = True
         self.warmup_matchdays = warmup_matchdays
         self.retrain_every_matchdays = retrain_every_matchdays
 
@@ -253,8 +282,25 @@ class WalkForwardBacktester:
         games: list[dict[str, Any]],
         odds: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        """Runs chronological walk-forward evaluation and populates SQLite audit tables."""
+        """Runs chronological walk-forward evaluation and populates SQLite audit tables.
+
+        The paper engine is switched to backtest mode (historical FINAL games are bettable) only for
+        the duration of this call, so a shared production engine is never left in backtest mode.
+        """
+        previous_mode = bool(getattr(self.paper_engine, "is_backtest", False))
+        self.paper_engine.is_backtest = True
+        try:
+            return self._run_walk_forward_impl(games, odds)
+        finally:
+            self.paper_engine.is_backtest = previous_mode
+
+    def _run_walk_forward_impl(
+        self,
+        games: list[dict[str, Any]],
+        odds: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         sorted_games = sorted(games, key=lambda g: g["game_start_time"])
+        skipped_unpredictable_games = 0
 
         # Ensure all games are persisted in SQLite so foreign key constraints on predictions/bets hold
         with self.db.connect() as conn:
@@ -294,11 +340,11 @@ class WalkForwardBacktester:
                 )
 
         odds_by_game: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        closing_odds_lookup: dict[tuple[str, str, str, float | None], float] = {}
+        closing_rows: list[dict[str, Any]] = []
 
         for o in odds:
             if int(o.get("is_closing_line", 0)) == 1:
-                closing_odds_lookup[(o["game_id"], o["market"], o["selection"], o.get("line_value"))] = float(o["decimal_odds"])
+                closing_rows.append(o)
             else:
                 odds_by_game[o["game_id"]].append(o)
 
@@ -389,6 +435,13 @@ class WalkForwardBacktester:
                     pred_dt = max(default_pred_dt, latest_odds_dt)
                 else:
                     pred_dt = default_pred_dt
+                # A prediction can only be made once the game's pre-game features exist. Games first seen
+                # as post-game results (features_available_at >= tip-off) are history only: never predicted.
+                feat_dt = parse_iso_utc(g["features_available_at"])
+                pred_dt = max(pred_dt, feat_dt)
+                if pred_dt >= start_dt:
+                    skipped_unpredictable_games += 1
+                    continue
                 pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                 validate_game_record(g, simulated_prediction_time=pred_ts)
 
@@ -415,6 +468,8 @@ class WalkForwardBacktester:
                 cal_p_under = round(1.0 - cal_p_over, 6)
                 va_over_int = tot_va.predict_interval(raw_p_over)
 
+                market_p_home: float | None = None
+                market_p_over: float | None = None
                 for o in game_odds:
                     validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
                     mkt = o["market"]
@@ -453,8 +508,7 @@ class WalkForwardBacktester:
                         conformal_interval=conf_int,
                     )
 
-                    line_str = str(o.get("line_value") or "ML").replace(".", "_")
-                    pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{line_str}_{m_ver}"
+                    pred_id = f"PRED_{m_ver}_{o['odds_id']}"
                     self.db.execute_insert(
                         """
                         INSERT OR IGNORE INTO predictions (
@@ -493,6 +547,10 @@ class WalkForwardBacktester:
                     opp["calibrated_probability"] = cal_p
                     opp["emitted_at"] = pred_ts
                     matchday_candidates.append(opp)
+                    if mkt == "moneyline" and sel == "HOME" and opp.get("implied_prob_fair") is not None:
+                        market_p_home = float(opp["implied_prob_fair"])
+                    elif mkt == "total_points" and sel == "OVER" and opp.get("implied_prob_fair") is not None:
+                        market_p_over = float(opp["implied_prob_fair"])
 
                 # If game finished, record outcome for subsequent matchday training/calibration
                 if g["status"] == "FINAL" and g["home_score"] is not None and g["away_score"] is not None:
@@ -535,6 +593,8 @@ class WalkForwardBacktester:
                             "model_a_tot": pred_a_tot["p_over"],
                             "model_d_tot": cal_p_over,
                             "model_e_tot": pred_e_tot["p_over"],
+                            "market_ml": market_p_home,
+                            "market_tot": market_p_over,
                         }
                     )
 
@@ -558,99 +618,116 @@ class WalkForwardBacktester:
                         settled_at=settle_ts,
                     )
 
-        return self.compute_comprehensive_metrics(
+        metrics = self.compute_comprehensive_metrics(
             model_comparison_records=model_comparison_records,
-            closing_odds_lookup=closing_odds_lookup,
+            closing_rows=closing_rows,
         )
+        metrics["skipped_unpredictable_games"] = skipped_unpredictable_games
+        return metrics
+
+    def _reconstruct_comparison_records_from_db(self) -> list[dict[str, Any]]:
+        """
+        One record per real FINAL game using the LATEST observed pre-tip prediction of each market.
+        Fields: naive baseline, calibrated ensemble probability (as stored), raw ensemble probability and
+        the de-vigged market probability of the same odds snapshot. Nothing is synthesized: when a value
+        is missing it stays None and the corresponding metric is not computed.
+        """
+        rows = self.db.fetch_all(
+            """
+            WITH latest AS (
+                SELECT p.*, ROW_NUMBER() OVER (
+                    PARTITION BY p.game_id, p.market ORDER BY p.emitted_at DESC, p.prediction_id DESC
+                ) AS rn
+                FROM v_observed_predictions p
+                WHERE (p.market = 'moneyline' AND p.selection = 'HOME')
+                   OR (p.market = 'total_points' AND p.selection = 'OVER')
+            )
+            SELECT l.game_id, l.market, l.raw_probability, l.calibrated_probability, l.implied_prob_fair,
+                   l.line_value, g.season, g.matchday_date, g.game_start_time, g.home_score, g.away_score
+            FROM latest l JOIN games g ON g.game_id = l.game_id
+            WHERE l.rn = 1 AND g.status = 'FINAL' AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
+              AND l.game_id NOT LIKE 'SYN%'
+            """
+        )
+        by_game: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+        for r in rows:
+            by_game[r["game_id"]][r["market"]] = r
+        all_final_games = self.db.fetch_all(
+            "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
+        )
+        games_idx = {g["game_id"]: g for g in all_final_games}
+        base_model = BaselineModel("model_a_baseline_v1")
+        out: list[dict[str, Any]] = []
+        for gid, mk in sorted(by_game.items(), key=lambda kv: str(next(iter(kv[1].values()))["game_start_time"])):
+            ml = mk.get("moneyline")
+            tot = mk.get("total_points")
+            if not ml or not tot or tot.get("line_value") is None:
+                continue
+            g_full = games_idx.get(gid)
+            if not g_full:
+                continue
+            prior_g = [x for x in all_final_games if x["game_start_time"] < g_full["game_start_time"]]
+            if prior_g:
+                base_model.fit(prior_g, g_full["game_start_time"])
+            line_v = float(tot["line_value"])
+            total_pts = int(g_full["home_score"]) + int(g_full["away_score"])
+            if abs(total_pts - line_v) < 1e-9:
+                continue  # pushes carry no binary outcome
+            out.append(
+                {
+                    "game_id": gid,
+                    "season": ml["season"],
+                    "matchday_date": ml["matchday_date"],
+                    "home_won": 1 if int(g_full["home_score"]) > int(g_full["away_score"]) else 0,
+                    "over_hit": 1 if total_pts > line_v else 0,
+                    "model_a_ml": base_model.predict_moneyline(g_full, prior_g)["p_home"],
+                    "model_raw_ml": float(ml["raw_probability"]),
+                    "model_c_ml": float(ml["calibrated_probability"]),
+                    "market_ml": float(ml["implied_prob_fair"]) if ml.get("implied_prob_fair") is not None else None,
+                    "model_a_tot": base_model.predict_total_points(g_full, prior_g, line_v)["p_over"],
+                    "model_d_tot": float(tot["calibrated_probability"]),
+                    "market_tot": float(tot["implied_prob_fair"]) if tot.get("implied_prob_fair") is not None else None,
+                }
+            )
+        return out
+
+    @staticmethod
+    def _score(probs: list[float], outcomes: list[int], with_curve: bool = False) -> dict[str, Any]:
+        if with_curve:
+            return compute_reliability_curve(probs, outcomes)
+        return {
+            "sample_size": len(probs),
+            "brier_score": compute_brier_score(probs, outcomes),
+            "log_loss": compute_log_loss(probs, outcomes),
+        }
 
     def compute_comprehensive_metrics(
         self,
         model_comparison_records: list[dict[str, Any]] | None = None,
-        closing_odds_lookup: dict[tuple[str, str, str, float | None], float] | None = None,
+        closing_rows: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Computes all Section 10 & 11 metrics from SQLite and out-of-sample records."""
+        """
+        Computes Section 10 & 11 metrics.
+        - Bets: only bets placed on OBSERVED odds (`v_observed_simulated_bets`), within the engine scope.
+        - Model quality: the calibrated ensemble vs. the naive baseline AND vs. the de-vigged market on the
+          same games. Beating the naive baseline is necessary but meaningless on its own; the market is
+          the benchmark that matters.
+        - Missing data yields None (never a default that would pass a gate).
+        """
         if not model_comparison_records:
-            # Reconstruct out-of-sample calibration comparison directly from SQLite predictions + final games
-            ml_rows = self.db.fetch_all(
-                """
-                SELECT p.game_id, p.calibrated_probability, p.implied_prob_fair, p.implied_prob_gross,
-                       g.season, g.matchday_date, g.home_score, g.away_score
-                FROM predictions p
-                JOIN games g ON p.game_id = g.game_id
-                WHERE p.market = 'moneyline' AND p.selection = 'HOME'
-                  AND g.status = 'FINAL' AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-                """
-            )
-            tot_rows = {
-                r["game_id"]: r
-                for r in self.db.fetch_all(
-                    """
-                    SELECT p.game_id, p.calibrated_probability, p.line_value,
-                           g.home_score, g.away_score
-                    FROM predictions p
-                    JOIN games g ON p.game_id = g.game_id
-                    WHERE p.market = 'total_points' AND p.selection = 'OVER'
-                      AND g.status = 'FINAL' AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-                    """
-                )
-            }
-            all_final_games = self.db.fetch_all(
-                "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
-            )
-            base_model = BaselineModel("model_a_baseline_v1")
-            reconstructed: list[dict[str, Any]] = []
-            for r in ml_rows:
-                gid = r["game_id"]
-                t_row = tot_rows.get(gid)
-                if not t_row:
-                    continue
-                g_full = next((x for x in all_final_games if x["game_id"] == gid), None)
-                if not g_full:
-                    continue
-                prior_g = [x for x in all_final_games if x["game_start_time"] < g_full["game_start_time"]]
-                if prior_g:
-                    base_model.fit(prior_g, g_full["game_start_time"])
-                p_base_ml = base_model.predict_moneyline(g_full, prior_g)["p_home"] if g_full else 0.565
-                line_v = float(t_row["line_value"] or 228.5)
-                p_base_tot = base_model.predict_total_points(g_full, prior_g, line_v)["p_over"] if g_full else 0.50
+            model_comparison_records = self._reconstruct_comparison_records_from_db()
+        if getattr(self.paper_engine, "exclude_synthetic", False):
+            model_comparison_records = [
+                r for r in model_comparison_records if not str(r["game_id"]).startswith("SYN")
+            ]
 
-                home_won = 1 if int(r["home_score"]) > int(r["away_score"]) else 0
-                over_hit = 1 if (int(t_row["home_score"]) + int(t_row["away_score"])) > line_v else 0
-
-                raw_p_ml = float(r.get("raw_probability") or r["calibrated_probability"])
-                cal_p_ml = float(r["calibrated_probability"])
-                fair_mkt = float(r.get("implied_prob_fair") or 0.50)
-                # Model E is shrinkage ensemble between calibrated model and market fair
-                ens_p_ml = round(0.30 * cal_p_ml + 0.70 * fair_mkt, 4)
-
-                cal_p_tot = float(t_row["calibrated_probability"])
-                float(t_row.get("raw_probability") or cal_p_tot)
-                ens_p_tot = round(0.35 * cal_p_tot + 0.65 * 0.50, 4)
-
-                reconstructed.append(
-                    {
-                        "game_id": gid,
-                        "season": r["season"],
-                        "matchday_date": r["matchday_date"],
-                        "home_won": home_won,
-                        "over_hit": over_hit,
-                        "model_a_ml": p_base_ml,
-                        "model_b_ml": raw_p_ml,
-                        "model_c_ml": cal_p_ml,
-                        "model_e_ml": ens_p_ml,
-                        "model_a_tot": p_base_tot,
-                        "model_d_tot": cal_p_tot,
-                        "model_e_tot": ens_p_tot,
-                    }
-                )
-            model_comparison_records = reconstructed
-            if getattr(self.paper_engine, "exclude_synthetic", False):
-                model_comparison_records = [
-                    r for r in model_comparison_records if not str(r["game_id"]).startswith("SYN_")
-                ]
-
+        # Production scope (exclude_synthetic=True): only bets placed on OBSERVED odds count.
+        # Simulation scope (synthetic walk-forward): every bet is synthetic by construction.
+        production_scope = bool(getattr(self.paper_engine, "exclude_synthetic", False))
+        bets_source = "v_observed_simulated_bets" if production_scope else "simulated_bets"
         all_bets = self.db.fetch_all(
-            f"SELECT * FROM simulated_bets WHERE {getattr(self.paper_engine, 'scope_sql', '1 = 1')} ORDER BY emitted_at ASC"
+            f"SELECT * FROM {bets_source} WHERE {getattr(self.paper_engine, 'scope_sql', '1 = 1')} "
+            "ORDER BY emitted_at ASC"
         )
         settled_bets = [b for b in all_bets if b["status"] in ("WON", "LOST", "PUSH", "VOID")]
         pending_bets = [b for b in all_bets if b["status"] == "PENDING"]
@@ -661,45 +738,41 @@ class WalkForwardBacktester:
         void_count = sum(1 for b in settled_bets if b["status"] == "VOID")
 
         net_profit = round(sum(float(b["net_profit_pen"] or 0.0) for b in settled_bets), 4)
-        settled_stakes = round(sum(float(b["stake_pen"]) for b in settled_bets), 4)
-        total_wagered = round(sum(float(b["stake_pen"]) for b in all_bets), 4)
+        # VOID stakes are returned, so they are not "risked" capital for ROI purposes.
+        settled_stakes = round(sum(float(b["stake_pen"]) for b in settled_bets if b["status"] != "VOID"), 4)
+        total_wagered = round(sum(float(b["stake_pen"]) for b in all_bets if b["status"] != "VOID"), 4)
 
         roi_pct = round((net_profit / settled_stakes) * 100.0, 4) if settled_stakes > 0 else 0.0
         yield_pct = round((net_profit / total_wagered) * 100.0, 4) if total_wagered > 0 else 0.0
         avg_odds = round(float(np.mean([float(b["decimal_odds"]) for b in settled_bets])), 4) if settled_bets else 0.0
 
-        dd_info = compute_drawdown_series(self.paper_engine.initial_bankroll_pen, settled_bets)
-        boot_ci = compute_block_bootstrap_roi_ci(settled_bets)
+        settled_chrono = sorted(settled_bets, key=lambda b: str(b.get("settled_at") or b.get("emitted_at") or ""))
+        dd_info = compute_drawdown_series(self.paper_engine.initial_bankroll_pen, settled_chrono)
+        boot_ci = compute_block_bootstrap_roi_ci([b for b in settled_bets if b["status"] != "VOID"])
 
-        # Max exposure from ledger
         ledger_rows = self.db.fetch_all("SELECT MAX(pending_exposure_pen) AS max_exp FROM bankroll_ledger")
         max_exposure = float(ledger_rows[0]["max_exp"] or 0.0) if ledger_rows else 0.0
 
-        # Closing Line Value (CLV)
-        if not closing_odds_lookup:
-            closing_odds_lookup = {}
-            close_rows = self.db.fetch_all(
-                "SELECT game_id, market, selection, line_value, decimal_odds FROM odds_snapshots WHERE is_closing_line = 1 ORDER BY captured_at ASC"
+        # Closing Line Value in probability space against the de-vigged observed close.
+        if closing_rows is None:
+            odds_source = "v_observed_odds_snapshots" if production_scope else "odds_snapshots"
+            closing_rows = self.db.fetch_all(
+                f"""
+                SELECT game_id, market, selection, line_value, decimal_odds, counterpart_decimal_odds, provider, captured_at
+                FROM {odds_source} WHERE is_closing_line = 1
+                """
             )
-            for cr in close_rows:
-                closing_odds_lookup[(cr["game_id"], cr["market"], cr["selection"], cr["line_value"])] = float(cr["decimal_odds"])
+        bet_providers = {
+            r["prediction_id"]: r["odds_provider"]
+            for r in self.db.fetch_all("SELECT prediction_id, odds_provider FROM predictions")
+        }
+        clv = summarize_clv([b for b in settled_bets if b["status"] != "VOID"], closing_rows, bet_providers)
 
-        clv_values: list[float] = []
-        if closing_odds_lookup:
-            for b in settled_bets:
-                key = (b["game_id"], b["market"], b["selection"], b["line_value"])
-                close_o = closing_odds_lookup.get(key)
-                if close_o and close_o > 1.0:
-                    clv_pct = ((float(b["decimal_odds"]) / close_o) - 1.0) * 100.0
-                    clv_values.append(clv_pct)
-        mean_clv_pct = round(float(np.mean(clv_values)), 4) if clv_values else None
-
-        # Market breakdown
         by_market: dict[str, dict[str, Any]] = {}
         for mkt in ("moneyline", "total_points"):
             m_bets = [b for b in settled_bets if b["market"] == mkt]
             m_prof = round(sum(float(b["net_profit_pen"] or 0.0) for b in m_bets), 4)
-            m_stakes = round(sum(float(b["stake_pen"]) for b in m_bets), 4)
+            m_stakes = round(sum(float(b["stake_pen"]) for b in m_bets if b["status"] != "VOID"), 4)
             by_market[mkt] = {
                 "settled_count": len(m_bets),
                 "won": sum(1 for b in m_bets if b["status"] == "WON"),
@@ -709,77 +782,68 @@ class WalkForwardBacktester:
                 "roi_pct": round((m_prof / m_stakes) * 100.0, 4) if m_stakes > 0 else 0.0,
             }
 
-        # Season breakdown
         games_map = {g["game_id"]: g for g in self.db.fetch_all("SELECT game_id, season FROM games")}
         by_season: dict[str, dict[str, Any]] = defaultdict(lambda: {"settled_count": 0, "net_profit_pen": 0.0, "stakes_pen": 0.0})
         for b in settled_bets:
             seas = games_map.get(b["game_id"], {}).get("season", "unknown")
             by_season[seas]["settled_count"] += 1
             by_season[seas]["net_profit_pen"] = round(by_season[seas]["net_profit_pen"] + float(b["net_profit_pen"] or 0.0), 4)
-            by_season[seas]["stakes_pen"] = round(by_season[seas]["stakes_pen"] + float(b["stake_pen"]), 4)
+            if b["status"] != "VOID":
+                by_season[seas]["stakes_pen"] = round(by_season[seas]["stakes_pen"] + float(b["stake_pen"]), 4)
         for _seas, sdata in by_season.items():
             sdata["roi_pct"] = round((sdata["net_profit_pen"] / sdata["stakes_pen"]) * 100.0, 4) if sdata["stakes_pen"] > 0 else 0.0
 
-        # Model comparison & calibration metrics
-        if model_comparison_records:
-            y_ml = [r["home_won"] for r in model_comparison_records]
-            y_tot = [r["over_hit"] for r in model_comparison_records]
+        model_metrics: dict[str, Any] = {}
+        overall_brier = baseline_brier = overall_ll = baseline_ll = overall_ece = None
+        market_brier = market_ll = model_brier_mkt_subset = model_ll_mkt_subset = None
+        market_subset_n = 0
+        recs = model_comparison_records
+        if recs:
+            y_ml = [int(r["home_won"]) for r in recs]
+            y_tot = [int(r["over_hit"]) for r in recs]
+            model_metrics["baseline_naive_ml"] = self._score([r["model_a_ml"] for r in recs], y_ml)
+            model_metrics["ensemble_calibrated_ml"] = self._score([r["model_c_ml"] for r in recs], y_ml, with_curve=True)
+            model_metrics["baseline_naive_totals"] = self._score([r["model_a_tot"] for r in recs], y_tot)
+            model_metrics["ensemble_calibrated_totals"] = self._score([r["model_d_tot"] for r in recs], y_tot, with_curve=True)
+            for field, key, ys in (
+                ("model_raw_ml", "ensemble_raw_ml", y_ml),
+                ("model_b_ml", "elo_ml", y_ml),
+                ("model_e_ml", "lightgbm_ml", y_ml),
+                ("model_e_tot", "lightgbm_totals", y_tot),
+            ):
+                if all(r.get(field) is not None for r in recs):
+                    model_metrics[key] = self._score([float(r[field]) for r in recs], ys)
 
-            model_metrics = {
-                "model_a_baseline_ml": {
-                    "brier_score": compute_brier_score([r["model_a_ml"] for r in model_comparison_records], y_ml),
-                    "log_loss": compute_log_loss([r["model_a_ml"] for r in model_comparison_records], y_ml),
-                },
-                "model_b_elo_ml": {
-                    "brier_score": compute_brier_score([r["model_b_ml"] for r in model_comparison_records], y_ml),
-                    "log_loss": compute_log_loss([r["model_b_ml"] for r in model_comparison_records], y_ml),
-                },
-                "model_c_point_margin_ml": compute_reliability_curve([r["model_c_ml"] for r in model_comparison_records], y_ml),
-                "model_e_lightgbm_ml": {
-                    "brier_score": compute_brier_score([r["model_e_ml"] for r in model_comparison_records], y_ml),
-                    "log_loss": compute_log_loss([r["model_e_ml"] for r in model_comparison_records], y_ml),
-                },
-                "model_a_baseline_totals": {
-                    "brier_score": compute_brier_score([r["model_a_tot"] for r in model_comparison_records], y_tot),
-                    "log_loss": compute_log_loss([r["model_a_tot"] for r in model_comparison_records], y_tot),
-                },
-                "model_d_total_points": compute_reliability_curve([r["model_d_tot"] for r in model_comparison_records], y_tot),
-                "model_e_lightgbm_totals": {
-                    "brier_score": compute_brier_score([r["model_e_tot"] for r in model_comparison_records], y_tot),
-                    "log_loss": compute_log_loss([r["model_e_tot"] for r in model_comparison_records], y_tot),
-                },
-            }
-            overall_brier = round(
-                0.5 * (model_metrics["model_c_point_margin_ml"]["brier_score"] + model_metrics["model_d_total_points"]["brier_score"]),
-                6,
-            )
+            sub = [r for r in recs if r.get("market_ml") is not None and r.get("market_tot") is not None]
+            market_subset_n = len(sub)
+            if sub:
+                ys_ml = [int(r["home_won"]) for r in sub]
+                ys_tot = [int(r["over_hit"]) for r in sub]
+                m_ml = self._score([float(r["market_ml"]) for r in sub], ys_ml)
+                m_tot = self._score([float(r["market_tot"]) for r in sub], ys_tot)
+                e_ml = self._score([float(r["model_c_ml"]) for r in sub], ys_ml)
+                e_tot = self._score([float(r["model_d_tot"]) for r in sub], ys_tot)
+                model_metrics["market_devig_ml"] = m_ml
+                model_metrics["market_devig_totals"] = m_tot
+                market_brier = round(0.5 * (m_ml["brier_score"] + m_tot["brier_score"]), 6)
+                market_ll = round(0.5 * (m_ml["log_loss"] + m_tot["log_loss"]), 6)
+                model_brier_mkt_subset = round(0.5 * (e_ml["brier_score"] + e_tot["brier_score"]), 6)
+                model_ll_mkt_subset = round(0.5 * (e_ml["log_loss"] + e_tot["log_loss"]), 6)
+
+            ens_ml = model_metrics["ensemble_calibrated_ml"]
+            ens_tot = model_metrics["ensemble_calibrated_totals"]
+            overall_brier = round(0.5 * (ens_ml["brier_score"] + ens_tot["brier_score"]), 6)
             baseline_brier = round(
-                0.5 * (model_metrics["model_a_baseline_ml"]["brier_score"] + model_metrics["model_a_baseline_totals"]["brier_score"]),
-                6,
+                0.5 * (model_metrics["baseline_naive_ml"]["brier_score"] + model_metrics["baseline_naive_totals"]["brier_score"]), 6
             )
-            overall_ll = round(
-                0.5 * (model_metrics["model_c_point_margin_ml"]["log_loss"] + model_metrics["model_d_total_points"]["log_loss"]),
-                6,
-            )
+            overall_ll = round(0.5 * (ens_ml["log_loss"] + ens_tot["log_loss"]), 6)
             baseline_ll = round(
-                0.5 * (model_metrics["model_a_baseline_ml"]["log_loss"] + model_metrics["model_a_baseline_totals"]["log_loss"]),
-                6,
+                0.5 * (model_metrics["baseline_naive_ml"]["log_loss"] + model_metrics["baseline_naive_totals"]["log_loss"]), 6
             )
-            overall_ece = round(
-                0.5 * (model_metrics["model_c_point_margin_ml"]["ece"] + model_metrics["model_d_total_points"]["ece"]),
-                6,
-            )
-            oos_seasons = len({r["season"] for r in model_comparison_records})
-        else:
-            model_metrics = {}
-            overall_brier = 0.25
-            baseline_brier = 0.25
-            overall_ll = 0.6931
-            baseline_ll = 0.6931
-            overall_ece = 0.05
-            oos_seasons = 0
+            overall_ece = round(0.5 * (ens_ml["ece"] + ens_tot["ece"]), 6)
+        oos_seasons = len({r["season"] for r in recs}) if recs else 0
 
-        live_settled_list = [b for b in settled_bets if str(b["game_id"]).startswith("ESPN_")]
+        live_settled_list = [b for b in settled_chrono if str(b["game_id"]).startswith("ESPN_")]
         live_espn_settled = len(live_settled_list)
         live_espn_pending = sum(1 for b in pending_bets if str(b["game_id"]).startswith("ESPN_"))
         live_dd_info = compute_drawdown_series(self.paper_engine.initial_bankroll_pen, live_settled_list)
@@ -794,7 +858,13 @@ class WalkForwardBacktester:
             "yield_pct": yield_pct,
             "roi_yield_equivalence_note": (
                 "ROI (net_profit / settled_stakes * 100) and Yield (net_profit / total_wagered * 100) "
-                "are equivalent when all wagered bets are settled; they differ only while pending bets exist."
+                "are equivalent when all wagered bets are settled; they differ only while pending bets exist. "
+                "VOID stakes are excluded (returned capital)."
+            ),
+            "bets_scope": (
+                "v_observed_simulated_bets (bets placed on observed odds only)"
+                if production_scope
+                else "simulated_bets (synthetic simulation scope)"
             ),
             "settled_bets_count": len(settled_bets),
             "pending_bets_count": len(pending_bets),
@@ -809,12 +879,22 @@ class WalkForwardBacktester:
             "max_drawdown_pct": dd_info["max_drawdown_pct"],
             "live_max_drawdown_pct": live_dd_info["max_drawdown_pct"],
             "max_exposure_pen": round(max_exposure, 4),
-            "mean_clv_pct": mean_clv_pct,
+            "mean_clv_pct": clv["mean_clv_pct"],
+            "clv_beat_close_rate": clv["clv_beat_close_rate"],
+            "clv_sample_size": clv["clv_sample_size"],
+            "clv_outliers_excluded": clv["clv_outliers_excluded"],
+            "clv_definition": clv["clv_definition"],
             "overall_brier_score": overall_brier,
             "baseline_brier_score": baseline_brier,
             "overall_log_loss": overall_ll,
             "baseline_log_loss": baseline_ll,
+            "market_brier_score": market_brier,
+            "market_log_loss": market_ll,
+            "model_brier_on_market_subset": model_brier_mkt_subset,
+            "model_log_loss_on_market_subset": model_ll_mkt_subset,
+            "market_comparison_sample_size": market_subset_n,
             "overall_ece": overall_ece,
+            "model_comparison_sample_size": len(recs) if recs else 0,
             "oos_seasons_evaluated": oos_seasons,
             "bootstrap_uncertainty": boot_ci,
             "performance_by_market": by_market,

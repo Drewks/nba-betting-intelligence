@@ -8,7 +8,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-from src.storage.schema import DDL_STATEMENTS
+from src.storage.migrations import run_migrations
+from src.storage.schema import DDL_STATEMENTS, VIEW_DDL
+
+VALID_SOURCE_TYPES: frozenset[str] = frozenset({"OBSERVED", "DERIVED", "SYNTHETIC"})
 
 
 class DatabaseManager:
@@ -143,6 +146,15 @@ class DatabaseManager:
                         conn.executescript(ddl)
                 conn.execute("PRAGMA foreign_keys = ON;")
 
+            # Numbered, audited migrations (history restoration, quarantine sweep, ...)
+            run_migrations(conn)
+
+            # Derived views are always recreated so existing databases get the latest definitions.
+            for view_name in reversed(list(VIEW_DDL)):
+                conn.execute(f"DROP VIEW IF EXISTS {view_name}")
+            for ddl in VIEW_DDL.values():
+                conn.execute(ddl)
+
     def fetch_all(self, query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
         with self.connect() as conn:
             cur = conn.execute(query, params)
@@ -157,6 +169,43 @@ class DatabaseManager:
     def execute_insert(self, query: str, params: tuple[Any, ...] = ()) -> None:
         with self.connect() as conn:
             conn.execute(query, params)
+
+    def insert_odds_snapshot(self, odds: dict[str, Any], conn: sqlite3.Connection | None = None) -> bool:
+        """
+        Single write path for odds_snapshots. Provenance is mandatory: callers MUST declare
+        `source_type` explicitly (OBSERVED / DERIVED / SYNTHETIC). The column has a legacy
+        DEFAULT 'OBSERVED' in old databases, so relying on the default is forbidden here.
+        Returns True if a new row was inserted (False if the odds_id already existed).
+        """
+        source_type = odds.get("source_type")
+        if source_type not in VALID_SOURCE_TYPES:
+            raise ValueError(
+                f"insert_odds_snapshot requires explicit source_type in {sorted(VALID_SOURCE_TYPES)}; "
+                f"got {source_type!r} for odds_id={odds.get('odds_id')!r}"
+            )
+        params = (
+            odds["odds_id"],
+            odds["game_id"],
+            odds["provider"],
+            odds["market"],
+            odds["selection"],
+            odds.get("line_value"),
+            odds["decimal_odds"],
+            odds.get("counterpart_decimal_odds"),
+            odds["captured_at"],
+            int(odds.get("is_closing_line", 0)),
+            source_type,
+        )
+        sql = """
+            INSERT OR IGNORE INTO odds_snapshots (
+                odds_id, game_id, provider, market, selection, line_value,
+                decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line, source_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        if conn is not None:
+            return conn.execute(sql, params).rowcount > 0
+        with self.connect() as own_conn:
+            return own_conn.execute(sql, params).rowcount > 0
 
     def log_agent_execution(
         self,

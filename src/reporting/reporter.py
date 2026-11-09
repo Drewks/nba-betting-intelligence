@@ -14,6 +14,8 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from src.evaluation.clv import compute_bet_clv, index_closing_rows
+
 from src.utils.team_dictionary import (
     format_matchup,
     get_team_full_name,
@@ -21,11 +23,13 @@ from src.utils.team_dictionary import (
 from src.models.statistical_models import EnsembleStackingModel, build_pregame_features
 from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
 from src.storage.db import DatabaseManager
-from src.ingestion.peru_sportsbooks import (
-    calculate_peru_odds_comparison,
-)
 from src.validation.validator import parse_iso_utc
 
+
+
+def _fmt(value: Any, spec: str = ".5f", missing: str = "null") -> str:
+    """Formats a possibly-missing metric (None -> 'null' / 'n/d'); never substitutes a fake value."""
+    return missing if value is None else format(float(value), spec)
 
 def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, Any]]:
     """
@@ -114,12 +118,10 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
             mkt_p_home = inv_h / (inv_h + inv_a)
             mkt_p_away = inv_a / (inv_h + inv_a)
 
-        peru_odds = calculate_peru_odds_comparison(
-            p_home_fair=float(pred_ml["p_home"]),
-            p_away_fair=float(pred_ml["p_away"]),
-            benchmark_home_odds=ml_home_odds if ml_home_odds > 1.0 else None,
-            benchmark_away_odds=ml_away_odds if ml_away_odds > 1.0 else None,
-        )
+        # No real Peruvian sportsbook prices are captured: the comparator only produces estimates
+        # (and, without a benchmark, would even derive "book odds" from the model's own probability).
+        # Estimates are never presented as bookmaker quotes.
+        peru_odds = None
 
         active_bet = pending_bets_by_game.get(gid)
         travel_miles = round(float(feats.get("travel_miles_diff", 0.0)), 0)
@@ -289,11 +291,14 @@ def export_bets_and_tracking_dashboard(
         """
     )
 
-    closing_lookup: dict[tuple[str, str, str, float | None], float] = {}
-    for cr in db.fetch_all(
-        "SELECT game_id, market, selection, line_value, decimal_odds FROM v_observed_odds_snapshots WHERE is_closing_line = 1 ORDER BY captured_at ASC"
-    ):
-        closing_lookup[(cr["game_id"], cr["market"], cr["selection"], cr["line_value"])] = float(cr["decimal_odds"])
+    closing_index = index_closing_rows(
+        db.fetch_all(
+            """
+            SELECT game_id, market, selection, line_value, decimal_odds, counterpart_decimal_odds, provider, captured_at
+            FROM v_observed_odds_snapshots WHERE is_closing_line = 1
+            """
+        )
+    )
 
     csv_path = Path(csv_output_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -351,10 +356,10 @@ def export_bets_and_tracking_dashboard(
                 .strip()
             )
 
-            close_odds = closing_lookup.get((r["game_id"], r["market"], r["selection"], r["line_value"]))
-            indiv_clv: float | None = None
-            if close_odds and close_odds > 1.0:
-                indiv_clv = round(((float(r["decimal_odds"]) / close_odds) - 1.0) * 100.0, 2)
+            clv_rec = compute_bet_clv(dict(r), closing_index, r.get("odds_provider"))
+            indiv_clv: float | None = (
+                round(float(clv_rec["clv_ev_pct"]), 2) if clv_rec is not None and not clv_rec["is_outlier"] else None
+            )
 
             item = {
                 "bet_id": r["bet_id"],
@@ -403,8 +408,18 @@ def export_bets_and_tracking_dashboard(
     live_prog_pct = float(readiness["progress_live_pct"])
     live_bars = int(round(live_prog_pct / 5.0))
     live_progress_bar = "█" * live_bars + "░" * (20 - live_bars)
-    ece_val = float(readiness["ece_score"])
-    max_dd_val = float(readiness["max_drawdown_pct"])
+    ece_raw = readiness.get("ece_score")
+    max_dd_raw = readiness.get("max_drawdown_pct")
+    ece_txt = "n/d" if ece_raw is None else f"{float(ece_raw):.4f} ({float(ece_raw) * 100:.2f}%)"
+    max_dd_txt = "n/d" if max_dd_raw is None else f"{float(max_dd_raw):.2f}%"
+    model_b = metrics.get("model_brier_on_market_subset")
+    market_b = metrics.get("market_brier_score")
+    base_b = metrics.get("baseline_brier_score")
+    calib_txt = (
+        f"Modelo {model_b:.4f} vs Mercado {market_b:.4f} (N={metrics.get('market_comparison_sample_size', 0)})"
+        if model_b is not None and market_b is not None
+        else "Sin comparación con mercado (faltan cuotas observadas)"
+    ) + (f" | Baseline {base_b:.4f}" if base_b is not None else "")
     live_dd_val = float(metrics.get("live_max_drawdown_pct") or 0.0)
     ci90_low = float(readiness["roi_ci_90_lower_pct"])
     ci90_high = float(readiness["roi_ci_90_upper_pct"])
@@ -418,7 +433,7 @@ def export_bets_and_tracking_dashboard(
         global_banner = f"🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING ({passed_gates}/{total_gates} CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)"
 
     clv_val = metrics.get("mean_clv_pct")
-    clv_str = f"`{clv_val:+.2f}%`" if clv_val is not None else "`Calculando en cierres pre-partido`"
+    clv_str = f"`{clv_val:+.2f}%` (N={metrics.get('clv_sample_size', 0)})" if clv_val is not None else "`Sin cierres observados suficientes`"
     pending_stake_sum = sum(float(x["stake_pen"]) for x in all_formatted if x["estado"] == "PENDING")
 
     lines = [
@@ -426,11 +441,12 @@ def export_bets_and_tracking_dashboard(
         "",
         f"- **Última actualización**: `{peru_str}` (`{now_str}`)",
         f"- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/{metrics['current_settled_bankroll_pen']:.2f} PEN`** (`{metrics['net_profit_pen']:+.2f} PEN`)",
-        f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **CLV Promedio**: {clv_str} | **Max Drawdown**: `{max_dd_val:.2f}%` | **Apuestas en espera**: `{pending_count}` (`S/{pending_stake_sum:.2f} PEN` reservados)",
-        "- **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.",
-        "- **Modo de Apuesta Activo**: `Kelly-Conviccion Proporcional a la Ventaja (S/1.00 a S/6.00 PEN)` *(Modulado por EV real contra casas sharp, Guardian Activo de CLV que reduce exposicion ante movimientos adversos de linea, y Limite de Anti-Correlacion de 1 apuesta por partido)*.",
+        f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **CLV (vs cierre sin margen)**: {clv_str} | **Max Drawdown**: `{max_dd_txt}` | **Apuestas en espera**: `{pending_count}` (`S/{pending_stake_sum:.2f} PEN` reservados)",
+        "- **Motor Predictivo Activo**: `Ensemble (Elo + Ridge + LightGBM + Monte Carlo) anclado 70% al mercado sin margen`. Sin ventaja demostrada frente al mercado.",
+        "- **Modo de Apuesta Activo**: `Stake fijo S/1.00 PEN (AGENTS.md v1)` | Máx. 3 selecciones/jornada | EV > 5% | Solo cuotas observadas (nunca estimadas).",
+        "- **Alcance de métricas**: solo apuestas hechas con cuotas observadas en un mercado real (`v_observed_simulated_bets`).",
         "- **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)",
-        "- **Sistema de Aviso Automático (Doble Nivel)**: `ACTIVO` *(Recibirás un correo automático vía GitHub Issue `@Drewks` al desbloquear el **Nivel 1: Micro-Banca** y un segundo correo al desbloquear el **Nivel 2: Banca Completa**)*.",
+        "- **Sistema de Aviso Automático**: `ACTIVO` *(aviso cuando se cumplan los criterios; cumplirlos solo habilita una revisión humana extendida, nunca dinero real automático)*.",
         "",
         "---",
         "",
@@ -446,14 +462,14 @@ def export_bets_and_tracking_dashboard(
         "| :-: | :--- | :---: | :--- | :--- | :--- |",
         f"| 1 | **Muestra total de apuestas liquidadas** | {'✅ VERDE' if flags['c1_total_sample_500'] else '🔴 PENDIENTE'} | `{settled_count} apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |",
         f"| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | {'✅ VERDE' if flags['c2_live_sample_200'] else '🔴 PENDIENTE'} | `{live_settled} liquidadas ({pending_count} activas)` | **>= 200 en vivo** | **>= 500 en vivo** |",
-        f"| 3 | **Calibración mejor que el Baseline (Brier & LogLoss)** | {'✅ VERDE' if flags['c3_brier_beats_baseline'] else '🟡 AJUSTANDO'} | `Brier {metrics['overall_brier_score']:.4f} vs {metrics['baseline_brier_score']:.4f}` | **Brier/LogLoss <= Base** | **Brier/LogLoss <= Base** |",
-        f"| 4 | **Error de Calibración por Tramos (ECE)** | {'✅ VERDE' if flags['c4_ece_under_5pct'] else '🟡 AJUSTANDO'} | `ECE {ece_val:.4f} ({ece_val * 100:.2f}%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |",
+        f"| 3 | **No peor que el Mercado sin margen ni que el Baseline (Brier & LogLoss)** | {'✅ VERDE' if flags.get('c3_brier_beats_baseline_and_market') else '🔴 PENDIENTE'} | `{calib_txt}` | **Modelo <= Mercado** | **Modelo <= Mercado** |",
+        f"| 4 | **Error de Calibración por Tramos (ECE)** | {'✅ VERDE' if flags['c4_ece_under_5pct'] else '🟡 AJUSTANDO'} | `ECE {ece_txt}` | **ECE <= 5.0%** | **ECE <= 3.5%** |",
         f"| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | {'✅ VERDE' if flags['c5_positive_net_roi'] else '🔴 PENDIENTE'} | `ROI {metrics['roi_pct']:+.2f}% / Yield {metrics['yield_pct']:+.2f}%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |",
-        f"| 6 | **Control de Caída Máxima (Max Drawdown)** | {'✅ VERDE' if flags['c6_max_drawdown_under_15pct'] else '🔴 PENDIENTE'} | `Total {max_dd_val:.2f}% (En vivo: {live_dd_val:.2f}%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |",
+        f"| 6 | **Control de Caída Máxima (Max Drawdown)** | {'✅ VERDE' if flags['c6_max_drawdown_under_15pct'] else '🔴 PENDIENTE'} | `Total {max_dd_txt} (En vivo: {live_dd_val:.2f}%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |",
         f"| 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | {'✅ VERDE' if flags['c7_bootstrap_ci_excludes_zero'] else '🔴 PENDIENTE'} | `IC90 [{ci90_low:+.1f}%, {ci90_high:+.1f}%] / IC95 [{ci_low:+.1f}%, {ci_high:+.1f}%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |",
-        f"| 8 | **Cero Fuga Temporal (Anti-Leakage) y SQLite** | {'✅ VERDE' if flags['c8_zero_leakage_and_reconciled'] else '🔴 PENDIENTE'} | `0 violaciones / 100% íntegro` | **0 violaciones** | **0 violaciones** |",
+        f"| 8 | **Cero Fuga Temporal, historial íntegro y ledger reconciliado** | {'✅ VERDE' if flags['c8_zero_leakage_and_reconciled'] else '🔴 PENDIENTE'} | `{'Sin violaciones' if flags['c8_zero_leakage_and_reconciled'] else 'Violación detectada (ver audit_report)'}` | **0 violaciones** | **0 violaciones** |",
         "",
-        "> **🔔 Doble aviso automático a tu correo**: No necesitas vigilar esta tabla a diario. Cuando las 8 filas lleguen a **✅ VERDE** en el **Nivel 1**, recibirás un correo de GitHub (`@Drewks`) autorizando pruebas con micro-banca (25% de tu stake). Cuando alcance el **Nivel 2** (`1,000` apuestas + `IC 95% > 0%`), recibirás el segundo correo de certificación completa.",
+        "> **Nota**: cumplir los criterios NO autoriza dinero real. Según AGENTS.md, el sistema opera exclusivamente en paper trading; los niveles solo habilitan una revisión humana extendida.",
         "",
         "---",
         "",
@@ -469,7 +485,7 @@ def export_bets_and_tracking_dashboard(
                 f"> - **Partido**: **{tp['partido']}** (`{tp['hora_partido_peru']} Hora Perú`)",
                 f"> - **Pick Más Probable**: 🎯 **{tp['seleccion']}** ({tp['mercado']}) @ **`{tp['cuota_decimal']:.3f}`** *({tp['casa_apuestas']})*",
                 f"> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`{tp['prob_estimada']:.1f}%`** | **EV**: `+{tp['ev_porcentaje']:.1f}%`",
-                "> - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor probabilidad de acierto y sin alerta CLV)*.",
+                "> - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor EV entre las apuestas pendientes con cuotas observadas)*.",
                 "",
             ]
         )
@@ -855,22 +871,44 @@ def generate_weekly_report(
 
     lines.extend([
         "",
-        "## 3. Calibración y Comparación frente al Baseline (Fuera de Muestra)",
+        "## 3. Calidad Probabilística Fuera de Muestra: Modelo vs. Baseline vs. Mercado",
         "",
-        "| Modelo | Mercado | Brier Score (menor es mejor) | Log Loss (menor es mejor) | ECE |",
-        "| :--- | :--- | ---: | ---: | ---: |",
+        "> El rival real es el **mercado sin margen** (mismas cuotas observadas). Superar al baseline ingenuo no prueba ventaja.",
+        "",
+        "| Serie | Mercado | N | Brier (menor es mejor) | Log Loss (menor es mejor) | ECE |",
+        "| :--- | :--- | ---: | ---: | ---: | ---: |",
     ])
 
-    if model_comp:
-        lines.extend([
-            f"| `Modelo A (Baseline)` | `moneyline` | {model_comp['model_a_baseline_ml']['brier_score']:.5f} | {model_comp['model_a_baseline_ml']['log_loss']:.5f} | — |",
-            f"| `Modelo B (Elo)` | `moneyline` | {model_comp['model_b_elo_ml']['brier_score']:.5f} | {model_comp['model_b_elo_ml']['log_loss']:.5f} | — |",
-            f"| `Modelo C (Point Margin)` | `moneyline` | **{model_comp['model_c_point_margin_ml']['brier_score']:.5f}** | **{model_comp['model_c_point_margin_ml']['log_loss']:.5f}** | {model_comp['model_c_point_margin_ml']['ece']:.5f} |",
-            f"| `Modelo E (LightGBM)` | `moneyline` | {model_comp['model_e_lightgbm_ml']['brier_score']:.5f} | {model_comp['model_e_lightgbm_ml']['log_loss']:.5f} | — |",
-            f"| `Modelo A (Baseline)` | `total_points` | {model_comp['model_a_baseline_totals']['brier_score']:.5f} | {model_comp['model_a_baseline_totals']['log_loss']:.5f} | — |",
-            f"| `Modelo D (Total Points + Cov)` | `total_points` | **{model_comp['model_d_total_points']['brier_score']:.5f}** | **{model_comp['model_d_total_points']['log_loss']:.5f}** | {model_comp['model_d_total_points']['ece']:.5f} |",
-            f"| `Modelo E (LightGBM)` | `total_points` | {model_comp['model_e_lightgbm_totals']['brier_score']:.5f} | {model_comp['model_e_lightgbm_totals']['log_loss']:.5f} | — |",
-        ])
+    comp_labels = [
+        ("baseline_naive_ml", "Baseline ingenuo", "moneyline"),
+        ("elo_ml", "Elo", "moneyline"),
+        ("lightgbm_ml", "LightGBM", "moneyline"),
+        ("ensemble_raw_ml", "Ensemble (crudo)", "moneyline"),
+        ("ensemble_calibrated_ml", "Ensemble final (calibrado + anclado 30/70 al mercado)", "moneyline"),
+        ("market_devig_ml", "Mercado sin margen", "moneyline"),
+        ("baseline_naive_totals", "Baseline ingenuo", "total_points"),
+        ("lightgbm_totals", "LightGBM", "total_points"),
+        ("ensemble_calibrated_totals", "Ensemble final (calibrado + anclado 30/70 al mercado)", "total_points"),
+        ("market_devig_totals", "Mercado sin margen", "total_points"),
+    ]
+    for key, label, mkt_name in comp_labels:
+        entry = model_comp.get(key)
+        if not entry:
+            continue
+        ece_cell = f"{entry['ece']:.5f}" if entry.get("ece") is not None else "—"
+        lines.append(
+            f"| `{label}` | `{mkt_name}` | {entry.get('sample_size', '—')} | {entry['brier_score']:.5f} | "
+            f"{entry['log_loss']:.5f} | {ece_cell} |"
+        )
+    if metrics.get("market_brier_score") is not None:
+        lines.append("")
+        lines.append(
+            f"- **Modelo vs. mercado (mismos {metrics.get('market_comparison_sample_size', 0)} partidos)**: "
+            f"Brier `{metrics['model_brier_on_market_subset']:.5f}` vs `{metrics['market_brier_score']:.5f}` | "
+            f"LogLoss `{metrics['model_log_loss_on_market_subset']:.5f}` vs `{metrics['market_log_loss']:.5f}`"
+        )
+    elif not model_comp:
+        lines.append("| `Sin datos fuera de muestra` | — | 0 | — | — | — |")
 
     lines.extend([
         "",
@@ -914,6 +952,13 @@ def generate_audit_report(
         f"- **Integridad contable del bankroll virtual (S/100.00 PEN)**: `{'VERIFICADA' if audit_result['bankroll_reconciled'] else 'ERROR'}`",
         f"- **Violaciones de fuga temporal (Data Leakage) detectadas**: `{audit_result['leakage_violations_count']}`",
         f"- **Inmutabilidad de predicciones y liquidaciones (Triggers SQLite)**: `{'ACTIVA Y VERIFICADA' if audit_result['immutability_triggers_verified'] else 'FALLO'}`",
+        (
+            f"- **Integridad del historial (registro append-only de filas)**: "
+            f"`{'ÍNTEGRO' if (audit_result.get('history_integrity') or {}).get('missing_rows_total', 1) == 0 else 'VIOLACIÓN: faltan filas registradas'}`"
+            f" — faltantes por tabla: `{(audit_result.get('history_integrity') or {}).get('missing_rows_by_table', {})}`"
+        ),
+        f"- **Inconsistencias del ledger**: `{audit_result.get('ledger_issues_count', 'n/d')}`",
+        f"- **Reproducibilidad**: `{audit_result.get('reproducibility_note', 'NO VERIFICADA')}`",
         "",
         "## 2. Evaluación de Puertas de Salida de Simulación (Sección 11)",
         "",
@@ -965,8 +1010,9 @@ def sync_obsidian_vault(
             f"current_bankroll_pen: {metrics['current_settled_bankroll_pen']:.2f}\n"
             f"net_profit_pen: {metrics['net_profit_pen']:.2f}\n"
             f"roi_pct: {metrics['roi_pct']:.2f}\n"
-            f"mean_clv_pct: {metrics.get('mean_clv_pct') or 0.0:.2f}\n"
-            f"brier_score: {metrics['overall_brier_score']:.5f}\n"
+            f"mean_clv_pct: {_fmt(metrics.get('mean_clv_pct'), '.2f')}\n"
+            f"brier_score: {_fmt(metrics.get('overall_brier_score'))}\n"
+            f"market_brier_score: {_fmt(metrics.get('market_brier_score'))}\n"
             f"settled_bets: {metrics['settled_bets_count']}\n---\n"
             "# NBA Betting Intelligence — Inbox Operativo\n\n"
             f"- **Última sincronización**: `{now_str}`\n"
@@ -991,7 +1037,7 @@ def sync_obsidian_vault(
             f"---\ndate_generated: {now_str}\ndashboard_type: obsidian_dataview_quant_v8\n"
             f"current_bankroll_pen: {metrics['current_settled_bankroll_pen']:.2f}\n"
             f"roi_pct: {metrics['roi_pct']:.2f}\n"
-            f"brier_score: {metrics['overall_brier_score']:.5f}\n---\n"
+            f"brier_score: {_fmt(metrics.get('overall_brier_score'))}\n---\n"
             "# 📊 Centro de Comando Cuantitativo (Obsidian DataviewJS & Tracker)\n\n"
             "> [!TIP] Plugins recomendados en Obsidian\n"
             "> Instala **Dataview** (habilitando `Enable JavaScript Queries`), **Tracker**, **Charts** y **Obsidian Git** para visualizar las tablas y curvas en tiempo real.\n\n"
@@ -1083,10 +1129,11 @@ def sync_obsidian_vault(
         ),
         "07-Backtesting/Walk-Forward-Backtest-Results.md": weekly_report_md,
         "08-Calibration/Calibration-and-Reliability.md": (
-            f"---\ndate_generated: {now_str}\nbrier_score: {metrics['overall_brier_score']}\nlog_loss: {metrics['overall_log_loss']}\n---\n"
+            f"---\ndate_generated: {now_str}\nbrier_score: {_fmt(metrics.get('overall_brier_score'))}\nlog_loss: {_fmt(metrics.get('overall_log_loss'))}\n---\n"
             "# Seguimiento de Calibración Probabilística (`model_calibrator`)\n\n"
-            f"- **Brier Score combinado (Modelos C & D)**: `{metrics['overall_brier_score']:.5f}` (Baseline: `{metrics['baseline_brier_score']:.5f}`)\n"
-            f"- **Log Loss combinado (Modelos C & D)**: `{metrics['overall_log_loss']:.5f}` (Baseline: `{metrics['baseline_log_loss']:.5f}`)\n"
+            f"- **Brier Score combinado (ensemble calibrado)**: `{_fmt(metrics.get('overall_brier_score'), '.5f', 'n/d')}` (Baseline ingenuo: `{_fmt(metrics.get('baseline_brier_score'), '.5f', 'n/d')}`)\n"
+            f"- **Log Loss combinado (ensemble calibrado)**: `{_fmt(metrics.get('overall_log_loss'), '.5f', 'n/d')}` (Baseline ingenuo: `{_fmt(metrics.get('baseline_log_loss'), '.5f', 'n/d')}`)\n"
+            f"- **Frente al mercado sin margen (mismos partidos)**: modelo `{_fmt(metrics.get('model_brier_on_market_subset'), '.5f', 'n/d')}` vs mercado `{_fmt(metrics.get('market_brier_score'), '.5f', 'n/d')}`\n"
             "- **Política de recalibración**: Calibración logística (`N >= 30`) e isotónica (`N >= 100`) entrenadas exclusivamente con partidos finalizados antes del timestamp de corte.\n"
         ),
         f"09-Reports/Daily-Report-{target_date}.md": daily_report_md,

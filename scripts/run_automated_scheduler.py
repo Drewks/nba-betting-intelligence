@@ -146,8 +146,8 @@ class NBADailyScheduler:
         sniper_res = sniper.scan_pregame_slate(force_scan_all=False)
 
         alerts_sent = 0
-        if self.bot.is_live and sniper_res.get("alerts_emitted"):
-            for alert in sniper_res["alerts_emitted"]:
+        if self.bot.is_live and sniper_res.get("alerts"):
+            for alert in sniper_res["alerts"]:
                 msg = (
                     f"🚨 *ALERTA INJURY SNIPER (T-2H / T-30M)*\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -167,9 +167,15 @@ class NBADailyScheduler:
         live_res: dict[str, Any] = {}
         try:
             live_scraper = LivePeruOddsScraper(db=self.db)
-            live_res = live_scraper.scan_and_alert_entire_slate(min_clv_pct=4.0, max_alerts=3)
-            alerts_sent += int(live_res.get("stale_lines_found", 0)) + int(live_res.get("surebets_found", 0))
-            logger.info(f"📊 [LIVE ODDS] {live_res.get('games_scanned', 0)} partidos escaneados para casas peruanas.")
+            scan_rows = live_scraper.scan_and_alert_entire_slate(notify_telegram=True)
+            live_res = {
+                "games_scanned": len(scan_rows),
+                "stale_lines_found": sum(len(r.get("stale_lines") or []) for r in scan_rows),
+                "surebets_found": sum(1 for r in scan_rows if r.get("surebet")),
+                "observed_quotes": sum(int(r.get("observed_quotes_count") or 0) for r in scan_rows),
+            }
+            alerts_sent += live_res["stale_lines_found"] + live_res["surebets_found"]
+            logger.info(f"📊 [LIVE ODDS] {live_res['games_scanned']} partidos con benchmark sharp observado escaneados.")
         except Exception as exc:
             logger.warning(f"Error escaneando cuotas en vivo en el scheduler: {exc}")
 

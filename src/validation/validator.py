@@ -103,6 +103,54 @@ def validate_game_record(
     return game
 
 
+RESULT_STATUSES: frozenset[str] = frozenset({"FINAL", "POSTPONED", "CANCELLED"})
+
+
+def validate_result_record(game: dict[str, Any]) -> dict[str, Any]:
+    """
+    Validates a post-game RESULT record (FINAL / POSTPONED / CANCELLED).
+
+    Results are by definition observed after tip-off, so the pre-game temporal rule
+    (features_available_at < game_start_time) does not apply to them. What must hold instead:
+    - structural identity (ids, teams, timestamps) is valid,
+    - FINAL results carry non-negative integer scores,
+    - the result was recorded strictly after tip-off (a result "known" before tip-off is leakage).
+    Results must never be used to overwrite pre-game feature snapshots (see the ingestion layer).
+    """
+    required_keys = ["game_id", "season", "matchday_date", "game_start_time", "home_team", "away_team", "status"]
+    for k in required_keys:
+        if not game.get(k):
+            raise DataValidationError(f"Result record missing required field '{k}'")
+
+    status = str(game["status"])
+    if status not in RESULT_STATUSES:
+        raise DataValidationError(f"Result record has non-result status {status!r} for {game['game_id']}")
+
+    home_code = normalize_team_code(game["home_team"])
+    away_code = normalize_team_code(game["away_team"])
+    if home_code == away_code:
+        raise DataValidationError(f"Home and away teams cannot be identical: {home_code}")
+
+    start_dt = parse_iso_utc(game["game_start_time"])
+
+    if status == "FINAL":
+        for side in ("home_score", "away_score"):
+            val = game.get(side)
+            if val is None or not isinstance(val, int) or isinstance(val, bool) or val < 0:
+                raise DataValidationError(f"FINAL result for {game['game_id']} has invalid {side}: {val!r}")
+
+    recorded = game.get("result_recorded_at")
+    if recorded:
+        rec_dt = parse_iso_utc(str(recorded))
+        if status == "FINAL" and rec_dt <= start_dt:
+            raise TemporalLeakageError(
+                f"FINAL result for {game['game_id']} recorded at {recorded} which is not after tip-off "
+                f"({game['game_start_time']})"
+            )
+
+    return game
+
+
 def validate_essential_features(game: dict[str, Any], market: str) -> None:
     """Verifies that all essential variables for the target market are present and finite."""
     if market not in ESSENTIAL_GAME_FEATURES:

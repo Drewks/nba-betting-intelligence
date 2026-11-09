@@ -18,7 +18,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
-import uuid
 
 from src.ingestion.peru_sportsbooks import calculate_peru_odds_comparison
 from src.storage.db import DatabaseManager
@@ -113,7 +112,8 @@ class PeruLiveOddsScraper:
                 "name": b["name"],
                 "home_odds": b["home_odds"],
                 "away_odds": b["away_odds"],
-                "source": f"{b['name']} (T-6H Window Direct)",
+                "source": f"{b['name']} (ESTIMATE derived from observed Pinnacle benchmark — not a real quote)",
+                "is_observed": False,
                 "payment_methods": b["payment_methods"],
                 "is_mincetur_licensed": b["is_mincetur_licensed"],
             }
@@ -159,46 +159,25 @@ class PeruLiveOddsScraper:
             book_name = quote["name"]
             provider_tag = f"{book_name} [T-6H Peru]"
 
-            odds_id_home = f"ODDS_T6H_{snapshot.game_id}_{book_id}_H_{uuid.uuid4().hex[:6]}"
-            odds_id_away = f"ODDS_T6H_{snapshot.game_id}_{book_id}_A_{uuid.uuid4().hex[:6]}"
-
-            # Home quote
-            self.db.execute_insert(
-                """
-                INSERT OR IGNORE INTO odds_snapshots (
-                    odds_id, game_id, provider, market, selection,
-                    line_value, decimal_odds, counterpart_decimal_odds,
-                    captured_at, is_closing_line
-                ) VALUES (?, ?, ?, 'moneyline', 'HOME', NULL, ?, ?, ?, 0)
-                """,
-                (
-                    odds_id_home,
-                    snapshot.game_id,
-                    provider_tag,
-                    float(quote["home_odds"]),
-                    float(quote["away_odds"]),
-                    snapshot.captured_at_utc,
-                ),
-            )
-
-            # Away quote
-            self.db.execute_insert(
-                """
-                INSERT OR IGNORE INTO odds_snapshots (
-                    odds_id, game_id, provider, market, selection,
-                    line_value, decimal_odds, counterpart_decimal_odds,
-                    captured_at, is_closing_line
-                ) VALUES (?, ?, ?, 'moneyline', 'AWAY', NULL, ?, ?, ?, 0)
-                """,
-                (
-                    odds_id_away,
-                    snapshot.game_id,
-                    provider_tag,
-                    float(quote["away_odds"]),
-                    float(quote["home_odds"]),
-                    snapshot.captured_at_utc,
-                ),
-            )
+            for selection, price, counter in (
+                ("HOME", quote["home_odds"], quote["away_odds"]),
+                ("AWAY", quote["away_odds"], quote["home_odds"]),
+            ):
+                self.db.insert_odds_snapshot(
+                    {
+                        "odds_id": f"ODDS_T6H_{snapshot.game_id}_{book_id}_{selection}_{snapshot.captured_at_utc}",
+                        "game_id": snapshot.game_id,
+                        "provider": provider_tag,
+                        "market": "moneyline",
+                        "selection": selection,
+                        "line_value": None,
+                        "decimal_odds": float(price),
+                        "counterpart_decimal_odds": float(counter),
+                        "captured_at": snapshot.captured_at_utc,
+                        "is_closing_line": 0,
+                        "source_type": "OBSERVED",
+                    }
+                )
 
     def scan_and_capture_slate_t6h(
         self,
@@ -226,17 +205,26 @@ class PeruLiveOddsScraper:
 
             if in_window or force_all:
                 # Retrieve benchmark odds if present
-                bench_rows = self.db.fetch_all(
-                    "SELECT market, selection, decimal_odds FROM odds_snapshots WHERE game_id = ? ORDER BY captured_at DESC",
+                # Benchmark = latest OBSERVED Pinnacle pair from the same capture. Without it there is
+                # nothing honest to compare against, so the game is skipped (no 50/50 fallback).
+                bench = self.db.fetch_one(
+                    """
+                    SELECT h.decimal_odds AS home_odds, a.decimal_odds AS away_odds
+                    FROM v_observed_odds_snapshots h
+                    JOIN v_observed_odds_snapshots a
+                      ON a.game_id = h.game_id AND a.provider = h.provider AND a.captured_at = h.captured_at
+                     AND a.market = 'moneyline' AND a.selection = 'AWAY' AND a.is_closing_line = 0
+                    WHERE h.game_id = ? AND h.market = 'moneyline' AND h.selection = 'HOME'
+                      AND h.is_closing_line = 0 AND h.provider LIKE '%Pinnacle%'
+                    ORDER BY h.captured_at DESC LIMIT 1
+                    """,
                     (gid,),
                 )
-                h_bench = None
-                a_bench = None
-                for row in bench_rows:
-                    if row["market"] == "moneyline" and row["selection"] == "HOME" and not h_bench:
-                        h_bench = float(row["decimal_odds"])
-                    elif row["market"] == "moneyline" and row["selection"] == "AWAY" and not a_bench:
-                        a_bench = float(row["decimal_odds"])
+                if not bench:
+                    logger.info("Skipping %s: no observed Pinnacle benchmark stored.", gid)
+                    continue
+                h_bench = float(bench["home_odds"])
+                a_bench = float(bench["away_odds"])
 
                 snap = self.extract_t6h_odds_for_game(
                     game_id=gid,

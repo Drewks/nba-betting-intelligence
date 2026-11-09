@@ -16,6 +16,10 @@ from src.ingestion.peru_sportsbooks import get_peru_sportsbooks_json_for_fronten
 logger = logging.getLogger(__name__)
 
 
+
+def _round_or_none(value: Any, digits: int) -> float | None:
+    return None if value is None else round(float(value), digits)
+
 def generate_interactive_html_dashboard(
     metrics: dict[str, Any],
     espn_real_bets: list[dict[str, Any]],
@@ -55,11 +59,12 @@ def generate_interactive_html_dashboard(
             "pending_stake_pen": pending_stake,
             "net_profit_pen": round(float(metrics.get("net_profit_pen", 0.0)), 2),
             "roi_pct": round(float(metrics.get("roi_pct", 0.0)), 2),
-            "mean_clv_pct": round(float(metrics.get("mean_clv_pct") or 1.17), 2),
-            "brier_score": round(float(metrics.get("overall_brier_score", 0.0718)), 4),
-            "baseline_brier": round(float(metrics.get("baseline_brier_score", 0.1062)), 4),
-            "optuna_improvement_pct": 26.53,
-            "optuna_parameters_count": 8,
+            # None when not computable: the page shows "—" instead of an invented default.
+            "mean_clv_pct": _round_or_none(metrics.get("mean_clv_pct"), 2),
+            "clv_sample_size": int(metrics.get("clv_sample_size") or 0),
+            "brier_score": _round_or_none(metrics.get("model_brier_on_market_subset"), 4),
+            "market_brier": _round_or_none(metrics.get("market_brier_score"), 4),
+            "market_sample_size": int(metrics.get("market_comparison_sample_size") or 0),
             "pending_count": sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) == "PENDING"),
             "settled_real_count": sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) != "PENDING"),
             "won_real_count": sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) == "WON"),
@@ -590,17 +595,17 @@ def generate_interactive_html_dashboard(
           color: 'text-amber-500'
         }},
         {{
-          title: 'Ventaja contra Cierre (CLV Medio)',
-          value: `${{s.mean_clv_pct >= 0 ? '+' : ''}}${{s.mean_clv_pct.toFixed(2)}}%`,
-          sub: 'Superando la cuota de cierre institucional',
-          badge: 'Calidad Profesional',
+          title: 'CLV vs. cierre sin margen',
+          value: s.mean_clv_pct === null ? '—' : `${{s.mean_clv_pct >= 0 ? '+' : ''}}${{s.mean_clv_pct.toFixed(2)}}%`,
+          sub: `Muestra: ${{s.clv_sample_size}} apuestas con cierre observado`,
+          badge: s.clv_sample_size >= 200 ? 'Muestra útil' : 'Muestra insuficiente',
           color: 'text-emerald-500'
         }},
         {{
-          title: 'Calibración Bayesiana (8 Hiperparámetros)',
-          value: `Brier ${{s.brier_score.toFixed(4)}}`,
-          sub: `Base: ${{s.baseline_brier.toFixed(4)}} (+${{s.optuna_improvement_pct || 26.53}}% Mejora)`,
-          badge: '✅ Optuna TPE Récord',
+          title: 'Modelo vs. Mercado (Brier)',
+          value: s.brier_score === null ? '—' : `Modelo ${{s.brier_score.toFixed(4)}}`,
+          sub: s.market_brier === null ? 'Sin cuotas observadas suficientes' : `Mercado: ${{s.market_brier.toFixed(4)}} (N=${{s.market_sample_size}})`,
+          badge: (s.brier_score !== null && s.market_brier !== null && s.brier_score <= s.market_brier) ? 'No peor que el mercado' : 'Sin ventaja demostrada',
           color: 'text-purple-500'
         }}
       ];
@@ -819,26 +824,26 @@ def generate_interactive_html_dashboard(
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="font-bold text-orange-500">Betsson Perú</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Yape/Plin</div>
-                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.home_odds || b.decimal_odds.toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.away_odds || b.decimal_odds.toFixed(2))}}</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.home_odds || '—') : (g.peru_odds?.books?.find(x => x.id === 'betsson_pe')?.away_odds || '—')}}</div>
                 </div>
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="font-bold text-cyan-500">Coolbet Perú</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Bajo Margen</div>
-                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.home_odds || (b.decimal_odds * 0.99).toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.away_odds || (b.decimal_odds * 0.99).toFixed(2))}}</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.home_odds || '—') : (g.peru_odds?.books?.find(x => x.id === 'coolbet_pe')?.away_odds || '—')}}</div>
                 </div>
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="font-bold text-red-600">RETAbet Perú</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">MINCETUR · Tarjeta RETA</div>
-                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.home_odds || (b.decimal_odds * 0.985).toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.away_odds || (b.decimal_odds * 0.985).toFixed(2))}}</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.home_odds || '—') : (g.peru_odds?.books?.find(x => x.id === 'retabet_pe')?.away_odds || '—')}}</div>
                 </div>
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="font-bold text-red-500">Apuesta Total</div>
                   <div class="text-[var(--muted-foreground)] text-[10px]">Tiendas + Web</div>
-                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.home_odds || (b.decimal_odds * 0.98).toFixed(2)) : (g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.away_odds || (b.decimal_odds * 0.98).toFixed(2))}}</div>
+                  <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.selection_label.includes('Local') ? (g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.home_odds || '—') : (g.peru_odds?.books?.find(x => x.id === 'apuesta_total')?.away_odds || '—')}}</div>
                 </div>
                 <div class="p-2 rounded-lg bg-[var(--background)] border border-[var(--border)]">
-                  <div class="font-bold text-emerald-500">Pinnacle / 1xBet</div>
-                  <div class="text-[var(--muted-foreground)] text-[10px]">Línea Sharp / Máx Cuota</div>
+                  <div class="font-bold text-emerald-500">Cuota observada</div>
+                  <div class="text-[var(--muted-foreground)] text-[10px]">${{b.bookmaker || 'Casa registrada'}}</div>
                   <div class="font-extrabold text-sm text-[var(--foreground)] mt-0.5">${{b.decimal_odds.toFixed(3)}}</div>
                 </div>
               </div>
@@ -968,7 +973,7 @@ def generate_interactive_html_dashboard(
                   🇵🇪 Cuotas Oficiales en Casas de Perú (Pagos con Yape / Plin / Bancos)
                 </span>
                 <span class="text-[var(--muted-foreground)]">
-                  Mejor en Perú: Local <strong>${{g.peru_odds?.best_home?.odds || (g.ml_home_odds || '—')}}</strong> (${{g.peru_odds?.best_home?.book || 'Pinnacle/Coolbet'}}) · Visita <strong>${{g.peru_odds?.best_away?.odds || (g.ml_away_odds || '—')}}</strong> (${{g.peru_odds?.best_away?.book || 'Betsson'}})
+                  Mejor cuota observada: Local <strong>${{g.peru_odds?.best_home?.odds || (g.ml_home_odds || '—')}}</strong> (${{g.peru_odds?.best_home?.book || g.ml_home_book || '—'}}) · Visita <strong>${{g.peru_odds?.best_away?.odds || (g.ml_away_odds || '—')}}</strong> (${{g.peru_odds?.best_away?.book || g.ml_away_book || '—'}})
                 </span>
               </div>
               <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">

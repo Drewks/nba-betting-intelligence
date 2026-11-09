@@ -1103,91 +1103,84 @@ class MarketResidualModel:
         rst = float(features.get("rest_diff") or 0.0)
         return np.array([ff, xe, fat, alt, trv, rst], dtype=float)
 
+    MIN_FIT_SAMPLES = 300
+    HOLDOUT_FRACTION = 0.30
+
     def fit(
         self,
         training_records: list[dict[str, Any]],
         l2_reg: float = 2.0,
     ) -> dict[str, Any]:
         """
-        Empirically fits situational weights on out-of-sample games by minimizing L2-regularized
-        cross-entropy loss relative to the sharp market consensus baseline.
-        Only retains weights if they achieve empirical log-loss improvement over the sharp consensus.
+        Fits the residual weights on the chronologically EARLIER part of the records and accepts them
+        only if they STRICTLY improve log-loss over the pure sharp-market probability on the LATER,
+        untouched holdout part. Records must be ordered by game time and carry the pre-game sharp
+        probability (`sharp_home_prob`), features, and the outcome (`home_won` in {0, 1}).
         """
-        if len(training_records) < 15:
+        n_total = len(training_records)
+        if n_total < self.MIN_FIT_SAMPLES:
             return {
                 "fitted": False,
+                "accepted": False,
                 "reason": "INSUFFICIENT_SAMPLE_SIZE",
-                "sample_size": len(training_records),
+                "sample_size": n_total,
+                "min_required": self.MIN_FIT_SAMPLES,
                 "weights": self.weights,
             }
 
-        X_list: list[np.ndarray] = []
-        z0_list: list[float] = []
-        y_list: list[float] = []
+        records = sorted(training_records, key=lambda r: str(r.get("game_start_time", "")))
+        X_all = np.asarray([self._extract_feature_vector(r.get("features") or {}) for r in records], dtype=float)
+        p_sharp = np.clip(np.asarray([float(r["sharp_home_prob"]) for r in records], dtype=float), 0.02, 0.98)
+        z0_all = np.log(p_sharp / (1.0 - p_sharp))
+        y_all = np.asarray([1.0 if int(r["home_won"]) == 1 else 0.0 for r in records], dtype=float)
 
-        for rec in training_records:
-            feats = rec.get("features") or {}
-            p_sharp = float(np.clip(rec.get("sharp_home_prob") or 0.50, 0.05, 0.95))
-            y = 1.0 if rec.get("home_won") or rec.get("actual_win") or (rec.get("home_score", 0) > rec.get("away_score", 0)) else 0.0
-            z0 = math.log(p_sharp / (1.0 - p_sharp))
-            X_list.append(self._extract_feature_vector(feats))
-            z0_list.append(z0)
-            y_list.append(y)
-
-        X = np.asarray(X_list, dtype=float)
-        z0_arr = np.asarray(z0_list, dtype=float)
-        y_arr = np.asarray(y_list, dtype=float)
+        split = int(round(n_total * (1.0 - self.HOLDOUT_FRACTION)))
+        X, z0_arr, y_arr = X_all[:split], z0_all[:split], y_all[:split]
+        X_h, z0_h, y_h = X_all[split:], z0_all[split:], y_all[split:]
         n = len(y_arr)
 
-        # Baseline loss with pure sharp consensus (w = 0)
-        p_base = 1.0 / (1.0 + np.exp(-z0_arr))
-        p_base_clipped = np.clip(p_base, 1e-6, 1.0 - 1e-6)
-        baseline_log_loss = float(-np.mean(y_arr * np.log(p_base_clipped) + (1.0 - y_arr) * np.log(1.0 - p_base_clipped)))
+        def _logloss(z: np.ndarray, y: np.ndarray) -> float:
+            p = np.clip(1.0 / (1.0 + np.exp(-z)), 1e-6, 1.0 - 1e-6)
+            return float(-np.mean(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)))
 
-        # Regularized objective
         def loss_and_grad(w: np.ndarray) -> tuple[float, np.ndarray]:
-            delta = np.clip(np.dot(X, w), -0.45, 0.45)
-            z = z0_arr + delta
+            raw = np.dot(X, w)
+            inside = (np.abs(raw) < 0.45).astype(float)  # gradient is zero where the clip is active
+            z = z0_arr + np.clip(raw, -0.45, 0.45)
             p = np.clip(1.0 / (1.0 + np.exp(-z)), 1e-6, 1.0 - 1e-6)
             ce = -np.mean(y_arr * np.log(p) + (1.0 - y_arr) * np.log(1.0 - p))
-            reg = 0.5 * l2_reg * float(np.sum(w ** 2))
-            loss = ce + reg
-            grad = (np.dot(X.T, (p - y_arr)) / n) + l2_reg * w
-            return loss, grad
+            loss = ce + 0.5 * l2_reg * float(np.sum(w ** 2))
+            grad = (np.dot(X.T, (p - y_arr) * inside) / n) + l2_reg * w
+            return float(loss), grad
 
-        init_w = np.array([self.weights[k] for k in self.FEATURE_KEYS], dtype=float)
         from scipy.optimize import minimize
         res = minimize(
             fun=loss_and_grad,
-            x0=init_w,
+            x0=np.zeros(len(self.FEATURE_KEYS)),
             jac=True,
             method="L-BFGS-B",
             bounds=[(-2.0, 2.0) for _ in self.FEATURE_KEYS],
         )
+        fitted_w = res.x if res.success else np.zeros(len(self.FEATURE_KEYS))
 
-        fitted_w = res.x if res.success else init_w
-        # Evaluate out-of-sample / in-sample log-loss
-        delta_fit = np.clip(np.dot(X, fitted_w), -0.45, 0.45)
-        p_fit = np.clip(1.0 / (1.0 + np.exp(-(z0_arr + delta_fit))), 1e-6, 1.0 - 1e-6)
-        fitted_log_loss = float(-np.mean(y_arr * np.log(p_fit) + (1.0 - y_arr) * np.log(1.0 - p_fit)))
-
-        # Only accept update if it doesn't degrade baseline market cross-entropy
-        if fitted_log_loss <= baseline_log_loss + 0.005:
+        holdout_market_ll = _logloss(z0_h, y_h)
+        holdout_fitted_ll = _logloss(z0_h + np.clip(np.dot(X_h, fitted_w), -0.45, 0.45), y_h)
+        accepted = holdout_fitted_ll < holdout_market_ll
+        if accepted:
             for idx, k in enumerate(self.FEATURE_KEYS):
                 self.weights[k] = round(float(fitted_w[idx]), 4)
             self.is_trained = True
             self.save_weights()
-            accepted = True
-        else:
-            accepted = False
 
         return {
             "fitted": True,
             "accepted": accepted,
-            "sample_size": n,
-            "baseline_log_loss": round(baseline_log_loss, 5),
-            "fitted_log_loss": round(fitted_log_loss, 5),
-            "log_loss_gain": round(baseline_log_loss - fitted_log_loss, 5),
+            "sample_size": n_total,
+            "train_size": n,
+            "holdout_size": len(y_h),
+            "holdout_market_log_loss": round(holdout_market_ll, 5),
+            "holdout_fitted_log_loss": round(holdout_fitted_ll, 5),
+            "holdout_log_loss_gain": round(holdout_market_ll - holdout_fitted_ll, 5),
             "weights": self.weights,
         }
 

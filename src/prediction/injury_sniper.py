@@ -16,13 +16,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 import json
-import math
 from typing import Any
 import uuid
 
 logger = logging.getLogger(__name__)
 
 import numpy as np
+from scipy.stats import norm
 
 from src.calibration.calibrator import VennAbersConformalInterval
 from src.features.team_ratings import (
@@ -151,7 +151,12 @@ class InjurySniperMonitor:
     Automated Pregame Dual-Window Monitor and Conformal +EV Sniper:
     Tracks scheduled matchups at T-2h and T-30m, detects injury delta, recalculates
     V7 non-linear synergy penalties and Venn-Abers conformal bounds, and emits high-EV alerts.
+
+    Probability model: the de-vigged market probability is the prior; only NEW material injury
+    transitions (vs. the previous stored snapshot) shift it, through a normal margin model.
     """
+
+    MARGIN_SIGMA_PTS = 12.0
 
     def __init__(
         self,
@@ -160,8 +165,10 @@ class InjurySniperMonitor:
         playwright_scraper: PlaywrightAuthorizedScraper | None = None,
         sportradar_adapter: SportradarAdapter | None = None,
         min_ev_threshold: float = 0.05,
+        max_stake_pen: float = 1.00,
     ) -> None:
         self.db = db
+        self.max_stake_pen = float(max_stake_pen)
         self.espn_adapter = espn_adapter or ESPNPublicAdapter()
         self.playwright_scraper = playwright_scraper or PlaywrightAuthorizedScraper()
         self.sportradar_adapter = sportradar_adapter
@@ -187,30 +194,36 @@ class InjurySniperMonitor:
         Evaluates pregame odds against recalculated synergy ratings and Venn-Abers conformal intervals.
         Generates actionable SniperAlert items if Lower-Bound EV exceeds the threshold.
         """
-        # 1. Detect transitions
-        transitions = detect_injury_status_transitions(cached_injuries or [], live_injuries)
+        # 1. Detect transitions vs. the previous snapshot. Long-known absences are already priced by the
+        #    market: only NEW status changes can move the fair price.
+        cached = cached_injuries or []
+        transitions = detect_injury_status_transitions(cached, live_injuries)
+        material = [t for t in transitions if t["severity"] in ("CRITICAL", "HIGH")]
+        if not material:
+            return []
 
-        # 2. Split injuries by home and away
-        home_absent: list[dict[str, Any]] = [
-            i for i in live_injuries if i.get("team") == home_team
-        ]
-        away_absent: list[dict[str, Any]] = [
-            i for i in live_injuries if i.get("team") == away_team
-        ]
+        # 2. Incremental lineup penalty per team (current report minus previous report)
+        def _team(items: list[dict[str, Any]], team: str) -> list[dict[str, Any]]:
+            return [i for i in items if i.get("team") == team]
 
-        # 3. Compute V7 On-Off RAPM Lineup Synergy degradation
-        home_syn = compute_lineup_synergy_penalty(home_absent)
-        away_syn = compute_lineup_synergy_penalty(away_absent)
+        home_syn = compute_lineup_synergy_penalty(_team(live_injuries, home_team))
+        away_syn = compute_lineup_synergy_penalty(_team(live_injuries, away_team))
+        home_prev = compute_lineup_synergy_penalty(_team(cached, home_team))
+        away_prev = compute_lineup_synergy_penalty(_team(cached, away_team))
+        delta_home = float(home_syn["total_net_penalty"] - home_prev["total_net_penalty"])
+        delta_away = float(away_syn["total_net_penalty"] - away_prev["total_net_penalty"])
+        # Net shift in points in favor of HOME (+ means home's relative strength increased)
+        net_shift = delta_away - delta_home
 
-        # Net rating shift in favor of Home (+ means home advantages increased)
-        net_shift = float(away_syn["total_net_penalty"] - home_syn["total_net_penalty"])
-
-        # 4. Standard NBA baseline probability calculation with synergy shift
-        # Default baseline spread ~ home advantage 2.5 pts
-        raw_spread = 2.5 + net_shift
-        # Logistic conversion: p = 1 / (1 + exp(-spread / 3.40))
-        p_home_raw = float(1.0 / (1.0 + math.exp(-raw_spread / 3.40)))
-        p_home_raw = float(np.clip(p_home_raw, 0.05, 0.95))
+        # 3. Anchor to the de-vigged market: p_new = Phi((sigma * Phi^-1(p_market) + shift) / sigma)
+        consensus = compute_market_consensus([o for o in market_odds if o.get("market") == "moneyline"])
+        mkt_entry = consensus.get(("moneyline", "HOME", None))
+        if not mkt_entry:
+            return []
+        p_mkt_home = float(np.clip(mkt_entry["p_market"], 0.02, 0.98))
+        sigma = self.MARGIN_SIGMA_PTS
+        spread_mkt = sigma * float(norm.ppf(p_mkt_home))
+        p_home_raw = float(np.clip(norm.cdf((spread_mkt + net_shift) / sigma), 0.02, 0.98))
         p_away_raw = 1.0 - p_home_raw
 
         # 5. Conformal Venn-Abers prediction interval calibration
@@ -220,9 +233,6 @@ class InjurySniperMonitor:
         # 6. Evaluate market odds from provided snapshots
         alerts: list[dict[str, Any]] = []
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        # De-vigged market consensus
-        compute_market_consensus(market_odds)
 
         for odds_rec in market_odds:
             if odds_rec.get("market") != "moneyline":
@@ -242,7 +252,9 @@ class InjurySniperMonitor:
                 game_start_time=game_start_time,
                 model_version_id="model_v7_sniper_pregame",
                 conformal_interval=conf_int,
-                model_weight=0.35,  # Higher weight for real-time injury sniper information
+                # p already contains the market; the injury-impact table is hand-made and uncalibrated,
+                # so only half of the modeled shift is trusted.
+                model_weight=0.50,
             )
 
             lb_ev_pct = float(opp.get("ev_lower_bound_pct", -100.0))
@@ -269,8 +281,9 @@ class InjurySniperMonitor:
                     max_total_exposure_fraction=0.15,
                     max_individual_fraction=0.06,
                 )
-                recommended_stake = kelly_res[0]["kelly_recommended_stake_pen"]
                 recommended_frac = kelly_res[0]["kelly_optimal_fraction"]
+                # Alerts never suggest more than the AGENTS.md cap (S/1.00); zero if Kelly says no edge.
+                recommended_stake = round(min(float(kelly_res[0]["kelly_recommended_stake_pen"]), self.max_stake_pen), 2)
 
                 # Build rationale
                 target_team = home_team if sel == "HOME" else away_team
@@ -309,6 +322,7 @@ class InjurySniperMonitor:
                     "synergy_shift": round(net_shift, 2),
                     "home_synergy_penalty": round(home_syn["total_net_penalty"], 2),
                     "away_synergy_penalty": round(away_syn["total_net_penalty"], 2),
+                    "market_p_home": round(p_mkt_home, 4),
                     "rational": rational,
                     "emitted_at": now_iso,
                 }
@@ -349,6 +363,41 @@ class InjurySniperMonitor:
                     logger.warning(f"Failed to persist sniper alert for {alert.get('game_id')}: {exc}")
 
         return alerts
+
+    def _latest_injury_snapshot(self, game_id: str) -> list[dict[str, Any]] | None:
+        row = self.db.fetch_one(
+            "SELECT MAX(captured_at) AS ts FROM injury_status_snapshots WHERE game_id = ?", (game_id,)
+        )
+        if not row or not row.get("ts"):
+            return None
+        rows = self.db.fetch_all(
+            "SELECT team, player_name, status FROM injury_status_snapshots WHERE game_id = ? AND captured_at = ?",
+            (game_id, row["ts"]),
+        )
+        return [{"team": r["team"], "name": r["player_name"], "status": r["status"]} for r in rows if r["player_name"]]
+
+    def _store_injury_snapshot(self, game_id: str, captured_at: str, injuries: list[dict[str, Any]]) -> None:
+        with self.db.connect() as conn:
+            if not injuries:
+                # Explicit "empty report" marker so a later report with new absences is a real transition
+                conn.execute(
+                    "INSERT OR IGNORE INTO injury_status_snapshots VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (f"INJ_{game_id}_{captured_at}_EMPTY", game_id, captured_at, "", "", "NONE", "espn_summary"),
+                )
+                return
+            for inj in injuries:
+                conn.execute(
+                    "INSERT OR IGNORE INTO injury_status_snapshots VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        f"INJ_{game_id}_{captured_at}_{inj.get('team')}_{inj.get('name')}",
+                        game_id,
+                        captured_at,
+                        str(inj.get("team") or ""),
+                        str(inj.get("name") or ""),
+                        str(inj.get("status") or ""),
+                        "espn_summary",
+                    ),
+                )
 
     def scan_pregame_slate(
         self,
@@ -415,18 +464,32 @@ class InjurySniperMonitor:
                 logger.info(f"Skipping sniper scan for game {g_id}: no observed odds found in database.")
                 continue
 
-            # Ingest live injury context from adapters
+            # Ingest the live ESPN injury report for both teams
             live_injuries: list[dict[str, Any]] = []
+            fetched = False
             try:
-                # 1. ESPN live event summary
                 espn_id = g_id.split("_")[1] if g_id.startswith("ESPN_") else g_id
                 event_ctx = self.espn_adapter._fetch_event_summary_context(espn_id)
-                for t_code, _pen in event_ctx.get("injury_penalties", {}).items():
-                    # Populate live injuries for this team
-                    if t_code == h_team or t_code == a_team:
-                        pass
+                reports = event_ctx.get("injury_reports") or {}
+                for t_code in (h_team, a_team):
+                    live_injuries.extend(reports.get(t_code, []))
+                fetched = bool(event_ctx.get("fetch_ok", False))
             except Exception as exc:
-                logging.warning(f"Handled exception in injury_sniper (line 428): {exc}")
+                logger.warning("Injury report fetch failed for %s: %s", g_id, exc)
+
+            if not fetched:
+                game_summary["note"] = "NO_INJURY_REPORT"
+                scanned_games_summary.append(game_summary)
+                continue
+
+            # Previous snapshot = baseline. The first observation of a game only records the baseline:
+            # without a previous state there is no "transition", hence no alert.
+            cached_injuries = self._latest_injury_snapshot(g_id)
+            self._store_injury_snapshot(g_id, ref_dt.strftime("%Y-%m-%dT%H:%M:%SZ"), live_injuries)
+            if cached_injuries is None:
+                game_summary["note"] = "BASELINE_SNAPSHOT_RECORDED"
+                scanned_games_summary.append(game_summary)
+                continue
 
             # Evaluate sniper opportunities
             game_alerts = self.evaluate_game_sniper_opportunity(
@@ -436,6 +499,7 @@ class InjurySniperMonitor:
                 home_team=h_team,
                 away_team=a_team,
                 live_injuries=live_injuries,
+                cached_injuries=cached_injuries,
                 market_odds=odds_rows,
                 window_type=window if not force_scan_all else (window if window in ("WINDOW_2H", "WINDOW_30M") else "FORCE"),
                 minutes_to_tipoff=delta_min,

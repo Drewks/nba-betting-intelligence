@@ -1,39 +1,24 @@
 {
-  "study_type": "OPTUNA_TPE_8_HYPERPARAMETERS_STUDY",
-  "optimized_at_utc": "2026-11-06T05:23:22Z",
-  "total_historical_games": 2989,
-  "evaluation_slice_size": 200,
-  "trials_completed": 500,
-  "elapsed_seconds": 84.9,
-  "baseline": {
-    "score": 0.29791,
-    "brier_score": 0.106225,
-    "log_loss": 0.383374
-  },
-  "optimized": {
-    "score": 0.21887,
-    "brier_score": 0.071823,
-    "log_loss": 0.294104,
-    "improvement_pct": 26.53
-  },
-  "best_hyperparameters": {
-    "alpha_slow": 0.015,
-    "alpha_fast": 0.145,
-    "tempo_alpha_slow": 0.036000000000000004,
-    "tempo_alpha_fast": 0.1,
-    "blowout_cap": 22.0,
-    "market_model_weight": 0.1,
-    "spread_sigma": 13.0,
-    "momentum_blend_weight": 0.75
-  },
-  "parameter_descriptions": {
-    "alpha_slow": "Tasa de aprendizaje estructural de largo plazo para rating ofensivo/defensivo",
-    "alpha_fast": "Tasa de aprendizaje de momentum reciente (rachas calientes/frías)",
-    "tempo_alpha_slow": "Tasa de ajuste de ritmo base de posesiones",
-    "tempo_alpha_fast": "Tasa de ajuste de ritmo de alta frecuencia",
-    "blowout_cap": "Umbral de margen Huber para filtrar minutos basura en palizas",
-    "market_model_weight": "Ponderación bayesiana del modelo vs consenso de mercado de apuestas",
-    "spread_sigma": "Desviación típica del margen para conversión a probabilidad (CDF Normal)",
-    "momentum_blend_weight": "Ponderación entre rating estructural base y momentum reciente"
+  "status": "INVALIDATED",
+  "invalidated_at_utc": "2026-11-09T16:00:00Z",
+  "reason": "The study used a 'market proxy' computed from each game's FINAL score (target leakage in hyperparameter_optimizer.py). Its Brier of 0.072 is impossible for pre-game NBA moneylines. Do not use these parameters. Re-run scripts/run_optuna_study.py (validation + holdout).",
+  "invalidated_result": {
+    "optimized_at_utc": "2026-11-06T05:23:22Z",
+    "optimized": {
+      "score": 0.21887,
+      "brier_score": 0.071823,
+      "log_loss": 0.294104,
+      "improvement_pct": 26.53
+    },
+    "best_hyperparameters": {
+      "alpha_slow": 0.015,
+      "alpha_fast": 0.145,
+      "tempo_alpha_slow": 0.036000000000000004,
+      "tempo_alpha_fast": 0.1,
+      "blowout_cap": 22.0,
+      "market_model_weight": 0.1,
+      "spread_sigma": 13.0,
+      "momentum_blend_weight": 0.75
+    }
   }
 }

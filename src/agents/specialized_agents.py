@@ -31,11 +31,14 @@ from src.ingestion.normalizer import NBA_TEAMS
 from src.paper_trading.engine import PaperTradingEngine
 from src.storage.db import DatabaseManager
 from src.validation.validator import (
+    RESULT_STATUSES,
+    DataValidationError,
     detect_duplicates,
     parse_iso_utc,
     validate_essential_features,
     validate_game_record,
     validate_odds_record,
+    validate_result_record,
 )
 
 
@@ -108,46 +111,35 @@ class NBADataScoutAgent:
         discarded_games: list[dict[str, str]] = []
         valid_game_start_map: dict[str, str] = {}
 
+        results_applied = 0
         for g in raw_games:
             try:
-                validate_game_record(g)
-                validate_essential_features(g, "moneyline")
-                validate_essential_features(g, "total_points")
+                status = str(g.get("status", ""))
+                existing = self.db.fetch_one(
+                    "SELECT status, home_score, away_score FROM games WHERE game_id = ?",
+                    (g.get("game_id"),),
+                )
+                if status in RESULT_STATUSES:
+                    # Post-game results: validated with result rules, never overwrite pre-game features.
+                    validate_result_record(g)
+                    if existing:
+                        results_applied += self._apply_result_update(g, existing, now_utc)
+                    else:
+                        validate_essential_features(g, "moneyline")
+                        validate_essential_features(g, "total_points")
+                        self._insert_game_row(g)
+                else:
+                    if existing and existing["status"] in RESULT_STATUSES:
+                        raise DataValidationError(
+                            f"Status regression blocked for {g.get('game_id')}: stored {existing['status']} "
+                            f"cannot revert to {status}"
+                        )
+                    validate_game_record(g)
+                    validate_essential_features(g, "moneyline")
+                    validate_essential_features(g, "total_points")
+                    self._insert_game_row(g)
                 validated_games.append(g)
                 valid_game_start_map[g["game_id"]] = g["game_start_time"]
-                self.db.execute_insert(
-                    """
-                    INSERT OR REPLACE INTO games (
-                        game_id, season, matchday_date, game_start_time, home_team, away_team,
-                        status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
-                        away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
-                        features_available_at, source_provider, ingested_at, result_recorded_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        g["game_id"],
-                        g["season"],
-                        g["matchday_date"],
-                        g["game_start_time"],
-                        g["home_team"],
-                        g["away_team"],
-                        g["status"],
-                        g["home_score"],
-                        g["away_score"],
-                        g["home_off_rtg"],
-                        g["home_def_rtg"],
-                        g["home_pace"],
-                        g["away_off_rtg"],
-                        g["away_def_rtg"],
-                        g["away_pace"],
-                        g["home_rest_days"],
-                        g["away_rest_days"],
-                        g["features_available_at"],
-                        g["source_provider"],
-                        g["ingested_at"],
-                        g["result_recorded_at"],
-                    ),
-                )
             except Exception as exc:
                 discarded_games.append({"game_id": str(g.get("game_id")), "reason": str(exc)})
 
@@ -160,27 +152,8 @@ class NBADataScoutAgent:
                 continue
             try:
                 validate_odds_record(o, g_start)
+                self.db.insert_odds_snapshot(o)
                 validated_odds.append(o)
-                self.db.execute_insert(
-                    """
-                    INSERT OR IGNORE INTO odds_snapshots (
-                        odds_id, game_id, provider, market, selection, line_value,
-                        decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        o["odds_id"],
-                        o["game_id"],
-                        o["provider"],
-                        o["market"],
-                        o["selection"],
-                        o.get("line_value"),
-                        o["decimal_odds"],
-                        o.get("counterpart_decimal_odds"),
-                        o["captured_at"],
-                        int(o.get("is_closing_line", 0)),
-                    ),
-                )
             except Exception as exc:
                 rejected_odds.append({"odds_id": str(o.get("odds_id")), "reason": str(exc)})
 
@@ -193,7 +166,71 @@ class NBADataScoutAgent:
             "rejected_odds": rejected_odds,
             "duplicate_games_detected": len(dup_games),
             "duplicate_odds_detected": len(dup_odds),
+            "results_applied": results_applied,
         }
+
+    def _insert_game_row(self, g: dict[str, Any]) -> None:
+        self.db.execute_insert(
+            """
+            INSERT OR REPLACE INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
+                away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
+                features_available_at, source_provider, ingested_at, result_recorded_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                g["game_id"],
+                g["season"],
+                g["matchday_date"],
+                g["game_start_time"],
+                g["home_team"],
+                g["away_team"],
+                g["status"],
+                g.get("home_score"),
+                g.get("away_score"),
+                g["home_off_rtg"],
+                g["home_def_rtg"],
+                g["home_pace"],
+                g["away_off_rtg"],
+                g["away_def_rtg"],
+                g["away_pace"],
+                g["home_rest_days"],
+                g["away_rest_days"],
+                g["features_available_at"],
+                g["source_provider"],
+                g["ingested_at"],
+                g.get("result_recorded_at"),
+            ),
+        )
+
+    def _apply_result_update(self, g: dict[str, Any], existing: dict[str, Any], now_utc: str) -> int:
+        """
+        Applies a post-game result to an already-known game WITHOUT touching its pre-game
+        features or features_available_at (those are the audit trail of what the model saw).
+        Already-FINAL games are never re-scored: a score correction after settlement needs human review.
+        Returns 1 if a status/score transition was written, else 0.
+        """
+        if existing["status"] == "FINAL":
+            if (existing["home_score"], existing["away_score"]) != (g.get("home_score"), g.get("away_score")):
+                logger.warning(
+                    "Score correction ignored for %s: stored %s-%s, feed %s-%s (manual review required)",
+                    g["game_id"], existing["home_score"], existing["away_score"],
+                    g.get("home_score"), g.get("away_score"),
+                )
+            return 0
+        recorded_at = g.get("result_recorded_at") or now_utc
+        with self.db.connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE games
+                SET status = ?, home_score = ?, away_score = ?,
+                    result_recorded_at = COALESCE(result_recorded_at, ?)
+                WHERE game_id = ? AND status != 'FINAL'
+                """,
+                (g["status"], g.get("home_score"), g.get("away_score"), recorded_at, g["game_id"]),
+            )
+            return int(cur.rowcount > 0)
 
 
 class VisualResearcherAgent:
@@ -302,36 +339,54 @@ class ModelCalibratorAgent:
 
     agent_name = "model_calibrator"
 
+    MIN_PROMOTION_SAMPLE = 300
+
     def evaluate_calibration_and_promotion(self, backtest_metrics: dict[str, Any]) -> dict[str, Any]:
-        comp = backtest_metrics.get("model_comparison", {})
-        c_ml = comp.get("model_c_point_margin_ml", {})
-        a_ml = comp.get("model_a_baseline_ml", {})
-        e_ml = comp.get("model_e_lightgbm_ml", {})
+        """
+        Promotion requires a real CANDIDATE model evaluated out of sample on the same games as the
+        incumbent, beating the incumbent and the naive baseline, not losing to the de-vigged market,
+        and a minimum sample. Without a candidate there is nothing to promote (no synthetic stand-ins).
+        """
+        comp = backtest_metrics.get("model_comparison", {}) or {}
+        inc = comp.get("ensemble_calibrated_ml") or {}
+        base = comp.get("baseline_naive_ml") or {}
+        cand = comp.get("lightgbm_ml") or {}
+        mkt = comp.get("market_devig_ml") or {}
 
-        inc_brier = float(c_ml.get("brier_score", 0.25))
-        base_brier = float(a_ml.get("brier_score", 0.25))
-        cand_brier = float(e_ml.get("brier_score", 0.25))
-        inc_ll = float(c_ml.get("log_loss", 0.69))
-        base_ll = float(a_ml.get("log_loss", 0.69))
-        cand_ll = float(e_ml.get("log_loss", 0.69))
+        def _get(d: dict[str, Any], k: str) -> float | None:
+            v = d.get(k)
+            return None if v is None else float(v)
 
-        beats_incumbent = (cand_brier <= inc_brier) and (cand_ll <= inc_ll)
-        beats_baseline = (inc_brier <= base_brier) and (inc_ll <= base_ll)
+        inc_b, inc_l = _get(inc, "brier_score"), _get(inc, "log_loss")
+        base_b, base_l = _get(base, "brier_score"), _get(base, "log_loss")
+        cand_b, cand_l = _get(cand, "brier_score"), _get(cand, "log_loss")
+        mkt_b = _get(mkt, "brier_score")
+        n = int(inc.get("sample_size") or 0)
+
+        beats_baseline = None not in (inc_b, inc_l, base_b, base_l) and inc_b <= base_b and inc_l <= base_l  # type: ignore[operator]
+        beats_incumbent = None not in (cand_b, cand_l, inc_b, inc_l) and cand_b <= inc_b and cand_l <= inc_l  # type: ignore[operator]
+        not_worse_than_market = mkt_b is None or (cand_b is not None and cand_b <= mkt_b)
+        recommend = bool(beats_incumbent and beats_baseline and not_worse_than_market and n >= self.MIN_PROMOTION_SAMPLE)
 
         return {
-            "oos_sample_size": int(c_ml.get("sample_size", 0)),
-            "incumbent_model": "model_c_point_margin_v1",
-            "candidate_model": "model_e_lightgbm_v1",
-            "incumbent_brier": inc_brier,
-            "incumbent_log_loss": inc_ll,
-            "candidate_brier": cand_brier,
-            "candidate_log_loss": cand_ll,
-            "baseline_brier": base_brier,
-            "baseline_log_loss": base_ll,
-            "beats_incumbent": beats_incumbent,
-            "beats_baseline": beats_baseline,
-            "recommend_promotion": bool(beats_incumbent and beats_baseline),
-            "selection_basis": "OOS_BRIER_AND_LOG_LOSS (never ROI alone)",
+            "oos_sample_size": n,
+            "incumbent_model": "ensemble_calibrated",
+            "candidate_model": "lightgbm" if cand else None,
+            "incumbent_brier": inc_b,
+            "incumbent_log_loss": inc_l,
+            "candidate_brier": cand_b,
+            "candidate_log_loss": cand_l,
+            "baseline_brier": base_b,
+            "baseline_log_loss": base_l,
+            "market_brier": mkt_b,
+            "beats_incumbent": bool(beats_incumbent),
+            "beats_baseline": bool(beats_baseline),
+            "recommend_promotion": recommend,
+            "reason": (
+                "NO_CANDIDATE_MODEL_EVALUATED" if not cand
+                else ("INSUFFICIENT_SAMPLE" if n < self.MIN_PROMOTION_SAMPLE else "EVALUATED")
+            ),
+            "selection_basis": "OOS_BRIER_AND_LOG_LOSS vs incumbent, baseline and de-vigged market (never ROI)",
         }
 
 
@@ -362,29 +417,16 @@ class NBAAuditorAgent:
             if emitted_dt >= start_dt or odds_dt >= start_dt or feat_dt >= start_dt:
                 leakage_violations += 1
 
-        # 2. Verify independent double-entry ledger reconciliation against bankroll_ledger table
+        # 2. Ledger reconciliation, independent of get_bankroll_state():
+        #    every bet has exactly one reservation, every settled bet exactly one settlement entry whose
+        #    amount equals the bet's net profit, and no settlement entry references an unsettled bet.
         state = self.paper_engine.get_bankroll_state()
-        expected_settled = round(state["initial_bankroll_pen"] + state["cumulative_net_profit_pen"], 4)
-        expected_avail = round(expected_settled - state["pending_exposure_pen"], 4)
-        arithmetic_valid = (
-            abs(state["settled_bankroll_pen"] - expected_settled) < 1e-4
-            and abs(state["available_balance_pen"] - expected_avail) < 1e-4
+        ledger_issues = self._reconcile_ledger()
+        bankroll_reconciled = (
+            not ledger_issues
             and state["settled_bankroll_pen"] >= 0.0
             and state["available_balance_pen"] >= 0.0
         )
-
-        ledger_row = self.db.fetch_one(
-            "SELECT settled_bankroll_pen, pending_exposure_pen, available_balance_pen FROM bankroll_ledger ORDER BY entry_id DESC LIMIT 1"
-        )
-        if ledger_row:
-            # Reconcile against independent event-driven ledger
-            ledger_match = (
-                abs(state["settled_bankroll_pen"] - float(ledger_row["settled_bankroll_pen"])) < 0.05
-                or abs(state["available_balance_pen"] - float(ledger_row["available_balance_pen"])) < 0.05
-            )
-            bankroll_reconciled = arithmetic_valid and ledger_match
-        else:
-            bankroll_reconciled = arithmetic_valid
 
         # 3. Verify SQLite immutability triggers are active
         immutability_verified = False
@@ -401,14 +443,20 @@ class NBAAuditorAgent:
         else:
             immutability_verified = True
 
-        integrity_errors = 0 if (bankroll_reconciled and immutability_verified) else 1
-        reproducibility_verified = bool(leakage_violations == 0 and integrity_errors == 0)
-        # Auditor approval requires zero leakage, full bankroll reconciliation, and verified exit criteria
+        # 4. History integrity: no previously registered immutable row may ever disappear.
+        history = self._verify_and_register_history()
+        history_intact = history["missing_rows_total"] == 0
+
+        integrity_errors = 0 if (bankroll_reconciled and immutability_verified and history_intact) else 1
+        # Reproducibility is NOT verified inside a production cycle (it requires a deterministic re-run);
+        # the gate stays closed instead of being assumed.
+        reproducibility_verified = False
         auditor_approved = bool(
-            reproducibility_verified
-            and bankroll_reconciled
-            and immutability_verified
-            and backtest_metrics.get("overall_brier_score", 1.0) <= backtest_metrics.get("baseline_brier_score", 1.0)
+            leakage_violations == 0
+            and integrity_errors == 0
+            and backtest_metrics.get("model_brier_on_market_subset") is not None
+            and backtest_metrics.get("market_brier_score") is not None
+            and float(backtest_metrics["model_brier_on_market_subset"]) <= float(backtest_metrics["market_brier_score"])
         )
         exit_gates = evaluate_simulation_exit_gates(
             metrics=backtest_metrics,
@@ -424,6 +472,86 @@ class NBAAuditorAgent:
             "leakage_violations_count": leakage_violations,
             "bankroll_reconciled": bankroll_reconciled,
             "immutability_triggers_verified": immutability_verified,
+            "ledger_issues": ledger_issues[:50],
+            "ledger_issues_count": len(ledger_issues),
+            "history_integrity": history,
+            "reproducibility_note": "NOT_VERIFIED_IN_PRODUCTION_CYCLE (requires deterministic re-run)",
             "bankroll_state": state,
             "exit_gates_evaluation": exit_gates,
         }
+
+    # Immutable tables tracked by the append-only row registry, with their primary keys.
+    TRACKED_TABLES: dict[str, str] = {
+        "predictions": "prediction_id",
+        "simulated_bets": "bet_id",
+        "odds_snapshots": "odds_id",
+        "decision_log": "decision_id",
+        "player_prop_picks": "prop_id",
+        "bankroll_ledger": "entry_id",
+        "sniper_alerts": "alert_id",
+    }
+
+    def _verify_and_register_history(self) -> dict[str, Any]:
+        """
+        Compares the current tables against the append-only `audit_row_registry`:
+        any registered primary key that no longer exists is a history violation (deletion,
+        database rollback or file replacement). New rows are then registered.
+        """
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        missing: dict[str, int] = {}
+        examples: dict[str, list[str]] = {}
+        with self.db.connect() as conn:
+            for table, pk in self.TRACKED_TABLES.items():
+                rows = conn.execute(
+                    f"""
+                    SELECT r.row_pk FROM audit_row_registry r
+                    WHERE r.table_name = ?
+                      AND r.row_pk NOT IN (SELECT CAST({pk} AS TEXT) FROM {table})
+                    """,
+                    (table,),
+                ).fetchall()
+                missing[table] = len(rows)
+                if rows:
+                    examples[table] = [str(r[0]) for r in rows[:10]]
+                conn.execute(
+                    f"""
+                    INSERT OR IGNORE INTO audit_row_registry (table_name, row_pk, registered_at)
+                    SELECT ?, CAST({pk} AS TEXT), ? FROM {table}
+                    """,
+                    (table, now_utc),
+                )
+        total = sum(missing.values())
+        if total:
+            logger.error("HISTORY INTEGRITY VIOLATION: %s registered rows are missing: %s", total, missing)
+        return {"missing_rows_total": total, "missing_rows_by_table": missing, "examples": examples}
+
+    def _reconcile_ledger(self) -> list[str]:
+        issues: list[str] = []
+        bets = {b["bet_id"]: b for b in self.db.fetch_all("SELECT bet_id, status, net_profit_pen FROM simulated_bets")}
+        ledger = self.db.fetch_all(
+            "SELECT event_type, reference_bet_id, amount_delta_pen FROM bankroll_ledger WHERE reference_bet_id IS NOT NULL"
+        )
+        reserved: dict[str, int] = {}
+        settled: dict[str, list[float]] = {}
+        for e in ledger:
+            ref = e["reference_bet_id"]
+            if e["event_type"] == "BET_RESERVED":
+                reserved[ref] = reserved.get(ref, 0) + 1
+            elif e["event_type"] == "BET_SETTLED":
+                settled.setdefault(ref, []).append(float(e["amount_delta_pen"]))
+        for bet_id, b in bets.items():
+            if reserved.get(bet_id, 0) != 1:
+                issues.append(f"{bet_id}: {reserved.get(bet_id, 0)} reservation entries (expected 1)")
+            entries = settled.get(bet_id, [])
+            if b["status"] == "PENDING":
+                if entries:
+                    issues.append(f"{bet_id}: PENDING bet has {len(entries)} settlement entries")
+            else:
+                if len(entries) != 1:
+                    issues.append(f"{bet_id}: {len(entries)} settlement entries for {b['status']} bet (expected 1)")
+                elif abs(entries[0] - float(b["net_profit_pen"] or 0.0)) > 1e-4:
+                    issues.append(f"{bet_id}: ledger {entries[0]:+.4f} != bet net {float(b['net_profit_pen'] or 0.0):+.4f}")
+        for ref in set(reserved) | set(settled):
+            if ref not in bets:
+                issues.append(f"{ref}: ledger entry references a bet that no longer exists")
+        return issues

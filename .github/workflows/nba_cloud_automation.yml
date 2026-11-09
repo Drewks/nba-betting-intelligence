@@ -115,7 +115,13 @@ jobs:
             echo "Sin cambios nuevos para confirmar."
           else
             git commit -m "chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]"
-            git pull --rebase origin main || true
+            # The SQLite audit database is binary and cannot be merged. If main moved during this run,
+            # abort instead of rebasing/overwriting: losing one cycle is recoverable, losing history is not.
+            git fetch --depth=2 origin main
+            if [ "$(git rev-parse HEAD~1)" != "$(git rev-parse origin/main)" ]; then
+              echo "::error::main changed during the cycle; refusing to overwrite the audit database. Re-run the workflow."
+              exit 1
+            fi
             git push origin main
           fi
 

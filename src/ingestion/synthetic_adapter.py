@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 from scipy.stats import norm
 
-from src.ingestion.adapters import BaseNBADataAdapter
+from src.ingestion.base import BaseNBADataAdapter
 from src.utils.team_dictionary import NBA_TEAMS
 
 

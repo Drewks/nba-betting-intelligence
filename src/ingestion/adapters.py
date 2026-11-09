@@ -28,7 +28,6 @@ __all__ = [
 import logging
 logger = logging.getLogger(__name__)
 
-from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime, timezone
 import json
@@ -152,25 +151,9 @@ LONG_TERM_INJURY_KEYWORDS: tuple[str, ...] = (
 )
 
 
-class AdapterUnavailableError(RuntimeError):
-    """Raised when an external data adapter cannot be reached or lacks credentials."""
-
-
-class BaseNBADataAdapter(ABC):
-    """Abstract interface for interchangeable NBA statistics, schedule, and odds providers."""
-
-    provider_name: str = "base"
-
-    @abstractmethod
-    def fetch_games_and_odds(
-        self,
-        date_str: str | None = None,
-        as_of_utc: str | None = None,
-    ) -> dict[str, list[dict[str, Any]]]:
-        """Returns {'games': [...], 'odds': [...]} with explicit provenance and timestamps."""
-
-
-from src.ingestion.synthetic_adapter import SyntheticFixtureAdapter as SyntheticFixtureAdapter
+from src.ingestion.base import AdapterUnavailableError as AdapterUnavailableError  # noqa: E402
+from src.ingestion.base import BaseNBADataAdapter as BaseNBADataAdapter  # noqa: E402
+from src.ingestion.synthetic_adapter import SyntheticFixtureAdapter as SyntheticFixtureAdapter  # noqa: E402
 
 
 class TheOddsAPIAdapter:
@@ -200,6 +183,8 @@ class TheOddsAPIAdapter:
 
         url = (
             f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/"
+            # The Odds API only accepts the key as the `apiKey` query parameter (no header auth).
+            # The URL is never logged; request errors are reported without it.
             f"?apiKey={self.api_key}&regions=us,eu&markets=h2h,totals&oddsFormat=decimal"
         )
         try:
@@ -207,8 +192,6 @@ class TheOddsAPIAdapter:
                 url,
                 headers={
                     "User-Agent": "Mozilla/5.0",
-                    "x-api-key": self.api_key,
-                    "apiKey": self.api_key,
                 },
             )
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
@@ -391,6 +374,7 @@ class TheOddsAPIAdapter:
                                 "counterpart_decimal_odds": round(float(over_cnt), 4),
                                 "captured_at": now_utc,
                                 "is_closing_line": 0,
+                                "source_type": "OBSERVED",
                             },
                             {
                                 "provider": t_info["best_under_book"],
@@ -401,6 +385,7 @@ class TheOddsAPIAdapter:
                                 "counterpart_decimal_odds": round(float(under_cnt), 4),
                                 "captured_at": now_utc,
                                 "is_closing_line": 0,
+                                "source_type": "OBSERVED",
                             },
                         ]
                     )
@@ -463,9 +448,17 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
         except Exception:
-            return {"injury_penalties": {}, "team_box_stats": {}, "referee_total_adj": 0.0, "referee_hca_adj": 0.0}
+            return {
+                "fetch_ok": False,
+                "injury_penalties": {},
+                "injury_reports": {},
+                "team_box_stats": {},
+                "referee_total_adj": 0.0,
+                "referee_hca_adj": 0.0,
+            }
 
         injury_penalties: dict[str, float] = {}
+        injury_reports: dict[str, list[dict[str, Any]]] = {}
         lineup_synergy_details: dict[str, dict[str, float]] = {}
         for t_inj in data.get("injuries") or []:
             raw_abbr = t_inj.get("team", {}).get("abbreviation", "")
@@ -498,6 +491,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 )
             syn_res = compute_lineup_synergy_penalty(absent_list)
             injury_penalties[t_code] = syn_res["total_net_penalty"]
+            injury_reports[t_code] = [dict(item, team=t_code) for item in absent_list]
             lineup_synergy_details[t_code] = syn_res
 
         ref_total_adj = 0.0
@@ -530,7 +524,9 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             team_box_stats[t_code] = s_map
 
         return {
+            "fetch_ok": True,
             "injury_penalties": injury_penalties,
+            "injury_reports": injury_reports,
             "lineup_synergy_details": lineup_synergy_details,
             "team_box_stats": team_box_stats,
             "referee_total_adj": ref_total_adj,
@@ -799,6 +795,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                 "counterpart_decimal_odds": a_dec,
                                 "captured_at": captured_at,
                                 "is_closing_line": 0,
+                                "source_type": "OBSERVED",
                             }
                         )
                         odds_out.append(
@@ -813,6 +810,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                 "counterpart_decimal_odds": h_dec,
                                 "captured_at": captured_at,
                                 "is_closing_line": 0,
+                                "source_type": "OBSERVED",
                             }
                         )
                     except ValueError:
@@ -841,6 +839,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                 "counterpart_decimal_odds": u_dec,
                                 "captured_at": captured_at,
                                 "is_closing_line": 0,
+                                "source_type": "OBSERVED",
                             }
                         )
                         odds_out.append(
@@ -855,6 +854,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                 "counterpart_decimal_odds": o_dec,
                                 "captured_at": captured_at,
                                 "is_closing_line": 0,
+                                "source_type": "OBSERVED",
                             }
                         )
                     except ValueError:
@@ -1038,9 +1038,9 @@ class SportradarAdapter(BaseNBADataAdapter):
         team_splits: dict[str, dict[str, float]] = {}
 
         # 1. Official League Injuries (1 request)
-        inj_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/league/injuries.json?api_key={self.api_key}"
+        inj_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/league/injuries.json"
         try:
-            req = urllib.request.Request(inj_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "api_key": self.api_key, "x-api-key": self.api_key})
+            req = urllib.request.Request(inj_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "x-api-key": self.api_key})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 inj_data = json.loads(resp.read().decode("utf-8"))
             for t_obj in inj_data.get("teams") or []:
@@ -1081,9 +1081,9 @@ class SportradarAdapter(BaseNBADataAdapter):
         time.sleep(2.1)
 
         # 2. Official Seasonal Standings & Tactical Splits (1 request)
-        std_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/seasons/2026/REG/standings.json?api_key={self.api_key}"
+        std_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/seasons/2026/REG/standings.json"
         try:
-            req = urllib.request.Request(std_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "api_key": self.api_key, "x-api-key": self.api_key})
+            req = urllib.request.Request(std_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "x-api-key": self.api_key})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 std_data = json.loads(resp.read().decode("utf-8"))
             for conf in std_data.get("conferences") or []:

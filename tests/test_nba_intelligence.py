@@ -505,6 +505,7 @@ def test_17_readiness_notification_system(tmp_path: Path) -> None:
             "gates": {
                 "gate_1_min_500_settled_selections": {"passed": False},
                 "gate_3_calibration_non_inferior_to_baseline": {"passed": True},
+                "gate_10_non_inferior_to_devigged_market": {"passed": True},
                 "gate_4_zero_information_leakage": {"passed": True},
                 "gate_5_positive_roi_and_yield": {"passed": True},
                 "gate_6_statistical_uncertainty_excludes_zero_edge": {"passed": False},
@@ -540,6 +541,7 @@ def test_17_readiness_notification_system(tmp_path: Path) -> None:
             "gates": {
                 "gate_1_min_500_settled_selections": {"passed": True},
                 "gate_3_calibration_non_inferior_to_baseline": {"passed": True},
+                "gate_10_non_inferior_to_devigged_market": {"passed": True},
                 "gate_4_zero_information_leakage": {"passed": True},
             }
         },
@@ -576,6 +578,7 @@ def test_17_readiness_notification_system(tmp_path: Path) -> None:
             "gates": {
                 "gate_1_min_500_settled_selections": {"passed": True},
                 "gate_3_calibration_non_inferior_to_baseline": {"passed": True},
+                "gate_10_non_inferior_to_devigged_market": {"passed": True},
                 "gate_4_zero_information_leakage": {"passed": True},
             }
         },
@@ -878,8 +881,8 @@ def test_21_prioridad_1_edge_proportional_kelly_clv_governor_anticorrelation(tmp
         """
         INSERT INTO odds_snapshots (
             odds_id, game_id, provider, market, selection, line_value, decimal_odds,
-            captured_at, is_closing_line
-        ) VALUES ('ODDS_CLV_01', 'REAL_GAME_01', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.80, '2026-10-19T23:55:00Z', 1)
+            captured_at, is_closing_line, source_type
+        ) VALUES ('ODDS_CLV_01', 'REAL_GAME_01', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.80, '2026-10-19T23:55:00Z', 1, 'OBSERVED')
         """
     )
     db.execute_insert(
@@ -951,16 +954,16 @@ def test_22_clv_deduplication_longshot_guard_and_daily_pick_quality(tmp_path: Pa
         """
         INSERT INTO odds_snapshots (
             odds_id, game_id, provider, market, selection, line_value, decimal_odds,
-            captured_at, is_closing_line
-        ) VALUES ('ODDS_MULTI_DK', 'G_CLV_MULTI', 'DraftKings', 'moneyline', 'HOME', NULL, 1.75, '2026-10-25T23:55:00Z', 1)
+            captured_at, is_closing_line, source_type
+        ) VALUES ('ODDS_MULTI_DK', 'G_CLV_MULTI', 'DraftKings', 'moneyline', 'HOME', NULL, 1.75, '2026-10-25T23:55:00Z', 1, 'OBSERVED')
         """
     )
     db.execute_insert(
         """
         INSERT INTO odds_snapshots (
             odds_id, game_id, provider, market, selection, line_value, decimal_odds,
-            captured_at, is_closing_line
-        ) VALUES ('ODDS_MULTI_PINN', 'G_CLV_MULTI', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.80, '2026-10-25T23:58:00Z', 1)
+            captured_at, is_closing_line, source_type
+        ) VALUES ('ODDS_MULTI_PINN', 'G_CLV_MULTI', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.80, '2026-10-25T23:58:00Z', 1, 'OBSERVED')
         """
     )
     db.execute_insert(
@@ -1057,8 +1060,8 @@ def test_23_persist_closing_lines_and_cycle_modes(tmp_path: Path) -> None:
         """
         INSERT INTO odds_snapshots (
             odds_id, game_id, provider, market, selection, line_value, decimal_odds,
-            captured_at, is_closing_line
-        ) VALUES ('ODDS_TIPOFF_HOME', 'REAL_GAME_TIPOFF', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.95, '2026-10-25T19:40:00Z', 0)
+            captured_at, is_closing_line, source_type
+        ) VALUES ('ODDS_TIPOFF_HOME', 'REAL_GAME_TIPOFF', 'Pinnacle', 'moneyline', 'HOME', NULL, 1.95, '2026-10-25T19:40:00Z', 0, 'OBSERVED')
         """
     )
 
@@ -1538,9 +1541,14 @@ def test_30_optuna_walk_forward_hyperparameter_optimization(tmp_path: Path) -> N
     best_p = summary["best_hyperparameters"]
     assert 0.010 <= best_p["alpha_slow"] <= 0.080
     assert 0.080 <= best_p["alpha_fast"] <= 0.200
-    assert 0.08 <= best_p["market_model_weight"] <= 0.45
     assert "spread_sigma" in best_p
     assert "momentum_blend_weight" in best_p
+    # No fake market anchor is tuned (historical games carry no observed market probability)
+    assert "market_model_weight" not in best_p
+    # Adoption is decided on an untouched holdout window, never on the tuning window
+    assert summary["holdout_sample_size"] > 0
+    assert set(summary["holdout"]) >= {"baseline_score", "best_score"}
+    assert summary["adoption_decision"] in ("ADOPT_ON_HOLDOUT_IMPROVEMENT", "REJECT_NO_HOLDOUT_IMPROVEMENT")
 
 
 # 31. V7 Fase 5: Optimización de Portafolio Kelly Simultáneo Multi-Partido (scipy.optimize)
@@ -1721,27 +1729,50 @@ def test_32_injury_sniper_pregame_dual_window(tmp_path: Path) -> None:
     ]
 
     monitor = InjurySniperMonitor(db=db, min_ev_threshold=0.04)
-    alerts = monitor.evaluate_game_sniper_opportunity(
+    # Give the sniper's Venn-Abers calibrator a well-calibrated history so its intervals are informative
+    import numpy as np
+    rng = np.random.default_rng(7)
+    cal_records = []
+    for i in range(600):
+        p_i = float(rng.uniform(0.2, 0.8))
+        cal_records.append(
+            {"game_start_time": f"2026-10-{1 + i % 28:02d}T00:00:00Z", "raw_probability": p_i, "outcome": int(rng.random() < p_i)}
+        )
+    assert monitor.calibrator.fit(cal_records, "2026-11-01T00:00:00Z") is True
+
+    common = dict(
         game_id="G_SNIPER_TEST",
         matchday_date="2026-11-07",
         game_start_time="2026-11-08T00:00:00Z",
         home_team="PHX",
         away_team="DAL",
-        live_injuries=[{"name": "Luka Doncic", "status": "OUT", "team": "DAL", "position": "PG"}],
         market_odds=odds_list,
         window_type="WINDOW_2H",
         minutes_to_tipoff=120.0,
-        cached_injuries=[{"name": "Luka Doncic", "status": "QUESTIONABLE", "team": "DAL"}],
         bankroll_pen=100.0,
     )
 
-    # 4. Verify Alert Generation on PHX ML
+    # 4a. A long-known absence (same status as the previous snapshot) is already priced by the market
+    no_alerts = monitor.evaluate_game_sniper_opportunity(
+        live_injuries=[{"name": "Luka Doncic", "status": "OUT", "team": "DAL", "position": "PG"}],
+        cached_injuries=[{"name": "Luka Doncic", "status": "OUT", "team": "DAL"}],
+        **common,
+    )
+    assert no_alerts == []
+
+    # 4b. A NEW transition (QUESTIONABLE -> OUT) shifts the de-vigged market probability toward PHX
+    alerts = monitor.evaluate_game_sniper_opportunity(
+        live_injuries=[{"name": "Luka Doncic", "status": "OUT", "team": "DAL", "position": "PG"}],
+        cached_injuries=[{"name": "Luka Doncic", "status": "QUESTIONABLE", "team": "DAL"}],
+        **common,
+    )
     assert len(alerts) >= 1
     phx_alert = next(a for a in alerts if a["selection"] == "HOME")
     assert phx_alert["target_team"] == "PHX"
-    assert phx_alert["synergy_shift"] > 3.0  # Away loss of Luka adds >3 pts advantage to Home
-    assert phx_alert["ev_lower_bound_pct"] > 4.0
-    assert 1.00 <= phx_alert["kelly_stake_pen"] <= 6.00
+    assert phx_alert["synergy_shift"] > 3.0  # incremental loss of Luka (Q -> OUT) adds > 3 pts to Home
+    assert phx_alert["point_prob"] > phx_alert["market_p_home"]
+    assert phx_alert["ev_lower_bound_pct"] >= 4.0
+    assert 0.0 < phx_alert["kelly_stake_pen"] <= 1.00  # AGENTS.md cap
     assert phx_alert["window_type"] == "WINDOW_2H"
 
     # 5. Verify SQLite persistence in sniper_alerts
@@ -1750,7 +1781,7 @@ def test_32_injury_sniper_pregame_dual_window(tmp_path: Path) -> None:
     row = persisted[0]
     assert row["selection"] == "HOME"
     assert row["window_type"] == "WINDOW_2H"
-    assert row["ev_lower_bound_pct"] > 4.0
+    assert row["ev_lower_bound_pct"] >= 4.0
 
 def test_33_player_props_engine(tmp_path: Path) -> None:
     """
@@ -2359,14 +2390,20 @@ def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path)
             "model_p_away_pct": 35.0,
         }
     ]
+    # Production default: no observed prop lines exist -> no prop opportunities at all (no invented 1.90 lines)
+    assert engine.generate_slate_prop_opportunities(slate_games=sample_slate, bankroll_pen=100.0, min_ev_pct=3.0) == []
+
+    # Explicit research mode: synthetic lines are evaluated but never persisted as paper bets
     gen_results = engine.generate_slate_prop_opportunities(
         slate_games=sample_slate,
         bankroll_pen=100.0,
         min_ev_pct=3.0,
+        allow_synthetic_lines=True,
     )
     assert len(gen_results) >= 1
     types = {r.get("type") for r in gen_results}
-    assert "INDIVIDUAL_PROP" in types or "RETABET_SGP" in types
+    assert "INDIVIDUAL_PROP" in types
+    assert "RETABET_SGP" not in types  # parlays stay off unless allow_parlays=True
 
 
 def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
@@ -2463,8 +2500,26 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
         "kelly_stake_pen": 1.00,
     })
 
-    # Prop 4: SGP Parlay: LAL Gana + LeBron PTS OVER 25.5 @ 3.50, stake S/ 2.00
-    sgp_id = engine.record_player_prop_pick({
+    # Prop 4: SGP Parlay: prohibited by AGENTS.md -> rejected by default
+    sgp_payload = {
+        "prop_id": "SGP_LAL_LEBRON_DEFAULT",
+        "game_id": "G_TEST_PROPS_1",
+        "matchday_date": "2026-11-08",
+        "player_name": "LeBron James + LAL Gana",
+        "team": "LAL",
+        "prop_category": "SGP",
+        "line_value": 25.5,
+        "selection": "SGP",
+        "decimal_odds": 3.50,
+        "model_prob": 0.38,
+        "stake_pen": 2.00,
+    }
+    from src.paper_trading.engine import RiskLimitError
+    with pytest.raises(RiskLimitError):
+        engine.record_player_prop_pick(sgp_payload)
+
+    # Research-only explicit opt-in still exercises the SGP settlement math
+    sgp_id = engine.record_player_prop_pick(allow_parlay=True, prop_dict={
         "prop_id": "SGP_LAL_LEBRON",
         "game_id": "G_TEST_PROPS_1",
         "matchday_date": "2026-11-08",
@@ -3121,10 +3176,24 @@ def test_48_live_peru_odds_scraper_and_arbitrage_alerts(tmp_path: Path) -> None:
     assert res["game_id"] == "G_LIVE_TEST_1"
     assert "best_home" in res
     assert "best_away" in res
+    # Retail quotes derived from the benchmark are DISPLAY-ONLY estimates (never observed)
     assert len(res["quotes"]) >= 8
-    assert "retabet_pe" in res["quotes"]
-    assert "betsson_pe" in res["quotes"]
-    assert "pinnacle_pe" in res["quotes"]
+    assert res["quotes"]["retabet_pe"]["source_type"] == "DERIVED"
+    assert res["quotes"]["retabet_pe"]["is_observed"] is False
+    assert "sharp_benchmark" in res["quotes"]
+    # Estimates are never used for stale-line or surebet detection, and nothing derived is persisted
+    assert res["stale_lines"] == []
+    assert res["surebet"] is None
+    assert db.fetch_one("SELECT COUNT(*) AS c FROM odds_snapshots")["c"] == 0
+
+    # Without an observed benchmark there is no fallback price (the old 1.90/1.91 default is gone)
+    res_nobench = scraper.collect_slate_odds(
+        game_id="G_LIVE_TEST_2",
+        home_team="BOS",
+        away_team="MIA",
+        game_start_time="2026-11-10T00:00:00Z",
+    )
+    assert res_nobench["quotes"] == {} or all(q["source_type"] == "OBSERVED" for q in res_nobench["quotes"].values())
 
     # 2. Test Stale Line identification against sharp benchmark
     # Mocking sharp move to 1.55 on HOME while RETAbet remains lagged at 1.80

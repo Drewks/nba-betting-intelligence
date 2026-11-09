@@ -24,7 +24,9 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     except Exception as exc:
         logging.warning(f"Handled exception in run_peru_odds_scraper (line 21): {exc}")
 
+from src.backtesting.backtester import WalkForwardBacktester
 from src.ingestion.peru_scraper import PeruLiveOddsScraper
+from src.paper_trading.engine import PaperTradingEngine
 from src.reporting.reporter import export_bets_and_tracking_dashboard
 from src.storage.db import DatabaseManager
 
@@ -60,7 +62,7 @@ def main() -> None:
         print("ℹ️ No hay partidos en la ventana exacta T-6H en este instante.")
         print("   Ejecuta con --force para capturar cuotas de toda la cartelera próxima.")
     else:
-        print(f"✅ Se capturaron cuotas exactas de casas peruanas para {len(snapshots)} partidos:\n")
+        print(f"ℹ️ Comparativa ESTIMADA (no son cuotas reales observadas) para {len(snapshots)} partidos con benchmark Pinnacle observado:\n")
         for s in snapshots:
             print(f"🏀 Partido: {s.matchup}")
             print(f"   Hora inicio: {s.game_start_time} | Faltan: {s.hours_to_tipoff:.1f} horas para el tipoff")
@@ -70,7 +72,7 @@ def main() -> None:
             coolbet_q = q.get("coolbet_pe", {})
             betsson_q = q.get("betsson_pe", {})
             apuesta_q = q.get("apuesta_total", {})
-            pinnacle_q = q.get("pinnacle_pe", {})
+            pinnacle_q = q.get("pinnacle_pe", {})  # benchmark observado (copiado), el resto son estimaciones
             print(f"   🔴 RETAbet Perú:   Local {retabet_q.get('home_odds', '—')} | Visita {retabet_q.get('away_odds', '—')}")
             print(f"   🔵 Coolbet Perú:   Local {coolbet_q.get('home_odds', '—')} | Visita {coolbet_q.get('away_odds', '—')}")
             print(f"   🟠 Betsson Perú:   Local {betsson_q.get('home_odds', '—')} | Visita {betsson_q.get('away_odds', '—')}")
@@ -79,38 +81,17 @@ def main() -> None:
             print(f"   🏆 MEJOR EN PERÚ:  Local: {s.best_home['odds']} ({s.best_home['book']}) | Visita: {s.best_away['odds']} ({s.best_away['book']})")
             print("-" * 80)
 
-    # Regenerate tracking dashboard & sync docs/index.html with dynamically computed observed metrics
-    # readiness_path = PROJECT_ROOT / "data" / "readiness_status.json"
-    obs_rows = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status IN ('WON', 'LOST', 'PUSH')")
-    pend_rows = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status = 'PENDING'")
-
-    total_staked = sum(float(r["stake_pen"]) for r in obs_rows) or 1.0
-    net_pnl = sum(float(r["net_profit_pen"] or 0.0) for r in obs_rows)
-    roi_pct = round((net_pnl / total_staked) * 100.0, 2)
-    bankroll = round(100.00 + net_pnl, 2)
-
-    metrics = {
-        "settled_bets_count": len(obs_rows),
-        "pending_bets_count": len(pend_rows),
-        "current_settled_bankroll_pen": bankroll,
-        "net_profit_pen": round(net_pnl, 2),
-        "roi_pct": roi_pct,
-        "yield_pct": roi_pct,
-        "mean_clv_pct": 0.45,
-        "overall_brier_score": 0.1797,
-        "baseline_brier_score": 0.1783,
-        "bootstrap_uncertainty": {
-            "roi_ci_lower_95_pct": -24.0,
-            "roi_ci_upper_95_pct": 28.0,
-        },
-    }
+    # Regenerate tracking dashboard with metrics COMPUTED from the database (never hardcoded).
+    metrics = WalkForwardBacktester(db, PaperTradingEngine(db, exclude_synthetic=True)).compute_comprehensive_metrics(
+        model_comparison_records=[]
+    )
     export_bets_and_tracking_dashboard(
         db=db,
         metrics=metrics,
         csv_output_path=PROJECT_ROOT / "data" / "apuestas_historial.csv",
         md_output_path=PROJECT_ROOT / "SEGUIMIENTO_APUESTAS.md",
     )
-    print("🚀 Dashboard y GitHub Pages actualizados con las cuotas T-6H.")
+    print("🚀 Dashboard regenerado con métricas calculadas desde la base de datos.")
 
 
 if __name__ == "__main__":

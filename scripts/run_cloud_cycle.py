@@ -36,6 +36,7 @@ from src.agents.specialized_agents import (
     VisualResearcherAgent,
 )
 from src.backtesting.backtester import WalkForwardBacktester
+from src.config import load_config
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
     VennAbersConformalInterval,
@@ -51,7 +52,6 @@ from src.models.statistical_models import (
 from src.orchestrator import Orchestrator
 from src.paper_trading.engine import PaperTradingEngine
 from src.prediction.ev_calculator import (
-    DEFAULT_MODEL_WEIGHT,
     MAX_MODEL_MARKET_DISAGREEMENT,
     compute_line_steam,
     compute_market_consensus,
@@ -67,7 +67,9 @@ from src.reporting.reporter import (
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
 
-MODEL_VERSION_ID = "model_f_ensemble_v8"
+# Model identity and market-anchor weight come from config/model_config.yaml (single source of truth).
+MODEL_VERSION_ID = load_config().model.version_id
+MARKET_ANCHOR_MODEL_WEIGHT = load_config().model.market_anchor_model_weight
 MIN_REAL_GAMES_FOR_TRAINING = 120
 
 
@@ -86,16 +88,21 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         return {"cycle_type": "INITIAL_BOOTSTRAP_AND_LIVE_SYNC", "run_id": init_res["run_id"]}
 
     db = DatabaseManager(db_path)
+    risk_cfg = load_config().risk
+    # AGENTS.md v1: flat S/1.00 stake, max 3 selections per matchday, EV > 5%. Flat staking stays
+    # until there is out-of-sample evidence of edge (CLV vs. the sharp close); see config/model_config.yaml.
     paper_engine = PaperTradingEngine(
         db=db,
-        initial_bankroll_pen=100.00,
-        base_stake_pen=1.00,
-        max_stake_pen=2.00,
-        min_ev_threshold=0.05,
-        dynamic_conviction_staking=True,
+        initial_bankroll_pen=risk_cfg.virtual_bankroll_initial_pen,
+        base_stake_pen=risk_cfg.base_stake_pen,
+        max_stake_pen=risk_cfg.max_stake_pen,
+        max_selections_per_matchday=risk_cfg.max_selections_per_matchday,
+        min_ev_threshold=risk_cfg.min_ev_threshold,
+        dynamic_conviction_staking=False,
         enable_cppi_shield=True,
         staking_mode="CONSERVATIVE",
         exclude_synthetic=True,
+        max_portfolio_exposure_pct=risk_cfg.max_portfolio_exposure_pct,
     )
     scout = NBADataScoutAgent(db)
     visual = VisualResearcherAgent()
@@ -207,9 +214,9 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
 
     # 3a. Make sure real NBA history exists (one-time ESPN backfill of 2 seasons) and recompute
     #     leakage-free pre-game ratings + real rest days for every real game.
-    real_final_count = db.fetch_one(
+    real_final_count = (db.fetch_one(
         "SELECT COUNT(*) AS c FROM games WHERE status = 'FINAL' AND game_id NOT LIKE 'SYN%'"
-    )["c"]
+    ) or {"c": 0})["c"]
     if real_final_count < MIN_REAL_GAMES_FOR_TRAINING:
         try:
             backfill_espn_history(db, date(2024, 10, 22), (now_dt - timedelta(days=1)).date())
@@ -241,7 +248,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             json.dumps(
                 {
                     "montecarlo_sims": 10000,
-                    "market_anchor_model_weight": DEFAULT_MODEL_WEIGHT,
+                    "market_anchor_model_weight": MARKET_ANCHOR_MODEL_WEIGHT,
                     "max_model_market_disagreement": MAX_MODEL_MARKET_DISAGREEMENT,
                     "training_data": "real_espn_history_only",
                     "team_ratings": "pace_decoupled_huber_multi_horizon_ewma",
@@ -263,13 +270,20 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
 
     # Fit probability calibrators on resolved predictions from the current model version,
     # augmented with strictly out-of-sample walk-forward evaluations when live sample < 50
+    # One record per game (the latest pre-tip prediction): predictions are append-only, so several
+    # snapshots per game exist; counting all of them would overweight games re-priced more often.
     resolved_ml_preds = db.fetch_all(
         """
-        SELECT p.raw_probability, g.game_start_time, g.result_recorded_at,
+        WITH latest AS (
+            SELECT p.*, ROW_NUMBER() OVER (PARTITION BY p.game_id ORDER BY p.emitted_at DESC, p.prediction_id DESC) AS rn
+            FROM v_observed_predictions p
+            WHERE p.market = 'moneyline' AND p.selection = 'HOME' AND p.model_version_id = ?
+        )
+        SELECT l.raw_probability, g.game_start_time, g.result_recorded_at,
                CASE WHEN g.home_score > g.away_score THEN 1 ELSE 0 END AS outcome
-        FROM predictions p
-        JOIN games g ON p.game_id = g.game_id
-        WHERE p.market = 'moneyline' AND p.selection = 'HOME' AND p.model_version_id = ?
+        FROM latest l
+        JOIN games g ON l.game_id = g.game_id
+        WHERE l.rn = 1
           AND g.status = 'FINAL' AND g.game_start_time < ?
           AND (g.result_recorded_at IS NULL OR g.result_recorded_at <= ?)
         """,
@@ -277,13 +291,19 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     )
     resolved_tot_preds = db.fetch_all(
         """
-        SELECT p.raw_probability, g.game_start_time, g.result_recorded_at,
-               CASE WHEN (g.home_score + g.away_score) > p.line_value THEN 1 ELSE 0 END AS outcome
-        FROM predictions p
-        JOIN games g ON p.game_id = g.game_id
-        WHERE p.market = 'total_points' AND p.selection = 'OVER' AND p.model_version_id = ?
+        WITH latest AS (
+            SELECT p.*, ROW_NUMBER() OVER (PARTITION BY p.game_id ORDER BY p.emitted_at DESC, p.prediction_id DESC) AS rn
+            FROM v_observed_predictions p
+            WHERE p.market = 'total_points' AND p.selection = 'OVER' AND p.model_version_id = ?
+        )
+        SELECT l.raw_probability, g.game_start_time, g.result_recorded_at,
+               CASE WHEN (g.home_score + g.away_score) > l.line_value THEN 1 ELSE 0 END AS outcome
+        FROM latest l
+        JOIN games g ON l.game_id = g.game_id
+        WHERE l.rn = 1
           AND g.status = 'FINAL' AND g.game_start_time < ?
           AND (g.result_recorded_at IS NULL OR g.result_recorded_at <= ?)
+          AND (g.home_score + g.away_score) != l.line_value
         """,
         (MODEL_VERSION_ID, now_str, now_str),
     )
@@ -393,8 +413,10 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             existing_bet = db.fetch_one("SELECT bet_id FROM simulated_bets WHERE game_id = ?", (g["game_id"],))
             if existing_bet:
                 continue
+            # Betting decisions may ONLY use quotes observed in a real market (never quarantined,
+            # derived or system-generated prices).
             raw_game_odds = db.fetch_all(
-                "SELECT * FROM odds_snapshots WHERE game_id = ? AND is_closing_line = 0 ORDER BY captured_at ASC",
+                "SELECT * FROM v_observed_odds_snapshots WHERE game_id = ? AND is_closing_line = 0 ORDER BY captured_at ASC",
                 (g["game_id"],),
             )
             if not raw_game_odds:
@@ -493,13 +515,15 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     model_version_id=m_ver,
                     simulated_prediction_time=pred_ts,
                     market_consensus_prob=cons_p,
-                    model_weight=DEFAULT_MODEL_WEIGHT,
+                    model_weight=MARKET_ANCHOR_MODEL_WEIGHT,
                     max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
                     steam_delta=s_delta,
                     conformal_interval=conf_int,
                 )
-                line_str = str(o.get("line_value") or "ML").replace(".", "_")
-                pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{line_str}_{m_ver}"
+                # Deterministic id bound to the exact odds snapshot used: re-running the cycle is idempotent,
+                # and a re-priced line always yields a NEW immutable prediction, so a bet can never point to
+                # a prediction made with different odds.
+                pred_id = f"PRED_{m_ver}_{o['odds_id']}"
                 db.execute_insert(
                     """
                     INSERT OR IGNORE INTO predictions (
@@ -612,6 +636,10 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             "overall_brier_score": metrics["overall_brier_score"],
             "baseline_brier_score": metrics["baseline_brier_score"],
             "overall_log_loss": metrics["overall_log_loss"],
+            "market_brier_score": metrics.get("market_brier_score"),
+            "model_brier_on_market_subset": metrics.get("model_brier_on_market_subset"),
+            "market_comparison_sample_size": metrics.get("market_comparison_sample_size"),
+            "history_integrity": audit_res.get("history_integrity"),
             "baseline_log_loss": metrics["baseline_log_loss"],
             "mean_clv_pct": metrics.get("mean_clv_pct"),
             "clv_governor_factor": metrics.get("clv_governor_factor", 1.0),
