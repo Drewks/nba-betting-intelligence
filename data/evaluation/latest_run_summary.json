@@ -1,14 +1,14 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "settle_and_calibrate",
-  "timestamp_utc": "2026-11-09T01:00:47Z",
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-09T01:59:36Z",
   "ingested_dates": [
-    "2026-11-08",
     "2026-11-09",
     "2026-11-10",
+    "2026-11-08",
     "2026-11-11"
   ],
-  "closing_lines_promoted": 4,
+  "closing_lines_promoted": 8,
   "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
@@ -36,22 +36,22 @@
     "lost_count": 14,
     "push_count": 0,
     "max_drawdown_pen": 6.2575,
-    "overall_brier_score": 0.204929,
-    "baseline_brier_score": 0.250947,
-    "overall_log_loss": 0.596347,
-    "baseline_log_loss": 0.697354,
+    "overall_brier_score": 0.208562,
+    "baseline_brier_score": 0.249611,
+    "overall_log_loss": 0.603919,
+    "baseline_log_loss": 0.694527,
     "mean_clv_pct": 6.5063,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 3,
+      "events_found_today": 4,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
-      "credentials_configured": false,
-      "status": "READY_IF_KEY_PROVIDED"
+      "credentials_configured": true,
+      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -61,9 +61,9 @@
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
       "browserbase_cli_installed": true,
-      "browserbase_api_key_configured": false,
-      "browserbase_mode": "LOCAL_BROWSE_CLI",
-      "extracted_at": "2026-11-09T01:00:53Z",
+      "browserbase_api_key_configured": true,
+      "browserbase_mode": "REMOTE_CLOUD_CDP",
+      "extracted_at": "2026-11-09T01:59:40Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -71,57 +71,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
-    "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
-    "indexed_documents_count": 34,
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+    "indexed_documents_count": 124,
     "top_retrieved_context": [
       {
-        "source": "playwright_espn_injuries_table",
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
+        "relevance_score": 0.2311,
+        "captured_at": "2026-11-08"
+      },
+      {
+        "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Jarrett Allen C Nov 9 Day-To-Day Nov 8: Allen (knee) is questionable for Monday's game against Charlotte.",
-        "relevance_score": 0.3353,
-        "captured_at": "2026-11-09T01:00:54Z"
+        "relevance_score": 0.23,
+        "captured_at": "2026-11-09T01:59:40Z"
       },
       {
-        "source": "playwright_espn_injuries_table",
+        "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 8: Diabate (quadriceps) is questionable for Monday's game against the Cavaliers.",
-        "relevance_score": 0.3353,
-        "captured_at": "2026-11-09T01:00:54Z"
+        "relevance_score": 0.2173,
+        "captured_at": "2026-11-09T01:59:40Z"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Mitchell Robinson C Nov 8 Day-To-Day Nov 8: Robinson (illness) is questionable for Sunday's game versus Milwaukee, Bobby Krivitsky of Forbes.com reports.",
-        "relevance_score": 0.2652,
-        "captured_at": "2026-11-09T01:00:54Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
+        "relevance_score": 0.205,
+        "captured_at": "2026-11-08"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Grant Nelson F Nov 10 Day-To-Day Nov 8: Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports.",
-        "relevance_score": 0.2215,
-        "captured_at": "2026-11-09T01:00:54Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
+        "relevance_score": 0.2004,
+        "captured_at": "2026-11-08"
       },
       {
-        "source": "espn_nba_news_feed",
-        "snippet": "Jalen Duren to miss at least two more weeks with hamstring injury. Jalen Duren will miss at least two more weeks because of a hamstring injury, the Detroit Pistons announced Sunday.",
-        "relevance_score": 0.1246,
-        "captured_at": "2026-11-08T23:28:50Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Saturday's (Nov. 7) game against the Wizards.",
+        "relevance_score": 0.1571,
+        "captured_at": "2026-11-08"
       },
       {
-        "source": "espn_nba_news_feed",
-        "snippet": "Nuggets' starters all questionable vs. Rockets after delays leaving Mexico. Hampered by plane delays leaving Mexico City, the Nuggets have listed their entire starting lineup as questionable for Monday's game in Houston.",
-        "relevance_score": 0.119,
-        "captured_at": "2026-11-08T23:37:36Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Saturday's (Nov. 7) game against the Wizards.",
+        "relevance_score": 0.157,
+        "captured_at": "2026-11-08"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Jock Landale C Nov 9 Out Nov 8: Landale (hip) is listed as questionable for Monday's game against the Lakers.",
-        "relevance_score": 0.0526,
-        "captured_at": "2026-11-09T01:00:54Z"
-      },
-      {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Jaylon Tyson G Nov 11 Out Nov 8: Tyson (ankle) is out for Monday's game against the Hornets.",
-        "relevance_score": 0.0,
-        "captured_at": "2026-11-09T01:00:54Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller is OUT for Monday's (Nov. 9) game against",
+        "relevance_score": 0.1559,
+        "captured_at": "2026-11-07"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -131,10 +131,10 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "READY_IF_KEY_PROVIDED",
+    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (29 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
-    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }

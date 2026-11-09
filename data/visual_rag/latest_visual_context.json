@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
-  "indexed_documents_count": 34,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
+      "relevance_score": 0.2311,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Jarrett Allen C Nov 9 Day-To-Day Nov 8: Allen (knee) is questionable for Monday's game against Charlotte.",
-      "relevance_score": 0.3353,
-      "captured_at": "2026-11-09T01:02:42Z"
+      "relevance_score": 0.23,
+      "captured_at": "2026-11-09T01:59:40Z"
     },
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 8: Diabate (quadriceps) is questionable for Monday's game against the Cavaliers.",
-      "relevance_score": 0.3353,
-      "captured_at": "2026-11-09T01:02:42Z"
+      "relevance_score": 0.2173,
+      "captured_at": "2026-11-09T01:59:40Z"
     },
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Mitchell Robinson C Nov 8 Day-To-Day Nov 8: Robinson (illness) is questionable for Sunday's game versus Milwaukee, Bobby Krivitsky of Forbes.com reports.",
-      "relevance_score": 0.2652,
-      "captured_at": "2026-11-09T01:02:42Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
+      "relevance_score": 0.205,
+      "captured_at": "2026-11-08"
     },
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Grant Nelson F Nov 10 Day-To-Day Nov 8: Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports.",
-      "relevance_score": 0.2215,
-      "captured_at": "2026-11-09T01:02:42Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
+      "relevance_score": 0.2004,
+      "captured_at": "2026-11-08"
     },
     {
-      "source": "espn_nba_news_feed",
-      "snippet": "Jalen Duren to miss at least two more weeks with hamstring injury. Jalen Duren will miss at least two more weeks because of a hamstring injury, the Detroit Pistons announced Sunday.",
-      "relevance_score": 0.1246,
-      "captured_at": "2026-11-08T23:28:50Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Saturday's (Nov. 7) game against the Wizards.",
+      "relevance_score": 0.1571,
+      "captured_at": "2026-11-08"
     },
     {
-      "source": "espn_nba_news_feed",
-      "snippet": "Nuggets' starters all questionable vs. Rockets after delays leaving Mexico. Hampered by plane delays leaving Mexico City, the Nuggets have listed their entire starting lineup as questionable for Monday's game in Houston.",
-      "relevance_score": 0.119,
-      "captured_at": "2026-11-08T23:37:36Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Saturday's (Nov. 7) game against the Wizards.",
+      "relevance_score": 0.157,
+      "captured_at": "2026-11-08"
     },
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Jock Landale C Nov 9 Out Nov 8: Landale (hip) is listed as questionable for Monday's game against the Lakers.",
-      "relevance_score": 0.0526,
-      "captured_at": "2026-11-09T01:02:42Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Jaylon Tyson G Nov 11 Out Nov 8: Tyson (ankle) is out for Monday's game against the Hornets.",
-      "relevance_score": 0.0,
-      "captured_at": "2026-11-09T01:02:42Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller is OUT for Monday's (Nov. 9) game against",
+      "relevance_score": 0.1559,
+      "captured_at": "2026-11-07"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
