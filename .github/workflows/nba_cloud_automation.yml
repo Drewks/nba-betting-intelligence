@@ -2,26 +2,18 @@ name: NBA Betting Intelligence — Cloud Auto-Trading & Calibration (S/100 Virtu
 
 on:
   schedule:
-    # 1. Post-Partido + Liquidación + Auto-Calibración (Adelantado para compensar cola de GitHub Actions):
-    # 06:17 UTC (01:17 AM Perú) -> Ejecuta ~08:30-10:00 UTC con cola típica
-    - cron: "17 6 * * *"
-    # 1b. Respaldo Matutino Liquidación: 10:47 UTC (05:47 AM Perú)
-    - cron: "47 10 * * *"
-    # 2. Pre-Partido Principal (Line Shopping 32 casas + Pronósticos tempranos):
-    # 17:23 UTC (12:23 PM Perú) -> Ejecuta ~19:50-20:30 UTC antes de los partidos
-    - cron: "23 17 * * *"
-    # 2b. Ventana Exacta T-6H Cuotas Perú (6 horas antes del tipoff de partidos 19:00 PET / 00:00 UTC):
-    # 18:00 UTC (01:00 PM Perú) -> Extrae cuotas exactas de RETAbet, Coolbet, Betsson, Apuesta Total y Pinnacle
-    - cron: "0 18 * * *"
-    # 3. Cierre Pre-Tipoff Ola 1 (Partidos 00:00 UTC / 7:00 PM EST):
-    # 20:41 UTC (03:41 PM Perú) -> Ejecuta ~23:15-23:45 UTC (CLV exacto 15-45m pre-tipoff)
-    - cron: "41 20 * * *"
-    # 4. Cierre Pre-Tipoff Ola 2 (Partidos 01:00 - 01:30 UTC):
-    # 22:47 UTC (05:47 PM Perú) -> Ejecuta ~01:10-01:35 UTC
-    - cron: "47 22 * * *"
-    # 5. Cierre Pre-Tipoff Ola 3 (Partidos Costa Oeste 03:00 - 03:30 UTC):
-    # 00:37 UTC (07:37 PM Perú) -> Ejecuta ~02:35-02:45 UTC
-    - cron: "37 0 * * *"
+    # 1. Apertura de Mercado (Line Shopping 32 casas + Player Props + RETAbet SGPs):
+    # 15:15 UTC -> 10:15 AM Perú
+    - cron: "15 15 * * *"
+    # 2. Injury Sniper T-2H (Reporte oficial de bajas NBA + Líneas desfasadas retail):
+    # 22:15 UTC -> 05:15 PM Perú
+    - cron: "15 22 * * *"
+    # 3. Cierre Pre-Tipoff T-25m Ola 1 (Quintetos confirmados + Stale Lines + Surebets):
+    # 23:35 UTC -> 06:35 PM Perú
+    - cron: "35 23 * * *"
+    # 4. Liquidación Nocturna Oficial ESPN + Reconciliación CPPI S/100 + Resumen Diario Telegram:
+    # 06:45 UTC -> 01:45 AM Perú
+    - cron: "45 6 * * *"
   workflow_dispatch:
     inputs:
       cycle_mode:
@@ -82,18 +74,18 @@ jobs:
           SCHEDULE="${{ github.event.schedule }}"
           echo "Disparador: schedule='$SCHEDULE' | input='$CYCLE_MODE'"
 
-          if [ "$CYCLE_MODE" = "settle" ] || [ "$SCHEDULE" = "17 6 * * *" ] || [ "$SCHEDULE" = "47 10 * * *" ]; then
-            echo "🌙 [VENTANA NOCTURNA] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
+          if [ "$CYCLE_MODE" = "settle" ] || [ "$SCHEDULE" = "45 6 * * *" ]; then
+            echo "🌙 [VENTANA NOCTURNA 01:45 AM PET] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
             uv run python scripts/run_automated_scheduler.py --run-now settle
-          elif [ "$CYCLE_MODE" = "morning" ] || [ "$SCHEDULE" = "23 17 * * *" ]; then
-            echo "☀️ [VENTANA MATUTINA] Apertura de Mercado, Player Props, RETAbet SGPs y Alertas Telegram"
+          elif [ "$CYCLE_MODE" = "morning" ] || [ "$SCHEDULE" = "15 15 * * *" ]; then
+            echo "☀️ [VENTANA MATUTINA 10:15 AM PET] Apertura de Mercado, Player Props, RETAbet SGPs y Alertas Telegram"
             uv run python scripts/run_automated_scheduler.py --run-now morning
-          elif [ "$CYCLE_MODE" = "sniper" ] || [ -n "$SCHEDULE" ]; then
+          elif [ "$CYCLE_MODE" = "sniper" ] || [ "$SCHEDULE" = "15 22 * * *" ] || [ "$SCHEDULE" = "35 23 * * *" ]; then
             echo "🎯 [VENTANA INJURY SNIPER & CUOTAS PERÚ] Bajas T-2h/T-30m y Stale Lines / Surebets"
             uv run python scripts/run_automated_scheduler.py --run-now sniper
             uv run python scripts/run_live_odds_monitor.py --once
           else
-            echo "🚀 [MODO COMPLETO] Ejecutando apertura matutina y escaneo de cuotas"
+            echo "🚀 [MODO MANUAL / COMPLETO] Ejecutando apertura matutina y escaneo de cuotas"
             uv run python scripts/run_automated_scheduler.py --run-now morning
             uv run python scripts/run_live_odds_monitor.py --once
           fi

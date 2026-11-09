@@ -267,7 +267,7 @@ class NBADailyScheduler:
         logger.info(f"Zona Horaria         : Perú Time (America/Lima / UTC-5)")
         logger.info(f"Hora Actual en Lima  : {get_peru_time().strftime('%Y-%m-%d %H:%M:%S PET')}")
         logger.info(f"Estado Telegram Bot  : {'EN VIVO (TELEGRAM BOT API)' if self.bot.is_live else 'DRY-RUN / LOCAL'}")
-        logger.info(f"Ventanas Programadas : 10:00 PET (Apertura) | 17:30 PET (Sniper) | 23:30 PET (Liquidación)")
+        logger.info(f"Ventanas Programadas : 10:15 PET (Apertura) | 17:15 PET (Sniper T-2H) | 18:35 PET (Pre-Tipoff) | 01:45 PET (Liquidación)")
         logger.info("=" * 80)
 
         executed_today: set[tuple[str, str]] = set()
@@ -279,18 +279,23 @@ class NBADailyScheduler:
                 hour = now_pet.hour
                 minute = now_pet.minute
 
-                # Morning Window: 10:00 - 10:05 PET
-                if hour == 10 and minute < 10 and (today_str, "morning") not in executed_today:
+                # 1. Morning Window: 10:15 - 10:25 PET
+                if hour == 10 and 15 <= minute < 25 and (today_str, "morning") not in executed_today:
                     self.execute_morning_cycle()
                     executed_today.add((today_str, "morning"))
 
-                # Sniper Window: 17:30 - 17:40 PET
-                elif hour == 17 and 30 <= minute < 40 and (today_str, "sniper") not in executed_today:
+                # 2. Injury Sniper T-2H: 17:15 - 17:25 PET
+                elif hour == 17 and 15 <= minute < 25 and (today_str, "sniper_t2h") not in executed_today:
                     self.execute_sniper_cycle()
-                    executed_today.add((today_str, "sniper"))
+                    executed_today.add((today_str, "sniper_t2h"))
 
-                # Night Settlement Window: 23:30 - 23:40 PET
-                elif hour == 23 and 30 <= minute < 40 and (today_str, "settle") not in executed_today:
+                # 3. Pre-Tipoff T-25m: 18:35 - 18:45 PET
+                elif hour == 18 and 35 <= minute < 45 and (today_str, "sniper_pre") not in executed_today:
+                    self.execute_sniper_cycle()
+                    executed_today.add((today_str, "sniper_pre"))
+
+                # 4. Night Settlement Window: 01:45 - 01:55 PET
+                elif hour == 1 and 45 <= minute < 55 and (today_str, "settle") not in executed_today:
                     self.execute_nightly_settlement_cycle()
                     executed_today.add((today_str, "settle"))
 
