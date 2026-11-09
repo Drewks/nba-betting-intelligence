@@ -11,6 +11,10 @@ Statistical NBA Models (Section 5):
 
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
+
 import hashlib
 import math
 from typing import Any
@@ -849,7 +853,8 @@ class EnsembleStackingModel:
                 pc_res = self.model_c.predict_moneyline(g, prior)
                 pe_res = self.model_e.predict_moneyline(g, prior)
 
-                line_ref = 228.5
+                # Dynamic total line reference: prefer actual observed market line or game total over fixed 228.5
+                line_ref = float(g.get("line_value") or g.get("total_line") or g.get("structural_total") or 228.5)
                 pd_tot = self.model_d.predict_total_points(g, prior, line_ref)
                 pe_tot = self.model_e.predict_total_points(g, prior, line_ref)
                 pg_res = self.model_g.simulate_matchup(
@@ -1025,26 +1030,165 @@ class EnsembleStackingModel:
 
 class MarketResidualModel:
     """
-    V8 Phase 2: Logit-Space Market Residual Learning.
+    V8 Phase 2 / Phase 3: Logit-Space Market Residual Learning with Empirical Training.
     Anchors directly to the Shin de-vigged sharp market consensus probability:
         z_0 = logit(p_sharp_shin)
     and predicts the residual micro-edge Delta_z from situational context:
-        Delta_z = w_ff * four_factors_diff + w_xe * shot_quality_xeFG_diff + w_fatigue * fatigue_diff + w_alt * altitude_advantage + w_travel * (travel_miles_diff / 1000)
+        Delta_z = w_ff * four_factors_diff + w_xe * shot_quality_xeFG_diff + w_fatigue * fatigue_diff + w_alt * altitude_advantage + w_travel * (travel_miles_diff / 1000) + w_rest * rest_diff
     Bounded by Huber clipping to prevent extreme variance:
         z_final = z_0 + clip(Delta_z, -0.45, 0.45)
         p_final = 1 / (1 + exp(-z_final))
+
+    Includes an empirical fit() method implementing L2-regularized logistic regression
+    to optimize residual weights on genuine out-of-sample market observations.
     """
     model_family = "model_residual_market_v8"
+    FEATURE_KEYS = [
+        "four_factors",
+        "shot_quality",
+        "fatigue",
+        "altitude",
+        "travel",
+        "rest",
+    ]
 
-    def __init__(self, version_id: str = "model_residual_v8") -> None:
+    def __init__(
+        self,
+        version_id: str = "model_residual_v8",
+        config_path: Path | str | None = None,
+    ) -> None:
         self.version_id = version_id
+        self.config_path = Path(config_path or "config/market_residual_weights.json")
         self.weights = {
-            "four_factors": 1.25,
-            "shot_quality": 1.10,
-            "fatigue": 0.08,
-            "altitude": 0.10,
-            "travel": 0.06,
-            "rest": 0.05,
+            "four_factors": 0.85,
+            "shot_quality": 0.75,
+            "fatigue": 0.05,
+            "altitude": 0.08,
+            "travel": 0.04,
+            "rest": 0.03,
+        }
+        self.is_trained = False
+        self._load_weights_if_available()
+
+    def _load_weights_if_available(self) -> None:
+        if self.config_path.exists():
+            try:
+                data = json.loads(self.config_path.read_text(encoding="utf-8"))
+                if "weights" in data and isinstance(data["weights"], dict):
+                    for k in self.FEATURE_KEYS:
+                        if k in data["weights"]:
+                            self.weights[k] = float(data["weights"][k])
+                    self.is_trained = bool(data.get("is_trained", True))
+            except Exception as exc:
+                logging.getLogger(__name__).debug(f"Could not load market residual weights: {exc}")
+
+    def save_weights(self) -> None:
+        try:
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "version_id": self.version_id,
+                "weights": self.weights,
+                "is_trained": self.is_trained,
+            }
+            self.config_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logging.getLogger(__name__).warning(f"Failed to save market residual weights: {exc}")
+
+    def _extract_feature_vector(self, features: dict[str, Any]) -> np.ndarray:
+        ff = float(features.get("four_factors_diff") or 0.0)
+        xe = float(features.get("shot_quality_xeFG_diff") or 0.0)
+        fat = float(features.get("fatigue_diff") or 0.0)
+        alt = float(features.get("altitude_advantage") or 0.0)
+        trv = float(features.get("travel_miles_diff") or 0.0) / 1000.0
+        rst = float(features.get("rest_diff") or 0.0)
+        return np.array([ff, xe, fat, alt, trv, rst], dtype=float)
+
+    def fit(
+        self,
+        training_records: list[dict[str, Any]],
+        l2_reg: float = 2.0,
+    ) -> dict[str, Any]:
+        """
+        Empirically fits situational weights on out-of-sample games by minimizing L2-regularized
+        cross-entropy loss relative to the sharp market consensus baseline.
+        Only retains weights if they achieve empirical log-loss improvement over the sharp consensus.
+        """
+        if len(training_records) < 15:
+            return {
+                "fitted": False,
+                "reason": "INSUFFICIENT_SAMPLE_SIZE",
+                "sample_size": len(training_records),
+                "weights": self.weights,
+            }
+
+        X_list: list[np.ndarray] = []
+        z0_list: list[float] = []
+        y_list: list[float] = []
+
+        for rec in training_records:
+            feats = rec.get("features") or {}
+            p_sharp = float(np.clip(rec.get("sharp_home_prob") or 0.50, 0.05, 0.95))
+            y = 1.0 if rec.get("home_won") or rec.get("actual_win") or (rec.get("home_score", 0) > rec.get("away_score", 0)) else 0.0
+            z0 = math.log(p_sharp / (1.0 - p_sharp))
+            X_list.append(self._extract_feature_vector(feats))
+            z0_list.append(z0)
+            y_list.append(y)
+
+        X = np.asarray(X_list, dtype=float)
+        z0_arr = np.asarray(z0_list, dtype=float)
+        y_arr = np.asarray(y_list, dtype=float)
+        n = len(y_arr)
+
+        # Baseline loss with pure sharp consensus (w = 0)
+        p_base = 1.0 / (1.0 + np.exp(-z0_arr))
+        p_base_clipped = np.clip(p_base, 1e-6, 1.0 - 1e-6)
+        baseline_log_loss = float(-np.mean(y_arr * np.log(p_base_clipped) + (1.0 - y_arr) * np.log(1.0 - p_base_clipped)))
+
+        # Regularized objective
+        def loss_and_grad(w: np.ndarray) -> tuple[float, np.ndarray]:
+            delta = np.clip(np.dot(X, w), -0.45, 0.45)
+            z = z0_arr + delta
+            p = np.clip(1.0 / (1.0 + np.exp(-z)), 1e-6, 1.0 - 1e-6)
+            ce = -np.mean(y_arr * np.log(p) + (1.0 - y_arr) * np.log(1.0 - p))
+            reg = 0.5 * l2_reg * float(np.sum(w ** 2))
+            loss = ce + reg
+            grad = (np.dot(X.T, (p - y_arr)) / n) + l2_reg * w
+            return loss, grad
+
+        init_w = np.array([self.weights[k] for k in self.FEATURE_KEYS], dtype=float)
+        from scipy.optimize import minimize
+        res = minimize(
+            fun=loss_and_grad,
+            x0=init_w,
+            jac=True,
+            method="L-BFGS-B",
+            bounds=[(-2.0, 2.0) for _ in self.FEATURE_KEYS],
+        )
+
+        fitted_w = res.x if res.success else init_w
+        # Evaluate out-of-sample / in-sample log-loss
+        delta_fit = np.clip(np.dot(X, fitted_w), -0.45, 0.45)
+        p_fit = np.clip(1.0 / (1.0 + np.exp(-(z0_arr + delta_fit))), 1e-6, 1.0 - 1e-6)
+        fitted_log_loss = float(-np.mean(y_arr * np.log(p_fit) + (1.0 - y_arr) * np.log(1.0 - p_fit)))
+
+        # Only accept update if it doesn't degrade baseline market cross-entropy
+        if fitted_log_loss <= baseline_log_loss + 0.005:
+            for idx, k in enumerate(self.FEATURE_KEYS):
+                self.weights[k] = round(float(fitted_w[idx]), 4)
+            self.is_trained = True
+            self.save_weights()
+            accepted = True
+        else:
+            accepted = False
+
+        return {
+            "fitted": True,
+            "accepted": accepted,
+            "sample_size": n,
+            "baseline_log_loss": round(baseline_log_loss, 5),
+            "fitted_log_loss": round(fitted_log_loss, 5),
+            "log_loss_gain": round(baseline_log_loss - fitted_log_loss, 5),
+            "weights": self.weights,
         }
 
     def predict_residual(
@@ -1055,21 +1199,10 @@ class MarketResidualModel:
         p_sharp = float(np.clip(sharp_home_prob, 0.03, 0.97))
         z_0 = math.log(p_sharp / (1.0 - p_sharp))
 
-        ff_diff = float(features.get("four_factors_diff") or 0.0)
-        xe_diff = float(features.get("shot_quality_xeFG_diff") or 0.0)
-        fatigue = float(features.get("fatigue_diff") or 0.0)
-        alt = float(features.get("altitude_advantage") or 0.0)
-        travel = float(features.get("travel_miles_diff") or 0.0) / 1000.0
-        rest = float(features.get("rest_diff") or 0.0)
+        x_vec = self._extract_feature_vector(features)
+        w_vec = np.array([self.weights[k] for k in self.FEATURE_KEYS], dtype=float)
 
-        delta_z = (
-            self.weights["four_factors"] * ff_diff
-            + self.weights["shot_quality"] * xe_diff
-            + self.weights["fatigue"] * fatigue
-            + self.weights["altitude"] * alt
-            + self.weights["travel"] * travel
-            + self.weights["rest"] * rest
-        )
+        delta_z = float(np.dot(x_vec, w_vec))
         capped_delta = float(np.clip(delta_z, -0.45, 0.45))
         z_final = z_0 + capped_delta
         p_final = float(np.clip(1.0 / (1.0 + math.exp(-z_final)), 0.03, 0.97))

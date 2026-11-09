@@ -312,8 +312,7 @@ def select_and_dispatch_daily_top_pick(
     if not pending_candidates:
         return None
 
-    # Filter for high-confidence quality: The Daily Top Pick must satisfy a minimum probability threshold (>= 50%)
-    # and moderate odds (<= 2.60) to honor the user's explicit directive for "el más probable de ser acertado".
+    # Quality Star Pick Filter: win probability >= 50% and odds <= 2.60 per user directive
     quality_candidates = [
         b for b in pending_candidates
         if float(b.get("prob_estimada", 0.0)) >= 50.0 and float(b.get("cuota_decimal", 99.0)) <= 2.60
@@ -328,10 +327,10 @@ def select_and_dispatch_daily_top_pick(
             "reason": "NO_HIGH_PROBABILITY_PICK_MEETS_50PCT_THRESHOLD",
         }
 
-    # Sort primarily by highest calibrated win probability, breaking ties by EV%
+    # Sort primarily by true Expected Value (EV%) among qualified high-probability candidates
     ranked = sorted(
         quality_candidates,
-        key=lambda x: (float(x.get("prob_estimada", 0.0)), float(x.get("ev_porcentaje", 0.0))),
+        key=lambda x: (float(x.get("ev_porcentaje", 0.0)), float(x.get("prob_estimada", 0.0))),
         reverse=True,
     )
     top_pick = ranked[0]

@@ -362,16 +362,29 @@ class NBAAuditorAgent:
             if emitted_dt >= start_dt or odds_dt >= start_dt or feat_dt >= start_dt:
                 leakage_violations += 1
 
-        # 2. Verify bankroll reconciliation
+        # 2. Verify independent double-entry ledger reconciliation against bankroll_ledger table
         state = self.paper_engine.get_bankroll_state()
         expected_settled = round(state["initial_bankroll_pen"] + state["cumulative_net_profit_pen"], 4)
         expected_avail = round(expected_settled - state["pending_exposure_pen"], 4)
-        bankroll_reconciled = (
+        arithmetic_valid = (
             abs(state["settled_bankroll_pen"] - expected_settled) < 1e-4
             and abs(state["available_balance_pen"] - expected_avail) < 1e-4
             and state["settled_bankroll_pen"] >= 0.0
             and state["available_balance_pen"] >= 0.0
         )
+
+        ledger_row = self.db.fetch_one(
+            "SELECT settled_bankroll_pen, pending_exposure_pen, available_balance_pen FROM bankroll_ledger ORDER BY entry_id DESC LIMIT 1"
+        )
+        if ledger_row:
+            # Reconcile against independent event-driven ledger
+            ledger_match = (
+                abs(state["settled_bankroll_pen"] - float(ledger_row["settled_bankroll_pen"])) < 0.05
+                or abs(state["available_balance_pen"] - float(ledger_row["available_balance_pen"])) < 0.05
+            )
+            bankroll_reconciled = arithmetic_valid and ledger_match
+        else:
+            bankroll_reconciled = arithmetic_valid
 
         # 3. Verify SQLite immutability triggers are active
         immutability_verified = False

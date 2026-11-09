@@ -333,4 +333,8 @@ DDL_STATEMENTS = [
         SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Player prop picks cannot be deleted from audit history.');
     END;
     """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_dedup
+    ON predictions (game_id, market, selection, coalesce(line_value, -999.0), model_version_id);
+    """,
 ]

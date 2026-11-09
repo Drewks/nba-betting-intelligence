@@ -498,10 +498,11 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     steam_delta=s_delta,
                     conformal_interval=conf_int,
                 )
-                pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{uuid.uuid4().hex[:6].upper()}"
+                line_str = str(o.get("line_value") or "ML").replace(".", "_")
+                pred_id = f"PRED_{g['game_id']}_{mkt}_{sel}_{line_str}_{m_ver}"
                 db.execute_insert(
                     """
-                    INSERT INTO predictions (
+                    INSERT OR IGNORE INTO predictions (
                         prediction_id, game_id, market, selection, line_value,
                         model_version_id, raw_probability, calibrated_probability,
                         uncertainty_std, implied_prob_gross, implied_prob_fair,

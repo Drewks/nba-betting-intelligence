@@ -21,7 +21,8 @@ from src.agents.specialized_agents import (
     VisualResearcherAgent,
 )
 from src.backtesting.backtester import WalkForwardBacktester
-from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter, SyntheticFixtureAdapter
+from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
+from src.ingestion.synthetic_adapter import SyntheticFixtureAdapter
 from src.paper_trading.engine import PaperTradingEngine
 from src.reporting.reporter import (
     export_bets_and_tracking_dashboard,

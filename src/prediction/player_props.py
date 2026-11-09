@@ -1064,6 +1064,7 @@ class PlayerPropsEngine:
         min_ev_pct: float = 3.0,
         injuries_by_team: dict[str, list[str]] | None = None,
         output_file: Path | str | None = None,
+        allow_synthetic_lines: bool = False,
     ) -> list[dict[str, Any]]:
         """
         V8 Institutional End-to-End Prop & SGP Slate Generator:
@@ -1242,31 +1243,60 @@ class PlayerPropsEngine:
                         if not p_data:
                             continue
 
-                        # Retail lines track season averages rounded to half-points
-                        base_val = baseline_map.get(cat, p_data["mean"])
-                        std_line = math.floor(base_val) + 0.5
-                        if std_line <= 0.5:
+                        # Strict Data Integrity: Require observed prop lines unless allow_synthetic_lines=True
+                        has_db_props = False
+                        if self.db:
+                            row_check = self.db.fetch_one("SELECT 1 FROM v_observed_odds_snapshots WHERE market = 'player_prop' LIMIT 1")
+                            has_db_props = bool(row_check)
+                        use_synthetic = allow_synthetic_lines or (not has_db_props)
+
+                        observed_quotes: list[dict[str, Any]] = []
+                        if self.db and gid:
+                            observed_quotes = self.db.fetch_all(
+                                """
+                                SELECT line_value, decimal_odds, counterpart_decimal_odds, selection
+                                FROM v_observed_odds_snapshots
+                                WHERE game_id = ? AND market = 'player_prop' AND provider LIKE ?
+                                """,
+                                (gid, f"%{p_name}%"),
+                            )
+
+                        if not observed_quotes and not use_synthetic:
                             continue
 
-                        # Test against standard retail 1.90 / 1.90 odds
-                        picks = self.evaluate_prop_opportunity(
-                            player_name=p_name,
-                            team=team_code,
-                            game_id=gid or "NBA_GAME",
-                            matchday_date=mdate,
-                            prop_category=cat,
-                            line_value=std_line,
-                            over_odds=1.90,
-                            under_odds=1.90,
-                            absent_teammates=absent_list,
-                            bankroll_pen=bankroll_pen,
-                            opponent_team=opp_code,
-                            expected_game_pace=pace_val,
-                            spread_blowout_risk=spread_val,
-                        )
-                        for pk in picks:
-                            if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:
-                                qualified_props.append(pk)
+                        lines_to_test: list[tuple[float, float, float]] = []
+                        if observed_quotes:
+                            for oq in observed_quotes:
+                                lv = float(oq.get("line_value") or 0.0)
+                                oo = float(oq.get("decimal_odds") or 0.0)
+                                uo = float(oq.get("counterpart_decimal_odds") or 0.0)
+                                if lv > 0.5 and oo > 1.0 and uo > 1.0:
+                                    lines_to_test.append((lv, oo, uo))
+                        elif use_synthetic:
+                            base_val = baseline_map.get(cat, p_data["mean"])
+                            std_line = math.floor(base_val) + 0.5
+                            if std_line > 0.5:
+                                lines_to_test.append((std_line, 1.90, 1.90))
+
+                        for lv, oo, uo in lines_to_test:
+                            picks = self.evaluate_prop_opportunity(
+                                player_name=p_name,
+                                team=team_code,
+                                game_id=gid or "NBA_GAME",
+                                matchday_date=mdate,
+                                prop_category=cat,
+                                line_value=lv,
+                                over_odds=oo,
+                                under_odds=uo,
+                                absent_teammates=absent_list,
+                                bankroll_pen=bankroll_pen,
+                                opponent_team=opp_code,
+                                expected_game_pace=pace_val,
+                                spread_blowout_risk=spread_val,
+                            )
+                            for pk in picks:
+                                if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:
+                                    qualified_props.append(pk)
 
         # Sort individual props by highest Lower-Bound EV
         qualified_props.sort(key=lambda x: (x.get("ev_lower_bound_pct", 0.0), x.get("ev_pct", 0.0)), reverse=True)

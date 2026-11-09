@@ -427,17 +427,20 @@ def optimize_simultaneous_kelly_portfolio(
         else:
             f_star = max(0.0, (p_val * (b_val + 1.0) - 1.0) / b_val)
             eff_f = min(effective_max_indiv, f_star * effective_mult)
-            max_s = bankroll_pen * effective_max_indiv
-            if p_val < 0.50:
-                t_cap, t_min = 1.75, 1.00
-            elif p_val < 0.58:
-                t_cap, t_min = 3.35, 2.00
-            elif p_val < 0.65:
-                t_cap, t_min = 4.75, 3.50
+            if eff_f <= 0.0:
+                stake = 0.00
             else:
-                t_cap, t_min = max_s, 4.80
-            raw_s = bankroll_pen * eff_f
-            stake = round(max(t_min, min(t_cap, raw_s)), 2)
+                max_s = bankroll_pen * effective_max_indiv
+                if p_val < 0.50:
+                    t_cap, t_min = min(max_s, 1.75), 1.00
+                elif p_val < 0.58:
+                    t_cap, t_min = min(max_s, 3.35), min(max_s, 2.00)
+                elif p_val < 0.65:
+                    t_cap, t_min = min(max_s, 4.75), min(max_s, 3.50)
+                else:
+                    t_cap, t_min = max_s, min(max_s, 4.80)
+                raw_s = bankroll_pen * eff_f
+                stake = round(max(t_min, min(t_cap, raw_s)), 2)
         enriched[0]["kelly_optimal_fraction"] = round(float(eff_f), 5)
         enriched[0]["kelly_recommended_stake_pen"] = stake
         return enriched
@@ -477,13 +480,13 @@ def optimize_simultaneous_kelly_portfolio(
         else:
             max_s = bankroll_pen * effective_max_indiv
             if p_c < 0.50:
-                t_cap, t_min = 1.75, 1.00
+                t_cap, t_min = min(max_s, 1.75), 1.00
             elif p_c < 0.58:
-                t_cap, t_min = 3.35, 2.00
+                t_cap, t_min = min(max_s, 3.35), min(max_s, 2.00)
             elif p_c < 0.65:
-                t_cap, t_min = 4.75, 3.50
+                t_cap, t_min = min(max_s, 4.75), min(max_s, 3.50)
             else:
-                t_cap, t_min = max_s, 4.80
+                t_cap, t_min = max_s, min(max_s, 4.80)
             raw_stake = bankroll_pen * frac
             stake = round(max(t_min, min(t_cap, raw_stake)), 2)
         c["kelly_optimal_fraction"] = round(frac, 5)

@@ -28,9 +28,6 @@ import uuid
 
 import httpx
 
-from src.ingestion.peru_sportsbooks import (
-    calculate_peru_odds_comparison,
-)
 from src.ingestion.stale_line_hunter import StaleLineHunter
 from src.reporting.telegram_bot import TelegramAlertBot
 from src.storage.db import DatabaseManager
@@ -53,7 +50,8 @@ class LiveGameOddsQuote:
     total_over_odds: float | None = None
     captured_at: str = ""
     source: str = "LIVE_EXTRACTOR"
-    is_observed: bool = False
+    is_observed: bool = True
+    source_type: str = "OBSERVED"
 
 
 class LivePeruOddsScraper:
@@ -100,16 +98,19 @@ class LivePeruOddsScraper:
                     for ev in data.get("events", []):
                         ev_name = ev.get("name", "").upper()
                         if home_team in ev_name or away_team in ev_name:
-                            h_odds = float(ev.get("home_odds", 1.90))
-                            a_odds = float(ev.get("away_odds", 1.90))
-                            return LiveGameOddsQuote(
-                                book_id="retabet_pe",
-                                book_name="RETAbet Perú",
-                                home_odds=h_odds,
-                                away_odds=a_odds,
-                                captured_at=now_str,
-                                source="RETAbet API Direct",
-                            )
+                            h_raw = ev.get("home_odds")
+                            a_raw = ev.get("away_odds")
+                            if h_raw is not None and a_raw is not None and float(h_raw) > 1.0 and float(a_raw) > 1.0:
+                                return LiveGameOddsQuote(
+                                    book_id="retabet_pe",
+                                    book_name="RETAbet Perú",
+                                    home_odds=float(h_raw),
+                                    away_odds=float(a_raw),
+                                    captured_at=now_str,
+                                    source="RETAbet API Direct",
+                                    is_observed=True,
+                                    source_type="OBSERVED",
+                                )
         except Exception as exc:
             logger.debug(f"RETAbet live fetch failed: {exc}")
         return None
@@ -129,15 +130,18 @@ class LivePeruOddsScraper:
                     for ev in data.get("events", []):
                         ev_name = ev.get("name", "").upper()
                         if home_team in ev_name or away_team in ev_name:
-                            prices = ev.get("prices", [1.90, 1.90])
-                            return LiveGameOddsQuote(
-                                book_id="betsson_pe",
-                                book_name="Betsson Perú",
-                                home_odds=float(prices[0]),
-                                away_odds=float(prices[1]),
-                                captured_at=now_str,
-                                source="Betsson API Direct",
-                            )
+                            prices = ev.get("prices")
+                            if prices and len(prices) >= 2 and float(prices[0]) > 1.0 and float(prices[1]) > 1.0:
+                                return LiveGameOddsQuote(
+                                    book_id="betsson_pe",
+                                    book_name="Betsson Perú",
+                                    home_odds=float(prices[0]),
+                                    away_odds=float(prices[1]),
+                                    captured_at=now_str,
+                                    source="Betsson API Direct",
+                                    is_observed=True,
+                                    source_type="OBSERVED",
+                                )
         except Exception as exc:
             logger.debug(f"Betsson live fetch failed: {exc}")
         return None
@@ -160,117 +164,123 @@ class LivePeruOddsScraper:
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         peru_time_str = (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M PET")
 
-        # 1. Base comparison using market benchmark
-        h_bench = sharp_home_odds or 1.90
-        a_bench = sharp_away_odds or 1.90
-        comp = calculate_peru_odds_comparison(
-            p_home_fair=0.50,
-            p_away_fair=0.50,
-            benchmark_home_odds=h_bench,
-            benchmark_away_odds=a_bench,
-        )
-
+        # 1. Base comparison using genuine market benchmark (no fake 1.90 fallback)
+        from src.ingestion.peru_sportsbooks import calculate_peru_odds_comparison
         quotes_by_book: dict[str, LiveGameOddsQuote] = {}
+        h_bench = float(sharp_home_odds) if sharp_home_odds and sharp_home_odds > 1.0 else None
+        a_bench = float(sharp_away_odds) if sharp_away_odds and sharp_away_odds > 1.0 else None
 
-        # 2. Populate quotes for all Peruvian books in catalog
-        for b_info in comp["books"]:
-            bid = b_info["id"]
-            bname = b_info["name"]
-            h_odds = float(b_info["home_odds"])
-            a_odds = float(b_info["away_odds"])
-
-            # Attempt live API connection for key retail books
-            live_q: LiveGameOddsQuote | None = None
-            if bid == "retabet_pe":
-                live_q = self.fetch_live_retabet_odds(home_team, away_team)
-            elif bid == "betsson_pe":
-                live_q = self.fetch_live_betsson_odds(home_team, away_team)
-
-            if live_q:
-                quotes_by_book[bid] = live_q
-            else:
+        if h_bench is not None and a_bench is not None:
+            comp = calculate_peru_odds_comparison(
+                p_home_fair=0.50,
+                p_away_fair=0.50,
+                benchmark_home_odds=h_bench,
+                benchmark_away_odds=a_bench,
+            )
+            for b_info in comp.get("books", []):
+                bid = b_info["id"]
                 quotes_by_book[bid] = LiveGameOddsQuote(
                     book_id=bid,
-                    book_name=bname,
-                    home_odds=h_odds,
-                    away_odds=a_odds,
+                    book_name=b_info["name"],
+                    home_odds=float(b_info["home_odds"]),
+                    away_odds=float(b_info["away_odds"]),
                     captured_at=now_str,
-                    source="Peruvian Calibrated Feed",
+                    source="Peruvian Retail Odds Comparator",
+                    is_observed=False,
+                    source_type="DERIVED",
                 )
+            quotes_by_book["pinnacle_pe"] = LiveGameOddsQuote(
+                book_id="pinnacle_pe",
+                book_name="Pinnacle",
+                home_odds=round(h_bench, 2),
+                away_odds=round(a_bench, 2),
+                captured_at=now_str,
+                source="Pinnacle Sharp Market Maker",
+                is_observed=True,
+                source_type="OBSERVED",
+            )
 
-        # 3. Always include Pinnacle sharp benchmark
-        quotes_by_book["pinnacle_pe"] = LiveGameOddsQuote(
-            book_id="pinnacle_pe",
-            book_name="Pinnacle",
-            home_odds=round(h_bench, 2),
-            away_odds=round(a_bench, 2),
-            captured_at=now_str,
-            source="Pinnacle Sharp Market Maker",
-        )
+        # 2. Populate genuine live quotes from retail scrapers if available
+        live_ret = self.fetch_live_retabet_odds(home_team, away_team)
+        if live_ret:
+            quotes_by_book["retabet_pe"] = live_ret
+
+        live_bet = self.fetch_live_betsson_odds(home_team, away_team)
+        if live_bet:
+            quotes_by_book["betsson_pe"] = live_bet
 
         # 4. Check for Stale Lines (retail book lagging behind sharp Pinnacle odds)
         stale_opportunities: list[dict[str, Any]] = []
-        sharp_quote = quotes_by_book["pinnacle_pe"]
+        sharp_quote = quotes_by_book.get("pinnacle_pe")
 
-        retail_home_list = [
-            {"bookmaker": q.book_name, "decimal_odds": q.home_odds, "selection": "HOME"}
-            for bid, q in quotes_by_book.items()
-            if bid != "pinnacle_pe"
-        ]
-        retail_away_list = [
-            {"bookmaker": q.book_name, "decimal_odds": q.away_odds, "selection": "AWAY"}
-            for bid, q in quotes_by_book.items()
-            if bid != "pinnacle_pe"
-        ]
+        if sharp_quote:
+            retail_home_list = [
+                {"bookmaker": q.book_name, "decimal_odds": q.home_odds, "selection": "HOME"}
+                for bid, q in quotes_by_book.items()
+                if bid != "pinnacle_pe"
+            ]
+            retail_away_list = [
+                {"bookmaker": q.book_name, "decimal_odds": q.away_odds, "selection": "AWAY"}
+                for bid, q in quotes_by_book.items()
+                if bid != "pinnacle_pe"
+            ]
 
-        sharp_home_spec = {
-            "bookmaker": "Pinnacle",
-            "market": "moneyline",
-            "selection": "HOME",
-            "decimal_odds": sharp_quote.home_odds,
-        }
-        sharp_away_spec = {
-            "bookmaker": "Pinnacle",
-            "market": "moneyline",
-            "selection": "AWAY",
-            "decimal_odds": sharp_quote.away_odds,
-        }
+            sharp_home_spec = {
+                "bookmaker": "Pinnacle",
+                "market": "moneyline",
+                "selection": "HOME",
+                "decimal_odds": sharp_quote.home_odds,
+            }
+            sharp_away_spec = {
+                "bookmaker": "Pinnacle",
+                "market": "moneyline",
+                "selection": "AWAY",
+                "decimal_odds": sharp_quote.away_odds,
+            }
 
-        stale_home = self.hunter.identify_stale_lines(
-            game_id=game_id,
-            matchday_date=now.strftime("%Y-%m-%d"),
-            sharp_line=sharp_home_spec,
-            retail_lines=retail_home_list,
-            bankroll_pen=self.bankroll_pen,
-        )
-        stale_away = self.hunter.identify_stale_lines(
-            game_id=game_id,
-            matchday_date=now.strftime("%Y-%m-%d"),
-            sharp_line=sharp_away_spec,
-            retail_lines=retail_away_list,
-            bankroll_pen=self.bankroll_pen,
-        )
-        stale_opportunities.extend(stale_home)
-        stale_opportunities.extend(stale_away)
-
-        # 5. Check for Cross-Bookmaker Surebet Arbitrage
-        best_h = max(quotes_by_book.values(), key=lambda q: q.home_odds)
-        best_a = max(quotes_by_book.values(), key=lambda q: q.away_odds)
-
-        surebet_info: dict[str, Any] | None = None
-        inv_sum = (1.0 / best_h.home_odds) + (1.0 / best_a.away_odds)
-        if inv_sum < 0.999:
-            surebet_info = self.hunter.compute_surebet_arbitrage(
+            stale_home = self.hunter.identify_stale_lines(
                 game_id=game_id,
                 matchday_date=now.strftime("%Y-%m-%d"),
-                book_a=best_h.book_name,
-                selection_a=f"{home_team} (Local)",
-                odds_a=best_h.home_odds,
-                book_b=best_a.book_name,
-                selection_b=f"{away_team} (Visita)",
-                odds_b=best_a.away_odds,
-                total_investment_pen=self.bankroll_pen,
+                sharp_line=sharp_home_spec,
+                retail_lines=retail_home_list,
+                bankroll_pen=self.bankroll_pen,
             )
+            stale_away = self.hunter.identify_stale_lines(
+                game_id=game_id,
+                matchday_date=now.strftime("%Y-%m-%d"),
+                sharp_line=sharp_away_spec,
+                retail_lines=retail_away_list,
+                bankroll_pen=self.bankroll_pen,
+            )
+            stale_opportunities.extend(stale_home)
+            stale_opportunities.extend(stale_away)
+
+        # 5. Check for Cross-Bookmaker Surebet Arbitrage if at least 2 quotes exist
+        best_h: LiveGameOddsQuote | None = None
+        best_a: LiveGameOddsQuote | None = None
+        if len(quotes_by_book) >= 2:
+            best_h = max(quotes_by_book.values(), key=lambda q: q.home_odds)
+            best_a = max(quotes_by_book.values(), key=lambda q: q.away_odds)
+        elif quotes_by_book:
+            best_h = next(iter(quotes_by_book.values()))
+            best_a = best_h
+
+        surebet_info: dict[str, Any] | None = None
+        inv_sum = 1.0
+        if best_h is not None and best_a is not None:
+            inv_sum = (1.0 / best_h.home_odds) + (1.0 / best_a.away_odds)
+            if inv_sum < 0.999:
+                surebet_info = self.hunter.compute_surebet_arbitrage(
+                    game_id=game_id,
+                    matchday_date=now.strftime("%Y-%m-%d"),
+                    book_a=best_h.book_name,
+                    selection_a=f"{home_team} (Local)",
+                    odds_a=best_h.home_odds,
+                    book_b=best_a.book_name,
+                    selection_b=f"{away_team} (Visita)",
+                    odds_b=best_a.away_odds,
+                    total_investment_pen=self.bankroll_pen,
+                )
 
         # 6. Persist to SQLite odds_snapshots if db provided
         if self.db:
@@ -282,9 +292,9 @@ class LivePeruOddsScraper:
             "game_start_time": game_start_time,
             "captured_at_utc": now_str,
             "hora_captura_peru": peru_time_str,
-            "best_home": {"book": best_h.book_name, "odds": best_h.home_odds},
-            "best_away": {"book": best_a.book_name, "odds": best_a.away_odds},
-            "synthetic_margin_pct": round((inv_sum - 1.0) * 100.0, 2),
+            "best_home": {"book": best_h.book_name, "odds": best_h.home_odds} if best_h else None,
+            "best_away": {"book": best_a.book_name, "odds": best_a.away_odds} if best_a else None,
+            "synthetic_margin_pct": round((inv_sum - 1.0) * 100.0, 2) if (best_h and best_a) else 0.0,
             "quotes": {bid: asdict(q) for bid, q in quotes_by_book.items()},
             "stale_lines": stale_opportunities,
             "surebet": surebet_info,
