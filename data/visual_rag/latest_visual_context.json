@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
-  "indexed_documents_count": 34,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 8: Diabate (quadriceps) is questionable for Monday's game against the Cavaliers.",
-      "relevance_score": 0.3994,
-      "captured_at": "2026-11-09T05:50:10Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "UTA Keyonte George (PG) Day To Day (Ankle): George won't return Sunday due to an ankle injury.",
+      "relevance_score": 0.2693,
+      "captured_at": "2026-11-08"
     },
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DEN DeMar DeRozan (SF) Day To Day (Back): Braun is Questionable for Monday's (Nov. 9) game against Houston.",
+      "relevance_score": 0.2155,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DEN Nikola Jokić (C) Day To Day (Elbow): Jokic is Questionable for Monday's (Nov. 9) game against Houston.",
+      "relevance_score": 0.2101,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabate is Questionable for Monday's (Nov. 9) game against Cleveland.",
+      "relevance_score": 0.2099,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
+      "relevance_score": 0.2067,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Jarrett Allen C Nov 9 Day-To-Day Nov 8: Allen (knee) is questionable for Monday's game against Charlotte.",
-      "relevance_score": 0.3987,
-      "captured_at": "2026-11-09T05:50:10Z"
+      "relevance_score": 0.2029,
+      "captured_at": "2026-11-09T06:28:26Z"
     },
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Grant Nelson F Nov 10 Day-To-Day Nov 8: Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports.",
-      "relevance_score": 0.2645,
-      "captured_at": "2026-11-09T05:50:10Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis as Questionable for Monday's (Nov. 9) game against Detroit.",
+      "relevance_score": 0.2016,
+      "captured_at": "2026-11-08"
     },
     {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Jock Landale C Nov 9 Out Nov 8: Landale (hip) is listed as questionable for Monday's game against the Lakers.",
-      "relevance_score": 0.0714,
-      "captured_at": "2026-11-09T05:50:10Z"
-    },
-    {
-      "source": "espn_nba_news_feed",
-      "snippet": "Golden State Warriors guard Will Richard sidelined with torn ligament in thumb. Second-year Golden State Warriors guard Will Richard, who has been providing key minutes as both a starter and a reserve, has a torn ligamen",
-      "relevance_score": 0.05,
-      "captured_at": "2026-11-09T05:31:13Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Sergio de Larrea F Nov 12 Out Nov 5: De Larrea (knee) is out for Friday's game against Utah.",
-      "relevance_score": 0.0,
-      "captured_at": "2026-11-09T05:50:10Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Jaylon Tyson G Nov 11 Out Nov 8: Tyson (ankle) is out for Monday's game against the Hornets.",
-      "relevance_score": 0.0,
-      "captured_at": "2026-11-09T05:50:10Z"
-    },
-    {
-      "source": "playwright_espn_injuries_table",
-      "snippet": "Norman Powell G Nov 11 Out Nov 8: Powell (shoulder) has been ruled out for Sunday's game against the 76ers, Adam Aaronson of PhillyVoice.com reports.",
-      "relevance_score": 0.0,
-      "captured_at": "2026-11-09T05:50:10Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Monday's (Nov. 9) game against Dallas.",
+      "relevance_score": 0.2015,
+      "captured_at": "2026-11-08"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-09T01:59:44Z
+date_generated: 2026-11-09T06:28:30Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-09T01:59:44Z`
+- **Fecha de auditoría (UTC)**: `2026-11-09T06:28:30Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -18,12 +18,12 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 
 | Puerta de Validación | Estado | Valor Observado | Criterio Requerido |
 | :--- | :--- | :--- | :--- |
-| `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `27` | `>= 500` |
+| `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `29` | `>= 500` |
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
-| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.208562, 'baseline_brier': 0.249611, 'model_log_loss': 0.603919, 'baseline_log_loss': 0.694527}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
+| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.205676, 'baseline_brier': 0.25101, 'model_log_loss': 0.597132, 'baseline_log_loss': 0.697252}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
-| `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -0.0985, 'yield_pct': -0.086}` | `ROI > 0% and Yield > 0%` |
-| `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -31.4538, 'ci_95_upper_pct': 25.4653, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
+| `gate_5_positive_roi_and_yield` | **PASS** | `{'roi_pct': 9.2377, 'yield_pct': 7.9069}` | `ROI > 0% and Yield > 0%` |
+| `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -24.1477, 'ci_95_upper_pct': 38.3253, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
 | `gate_9_independent_audit_approved` | **PASS** | `True` | `True` |

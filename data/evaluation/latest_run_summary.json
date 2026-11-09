@@ -1,7 +1,7 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-09T01:59:36Z",
+  "timestamp_utc": "2026-11-09T06:28:22Z",
   "ingested_dates": [
     "2026-11-09",
     "2026-11-10",
@@ -9,44 +9,44 @@
     "2026-11-11"
   ],
   "closing_lines_promoted": 8,
-  "bets_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 0,
+  "bets_settled_in_cycle": 2,
+  "new_bets_placed_in_cycle": 2,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic"
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 99.9652,
-    "cumulative_net_profit_pen": -0.0348,
-    "pending_exposure_pen": 5.12,
-    "available_balance_pen": 94.8452,
-    "settled_bets_count": 27,
+    "settled_bankroll_pen": 103.6332,
+    "cumulative_net_profit_pen": 3.6332,
+    "pending_exposure_pen": 6.62,
+    "available_balance_pen": 97.0132,
+    "settled_bets_count": 29,
     "pending_bets_count": 3
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 99.9652,
-    "net_profit_pen": -0.0348,
-    "roi_pct": -0.0985,
-    "yield_pct": -0.086,
-    "settled_bets_count": 27,
-    "won_count": 13,
+    "current_settled_bankroll_pen": 103.6332,
+    "net_profit_pen": 3.6332,
+    "roi_pct": 9.2377,
+    "yield_pct": 7.9069,
+    "settled_bets_count": 29,
+    "won_count": 15,
     "lost_count": 14,
     "push_count": 0,
     "max_drawdown_pen": 6.2575,
-    "overall_brier_score": 0.208562,
-    "baseline_brier_score": 0.249611,
-    "overall_log_loss": 0.603919,
-    "baseline_log_loss": 0.694527,
-    "mean_clv_pct": 6.5063,
+    "overall_brier_score": 0.205676,
+    "baseline_brier_score": 0.25101,
+    "overall_log_loss": 0.597132,
+    "baseline_log_loss": 0.697252,
+    "mean_clv_pct": 8.8449,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 4,
+      "events_found_today": 7,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -63,7 +63,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-09T01:59:40Z",
+      "extracted_at": "2026-11-09T06:28:26Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -77,51 +77,51 @@
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "UTA Keyonte George (PG) Day To Day (Ankle): George won't return Sunday due to an ankle injury.",
+        "relevance_score": 0.2693,
+        "captured_at": "2026-11-08"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "DEN DeMar DeRozan (SF) Day To Day (Back): Braun is Questionable for Monday's (Nov. 9) game against Houston.",
+        "relevance_score": 0.2155,
+        "captured_at": "2026-11-08"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "DEN Nikola Jokić (C) Day To Day (Elbow): Jokic is Questionable for Monday's (Nov. 9) game against Houston.",
+        "relevance_score": 0.2101,
+        "captured_at": "2026-11-08"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabate is Questionable for Monday's (Nov. 9) game against Cleveland.",
+        "relevance_score": 0.2099,
+        "captured_at": "2026-11-08"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
-        "relevance_score": 0.2311,
+        "relevance_score": 0.2067,
         "captured_at": "2026-11-08"
       },
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Jarrett Allen C Nov 9 Day-To-Day Nov 8: Allen (knee) is questionable for Monday's game against Charlotte.",
-        "relevance_score": 0.23,
-        "captured_at": "2026-11-09T01:59:40Z"
-      },
-      {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 8: Diabate (quadriceps) is questionable for Monday's game against the Cavaliers.",
-        "relevance_score": 0.2173,
-        "captured_at": "2026-11-09T01:59:40Z"
+        "relevance_score": 0.2029,
+        "captured_at": "2026-11-09T06:28:26Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "WAS Deandre Ayton (C) Day To Day (Leg): Ayton did not return on Saturday's (Nov. 7) game against the Thunder.",
-        "relevance_score": 0.205,
+        "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis as Questionable for Monday's (Nov. 9) game against Detroit.",
+        "relevance_score": 0.2016,
         "captured_at": "2026-11-08"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell did not return on Saturday's (Nov. 7) game against the Nuggets.",
-        "relevance_score": 0.2004,
+        "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Monday's (Nov. 9) game against Dallas.",
+        "relevance_score": 0.2015,
         "captured_at": "2026-11-08"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "OKC Nikola Topić (PG) Day To Day (Back): Topic did not play on Saturday's (Nov. 7) game against the Wizards.",
-        "relevance_score": 0.1571,
-        "captured_at": "2026-11-08"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Saturday's (Nov. 7) game against the Wizards.",
-        "relevance_score": 0.157,
-        "captured_at": "2026-11-08"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHA Brandon Miller (SF) Day To Day (Groin): Miller is OUT for Monday's (Nov. 9) game against",
-        "relevance_score": 0.1559,
-        "captured_at": "2026-11-07"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

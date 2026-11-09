@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-09T01:59:44Z
+date_generated: 2026-11-09T06:28:30Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-09
@@ -9,7 +9,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-09
 
 ## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-09T01:59:44Z`
+- **Fecha de generación (UTC)**: `2026-11-09T06:28:30Z`
 - **Jornada evaluada**: `2026-11-09`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
 - **Partidos evaluados**: `5`
@@ -41,8 +41,8 @@ simulation_only: true
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261109_A985B0D3` | `ESPN_401909950_2026-11-09_NOP_AT_LAC` | `moneyline` | **HOME** | 1.917 | 0.5427 | +4.03% | S/2.00 | `PENDING` | PENDIENTE |
-| `BET_20261109_0E342DCD` | `ESPN_401909951_2026-11-09_MIA_AT_SAC` | `moneyline` | **AWAY** | 1.917 | 0.5353 | +2.62% | S/2.00 | `PENDING` | PENDIENTE |
+| `BET_20261109_A985B0D3` | `ESPN_401909950_2026-11-09_NOP_AT_LAC` | `moneyline` | **HOME** | 1.917 | 0.5427 | +4.03% | S/2.00 | `WON` | S/+1.83 |
+| `BET_20261109_0E342DCD` | `ESPN_401909951_2026-11-09_MIA_AT_SAC` | `moneyline` | **AWAY** | 1.917 | 0.5353 | +2.62% | S/2.00 | `WON` | S/+1.83 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909947_2026-11-09_UTA_AT_MIN` (`moneyline` - `HOME`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 38.9 pts (> 15); likely missing information, skipped.
