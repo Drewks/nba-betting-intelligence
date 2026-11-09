@@ -20,7 +20,7 @@
       "test_games": 2301
     },
     "data_attribution": "Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).",
-    "generated_at_utc": "2026-11-09T18:31:51Z",
+    "generated_at_utc": "2026-11-09T18:37:58Z",
     "moneyline_quality": {
       "model_raw": {
         "n": 2301,
@@ -68,6 +68,88 @@
         "n": 2301,
         "brier": 0.24324,
         "log_loss": 0.679434
+      }
+    },
+    "line_movement_signal": {
+      "2024-25": {
+        "moneyline": {
+          "n": 830,
+          "correlation": -0.0058,
+          "correlation_ci95": [
+            -0.0768,
+            0.0759
+          ],
+          "directional_hit_rate": 0.488
+        },
+        "totals": {
+          "n": 758,
+          "correlation": 0.2935,
+          "correlation_ci95": [
+            0.2262,
+            0.3561
+          ],
+          "directional_hit_rate": 0.5844
+        }
+      },
+      "2025-26": {
+        "moneyline": {
+          "n": 1301,
+          "correlation": 0.0899,
+          "correlation_ci95": [
+            0.017,
+            0.1779
+          ],
+          "directional_hit_rate": 0.5281
+        },
+        "totals": {
+          "n": 1166,
+          "correlation": 0.2253,
+          "correlation_ci95": [
+            0.1661,
+            0.2837
+          ],
+          "directional_hit_rate": 0.5669
+        }
+      },
+      "2026-27": {
+        "moneyline": {
+          "n": 143,
+          "correlation": 0.4015,
+          "correlation_ci95": [
+            0.2735,
+            0.5137
+          ],
+          "directional_hit_rate": 0.6224
+        },
+        "totals": {
+          "n": 129,
+          "correlation": 0.3274,
+          "correlation_ci95": [
+            0.1958,
+            0.464
+          ],
+          "directional_hit_rate": 0.6434
+        }
+      },
+      "ALL": {
+        "moneyline": {
+          "n": 2274,
+          "correlation": 0.0714,
+          "correlation_ci95": [
+            0.0136,
+            0.1234
+          ],
+          "directional_hit_rate": 0.5193
+        },
+        "totals": {
+          "n": 2053,
+          "correlation": 0.2664,
+          "correlation_ci95": [
+            0.2239,
+            0.3037
+          ],
+          "directional_hit_rate": 0.5782
+        }
       }
     },
     "betting": {
