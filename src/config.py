@@ -7,7 +7,7 @@ risk. Risk limits are additionally checked against the hard caps from AGENTS.md.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -55,10 +55,34 @@ class RiskConfig:
 
 
 @dataclass(frozen=True)
+class SubBankrollConfig:
+    enabled: bool = True
+    virtual_bankroll_initial_pen: float = 50.00
+    staking_mode: str = "dynamic_kelly"
+    kelly_fraction: float = 0.40
+    min_stake_pen: float = 0.50
+    max_stake_pen: float = 5.00
+    max_stake_bankroll_fraction: float = 0.10
+    max_parlays_per_matchday: int = 2
+    min_compound_ev_pct: float = 6.0
+
+
+@dataclass(frozen=True)
+class HybridAllocationConfig:
+    enabled: bool = True
+    totals_weight: float = 0.70
+    moneyline_weight: float = 0.30
+    max_totals_per_matchday: int = 2
+    max_moneyline_per_matchday: int = 1
+
+
+@dataclass(frozen=True)
 class AppConfig:
     model: ModelConfig
     risk: RiskConfig
     betting_allowed_source_types: tuple[str, ...]
+    sub_bankroll: SubBankrollConfig = field(default_factory=SubBankrollConfig)
+    hybrid_allocation: HybridAllocationConfig = field(default_factory=HybridAllocationConfig)
 
 
 def _require(section: dict[str, Any], key: str, section_name: str) -> Any:
@@ -128,7 +152,44 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     allowed = tuple(str(x) for x in (src.get("betting_allowed_source_types") or ["OBSERVED"]))
     if allowed != ("OBSERVED",):
         raise ConfigError("Only OBSERVED odds may be used for betting decisions")
-    return AppConfig(model=model, risk=risk, betting_allowed_source_types=allowed)
+
+    # Optional sub_bankroll section
+    sub_raw = raw.get("sub_bankroll_combinadas")
+    if sub_raw:
+        sub_bankroll = SubBankrollConfig(
+            enabled=bool(sub_raw.get("enabled", True)),
+            virtual_bankroll_initial_pen=_in_range("virtual_bankroll_initial_pen", sub_raw.get("virtual_bankroll_initial_pen", 50.0), 1.0, 1000.0),
+            staking_mode=str(sub_raw.get("staking_mode", "dynamic_kelly")),
+            kelly_fraction=_in_range("kelly_fraction", sub_raw.get("kelly_fraction", 0.40), 0.01, 0.50),
+            min_stake_pen=_in_range("min_stake_pen", sub_raw.get("min_stake_pen", 0.50), 0.10, 5.00),
+            max_stake_pen=_in_range("max_stake_pen", sub_raw.get("max_stake_pen", 5.00), 0.50, 25.00),
+            max_stake_bankroll_fraction=_in_range("max_stake_bankroll_fraction", sub_raw.get("max_stake_bankroll_fraction", 0.10), 0.01, 0.25),
+            max_parlays_per_matchday=int(_in_range("max_parlays_per_matchday", sub_raw.get("max_parlays_per_matchday", 2), 1, 10)),
+            min_compound_ev_pct=_in_range("min_compound_ev_pct", sub_raw.get("min_compound_ev_pct", 6.0), 1.0, 50.0),
+        )
+    else:
+        sub_bankroll = SubBankrollConfig()
+
+    # Optional hybrid_allocation section
+    hyb_raw = raw.get("hybrid_allocation")
+    if hyb_raw:
+        hybrid_allocation = HybridAllocationConfig(
+            enabled=bool(hyb_raw.get("enabled", True)),
+            totals_weight=_in_range("totals_weight", hyb_raw.get("totals_weight", 0.70), 0.0, 1.0),
+            moneyline_weight=_in_range("moneyline_weight", hyb_raw.get("moneyline_weight", 0.30), 0.0, 1.0),
+            max_totals_per_matchday=int(_in_range("max_totals_per_matchday", hyb_raw.get("max_totals_per_matchday", 2), 0, 10)),
+            max_moneyline_per_matchday=int(_in_range("max_moneyline_per_matchday", hyb_raw.get("max_moneyline_per_matchday", 1), 0, 10)),
+        )
+    else:
+        hybrid_allocation = HybridAllocationConfig()
+
+    return AppConfig(
+        model=model,
+        risk=risk,
+        betting_allowed_source_types=allowed,
+        sub_bankroll=sub_bankroll,
+        hybrid_allocation=hybrid_allocation,
+    )
 
 
 @lru_cache(maxsize=1)

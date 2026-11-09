@@ -25,6 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.paper_trading.engine import PaperTradingEngine
+from src.paper_trading.parlay_engine import ParlayTradingEngine
 from src.reporting.telegram_bot import TelegramAlertBot, _load_dotenv_if_present
 from src.storage.db import DatabaseManager
 
@@ -68,12 +69,22 @@ class TelegramInteractiveListener:
             db=self.db,
             initial_bankroll_pen=100.00,
             base_stake_pen=1.00,
-            max_stake_pen=2.00,
+            max_stake_pen=3.00,
             min_ev_threshold=0.05,
-            dynamic_conviction_staking=True,
+            dynamic_conviction_staking=False,
             enable_cppi_shield=True,
-            staking_mode="CONSERVATIVE",
+            staking_mode="FRACTIONAL_KELLY",
             exclude_synthetic=True,
+            hybrid_allocation_enabled=True,
+            max_totals_per_matchday=2,
+            max_moneyline_per_matchday=1,
+        )
+        self.parlay_engine = ParlayTradingEngine(
+            db=self.db,
+            initial_bankroll_pen=50.00,
+            max_stake_pen=5.00,
+            min_stake_pen=0.50,
+            kelly_fraction=0.40,
         )
         self.bot = TelegramAlertBot(bot_token=self.bot_token, chat_id=list(self.allowed_chat_ids)[0] if self.allowed_chat_ids else None)
         self.offset_file = Path(offset_file) if offset_file else PROJECT_ROOT / "data" / "evaluation" / "telegram_last_update_id.txt"
@@ -184,8 +195,10 @@ class TelegramInteractiveListener:
             return self.handle_banca()
         elif cmd in ("/picks", "/pronosticos", "/apuestas") or "picks" in text_lower or "pronostico" in text_lower:
             return self.handle_picks()
-        elif cmd in ("/sgp", "/props", "/parlays", "/combinadas") or "combinada" in text_lower or "sgp" in text_lower or "props" in text_lower:
+        elif cmd in ("/sgp", "/combos", "/props", "/parlays", "/combinadas") or "combinada" in text_lower or "sgp" in text_lower or "combos" in text_lower:
             return self.handle_sgp()
+        elif cmd in ("/status", "/fase0", "/auditoria") or "status" in text_lower or "fase 0" in text_lower:
+            return self.handle_status()
         elif cmd in ("/cuotas", "/arbitraje", "/surebets", "/odds") or "cuota" in text_lower or "arbitraje" in text_lower or "surebet" in text_lower:
             return self.handle_cuotas()
         elif cmd in ("/partidos", "/slate", "/juegos") or "partido" in text_lower or "juego" in text_lower or "cartelera" in text_lower:
@@ -237,17 +250,14 @@ class TelegramInteractiveListener:
         )
 
     def handle_banca(self) -> str:
-        """Generates real-time virtual bankroll, PnL and CPPI state."""
-        state = self.paper_engine.get_bankroll_state()
+        """Generates dual real-time virtual bankroll state: Main (S/100) and Sub-Bankroll Parlays (S/50)."""
+        main_state = self.paper_engine.get_bankroll_state()
+        m_settled = main_state.get("settled_bankroll_pen", 100.00)
+        m_pnl = main_state.get("cumulative_net_profit_pen", 0.00)
+        m_exp = main_state.get("pending_exposure_pen", 0.00)
+        m_avail = main_state.get("available_balance_pen", m_settled)
+        m_roi = ((m_settled - 100.0) / 100.0 * 100.0)
 
-        settled = state.get("settled_bankroll_pen", 100.00)
-        initial = state.get("initial_bankroll_pen", 100.00)
-        pnl = state.get("cumulative_net_profit_pen", 0.00)
-        exposure = state.get("pending_exposure_pen", 0.00)
-        available = state.get("available_balance_pen", settled)
-        peak = max(100.0, settled)
-
-        # Reconcile Win Rate & Counts from DB
         counts = self.db.fetch_one(
             f"""
             SELECT
@@ -258,31 +268,40 @@ class TelegramInteractiveListener:
             WHERE {self.paper_engine.scope_sql}
             """
         ) or {}
-
         won = int(counts.get("won") or 0)
         lost = int(counts.get("lost") or 0)
         push = int(counts.get("push") or 0)
         total_settled = won + lost + push
         wr = (won / total_settled * 100.0) if total_settled > 0 else 0.0
-        roi = ((settled - initial) / initial * 100.0)
 
-        pnl_symbol = "🟢" if pnl >= 0 else "🔴"
-        pnl_sign = "+" if pnl >= 0 else ""
+        p_state = self.parlay_engine.get_bankroll_state()
+        p_settled = p_state.get("settled_bankroll_pen", 50.00)
+        p_pnl = p_state.get("cumulative_net_profit_pen", 0.00)
+        p_exp = p_state.get("pending_exposure_pen", 0.00)
+        p_avail = p_state.get("available_balance_pen", p_settled)
+        p_roi = p_state.get("roi_pct", 0.0)
+
+        m_sym = "🟢" if m_pnl >= 0 else "🔴"
+        p_sym = "🟢" if p_pnl >= 0 else "🔴"
 
         return (
-            f"💰 *ESTADO DE LA BANCA VIRTUAL (S/ 100 PEN)*\n"
+            f"💰 *ESTADO DE LA BANCA VIRTUAL — CENTRO FINANCIERO DUAL*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🏦 *Saldo Liquidado:* *S/ {settled:.2f} PEN*\n"
-            f"💵 *Saldo Disponible:* *S/ {available:.2f} PEN*\n"
-            f"⏳ *Exposición Pendiente:* *S/ {exposure:.2f} PEN*\n"
+            f"🎯 *1. BANKROLL PRINCIPAL (S/ 100.00 PEN — Fase 0 Auditada)*\n"
+            f"   • Saldo Liquidado: *S/ {m_settled:.2f} PEN* (Disp: S/ {m_avail:.2f})\n"
+            f"   • Exposición Pendiente: *S/ {m_exp:.2f} PEN*\n"
+            f"   • {m_sym} PnL: *{'+' if m_pnl >= 0 else ''}S/ {m_pnl:.2f}* (`{m_roi:+.2f}% ROI`)\n"
+            f"   • Récord: `{won}W - {lost}L - {push}P` (Win Rate: `{wr:.1f}%`)\n"
+            f"   • Política: *70% Totales / 30% Moneyline* (Kelly 25%, máx S/ 3.00)\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{pnl_symbol} *PnL Acumulado:* *{pnl_sign}S/ {pnl:.2f} PEN* (`{roi:+.2f}% ROI`)\n"
-            f"🏆 *Récord:* `{won}W - {lost}L - {push}P` (Win Rate: `{wr:.1f}%`)\n"
-            f"📈 *Pico Histórico:* `S/ {peak:.2f} PEN`\n"
-            f"⚡ *Modo de Operación:* *MODO ALFA PURO (Sin Escudo)*\n"
-            f"🎯 *Rango de Stakes:* *S/ 3.50 a S/ 20.00 PEN (Alta Convicción)*\n"
+            f"🔥 *2. SUB-BANKROLL COMBINADAS (S/ 50.00 PEN — Alpha Lab)*\n"
+            f"   • Saldo Liquidado: *S/ {p_settled:.2f} PEN* (Disp: S/ {p_avail:.2f})\n"
+            f"   • Exposición Pendiente: *S/ {p_exp:.2f} PEN*\n"
+            f"   • {p_sym} PnL: *{'+' if p_pnl >= 0 else ''}S/ {p_pnl:.2f}* (`{p_roi:+.2f}% ROI`)\n"
+            f"   • Parlays Registrados: `{int(p_state.get('settled_parlays_count', 0))} liquidados / {int(p_state.get('pending_parlays_count', 0))} pendientes`\n"
+            f"   • Política: *SGP Cópulas & Parlays Alta Probabilidad* (Kelly 40%, máx S/ 5.00)\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚙️ _Régimen: Confianza Plena en el Modelo Cuantitativo_"
+            f"⚙️ _Régimen: MODO ALFA PURO en combinadas y gestión institucional en principal._\n            🔒 _Aislamiento Total: Las combinadas no alteran la auditoría del bankroll principal._"
         )
 
     def handle_picks(self) -> str:
@@ -396,6 +415,33 @@ class TelegramInteractiveListener:
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
         return "\n".join(lines)
+
+    def handle_status(self) -> str:
+        """Reports Phase 0 audit graduation progress towards 500 settled bets."""
+        status_file = PROJECT_ROOT / "data" / "readiness_status.json"
+        if status_file.exists():
+            try:
+                data = json.loads(status_file.read_text(encoding="utf-8"))
+                settled = data.get("settled_bets_count", 0)
+                target = data.get("target_settled_bets_tier1", 500)
+                prog = data.get("progress_pct", 0.0)
+                brier = data.get("brier_score", 0.0)
+                base_brier = data.get("baseline_brier_score", 0.0)
+                max_dd = data.get("max_drawdown_pct", 0.0)
+                headline = data.get("headline", "EN CALIBRACIÓN")
+                return (
+                    f"🚦 *ESTADO DE GRADUACIÓN DE FASE 0*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"*{headline}*\n\n"
+                    f"📊 *Progreso Muestra:* `{settled} / {target}` ({prog:.1f}%)\n"
+                    f"🎯 *Brier Score:* `{brier:.4f}` (Base: `{base_brier:.4f}`)\n"
+                    f"🛡️ *Drawdown Máximo:* `{max_dd:.2f}%` (Límite: `<= 15.0%`)\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"ℹ️ _El sistema requiere 500 apuestas resueltas con cuotas observadas para desbloquear Nivel 1._"
+                )
+            except Exception:
+                pass
+        return "ℹ️ Estado de readiness en actualización. Ejecuta un ciclo cloud."
 
     def handle_cuotas(self) -> str:
         """Returns comparison across Peruvian bookmakers and identifies any Surebets."""

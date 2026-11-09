@@ -39,3 +39,21 @@ risk_management:                     # AGENTS.md section 2 (paper_trading_manage
 
 sources:
   betting_allowed_source_types: ["OBSERVED"]
+
+sub_bankroll_combinadas:             # Sub-bankroll independiente para SGP y combinadas de alta probabilidad
+  enabled: true
+  virtual_bankroll_initial_pen: 50.00
+  staking_mode: "dynamic_kelly"
+  kelly_fraction: 0.40
+  min_stake_pen: 0.50
+  max_stake_pen: 5.00
+  max_stake_bankroll_fraction: 0.10
+  max_parlays_per_matchday: 2
+  min_compound_ev_pct: 6.0
+
+hybrid_allocation:                   # Política de asignación 70% Totales / 30% Moneyline
+  enabled: true
+  totals_weight: 0.70
+  moneyline_weight: 0.30
+  max_totals_per_matchday: 2
+  max_moneyline_per_matchday: 1

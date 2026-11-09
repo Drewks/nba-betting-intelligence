@@ -246,12 +246,120 @@ def m005_invalidate_pending_unobserved_props(conn: sqlite3.Connection, migration
     return {"props_invalidated": len(rows)}
 
 
+
+
+def m006_add_sub_bankroll_and_parlays(conn: sqlite3.Connection, migration_id: str) -> dict[str, Any]:
+    """
+    Creates isolated sub-bankroll tables for combined bets (SGP & high-probability parlays).
+    Initializes a dedicated S/50.00 PEN virtual sub-bankroll with its own append-only ledger,
+    keeping multi-leg parlay testing completely isolated from the audited Phase 0 main bankroll.
+    """
+    now = _now()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS parlay_bets (
+            parlay_id TEXT PRIMARY KEY,
+            matchday_date TEXT NOT NULL,
+            strategy_type TEXT NOT NULL CHECK (strategy_type IN ('SGP_COPULA', 'HIGH_PROB_PARLAY', 'CROSS_GAME_PARLAY')),
+            legs_json TEXT NOT NULL,
+            num_legs INTEGER NOT NULL CHECK (num_legs >= 2),
+            compound_odds REAL NOT NULL CHECK (compound_odds > 1.0),
+            joint_prob REAL NOT NULL CHECK (joint_prob > 0.0 AND joint_prob <= 1.0),
+            compound_ev_pct REAL NOT NULL,
+            stake_pen REAL NOT NULL CHECK (stake_pen > 0.0 AND stake_pen <= 25.0),
+            emitted_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+            net_profit_pen REAL,
+            bankroll_after_pen REAL,
+            actual_result_summary TEXT,
+            settled_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS prevent_settled_parlay_tampering
+        BEFORE UPDATE ON parlay_bets
+        BEGIN
+            SELECT CASE
+                WHEN OLD.status != 'PENDING' THEN
+                    RAISE(ABORT, 'DOUBLE_SETTLEMENT_OR_TAMPERING: Parlay bet has already been settled and is immutable.')
+                WHEN NEW.compound_odds != OLD.compound_odds
+                  OR NEW.stake_pen != OLD.stake_pen
+                  OR NEW.legs_json != OLD.legs_json
+                  OR NEW.emitted_at != OLD.emitted_at
+                  OR NEW.strategy_type != OLD.strategy_type THEN
+                    RAISE(ABORT, 'IMMUTABLE_VIOLATION: Original parlay parameters cannot be modified.')
+            END;
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS prevent_parlay_delete
+        BEFORE DELETE ON parlay_bets
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Parlay bets cannot be deleted from audit history.');
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS parlay_bankroll_ledger (
+            entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK (event_type IN ('INITIAL_VIRTUAL_BANKROLL', 'BET_RESERVED', 'BET_SETTLED')),
+            reference_parlay_id TEXT,
+            amount_delta_pen REAL NOT NULL,
+            settled_bankroll_pen REAL NOT NULL CHECK (settled_bankroll_pen >= 0.0),
+            pending_exposure_pen REAL NOT NULL CHECK (pending_exposure_pen >= 0.0),
+            available_balance_pen REAL NOT NULL CHECK (available_balance_pen >= 0.0)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS prevent_parlay_ledger_update
+        BEFORE UPDATE ON parlay_bankroll_ledger
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: parlay_bankroll_ledger entries cannot be updated.');
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS prevent_parlay_ledger_delete
+        BEFORE DELETE ON parlay_bankroll_ledger
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: parlay_bankroll_ledger entries cannot be deleted.');
+        END
+        """
+    )
+
+    seeded = False
+    existing = conn.execute("SELECT COUNT(*) FROM parlay_bankroll_ledger").fetchone()
+    if not existing or existing[0] == 0:
+        conn.execute(
+            """
+            INSERT INTO parlay_bankroll_ledger (
+                timestamp, event_type, reference_parlay_id, amount_delta_pen,
+                settled_bankroll_pen, pending_exposure_pen, available_balance_pen
+            ) VALUES (?, 'INITIAL_VIRTUAL_BANKROLL', NULL, 50.0, 50.0, 0.0, 50.0)
+            """,
+            (now,),
+        )
+        seeded = True
+
+    return {"action": "tables_created", "initial_bankroll_seeded": seeded, "initial_amount_pen": 50.0}
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
     ("2026_11_09_003_restore_history_from_93cfa87", m003_restore_history_from_93cfa87),
     ("2026_11_09_004_quarantine_unobserved_odds", m004_quarantine_unobserved_odds),
     ("2026_11_09_005_invalidate_pending_unobserved_props", m005_invalidate_pending_unobserved_props),
+    ("2026_11_09_006_add_sub_bankroll_and_parlays", m006_add_sub_bankroll_and_parlays),
 ]
 
 

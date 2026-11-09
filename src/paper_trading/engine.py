@@ -83,8 +83,14 @@ class PaperTradingEngine:
         kelly_fraction: float = 0.25,
         min_stake_pen: float = 0.50,
         max_stake_bankroll_fraction: float = 0.03,
+        hybrid_allocation_enabled: bool = False,
+        max_totals_per_matchday: int = 2,
+        max_moneyline_per_matchday: int = 1,
     ) -> None:
         self.is_backtest = is_backtest
+        self.hybrid_allocation_enabled = bool(hybrid_allocation_enabled)
+        self.max_totals_per_matchday = int(max_totals_per_matchday)
+        self.max_moneyline_per_matchday = int(max_moneyline_per_matchday)
         self.max_portfolio_exposure_pct = max_portfolio_exposure_pct
         self.kelly_fraction = float(kelly_fraction)
         self.min_stake_pen = float(min_stake_pen)
@@ -501,6 +507,12 @@ class PaperTradingEngine:
             (matchday_date,),
         )
         day_count = int(existing_day_bets["cnt"]) if existing_day_bets else 0
+        existing_market_rows = self.db.fetch_all(
+            "SELECT market, COUNT(*) AS cnt FROM simulated_bets WHERE matchday_date = ? GROUP BY market",
+            (matchday_date,),
+        )
+        day_totals_count = sum(int(r["cnt"]) for r in existing_market_rows if r.get("market") == "total_points")
+        day_ml_count = sum(int(r["cnt"]) for r in existing_market_rows if r.get("market") == "moneyline")
         selected_game_markets: set[tuple[str, str]] = set()
         selected_games: set[str] = set()
 
@@ -689,6 +701,30 @@ class PaperTradingEngine:
                 )
                 continue
 
+            # 5a. Check Hybrid Market Allocation (70% Totales / 30% Moneyline)
+            if self.hybrid_allocation_enabled:
+                if market == "moneyline" and day_ml_count >= self.max_moneyline_per_matchday:
+                    no_bet_decisions.append(
+                        self._record_decision(
+                            game_id, matchday_date, market, selection, "NO_BET",
+                            "MARKET_CAP_REACHED",
+                            f"Matchday cap of {self.max_moneyline_per_matchday} moneyline pick(s) reached (70/30 hybrid allocation)",
+                            ev_pct, emitted_at, model_version_id
+                        )
+                    )
+                    continue
+                elif market == "total_points" and day_totals_count >= self.max_totals_per_matchday:
+                    if day_ml_count > 0 or day_count >= self.max_selections_per_matchday:
+                        no_bet_decisions.append(
+                            self._record_decision(
+                                game_id, matchday_date, market, selection, "NO_BET",
+                                "MARKET_CAP_REACHED",
+                                f"Matchday cap of {self.max_totals_per_matchday} total_points pick(s) reached (70/30 hybrid allocation)",
+                                ev_pct, emitted_at, model_version_id
+                            )
+                        )
+                        continue
+
             # 5b. Check game existence and strict pre-tipoff scheduled validity
             game_record = self.db.fetch_one(
                 "SELECT game_id, game_start_time, status FROM games WHERE game_id = ?",
@@ -854,6 +890,10 @@ class PaperTradingEngine:
             )
 
             day_count += 1
+            if market == "total_points":
+                day_totals_count += 1
+            elif market == "moneyline":
+                day_ml_count += 1
             selected_games.add(game_id)
             selected_game_markets.add((game_id, market))
             placed_bets.append(
@@ -1492,7 +1532,9 @@ class PaperTradingEngine:
 
 def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
     """The single place that turns config/model_config.yaml into the production paper-trading engine."""
-    risk = load_config().risk
+    cfg = load_config()
+    risk = cfg.risk
+    hyb = cfg.hybrid_allocation
     return PaperTradingEngine(
         db=db,
         initial_bankroll_pen=risk.virtual_bankroll_initial_pen,
@@ -1508,4 +1550,7 @@ def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
         kelly_fraction=risk.kelly_fraction,
         min_stake_pen=risk.min_stake_pen,
         max_stake_bankroll_fraction=risk.max_stake_bankroll_fraction,
+        hybrid_allocation_enabled=hyb.enabled,
+        max_totals_per_matchday=hyb.max_totals_per_matchday,
+        max_moneyline_per_matchday=hyb.max_moneyline_per_matchday,
     )

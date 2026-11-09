@@ -111,7 +111,7 @@ class TelegramAlertBot:
         book = bet.get("odds_provider") or bet.get("bookmaker") or "RETAbet Perú"
 
         msg = (
-            f"🏀 *ALERTA +EV | NBA INTELLIGENCE V9*\n"
+            f"🎯 *[PICK PRINCIPAL] (70% Totales / 30% Moneyline)*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📍 *Partido:* `{game_id}`\n"
             f"🎯 *Mercado:* `{mkt}` | *Selección:* *{sel}*\n"
@@ -146,7 +146,7 @@ class TelegramAlertBot:
             legs_text = f"  • {sgp.get('player_name', 'Player')} + {sgp.get('game_selection', 'Selection')}\n"
 
         msg = (
-            f"🔥 *COMBINADA CORRELACIONADA (SGP {num_legs}-LEGS)*\n"
+            f"🔥 *[COMBO ALPHA S/50] (SGP Cópulas Correlacionadas {num_legs}-Legs)*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏆 *Crea tu Apuesta (RETAbet / Betsson Perú)*\n"
             f"📋 *Selecciones:*\n{legs_text}"
@@ -179,7 +179,7 @@ class TelegramAlertBot:
             legs_text += f"  {i}. {desc} @ `{leg_odds:.2f}` (Prob: `{leg_p:.1f}%`)\n"
 
         msg = (
-            f"🔥 *COMBINADA DE ALTA PROBABILIDAD (MODO ALFA)*\n"
+            f"🔥 *[COMBO ALPHA S/50] (Parlay de Alta Consistencia)*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🎯 *Estrategia:* *{strat_label}*\n"
             f"🏦 *Casa Sugerida:* *{book}*\n"
@@ -205,7 +205,7 @@ class TelegramAlertBot:
         stake = float(stale.get("kelly_stake_pen", 3.00))
 
         msg = (
-            f"🚨 *LÍNEA DESFASADA DETECTADA (STALE LINE)*\n"
+            f"⚡ *[ARBITRAJE / STALE LINE PERÚ]*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⚡ *{retail_book} mantiene cuota desactualizada!*\n"
             f"🎯 *Selección:* *{sel}*\n"
