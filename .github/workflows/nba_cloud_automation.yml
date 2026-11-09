@@ -25,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       cycle_mode:
-        description: "Modo de ciclo a ejecutar (auto, pregame, settle_and_calibrate, sniper)"
+        description: "Modo de ciclo a ejecutar (auto, morning, sniper, settle, all)"
         required: false
         default: "auto"
 
@@ -63,7 +63,7 @@ jobs:
       - name: 4. Ejecutar suite de pruebas de integridad y anti-leakage
         run: uv run pytest
 
-      - name: 5. Ejecutar Ciclo Stateful y Evaluar Alerta de Madurez para Entorno Real
+      - name: 5. Ejecutar Ciclo de Inteligencia, Modelos y Despacho a Telegram
         env:
           SPORTRADAR_API_KEY: ${{ secrets.SPORTRADAR_API_KEY }}
           THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
@@ -79,29 +79,24 @@ jobs:
           SIMULATION_ONLY: "true"
         run: |
           CYCLE_MODE="${{ github.event.inputs.cycle_mode }}"
-          if [ -z "$CYCLE_MODE" ] || [ "$CYCLE_MODE" = "auto" ]; then
-            SCHEDULE="${{ github.event.schedule }}"
-            if [ "$SCHEDULE" = "17 6 * * *" ] || [ "$SCHEDULE" = "47 10 * * *" ]; then
-              CYCLE_MODE="settle_and_calibrate"
-            elif [ "$SCHEDULE" = "23 17 * * *" ] || [ "$SCHEDULE" = "0 18 * * *" ] || [ "$SCHEDULE" = "41 20 * * *" ] || [ "$SCHEDULE" = "47 22 * * *" ] || [ "$SCHEDULE" = "37 0 * * *" ]; then
-              CYCLE_MODE="pregame"
-            else
-              CYCLE_MODE="auto"
-            fi
+          SCHEDULE="${{ github.event.schedule }}"
+          echo "Disparador: schedule='$SCHEDULE' | input='$CYCLE_MODE'"
+
+          if [ "$CYCLE_MODE" = "settle" ] || [ "$SCHEDULE" = "17 6 * * *" ] || [ "$SCHEDULE" = "47 10 * * *" ]; then
+            echo "🌙 [VENTANA NOCTURNA] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
+            uv run python scripts/run_automated_scheduler.py --run-now settle
+          elif [ "$CYCLE_MODE" = "morning" ] || [ "$SCHEDULE" = "23 17 * * *" ]; then
+            echo "☀️ [VENTANA MATUTINA] Apertura de Mercado, Player Props, RETAbet SGPs y Alertas Telegram"
+            uv run python scripts/run_automated_scheduler.py --run-now morning
+          elif [ "$CYCLE_MODE" = "sniper" ] || [ -n "$SCHEDULE" ]; then
+            echo "🎯 [VENTANA INJURY SNIPER & CUOTAS PERÚ] Bajas T-2h/T-30m y Stale Lines / Surebets"
+            uv run python scripts/run_automated_scheduler.py --run-now sniper
+            uv run python scripts/run_live_odds_monitor.py --once
+          else
+            echo "🚀 [MODO COMPLETO] Ejecutando apertura matutina y escaneo de cuotas"
+            uv run python scripts/run_automated_scheduler.py --run-now morning
+            uv run python scripts/run_live_odds_monitor.py --once
           fi
-          echo "Ejecutando ciclo en modo: $CYCLE_MODE (schedule: ${{ github.event.schedule || 'manual' }})"
-          uv run python scripts/run_cloud_cycle.py --mode "$CYCLE_MODE"
-
-      - name: 5b. Ejecutar Monitor Dual-Window Injury Sniper (T-2h y T-30m)
-        env:
-          BROWSERBASE_API_KEY: ${{ secrets.BROWSERBASE_API_KEY }}
-          SPORTRADAR_API_KEY: ${{ secrets.SPORTRADAR_API_KEY }}
-        run: |
-          uv run python scripts/run_injury_sniper.py --mode auto
-
-      - name: 5c. Extractor de Cuotas Perú Ventana T-6H (RETAbet, Coolbet, Betsson, Apuesta Total, Pinnacle)
-        run: |
-          uv run python scripts/run_peru_odds_scraper.py --window 6.0 --tolerance 2.0
 
       - name: 6. Publicar Tablero de Pronósticos, Semáforo y Auditoría en el Summary de GitHub Actions
         run: |
@@ -115,11 +110,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           cat reports/audit_report.md >> $GITHUB_STEP_SUMMARY
 
-      - name: 7. Guardar estado (SQLite, CSV, Alerta de Madurez, Reportes y Vault Obsidian)
+      - name: 7. Guardar estado (SQLite, CSV, Alerta de Madurez, Reportes, Evaluación y Vault Obsidian)
         run: |
           git config user.name "nba-intelligence-bot"
           git config user.email "nba-intelligence-bot@users.noreply.github.com"
-          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/visual_rag/latest_visual_context.json data/nba_intelligence.sqlite3 data/evaluation/latest_run_summary.json reports/*.md reports/dashboard.html docs/index.html NBA/
+          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/visual_rag/latest_visual_context.json data/nba_intelligence.sqlite3 data/evaluation/*.json reports/*.md reports/dashboard.html docs/index.html NBA/
           if git diff --staged --quiet; then
             echo "Sin cambios nuevos para confirmar."
           else
