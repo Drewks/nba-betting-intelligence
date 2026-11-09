@@ -14,6 +14,9 @@ when Tier 1 or Tier 2 is unlocked.
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 from datetime import datetime, timezone
 import json
 import os
@@ -42,8 +45,8 @@ def _resolve_github_token() -> str:
                 val = line.split("=", 1)[1].strip()
                 if len(val) >= 16:
                     return val
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug(f"Failed to query git credential: {exc}")
     return ""
 
 
@@ -439,8 +442,8 @@ def _send_daily_pick_email(top_pick: dict[str, Any], pick_date: str) -> list[str
                     )
                     if post_resp.status_code in (200, 201):
                         triggered.append("github_issue_email")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Failed to post GitHub issue email: {exc}")
 
     smtp_user = os.getenv("SMTP_USER", "").strip()
     smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
@@ -461,8 +464,8 @@ def _send_daily_pick_email(top_pick: dict[str, Any], pick_date: str) -> list[str
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
             triggered.append("smtp_email")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Failed to dispatch SMTP email: {exc}")
 
     return triggered
 
@@ -545,8 +548,8 @@ def _dispatch_readiness_alerts(
                     )
                     if post_resp.status_code in (200, 201):
                         triggered.append("github_issue_email")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in notifier (line 548): {exc}")
 
     tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     tg_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
@@ -567,8 +570,8 @@ def _dispatch_readiness_alerts(
                 )
                 if resp.status_code == 200:
                     triggered.append("telegram")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in notifier (line 570): {exc}")
 
     webhook_url = os.getenv("ALERT_WEBHOOK_URL", "").strip()
     if webhook_url:
@@ -577,7 +580,7 @@ def _dispatch_readiness_alerts(
                 resp = client.post(webhook_url, json={"content": f"**{issue_title}**\n\n{issue_body}"})
                 if resp.status_code < 300:
                     triggered.append("webhook")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in notifier (line 580): {exc}")
 
     return triggered

@@ -32,8 +32,8 @@ def _load_dotenv_if_present() -> None:
                     v = v.strip().strip("'").strip('"')
                     if k and k not in os.environ:
                         os.environ[k] = v
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in telegram_bot (line 35): {exc}")
 
 
 _load_dotenv_if_present()
@@ -96,8 +96,8 @@ class TelegramAlertBot:
             existing.append(record)
             # Keep last 50 alerts
             self.alerts_log_path.write_text(json.dumps(existing[-50:], indent=2, ensure_ascii=False), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in telegram_bot (line 99): {exc}")
 
     def format_single_bet_alert(self, bet: dict[str, Any]) -> str:
         """Formats a standard +EV moneyline or totals pick into actionable Telegram markdown."""
@@ -162,7 +162,7 @@ class TelegramAlertBot:
 
     def format_high_prob_parlay_alert(self, parlay: dict[str, Any]) -> str:
         """Formats a High-Probability Lock Builder Parlay (Pure Alpha Mode)."""
-        num_legs = parlay.get("num_legs", len(parlay.get("legs", [])))
+        parlay.get("num_legs", len(parlay.get("legs", [])))
         strat = parlay.get("strategy", "SAME_GAME_ANCHOR")
         strat_label = "Mismo Partido (SGP)" if strat == "SAME_GAME_ANCHOR" else "Cruzada Multi-Partido"
         book = parlay.get("bookmaker", "RETAbet / Betsson Perú")

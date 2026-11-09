@@ -167,7 +167,7 @@ class VineCopulaSGP:
         is_value = (ev_pct >= 3.5) and (p_joint >= 0.08)
 
         # Format descriptive rationale
-        leg_desc = " + ".join([f"{l.get('player_name', l.get('team', 'Leg'))} {l.get('category', '')} {l.get('selection', '')} {l.get('line', '')}".strip() for l in legs])
+        leg_desc = " + ".join([f"{leg.get('player_name', leg.get('team', 'Leg'))} {leg.get('category', '')} {leg.get('selection', '')} {leg.get('line', '')}".strip() for leg in legs])
         rationale = (
             f"[RETAbet/Betsson SGP {n_legs}-Legs] {leg_desc}. "
             f"Prob Conjunta Cópula Student-t: {p_joint * 100:.2f}% (vs {p_independent * 100:.2f}% Independiente, Impulso: +{corr_boost_pct}%). "

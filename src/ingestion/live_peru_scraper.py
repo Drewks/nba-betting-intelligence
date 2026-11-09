@@ -110,8 +110,8 @@ class LivePeruOddsScraper:
                                 captured_at=now_str,
                                 source="RETAbet API Direct",
                             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"RETAbet live fetch failed: {exc}")
         return None
 
     def fetch_live_betsson_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
@@ -138,8 +138,8 @@ class LivePeruOddsScraper:
                                 captured_at=now_str,
                                 source="Betsson API Direct",
                             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Betsson live fetch failed: {exc}")
         return None
 
     def collect_slate_odds(

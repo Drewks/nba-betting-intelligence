@@ -162,7 +162,7 @@ def evaluate_simulation_exit_gates(
     ci_info = metrics.get("bootstrap_uncertainty", {})
     ci_excludes_zero = not bool(ci_info.get("compatible_with_zero_edge", True))
 
-    gates = {
+    gates: dict[str, dict[str, Any]] = {
         "gate_1_min_500_settled_selections": {
             "passed": settled_count >= min_settled_required,
             "observed": settled_count,
@@ -604,7 +604,9 @@ class WalkForwardBacktester:
                 if not t_row:
                     continue
                 g_full = next((x for x in all_final_games if x["game_id"] == gid), None)
-                prior_g = [x for x in all_final_games if x["game_start_time"] < g_full["game_start_time"]] if g_full else []
+                if not g_full:
+                    continue
+                prior_g = [x for x in all_final_games if x["game_start_time"] < g_full["game_start_time"]]
                 if prior_g:
                     base_model.fit(prior_g, g_full["game_start_time"])
                 p_base_ml = base_model.predict_moneyline(g_full, prior_g)["p_home"] if g_full else 0.565
@@ -621,7 +623,7 @@ class WalkForwardBacktester:
                 ens_p_ml = round(0.30 * cal_p_ml + 0.70 * fair_mkt, 4)
 
                 cal_p_tot = float(t_row["calibrated_probability"])
-                raw_p_tot = float(t_row.get("raw_probability") or cal_p_tot)
+                float(t_row.get("raw_probability") or cal_p_tot)
                 ens_p_tot = round(0.35 * cal_p_tot + 0.65 * 0.50, 4)
 
                 reconstructed.append(
@@ -714,7 +716,7 @@ class WalkForwardBacktester:
             by_season[seas]["settled_count"] += 1
             by_season[seas]["net_profit_pen"] = round(by_season[seas]["net_profit_pen"] + float(b["net_profit_pen"] or 0.0), 4)
             by_season[seas]["stakes_pen"] = round(by_season[seas]["stakes_pen"] + float(b["stake_pen"]), 4)
-        for seas, sdata in by_season.items():
+        for _seas, sdata in by_season.items():
             sdata["roi_pct"] = round((sdata["net_profit_pen"] / sdata["stakes_pen"]) * 100.0, 4) if sdata["stakes_pen"] > 0 else 0.0
 
         # Model comparison & calibration metrics

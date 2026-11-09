@@ -16,6 +16,9 @@ Usage:
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import argparse
 import json
 import os
@@ -51,8 +54,8 @@ def resolve_repository(explicit_repo: str | None = None) -> str:
         match = re.search(r"github\.com[:/]([^/]+/[^/.]+)(?:\.git)?", remote_url)
         if match:
             return match.group(1)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug(f"Could not detect remote repository: {exc}")
 
     return "Drewks/nba-betting-intelligence"
 
@@ -71,8 +74,8 @@ def resolve_token(explicit_token: str | None = None) -> str | None:
         out = subprocess.check_output(["gh", "auth", "token"], stderr=subprocess.DEVNULL).decode("utf-8").strip()
         if out:
             return out
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug(f"gh auth token failed: {exc}")
 
     return None
 
@@ -176,8 +179,8 @@ def wait_and_print_run_status(repo: str, token: str, max_wait_seconds: int = 30)
                     print(f"[>] Run URL: {html_url}")
                     print(f"[>] Estado inicial: {status} (Creado: {created_at})")
                     return
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in dispatch_cycle (line 179): {exc}")
         time.sleep(3)
 
 

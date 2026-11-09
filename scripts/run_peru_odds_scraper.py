@@ -6,9 +6,11 @@ Apuesta Total, Doradobet, Pinnacle) targeting exactly 6 hours before tipoff.
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import argparse
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 import sys
 
@@ -19,8 +21,8 @@ if str(PROJECT_ROOT) not in sys.path:
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.warning(f"Handled exception in run_peru_odds_scraper (line 21): {exc}")
 
 from src.ingestion.peru_scraper import PeruLiveOddsScraper
 from src.reporting.reporter import export_bets_and_tracking_dashboard
@@ -78,10 +80,10 @@ def main() -> None:
             print("-" * 80)
 
     # Regenerate tracking dashboard & sync docs/index.html with dynamically computed observed metrics
-    readiness_path = PROJECT_ROOT / "data" / "readiness_status.json"
+    # readiness_path = PROJECT_ROOT / "data" / "readiness_status.json"
     obs_rows = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status IN ('WON', 'LOST', 'PUSH')")
     pend_rows = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status = 'PENDING'")
-    
+
     total_staked = sum(float(r["stake_pen"]) for r in obs_rows) or 1.0
     net_pnl = sum(float(r["net_profit_pen"] or 0.0) for r in obs_rows)
     roi_pct = round((net_pnl / total_staked) * 100.0, 2)

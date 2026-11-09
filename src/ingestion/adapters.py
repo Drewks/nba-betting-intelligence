@@ -11,6 +11,9 @@ Interchangeable NBA data and odds adapters (V2 Syndicate-Grade):
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -46,8 +49,8 @@ def _load_dotenv_if_present() -> None:
                     v = v.strip().strip("'").strip('"')
                     if k and k not in os.environ:
                         os.environ[k] = v
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in adapters (line 49): {exc}")
 
 
 _load_dotenv_if_present()
@@ -165,7 +168,7 @@ class TheOddsAPIAdapter:
 
     def __init__(self, api_key: str | None = None, timeout_seconds: int = 10) -> None:
         _load_dotenv_if_present()
-        self.api_key = (api_key or os.getenv("THE_ODDS_API_KEY", "")).strip()
+        self.api_key = (api_key or os.getenv("THE_ODDS_API_KEY") or "").strip()
         self.timeout_seconds = timeout_seconds
 
     def is_configured(self) -> bool:
@@ -478,6 +481,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             "referee_hca_adj": ref_hca_adj,
         }
 
+    get_event_summary_context = _fetch_event_summary_context
+
     def fetch_player_boxscores(self, event_id: str) -> dict[str, dict[str, float]]:
         """
         Fetches individual player boxscore statistics from ESPN game summary.
@@ -495,14 +500,14 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
 
         for p_team in data.get("boxscore", {}).get("players") or []:
             for stat_cat in p_team.get("statistics") or []:
-                labels = [str(l).upper() for l in stat_cat.get("labels") or []]
+                labels = [str(lbl).upper() for lbl in stat_cat.get("labels") or []]
                 for ath in stat_cat.get("athletes") or []:
                     ath_name = (ath.get("athlete") or {}).get("displayName")
                     if not ath_name:
                         continue
                     stats_vals = ath.get("stats") or []
                     val_map: dict[str, float] = {}
-                    for lbl, val_str in zip(labels, stats_vals):
+                    for lbl, val_str in zip(labels, stats_vals, strict=False):
                         try:
                             if lbl in ("3PT", "3PM") and "-" in str(val_str):
                                 val_map["3PM"] = float(str(val_str).split("-")[0])
@@ -953,7 +958,7 @@ class SportradarAdapter(BaseNBADataAdapter):
     _CACHED_CONTEXT: dict[str, Any] | None = None
 
     def __init__(self, api_key: str | None = None, access_level: str = "trial") -> None:
-        self.api_key = (api_key or os.getenv("SPORTRADAR_API_KEY", "") or os.getenv("SPORTRADAR_SYNERGY_API_KEY", "")).strip()
+        self.api_key = (api_key or os.getenv("SPORTRADAR_API_KEY") or os.getenv("SPORTRADAR_SYNERGY_API_KEY") or "").strip()
         self.access_level = access_level
 
     def is_configured(self) -> bool:
@@ -1012,8 +1017,8 @@ class SportradarAdapter(BaseNBADataAdapter):
                         elif "questionable" in st or "day" in st:
                             pen += 0.35 * impact
                 injury_penalties[t_code] = round(min(14.5, pen), 2)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Failed to fetch Sportradar injury report: {exc}")
 
         # Respect Sportradar Trial QPS limit (1 req / 2 seconds) before second call
         time.sleep(2.1)
@@ -1035,9 +1040,9 @@ class SportradarAdapter(BaseNBADataAdapter):
                         for r in tm.get("records") or []:
                             rtype = str(r.get("record_type", ""))
                             w = int(r.get("wins", 0))
-                            l = int(r.get("losses", 0))
-                            if (w + l) > 0:
-                                rec_map[rtype] = float(r.get("win_pct", w / (w + l)))
+                            losses = int(r.get("losses", 0))
+                            if (w + losses) > 0:
+                                rec_map[rtype] = float(r.get("win_pct", w / (w + losses)))
                         team_splits[t_code] = {
                             "points_for": float(tm.get("points_for", 114.5)),
                             "points_against": float(tm.get("points_against", 114.5)),
@@ -1050,8 +1055,8 @@ class SportradarAdapter(BaseNBADataAdapter):
                             "leads_fg_win_pct": rec_map.get("leads_field_goal_pct", 0.75),
                             "fewer_tov_win_pct": rec_map.get("fewer_turnovers", 0.65),
                         }
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Failed to fetch Sportradar standings: {exc}")
 
         # 3. Official Sportradar Synergy Basketball NBA API (Games & Possession Play-Type Telemetry)
         time.sleep(2.1)
@@ -1153,8 +1158,8 @@ class SportradarAdapter(BaseNBADataAdapter):
                         "captured_at": now_utc,
                     }
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Failed to fetch Synergy game events: {exc}")
 
         status_str = (
             f"OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY ({len(injury_penalties)} teams injuries + "
@@ -1304,15 +1309,15 @@ class PlaywrightAuthorizedScraper:
                             "captured_at": published,
                         }
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Failed to fetch ESPN NBA RSS news: {exc}")
 
         # 1b. Merge official Sportradar NBA v8 injury documents & Synergy Basketball NBA profiles when configured
         try:
             sr_ctx = SportradarAdapter().fetch_league_intelligence_context()
             documents.extend(sr_ctx.get("injury_documents", [])[:90])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Failed to fetch Sportradar injury docs: {exc}")
 
         bb_key = os.getenv("BROWSERBASE_API_KEY", "").strip()
 

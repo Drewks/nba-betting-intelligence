@@ -128,7 +128,7 @@ class BaselineModel:
         self,
         game: dict[str, Any],
         historical_games: list[dict[str, Any]],
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         feats = build_pregame_features(game, historical_games, market="moneyline")
         win_pct_diff = feats["home_recent_win_pct"] - feats["away_recent_win_pct"]
         p_home = float(np.clip(self.historical_home_win_rate + 0.15 * win_pct_diff, 0.08, 0.92))
@@ -183,7 +183,7 @@ class EloModel:
         self,
         game: dict[str, Any],
         historical_games: list[dict[str, Any]],
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         feats = build_pregame_features(game, historical_games, market="moneyline")
         r_home = feats["elo_home"]
         r_away = feats["elo_away"]
@@ -266,7 +266,7 @@ class PointMarginModel:
         self,
         game: dict[str, Any],
         historical_games: list[dict[str, Any]],
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         feats = build_pregame_features(game, historical_games, market="moneyline")
         structural_margin = feats["structural_margin"]
 
@@ -562,7 +562,7 @@ class AdvancedGBMModel:
         )
         reg.fit(Xt, yt_res, sample_weight=w_tr)
 
-        tot_preds = st_vec + 0.35 * reg.predict(Xt)
+        tot_preds = st_vec + 0.35 * np.asarray(reg.predict(Xt), dtype=float)
         actual_tots = st_vec + yt_res
         self.total_residual_std = float(np.clip(np.std(actual_tots - tot_preds, ddof=1), 16.5, 20.2))
 
@@ -575,7 +575,7 @@ class AdvancedGBMModel:
         self,
         game: dict[str, Any],
         historical_games: list[dict[str, Any]],
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         feats = build_pregame_features(game, historical_games, market="moneyline")
         if not self.is_fitted or self.clf is None or self.mar_reg is None:
             fallback = PointMarginModel()
@@ -585,7 +585,7 @@ class AdvancedGBMModel:
         res_mar = float(np.clip(self.mar_reg.predict(xm_vec)[0], -4.0, 4.0))
         gbm_margin = feats["structural_margin"] + 0.25 * res_mar
         p_from_mar = float(1.0 - norm.cdf(0.0, loc=gbm_margin, scale=self.win_prob_std))
-        p_from_clf = float(self.clf.predict_proba(xm_vec)[0, 1])
+        p_from_clf = float(self.clf.predict_proba(xm_vec)[0][1])
         p_elo = feats["p_elo"]
 
         # Blend residual-boosted margin probability, Elo anchor, and shallow tree classifier
@@ -908,14 +908,14 @@ class EnsembleStackingModel:
     def _pool_probs_log_odds(probs: list[float], weights: list[float]) -> float:
         eps = 1e-5
         logits = [math.log(max(eps, min(1.0 - eps, p)) / (1.0 - max(eps, min(1.0 - eps, p)))) for p in probs]
-        pooled_logit = sum(w * lg for w, lg in zip(weights, logits))
+        pooled_logit = sum(w * lg for w, lg in zip(weights, logits, strict=False))
         return float(np.clip(1.0 / (1.0 + math.exp(-pooled_logit)), 0.05, 0.95))
 
     def predict_moneyline(
         self,
         game: dict[str, Any],
         historical_games: list[dict[str, Any]],
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         pb = self.model_b.predict_moneyline(game, historical_games)["p_home"]
         c_res = self.model_c.predict_moneyline(game, historical_games)
         e_res = self.model_e.predict_moneyline(game, historical_games)

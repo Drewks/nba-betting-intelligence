@@ -7,7 +7,7 @@ Can be scheduled via cron, GitHub Actions workflow, or Antigravity `/schedule`.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime
 import json
 from pathlib import Path
 import sys

@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone, timedelta
-import json
 import logging
 from pathlib import Path
+from typing import Any
 import sys
 import time
 
@@ -199,8 +199,8 @@ class NBADailyScheduler:
         settle_res = run_incremental_cloud_cycle(mode="settle_and_calibrate")
 
         # 2. Extract settled bets and props
-        now_utc = datetime.now(timezone.utc)
-        now_str = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        # now_utc = datetime.now(timezone.utc)
+        # now_str = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Fetch settled bets today
         settled_today = self.db.fetch_all(
@@ -267,10 +267,10 @@ class NBADailyScheduler:
         logger.info("=" * 80)
         logger.info("🕒 NBA BETTING INTELLIGENCE — AUTOMATED DAILY SCHEDULER")
         logger.info("=" * 80)
-        logger.info(f"Zona Horaria         : Perú Time (America/Lima / UTC-5)")
+        logger.info("Zona Horaria         : Perú Time (America/Lima / UTC-5)")
         logger.info(f"Hora Actual en Lima  : {get_peru_time().strftime('%Y-%m-%d %H:%M:%S PET')}")
         logger.info(f"Estado Telegram Bot  : {'EN VIVO (TELEGRAM BOT API)' if self.bot.is_live else 'DRY-RUN / LOCAL'}")
-        logger.info(f"Ventanas Programadas : 10:15 PET (Apertura) | 17:15 PET (Sniper T-2H) | 18:35 PET (Pre-Tipoff) | 01:45 PET (Liquidación)")
+        logger.info("Ventanas Programadas : 10:15 PET (Apertura) | 17:15 PET (Sniper T-2H) | 18:35 PET (Pre-Tipoff) | 01:45 PET (Liquidación)")
         logger.info("=" * 80)
 
         executed_today: set[tuple[str, str]] = set()
@@ -332,18 +332,18 @@ def main() -> None:
         mode = args.run_now
         print(f"[*] Ejecutando inmediatamente ventana: {mode.upper()} en hora de Perú...")
         if mode == "morning":
-            res = scheduler.execute_morning_cycle()
+            scheduler.execute_morning_cycle()
         elif mode == "sniper":
-            res = scheduler.execute_sniper_cycle()
+            scheduler.execute_sniper_cycle()
         elif mode == "settle":
-            res = scheduler.execute_nightly_settlement_cycle()
+            scheduler.execute_nightly_settlement_cycle()
         elif mode == "all":
             print("--- 1. Apertura Matutina ---")
             scheduler.execute_morning_cycle()
             print("--- 2. Injury Sniper ---")
             scheduler.execute_sniper_cycle()
             print("--- 3. Liquidación Nocturna ---")
-            res = scheduler.execute_nightly_settlement_cycle()
+            scheduler.execute_nightly_settlement_cycle()
         print(f"[OK] Ventana {mode.upper()} completada con éxito.")
     else:
         # Default: start daemon

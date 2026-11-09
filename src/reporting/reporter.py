@@ -6,6 +6,9 @@ Obsidian Vault (`NBA/00-Inbox` through `NBA/09-Reports`) with full provenance me
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 from datetime import datetime, timedelta, timezone
 import csv
 import json
@@ -883,7 +886,7 @@ def generate_interactive_html_dashboard(
       const container = document.getElementById('active-bets-container');
       if (!container) return;
       const activeGames = DASH_DATA.slate.filter(g => g.verdict_status === 'APOSTADO' && g.bet_details);
-      
+
       if (!activeGames.length) {{
         const pendingBets = DASH_DATA.real_bets.filter(b => (b.estado || b.status) === 'PENDING');
         if (pendingBets.length) {{
@@ -1662,7 +1665,7 @@ def generate_interactive_html_dashboard(
         const rawStake = b.stake_pen !== undefined && b.stake_pen !== null ? Number(b.stake_pen) : 0;
         const stakeStr = `S/ ${{rawStake.toFixed(2)}}`;
         const estado = b.estado || b.status || 'PENDING';
-        
+
         let badge = '';
         if (estado === 'PENDING') badge = '<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 font-semibold">⏳ PENDIENTE</span>';
         else if (estado === 'WON') badge = '<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-semibold">✅ GANADA</span>';
@@ -1710,15 +1713,15 @@ def generate_interactive_html_dashboard(
         try:
             docs_dash.parent.mkdir(parents=True, exist_ok=True)
             docs_dash.write_text(html, encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Failed to sync docs/index.html: {exc}")
 
         artifact_dash = Path(r"C:\Users\faboa\.gemini\antigravity\brain\369616bb-9a6e-460b-be8c-b9c7e1a798b7\nba_dashboard.html")
         if artifact_dash.parent.exists():
             try:
                 artifact_dash.write_text(html, encoding="utf-8")
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.warning(f"Handled exception in reporter (line 1720): {exc}")
 
     return str(out)
 
@@ -2144,8 +2147,8 @@ def export_bets_and_tracking_dashboard(
     try:
         docs_path.parent.mkdir(parents=True, exist_ok=True)
         docs_path.write_text(generated_html, encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Failed to export docs/index.html: {exc}")
 
     return {"csv_path": str(csv_path), "md_path": str(md_path), "html_path": str(html_path)}
 

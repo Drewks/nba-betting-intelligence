@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+from typing import Any
 import sys
 import time
 
@@ -19,7 +20,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.backtesting.hyperparameter_optimizer import (
-    OptunaWalkForwardOptimizer,
     _simulate_parametric_ratings_and_preds,
 )
 from src.calibration.calibrator import compute_brier_score, compute_log_loss
@@ -43,7 +43,7 @@ def main() -> None:
     print(f"Total Historical Games : {len(games)}")
     print(f"Target Trials          : {args.trials}")
     print(f"Evaluation Slice Size  : {args.eval_slice} games (out-of-sample)")
-    print(f"Objective Metric       : Minimize (Brier Score + 0.5 * Log-Loss)")
+    print("Objective Metric       : Minimize (Brier Score + 0.5 * Log-Loss)")
     print(f"Started At (UTC)       : {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     print("-" * 80)
 
@@ -62,7 +62,7 @@ def main() -> None:
     base_logloss = compute_log_loss(base_anch, base_y)
     baseline_score = round(base_brier + 0.5 * base_logloss, 5)
 
-    print(f"BASELINE SCORE (Default Priors):")
+    print("BASELINE SCORE (Default Priors):")
     print(f"  • Brier Score : {base_brier:.5f}")
     print(f"  • Log-Loss    : {base_logloss:.5f}")
     print(f"  • Total Score : {baseline_score:.5f}")

@@ -8,6 +8,9 @@ Registers and activates the new V7 trained model versions in SQLite `model_versi
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import argparse
 from datetime import datetime, timezone
 import json
@@ -50,8 +53,8 @@ def main() -> None:
         try:
             opt_data = json.loads(opt_file.read_text(encoding="utf-8"))
             hyperparams = opt_data.get("best_hyperparameters", {})
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning(f"Handled exception in train_models (line 53): {exc}")
 
     print("=" * 80)
     print("[TRAINING] ENTRENAMIENTO DE MODELOS DE MACHINE LEARNING NBA (V7 ENSEMBLE)")
@@ -138,7 +141,7 @@ def main() -> None:
             (v_tot, "model_g_ml_montecarlo_hybrid", "total_points", train_start_date, train_end_date, now_iso, hp_json, oos_brier, oos_logloss),
         )
 
-    print(f"[OK] Modelos promovidos y activados en base de datos:")
+    print("[OK] Modelos promovidos y activados en base de datos:")
     print(f"  • Moneyline    : {v_ml} (is_active = 1)")
     print(f"  • Total Points : {v_tot} (is_active = 1)")
     print("=" * 80)

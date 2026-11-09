@@ -1099,7 +1099,6 @@ def test_25_v4_model_breakthrough_and_calibration_guards() -> None:
     from src.calibration.calibrator import ProbabilityCalibrator
     from src.features.builder import build_pregame_features
     from src.features.team_ratings import compute_pregame_team_ratings
-    from src.models.statistical_models import EnsembleStackingModel
 
     # 1. Pace-decoupled rating verification: high-scoring offense increases home_off_rtg without artificially lowering home_def_rtg
     sample_games = [
@@ -1996,7 +1995,7 @@ def test_36_v8_clean_four_factors_and_garbage_time_filtering() -> None:
     """
     from src.features.team_ratings import compute_pregame_team_ratings
     from src.features.builder import build_pregame_features
-    from src.models.statistical_models import PointMarginModel, AdvancedGBMModel
+    from src.models.statistical_models import PointMarginModel
 
     sample_games = [
         {
@@ -2095,7 +2094,7 @@ def test_37_v8_market_residual_model_and_clv_meta_labeling(tmp_path: Path) -> No
     3. PaperTradingEngine integration blocking candidates that fail CLV meta-labeling.
     """
     from src.models.statistical_models import MarketResidualModel
-    from src.prediction.ev_calculator import predict_clv_meta_label, evaluate_market_opportunity
+    from src.prediction.ev_calculator import predict_clv_meta_label
     from src.paper_trading.engine import PaperTradingEngine
     from src.storage.db import DatabaseManager
 
@@ -2347,7 +2346,7 @@ def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path)
         assert proj_combos["projections"][combo]["std"] > 0.0
 
     # 6. Automated Slate Generator test
-    test_db = DatabaseManager(tmp_path / "test_slate.sqlite3")
+    DatabaseManager(tmp_path / "test_slate.sqlite3")
     sample_slate = [
         {
             "game_id": "G_TEST_SLATE_1",
@@ -2558,7 +2557,7 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
                   'FINAL', 105, 102, '2026-11-08T20:00:00Z', 'ESPN', '2026-11-08T20:00:00Z')
         """
     )
-    p_curry = engine.record_player_prop_pick({
+    engine.record_player_prop_pick({
         "prop_id": "PROP_CURRY_3PM",
         "game_id": "G_TEST_PROPS_2",
         "matchday_date": "2026-11-08",
@@ -2593,7 +2592,7 @@ def test_42_data_integrity_and_dynamic_roster_audit(tmp_path: Path) -> None:
     6. Dynamic ESPN roster synchronization and team lookup.
     """
     import pytest
-    from src.ingestion.roster_manager import ensure_roster_table, get_player_team, normalize_name
+    from src.ingestion.roster_manager import ensure_roster_table, get_player_team
     from src.paper_trading.engine import PaperTradingEngine
     from src.storage.db import DatabaseManager
     from src.validation.validator import DataValidationError, TemporalLeakageError
@@ -3081,7 +3080,7 @@ def test_47_automated_daily_settlement_and_telegram_report(tmp_path: Path) -> No
     assert "S/ 100.00 PEN" in empty_report
 
     # 4. Scheduler instantiation with test DB
-    db = DatabaseManager(tmp_path / "sched_test.sqlite3")
+    DatabaseManager(tmp_path / "sched_test.sqlite3")
     sched = NBADailyScheduler(db_path=tmp_path / "sched_test.sqlite3")
     assert sched.paper_engine.initial_bankroll_pen == 100.00
 
@@ -3311,7 +3310,6 @@ def test_50_unconstrained_staking_and_high_prob_parlays(tmp_path: Path) -> None:
     from src.paper_trading.engine import PaperTradingEngine
     from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
     from src.prediction.player_props import PlayerPropsEngine
-    from src.reporting.telegram_bot import TelegramAlertBot
     from src.storage.db import DatabaseManager
 
     db = DatabaseManager(tmp_path / "test_audited_risk.sqlite3")

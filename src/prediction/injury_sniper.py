@@ -14,10 +14,13 @@ When a high-impact player status transition occurs (e.g., Questionable/GTD -> OU
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 import json
 import math
 from typing import Any
 import uuid
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -115,8 +118,8 @@ def detect_injury_status_transitions(
             # Check tactical impact in Synergy Profiles
             synergy_profile = PLAYER_ON_OFF_SYNERGY_PROFILES.get(p_name)
             is_star = synergy_profile is not None
-            impact_val = synergy_profile[0] if is_star else float(live.get("default_impact", 0.5))
-            role = synergy_profile[4] if is_star else "ROTATION"
+            impact_val = synergy_profile[0] if synergy_profile is not None else float(live.get("default_impact", 0.5))
+            role = synergy_profile[4] if synergy_profile is not None else "ROTATION"
 
             severity = "LOW"
             if is_star and new_status == "OUT":
@@ -219,7 +222,7 @@ class InjurySniperMonitor:
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # De-vigged market consensus
-        market_consensus = compute_market_consensus(market_odds)
+        compute_market_consensus(market_odds)
 
         for odds_rec in market_odds:
             if odds_rec.get("market") != "moneyline":
@@ -342,8 +345,8 @@ class InjurySniperMonitor:
                             alert["emitted_at"],
                         ),
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(f"Failed to persist sniper alert for {alert.get('game_id')}: {exc}")
 
         return alerts
 
@@ -417,13 +420,13 @@ class InjurySniperMonitor:
             try:
                 # 1. ESPN live event summary
                 espn_id = g_id.split("_")[1] if g_id.startswith("ESPN_") else g_id
-                event_ctx = self.espn_adapter.get_event_summary_context(espn_id)
-                for t_code, pen in event_ctx.get("injury_penalties", {}).items():
+                event_ctx = self.espn_adapter._fetch_event_summary_context(espn_id)
+                for t_code, _pen in event_ctx.get("injury_penalties", {}).items():
                     # Populate live injuries for this team
                     if t_code == h_team or t_code == a_team:
                         pass
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.warning(f"Handled exception in injury_sniper (line 428): {exc}")
 
             # Evaluate sniper opportunities
             game_alerts = self.evaluate_game_sniper_opportunity(

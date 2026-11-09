@@ -7,6 +7,8 @@ and Bayesian market-anchoring parameters minimizing combined (Brier Score + 0.5 
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import json
 from pathlib import Path
 from typing import Any
@@ -50,7 +52,7 @@ class _ParametricTeamState:
         self.pts_against_fast = league_ppg
         self.tempo_slow = 0.0
         self.tempo_fast = 0.0
-        self.last_start = None
+        self.last_start: datetime | None = None
         self.games = 0
 
 

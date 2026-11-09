@@ -9,6 +9,9 @@ Paper Trading Engine (Sections 7 & 8):
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 from datetime import datetime, timedelta, timezone
 import sqlite3
 from typing import Any
@@ -1332,8 +1335,8 @@ class PaperTradingEngine:
                 try:
                     res = self.settle_player_prop(pid, game_status=g_status, settled_at=ts)
                     settled_results.append(res)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(f"Failed to settle postponed prop {pid}: {exc}")
                 continue
 
             cat = prop["prop_category"]
@@ -1364,8 +1367,8 @@ class PaperTradingEngine:
                         settled_at=ts,
                     )
                     settled_results.append(res)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(f"Failed to settle prop {pid}: {exc}")
 
         return settled_results
 

@@ -7,8 +7,6 @@ and dispatches instant Telegram alerts for high-CLV latency lags and risk-free S
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
-import json
 import logging
 from pathlib import Path
 import sys
@@ -55,7 +53,7 @@ def print_comparison_table(results: list[dict]) -> None:
         print("   {:<22} | {:<12} | {:<12} | {:<20}".format("Casa de Apuestas", "Cuota Local", "Cuota Visita", "Fuente"))
         print("   " + "-" * 85)
 
-        for bid, q in res.get("quotes", {}).items():
+        for _bid, q in res.get("quotes", {}).items():
             print("   {:<22} | {:<12.2f} | {:<12.2f} | {:<20}".format(q["book_name"], q["home_odds"], q["away_odds"], q["source"]))
         print("   " + "-" * 85)
 

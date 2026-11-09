@@ -6,6 +6,9 @@ enforces at most 2 controlled retries on failure, and halts for human interventi
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -140,8 +143,8 @@ class Orchestrator:
                 try:
                     live_router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=8)])
                     live_bundle = self.scout_agent.ingest_and_validate_dataset(live_router)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(f"Live ESPN ingestion failed in step 2: {exc}")
             return {"historical": hist_bundle, "live_espn": live_bundle}
 
         ingestion_result = self.execute_step_sequentially(2, "nba_data_scout", _step2_ingest)

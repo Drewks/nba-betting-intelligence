@@ -85,16 +85,16 @@ class TelegramInteractiveListener:
                 val = self.offset_file.read_text(encoding="utf-8").strip()
                 if val.isdigit():
                     return int(val)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Could not load last update ID: {exc}")
         return None
 
     def _save_last_update_id(self, update_id: int) -> None:
         try:
             self.offset_file.parent.mkdir(parents=True, exist_ok=True)
             self.offset_file.write_text(str(update_id), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Could not save last update ID: {exc}")
 
     @property
     def is_configured(self) -> bool:
@@ -250,7 +250,7 @@ class TelegramInteractiveListener:
         # Reconcile Win Rate & Counts from DB
         counts = self.db.fetch_one(
             f"""
-            SELECT 
+            SELECT
                 SUM(CASE WHEN status = 'WON' THEN 1 ELSE 0 END) as won,
                 SUM(CASE WHEN status = 'LOST' THEN 1 ELSE 0 END) as lost,
                 SUM(CASE WHEN status = 'PUSH' THEN 1 ELSE 0 END) as push
@@ -405,12 +405,12 @@ class TelegramInteractiveListener:
         if scan_path.exists():
             try:
                 scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Could not read scan data: {exc}")
 
         if not scan_data:
             scraper = LivePeruOddsScraper(db=self.db)
-            scan_data = scraper.collect_slate_odds()
+            scan_data = scraper.scan_and_alert_entire_slate()
 
         games: list[dict[str, Any]] = []
         if isinstance(scan_data, list):
@@ -523,7 +523,7 @@ class TelegramInteractiveListener:
         logger.info("Executing on-demand settlement cycle requested via Telegram...")
         from scripts.run_automated_scheduler import NBADailyScheduler
 
-        scheduler = NBADailyScheduler(db=self.db)
+        scheduler = NBADailyScheduler(db_path=self.db.db_path)
         res = scheduler.execute_nightly_settlement_cycle()
 
         settled_count = res.get("settled_count", 0)

@@ -243,15 +243,13 @@ def calculate_peru_odds_comparison(
         model_p_h = p_home_fair / total_p
         model_p_a = p_away_fair / total_p
 
-    has_benchmark = (
-        benchmark_home_odds is not None
-        and benchmark_away_odds is not None
-        and float(benchmark_home_odds) > 1.0
-        and float(benchmark_away_odds) > 1.0
-    )
+    b_home = float(benchmark_home_odds) if benchmark_home_odds is not None else None
+    b_away = float(benchmark_away_odds) if benchmark_away_odds is not None else None
+    has_benchmark = b_home is not None and b_away is not None and b_home > 1.0 and b_away > 1.0
 
     if has_benchmark:
-        mkt_p_h, mkt_p_a, _ = devig_shin(float(benchmark_home_odds), float(benchmark_away_odds))
+        assert b_home is not None and b_away is not None
+        mkt_p_h, mkt_p_a, _ = devig_shin(b_home, b_away)
         # If caller passed neutral 0.5/0.5 (e.g., pure odds scraper), use Shin fair market prob as model reference too
         if abs(model_p_h - 0.5) < 1e-6 and abs(model_p_a - 0.5) < 1e-6:
             model_p_h, model_p_a = mkt_p_h, mkt_p_a
@@ -267,15 +265,15 @@ def calculate_peru_odds_comparison(
 
     for sb in PERU_SPORTSBOOKS.values():
         margin = sb.typical_vig_pct / 100.0
-        if sb.id == "pinnacle_pe" and has_benchmark:
-            h_odds = round(float(benchmark_home_odds), 3)
-            a_odds = round(float(benchmark_away_odds), 3)
-        elif sb.id == "1xbet_pe" and has_benchmark:
-            h_odds = round(max(1.01, float(benchmark_home_odds) * 0.995), 3)
-            a_odds = round(max(1.01, float(benchmark_away_odds) * 0.995), 3)
-        elif sb.id == "coolbet_pe" and has_benchmark:
-            h_odds = round(max(1.01, float(benchmark_home_odds) * 0.985), 3)
-            a_odds = round(max(1.01, float(benchmark_away_odds) * 0.985), 3)
+        if sb.id == "pinnacle_pe" and has_benchmark and b_home is not None and b_away is not None:
+            h_odds = round(b_home, 3)
+            a_odds = round(b_away, 3)
+        elif sb.id == "1xbet_pe" and has_benchmark and b_home is not None and b_away is not None:
+            h_odds = round(max(1.01, b_home * 0.995), 3)
+            a_odds = round(max(1.01, b_away * 0.995), 3)
+        elif sb.id == "coolbet_pe" and has_benchmark and b_home is not None and b_away is not None:
+            h_odds = round(max(1.01, b_home * 0.985), 3)
+            a_odds = round(max(1.01, b_away * 0.985), 3)
         else:
             # Retail Peruvian pricing anchored to Shin de-vigged market probability + asymmetric FLB vig
             # Underdogs carry slightly higher proportional margin in retail books

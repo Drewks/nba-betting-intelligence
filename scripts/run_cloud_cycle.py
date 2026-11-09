@@ -12,6 +12,9 @@ Designed to run unattended in the cloud (e.g., GitHub Actions cron 2x/day) witho
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import argparse
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
@@ -121,13 +124,13 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         r["matchday_date"]
         for r in db.fetch_all(
             """
-            SELECT DISTINCT matchday_date FROM games 
+            SELECT DISTINCT matchday_date FROM games
             WHERE status != 'FINAL' AND game_start_time <= ? AND matchday_date IS NOT NULL
             UNION
-            SELECT DISTINCT matchday_date FROM player_prop_picks 
+            SELECT DISTINCT matchday_date FROM player_prop_picks
             WHERE status = 'PENDING' AND matchday_date IS NOT NULL
             UNION
-            SELECT DISTINCT matchday_date FROM simulated_bets 
+            SELECT DISTINCT matchday_date FROM simulated_bets
             WHERE status = 'PENDING' AND matchday_date IS NOT NULL
             """,
             (now_str,),
@@ -144,8 +147,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         try:
             scout.ingest_and_validate_dataset(router, date_str=dt_str)
             ingested_dates.append(dt_str)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Ingestion failed for date {dt_str}: {exc}")
 
     # 1b. Automatically promote latest pre-tipoff odds to closing lines for started / final games
     new_closing_lines = paper_engine.persist_closing_lines_for_games(now_str)
@@ -171,8 +174,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                 settled_at=pb["result_recorded_at"] or now_str,
             )
             settled_now.append(s_res)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Failed to settle bet {pb.get('bet_id')}: {exc}")
 
     # 2b. Settle any PENDING player prop & SGP bets whose games are now FINAL, POSTPONED, or CANCELLED
     pending_props = db.fetch_all(
@@ -193,9 +196,9 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             b_stats = espn_adapter.fetch_player_boxscores(ev_id)
             if b_stats:
                 game_boxscores[gid] = b_stats
-        except Exception:
-            pass
-    settled_props_now = paper_engine.settle_pending_player_props(game_boxscores=game_boxscores, settled_at=now_str)
+        except Exception as exc:
+            logger.warning(f"Failed to fetch boxscore for game {gid}: {exc}")
+    paper_engine.settle_pending_player_props(game_boxscores=game_boxscores, settled_at=now_str)
 
     # 3. Auto-Calibration Step: Fit calibrators & models on all strictly prior FINAL games
     # Refresh current timestamp post-ingestion to encompass recently settled games without temporal leakage
@@ -210,8 +213,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     if real_final_count < MIN_REAL_GAMES_FOR_TRAINING:
         try:
             backfill_espn_history(db, date(2024, 10, 22), (now_dt - timedelta(days=1)).date())
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error(f"Historical ESPN backfill failed: {exc}", exc_info=True)
     apply_pregame_team_ratings(db)
 
     all_final_games = db.fetch_all(
@@ -552,11 +555,11 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         props_engine = PlayerPropsEngine(db=db, min_ev_threshold=0.03)
         slate_records = db.fetch_all(
             """
-            SELECT * FROM games 
-            WHERE status = 'SCHEDULED' 
-              AND game_start_time > ? 
+            SELECT * FROM games
+            WHERE status = 'SCHEDULED'
+              AND game_start_time > ?
               AND game_id NOT LIKE 'SYN%'
-            ORDER BY game_start_time ASC 
+            ORDER BY game_start_time ASC
             LIMIT 15
             """,
             (now_str,),
@@ -565,8 +568,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             slate_games=slate_records,
             bankroll_pen=paper_engine.get_bankroll_state()["settled_bankroll_pen"],
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.warning(f"Handled exception in run_cloud_cycle (line 568): {exc}")
 
     daily_md = generate_daily_report(db, target_date=today_str)
     weekly_md = generate_weekly_report(metrics, promo_eval)

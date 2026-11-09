@@ -22,7 +22,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import logging
 import math
+logger = logging.getLogger(__name__)
 import os
 from pathlib import Path
 from typing import Any
@@ -345,7 +347,7 @@ class PlayerPropsEngine:
         for abs_p in absent:
             abs_prof = PLAYER_PROP_BASELINES.get(abs_p)
             if abs_prof:
-                abs_min, abs_usg = abs_prof[0], abs_prof[1]
+                _abs_min, abs_usg = abs_prof[0], abs_prof[1]
                 # High-usage star out (>26% USG)
                 if abs_usg >= 26.0:
                     # If this player is secondary initiator/scorer, absorbs major usage share
@@ -645,8 +647,8 @@ class PlayerPropsEngine:
                                 prop_pick["emitted_at"],
                             ),
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning(f"Failed to persist player prop opportunity: {exc}")
 
         return opportunities
 
@@ -808,7 +810,7 @@ class PlayerPropsEngine:
             sim_offered_odds = round(max(2.15, odds_g * odds_p * 0.94), 2)
 
             sgp_cand = self.simulate_same_game_parlay_copula(
-                game_id=gid,
+                game_id=gid or "NBA_GAME",
                 matchday_date=prop.get("matchday_date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
                 game_selection_label=sel_label,
                 game_model_prob=game_prob,
@@ -859,8 +861,8 @@ class PlayerPropsEngine:
                                 datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             ),
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logging.warning(f"Handled exception in player_props (line 864): {exc}")
 
         return sgp_opportunities
 
@@ -1016,9 +1018,9 @@ class PlayerPropsEngine:
         if len(distinct_legs) >= 2:
             combined_odds = 1.0
             joint_p = 1.0
-            for l in distinct_legs[:3]:
-                combined_odds *= l["odds"]
-                joint_p *= l["prob"]
+            for leg in distinct_legs[:3]:
+                combined_odds *= leg["odds"]
+                joint_p *= leg["prob"]
 
             combined_odds = round(combined_odds, 2)
             ev_pct = round(((joint_p * combined_odds) - 1.0) * 100.0, 2)
@@ -1046,7 +1048,7 @@ class PlayerPropsEngine:
                 "kelly_stake_pen": suggested_stake,
                 "stake_pen": suggested_stake,
                 "rationale": (
-                    f"[SUPER COMBINADA MULTI-PARTIDO] {' + '.join(l['desc'] for l in distinct_legs[:3])}. "
+                    f"[SUPER COMBINADA MULTI-PARTIDO] {' + '.join(leg['desc'] for leg in distinct_legs[:3])}. "
                     f"Probabilidad Conjunta: {joint_p * 100.0:.1f}%. Cuota Combinada: {combined_odds:.2f} (EV: +{ev_pct:.1f}%). "
                     f"Stake Alfa: S/ {suggested_stake:.2f} PEN."
                 ),
@@ -1077,11 +1079,11 @@ class PlayerPropsEngine:
         if slate_games is None and self.db is not None:
             slate_games = self.db.fetch_all(
                 """
-                SELECT * FROM games 
-                WHERE status = 'SCHEDULED' 
-                  AND game_start_time > ? 
-                  AND game_id NOT LIKE 'SYN%' 
-                ORDER BY game_start_time ASC 
+                SELECT * FROM games
+                WHERE status = 'SCHEDULED'
+                  AND game_start_time > ?
+                  AND game_id NOT LIKE 'SYN%'
+                ORDER BY game_start_time ASC
                 LIMIT 15
                 """,
                 (now_iso,),
@@ -1091,7 +1093,7 @@ class PlayerPropsEngine:
         # Strictly enforce upcoming scheduled games only (zero historical/finished games)
         valid_slate_games = [
             g for g in slate_games
-            if g.get("status", "SCHEDULED") == "SCHEDULED" and (not g.get("game_start_time") or g.get("game_start_time") > now_iso)
+            if g.get("status", "SCHEDULED") == "SCHEDULED" and (not g.get("game_start_time") or str(g.get("game_start_time")) > now_iso)
         ]
 
         # Build injuries mapping if not passed
@@ -1104,8 +1106,8 @@ class PlayerPropsEngine:
                     p = r.get("player_name")
                     if t and p:
                         team_injuries.setdefault(t, []).append(p)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Failed to load injuries from DB: {exc}")
 
         # Also fallback to visual RAG context if available
         if not team_injuries:
@@ -1114,11 +1116,11 @@ class PlayerPropsEngine:
                 if v_path.exists():
                     v_data = json.loads(v_path.read_text(encoding="utf-8"))
                     for doc in v_data.get("top_retrieved_context", []):
-                        snip = doc.get("snippet", "")
-                        for team_code in PLAYER_PROP_BASELINES:
+                        doc.get("snippet", "")
+                        for _team_code in PLAYER_PROP_BASELINES:
                             pass
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Failed to load visual context: {exc}")
 
         qualified_props: list[dict[str, Any]] = []
 
@@ -1128,8 +1130,8 @@ class PlayerPropsEngine:
             try:
                 from src.ingestion.roster_manager import get_all_rosters
                 active_rosters = get_all_rosters(self.db)
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.warning(f"Handled exception in player_props (line 1133): {exc}")
 
         # Direct team mapping fallback for offline testing without DB
         fallback_rosters: dict[str, list[str]] = {
@@ -1173,7 +1175,7 @@ class PlayerPropsEngine:
             spread_val = float(game.get("expected_margin") or 0.0)
             pace_val = float(game.get("stats", {}).get("expected_pace") or 99.5) if isinstance(game.get("stats"), dict) else 99.5
 
-            for is_home, team_code, opp_code in [(True, home_t, away_t), (False, away_t, home_t)]:
+            for _is_home, team_code, opp_code in [(True, home_t, away_t), (False, away_t, home_t)]:
                 if not team_code:
                     continue
                 team_players = active_rosters.get(team_code) or fallback_rosters.get(team_code, [])
@@ -1250,7 +1252,7 @@ class PlayerPropsEngine:
                         picks = self.evaluate_prop_opportunity(
                             player_name=p_name,
                             team=team_code,
-                            game_id=gid,
+                            game_id=gid or "NBA_GAME",
                             matchday_date=mdate,
                             prop_category=cat,
                             line_value=std_line,

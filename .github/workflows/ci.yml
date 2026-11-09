@@ -1,0 +1,43 @@
+name: Continuous Integration (Lint, Types & Test Suite)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, Type Check & Pytest Suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and configure Python 3.12
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --python 3.12
+
+      - name: Ruff Linter & Code Style
+        run: |
+          uv run ruff check src/ scripts/ tests/
+
+      - name: Mypy Static Type Verification
+        run: |
+          uv run mypy src/
+
+      - name: Pytest Suite (50 Tests, Isolated in tmp_path)
+        run: |
+          uv run pytest

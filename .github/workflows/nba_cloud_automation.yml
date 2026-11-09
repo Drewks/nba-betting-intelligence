@@ -115,6 +115,7 @@ jobs:
             echo "Sin cambios nuevos para confirmar."
           else
             git commit -m "chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]"
+            git pull --rebase origin main || true
             git push origin main
           fi
 

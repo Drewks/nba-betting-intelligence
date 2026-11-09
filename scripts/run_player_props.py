@@ -8,7 +8,6 @@ across Points (PTS), Rebounds (REB), Assists (AST), 3PM, PRA, and RETAbet Perú 
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
