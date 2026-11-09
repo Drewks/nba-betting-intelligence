@@ -1,6 +1,6 @@
 [
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Bennedict_Mathurin_PRA_OVER_13e6c6",
+    "prop_id": "PROP_G_TEST_SLATE_1_Bennedict_Mathurin_PRA_OVER_69ae79",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -28,10 +28,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 28.0,
     "rationale": "[PRA OVER 24.5] Bennedict Mathurin (IND). Proyección: 27.8 (std: 7.6, Ventaja vs Línea: +3.3 pts). Prob Modelo: 62.5% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -2.56% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Pascal_Siakam_PTS_OVER_767621",
+    "prop_id": "PROP_G_TEST_SLATE_1_Pascal_Siakam_PTS_OVER_d8d33e",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -59,10 +59,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 33.0,
     "rationale": "[PTS OVER 21.5] Pascal Siakam (IND). Proyección: 24.3 (std: 6.7, Ventaja vs Línea: +2.8 pts). Prob Modelo: 62.2% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -3.29% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Tyrese_Haliburton_AST_OVER_528628",
+    "prop_id": "PROP_G_TEST_SLATE_1_Tyrese_Haliburton_AST_OVER_3edb47",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -90,10 +90,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 34.0,
     "rationale": "[AST OVER 9.5] Tyrese Haliburton (IND). Proyección: 11.0 (std: 3.3, Ventaja vs Línea: +1.5 pts). Prob Modelo: 62.0% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -3.65% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Bennedict_Mathurin_PTS_OVER_67d188",
+    "prop_id": "PROP_G_TEST_SLATE_1_Bennedict_Mathurin_PTS_OVER_40fece",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -121,10 +121,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 28.0,
     "rationale": "[PTS OVER 17.5] Bennedict Mathurin (IND). Proyección: 20.0 (std: 6.1, Ventaja vs Línea: +2.5 pts). Prob Modelo: 62.0% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -3.65% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Pascal_Siakam_PRA_OVER_c72500",
+    "prop_id": "PROP_G_TEST_SLATE_1_Pascal_Siakam_PRA_OVER_17ab32",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -152,10 +152,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 33.0,
     "rationale": "[PRA OVER 33.5] Pascal Siakam (IND). Proyección: 37.1 (std: 8.8, Ventaja vs Línea: +3.6 pts). Prob Modelo: 61.9% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -3.82% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Myles_Turner_PRA_OVER_09f6d9",
+    "prop_id": "PROP_G_TEST_SLATE_1_Myles_Turner_PRA_OVER_04c5e6",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -183,10 +183,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 28.0,
     "rationale": "[PRA OVER 24.5] Myles Turner (IND). Proyección: 27.6 (std: 7.6, Ventaja vs Línea: +3.1 pts). Prob Modelo: 61.9% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -3.85% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Tyrese_Haliburton_PRA_OVER_e70528",
+    "prop_id": "PROP_G_TEST_SLATE_1_Tyrese_Haliburton_PRA_OVER_d3ac63",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -214,10 +214,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 34.0,
     "rationale": "[PRA OVER 35.5] Tyrese Haliburton (IND). Proyección: 39.1 (std: 9.1, Ventaja vs Línea: +3.6 pts). Prob Modelo: 61.6% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -4.37% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Tyrese_Haliburton_PTS_OVER_ce703a",
+    "prop_id": "PROP_G_TEST_SLATE_1_Tyrese_Haliburton_PTS_OVER_a2c7b1",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -245,10 +245,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 34.0,
     "rationale": "[PTS OVER 21.5] Tyrese Haliburton (IND). Proyección: 23.6 (std: 6.6, Ventaja vs Línea: +2.1 pts). Prob Modelo: 59.3% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -8.62% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "prop_id": "PROP_G_TEST_SLATE_1_Myles_Turner_PTS_OVER_ec5fd5",
+    "prop_id": "PROP_G_TEST_SLATE_1_Myles_Turner_PTS_OVER_1682c7",
     "type": "INDIVIDUAL_PROP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -276,10 +276,10 @@
     "usage_bump_pct": 0.0,
     "effective_minutes": 28.0,
     "rationale": "[PTS OVER 16.5] Myles Turner (IND). Proyección: 18.2 (std: 5.8, Ventaja vs Línea: +1.7 pts). Prob Modelo: 58.6% vs Casa: 50.0%. Ajustes: +0.0% USG, Rival WAS (TARGET). Lower-Bound EV: -9.94% a cuota 1.90. Kelly: S/ 3.50 PEN.",
-    "emitted_at": "2026-11-09T03:03:08Z"
+    "emitted_at": "2026-11-09T03:07:03Z"
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Bennedict_Mathurin_PRA_c2e903",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Bennedict_Mathurin_PRA_246879",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -304,7 +304,7 @@
     "rationale": "[RETAbet Crea tu Apuesta SGP] IND Gana + Bennedict Mathurin PRA OVER 24.5. Prob Conjunta Cópula: 45.0% (vs 40.6% Independiente, Impulso: +10.67%). Cuota Ofrecida: 2.75 vs Justa: 2.22 (EV: +23.7%). Stake Sugerido: S/ 3.50 PEN."
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Pascal_Siakam_PTS_769938",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Pascal_Siakam_PTS_fcf800",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -329,7 +329,7 @@
     "rationale": "[RETAbet Crea tu Apuesta SGP] IND Gana + Pascal Siakam PTS OVER 21.5. Prob Conjunta Cópula: 44.8% (vs 40.4% Independiente, Impulso: +10.92%). Cuota Ofrecida: 2.75 vs Justa: 2.23 (EV: +23.2%). Stake Sugerido: S/ 3.50 PEN."
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Tyrese_Haliburton_AST_3e28b7",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Tyrese_Haliburton_AST_5ed6b1",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -354,7 +354,7 @@
     "rationale": "[RETAbet Crea tu Apuesta SGP] IND Gana + Tyrese Haliburton AST OVER 9.5. Prob Conjunta Cópula: 44.7% (vs 40.3% Independiente, Impulso: +10.99%). Cuota Ofrecida: 2.75 vs Justa: 2.24 (EV: +22.9%). Stake Sugerido: S/ 3.50 PEN."
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Bennedict_Mathurin_PTS_3b55f3",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Bennedict_Mathurin_PTS_f41e03",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -379,7 +379,7 @@
     "rationale": "[RETAbet Crea tu Apuesta SGP] IND Gana + Bennedict Mathurin PTS OVER 17.5. Prob Conjunta Cópula: 44.7% (vs 40.3% Independiente, Impulso: +10.99%). Cuota Ofrecida: 2.75 vs Justa: 2.24 (EV: +22.9%). Stake Sugerido: S/ 3.50 PEN."
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Pascal_Siakam_PRA_ae7bfc",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Pascal_Siakam_PRA_d5cc44",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -404,7 +404,7 @@
     "rationale": "[RETAbet Crea tu Apuesta SGP] IND Gana + Pascal Siakam PRA OVER 33.5. Prob Conjunta Cópula: 44.6% (vs 40.2% Independiente, Impulso: +10.9%). Cuota Ofrecida: 2.75 vs Justa: 2.24 (EV: +22.6%). Stake Sugerido: S/ 3.50 PEN."
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Myles_Turner_PRA_2b2651",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Myles_Turner_PRA_b97ae7",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -429,7 +429,7 @@
     "rationale": "[RETAbet Crea tu Apuesta SGP] IND Gana + Myles Turner PRA OVER 24.5. Prob Conjunta Cópula: 44.6% (vs 40.2% Independiente, Impulso: +10.92%). Cuota Ofrecida: 2.75 vs Justa: 2.24 (EV: +22.6%). Stake Sugerido: S/ 3.50 PEN."
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Tyrese_Haliburton_PRA_09656f",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Tyrese_Haliburton_PRA_2b6fbe",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",
@@ -454,7 +454,7 @@
     "rationale": "[RETAbet Crea tu Apuesta SGP] IND Gana + Tyrese Haliburton PRA OVER 35.5. Prob Conjunta Cópula: 44.5% (vs 40.0% Independiente, Impulso: +11.12%). Cuota Ofrecida: 2.75 vs Justa: 2.25 (EV: +22.3%). Stake Sugerido: S/ 3.50 PEN."
   },
   {
-    "sgp_id": "SGP_G_TEST_SLATE_1_Tyrese_Haliburton_PTS_a32506",
+    "sgp_id": "SGP_G_TEST_SLATE_1_Tyrese_Haliburton_PTS_bed684",
     "type": "RETABET_SGP",
     "game_id": "G_TEST_SLATE_1",
     "matchday_date": "2026-11-08",

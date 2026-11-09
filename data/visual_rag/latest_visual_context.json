@@ -1,33 +1,27 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 124,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+  "indexed_documents_count": 34,
   "top_retrieved_context": [
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
-      "relevance_score": 0.2311,
-      "captured_at": "2026-11-08"
-    },
-    {
-      "source": "browserbase_cloud_espn_injuries_table",
+      "source": "playwright_espn_injuries_table",
       "snippet": "Jarrett Allen C Nov 9 Day-To-Day Nov 8: Allen (knee) is questionable for Monday's game against Charlotte.",
       "relevance_score": 0.3623,
-      "captured_at": "2026-11-09T03:02:27Z"
+      "captured_at": "2026-11-09T03:05:25Z"
     },
     {
-      "source": "browserbase_cloud_espn_injuries_table",
+      "source": "playwright_espn_injuries_table",
       "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 8: Diabate (quadriceps) is questionable for Monday's game against the Cavaliers.",
       "relevance_score": 0.3612,
-      "captured_at": "2026-11-09T03:02:27Z"
+      "captured_at": "2026-11-09T03:05:25Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Grant Nelson F Nov 10 Day-To-Day Nov 8: Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports.",
       "relevance_score": 0.2419,
-      "captured_at": "2026-11-09T03:02:27Z"
+      "captured_at": "2026-11-09T03:05:25Z"
     },
     {
       "source": "espn_nba_news_feed",
@@ -45,19 +39,19 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Jock Landale C Nov 9 Out Nov 8: Landale (hip) is listed as questionable for Monday's game against the Lakers.",
       "relevance_score": 0.0572,
-      "captured_at": "2026-11-09T03:02:27Z"
+      "captured_at": "2026-11-09T03:05:25Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Jaylon Tyson G Nov 11 Out Nov 8: Tyson (ankle) is out for Monday's game against the Hornets.",
       "relevance_score": 0.0,
-      "captured_at": "2026-11-09T03:02:27Z"
+      "captured_at": "2026-11-09T03:05:25Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Sergio de Larrea F Nov 12 Out Nov 5: De Larrea (knee) is out for Friday's game against Utah.",
       "relevance_score": 0.0,
-      "captured_at": "2026-11-09T03:02:27Z"
+      "captured_at": "2026-11-09T03:05:25Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
