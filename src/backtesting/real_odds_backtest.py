@@ -384,20 +384,24 @@ def run_real_odds_backtest(
         # Selection: best EV first, one bet per game, at most `max_bets_per_day`
         chosen: list[dict[str, Any]] = []
         seen_games: set[str] = set()
+        # Size every candidate first: one whose Kelly stake falls below the minimum is not a bet in
+        # production, so it must not consume a slot of the daily cap either.
+        start_kelly_bankroll = kelly_bankroll
         for c in sorted(candidates, key=lambda c: c["ev_unit"], reverse=True):
             if c["game_id"] in seen_games or len(chosen) >= max_bets_per_day:
                 continue
-            seen_games.add(c["game_id"])
-            chosen.append(c)
-
-        start_kelly_bankroll = kelly_bankroll
-        for c in chosen:
-            odds = c["decimal_odds"]
             k_stake = fractional_kelly_stake(
-                prob=c["anchored_prob"], decimal_odds=odds, bankroll_pen=start_kelly_bankroll,
+                prob=c["anchored_prob"], decimal_odds=c["decimal_odds"], bankroll_pen=start_kelly_bankroll,
                 kelly_fraction=kelly_fraction, min_stake_pen=kelly_min_stake,
                 max_stake_pen=kelly_max_stake, max_bankroll_fraction=kelly_max_fraction,
             )
+            if k_stake <= 0.0:
+                continue
+            seen_games.add(c["game_id"])
+            chosen.append({**c, "_k_stake": k_stake})
+        for c in chosen:
+            odds = c["decimal_odds"]
+            k_stake = c.pop("_k_stake")
             mult = (odds - 1.0) if c["result"] == "WON" else (-1.0 if c["result"] == "LOST" else 0.0)
             clv_pct = 100.0 * (odds * c["p_close"] - 1.0)
             kelly_bankroll += k_stake * mult
