@@ -1,42 +1,32 @@
 # ==============================================================================
-# NBA Betting Intelligence — Quantitative Model & Risk Configuration
-# Version: 10.0 (Audited & Calibrated)
-# All parameters are versioned and audited against historical Pinnacle closing lines.
+# NBA Betting Intelligence — Model & Risk Configuration (single source of truth)
+# Loaded by src/config.py. Values are validated at load time (out-of-range values fail fast).
+#
+# Honesty notes:
+# - The EWMA rates below are UNTUNED structural priors. The previous "Optuna-optimized" values
+#   (0.020 / 0.155 / 0.035 / 0.080) were selected by an objective that leaked final scores and
+#   are invalid. Re-tune only with scripts/run_optuna_study.py (validation + untouched holdout).
+# - None of these parameters has been validated against historical Pinnacle closing lines:
+#   the project does not yet store historical closing odds.
 # ==============================================================================
 
 model:
-  version_id: "model_c_calibrated_v10"
-  family: "bayesian_ewma_ensemble"
+  version_id: "model_f_ensemble_v8"
   ewma_alpha_slow: 0.045
   ewma_alpha_fast: 0.110
   tempo_alpha_slow: 0.055
   tempo_alpha_fast: 0.130
-  hca_per_side_pts: 0.925        # 1.85 pts net home court advantage
-  blowout_huber_cap_pts: 26.0    # Huber cap for garbage time distortion
-  league_ppg_prior: 114.2
-  league_pace_prior: 99.5
-  market_anchor_weight: 0.70     # 70% sharp market consensus, 30% fundamental edge
+  market_anchor_model_weight: 0.30   # p_final = 0.30 * p_model + 0.70 * p_market (de-vigged)
 
-risk_management:
+risk_management:                     # AGENTS.md section 4 (paper_trading_manager), version 1 rules
   virtual_bankroll_initial_pen: 100.00
-  base_stake_pen: 1.00           # Strict 1.0% of virtual bankroll
-  max_stake_pen: 2.00            # Strict 2.0% cap per AGENTS.md
-  min_ev_threshold: 0.05         # Minimum 5.0% Expected Value (+EV) required
-  quarter_kelly_fraction: 0.25   # Conservative fractional Kelly multiplier
-  max_portfolio_exposure_pct: 0.20 # Maximum 20% of bankroll exposed across all active bets
-  allow_negative_ev_bets: false  # Zero tolerance for negative EV: stake MUST be 0.00
-  parlays_require_observed_odds: true
-
-benchmarking:
-  primary_sharp_bookmaker: "Pinnacle"
-  devig_method: "shin"           # Shin's de-vigging method for true probability extraction
-  clv_measurement: "probability_space" # P(model) - P(sharp_closing_devigged)
-  quarantine_synthetic_odds: true
+  base_stake_pen: 1.00               # Stake base S/1.00
+  max_stake_pen: 1.00                # Stake maximo S/1.00 por seleccion
+  max_selections_per_matchday: 3
+  min_ev_threshold: 0.05             # EV > 5%
+  max_portfolio_exposure_pct: 0.20
+  allow_parlays: false               # Prohibidas apuestas combinadas
+  allow_player_props_betting: false  # No observed player-prop prices are ingested yet
 
 sources:
-  allowed_types:
-    - "OBSERVED"
-    - "DERIVED"
-    - "SYNTHETIC"
-  betting_allowed_sources:
-    - "OBSERVED"
+  betting_allowed_source_types: ["OBSERVED"]

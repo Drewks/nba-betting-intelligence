@@ -90,7 +90,7 @@ def backfill(db: DatabaseManager, start: date, end: date, workers: int = 8) -> d
         results = list(pool.map(_fetch_day, days))
     games = {r["game_id"]: r for day_rows in results for r in day_rows}
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    before = db.fetch_one("SELECT COUNT(*) AS c FROM games")["c"]
+    before = (db.fetch_one("SELECT COUNT(*) AS c FROM games") or {"c": 0})["c"]
     with db.connect() as conn:
         conn.executemany(
             """
@@ -111,7 +111,7 @@ def backfill(db: DatabaseManager, start: date, end: date, workers: int = 8) -> d
                 for g in games.values()
             ],
         )
-    after = db.fetch_one("SELECT COUNT(*) AS c FROM games")["c"]
+    after = (db.fetch_one("SELECT COUNT(*) AS c FROM games") or {"c": 0})["c"]
     rated = apply_pregame_team_ratings(db)
     return {"days_queried": len(days), "games_found": len(games), "games_inserted": after - before, "games_rated": rated}
 

@@ -27,6 +27,11 @@ from typing import Any
 import httpx
 
 
+
+def _nd(value: float | None, spec: str = ".4f") -> str:
+    """Formats an optional metric; missing values are shown as 'n/d', never as a fake number."""
+    return "n/d" if value is None else format(float(value), spec)
+
 def _resolve_github_token() -> str:
     """Resolves GITHUB_TOKEN from environment (GitHub Actions) or local Git Credential Manager."""
     env_tok = os.getenv("GITHUB_TOKEN", "").strip() or os.getenv("GH_TOKEN", "").strip()
@@ -71,13 +76,9 @@ def evaluate_and_notify_readiness(
 
     settled_count = int(metrics.get("settled_bets_count", 0))
     pending_count = int(metrics.get("pending_bets_count", 0))
-    live_settled = int(
-        metrics.get(
-            "live_espn_settled_bets_count",
-            settled_count if settled_count >= 500 else 0,
-        )
-    )
-    live_pending = int(metrics.get("live_espn_pending_bets_count", pending_count))
+    # Fail-closed: a missing metric never counts as a passed criterion.
+    live_settled = int(metrics.get("live_espn_settled_bets_count") or 0)
+    live_pending = int(metrics.get("live_espn_pending_bets_count") or 0)
 
     gates = metrics.get("exit_gates_evaluation", {}).get("gates", {})
     boot = metrics.get("bootstrap_uncertainty", {})
@@ -89,38 +90,35 @@ def evaluate_and_notify_readiness(
     bankroll = float(metrics.get("current_settled_bankroll_pen", 100.0))
     roi_pct = float(metrics.get("roi_pct", 0.0))
     yield_pct = float(metrics.get("yield_pct", 0.0))
-    raw_max_dd = float(metrics.get("max_drawdown_pct", 0.0))
+    raw_max_dd = metrics.get("max_drawdown_pct")
     live_max_dd = float(metrics.get("live_max_drawdown_pct") or 0.0)
     # Strict audit rule: evaluate worst-case drawdown across total history and live bets
-    max_dd_pct = max(raw_max_dd, live_max_dd)
-    brier = float(metrics.get("overall_brier_score", 0.25))
-    base_brier = float(metrics.get("baseline_brier_score", 0.25))
-    ece = float(metrics.get("overall_ece", 0.025))
+    max_dd_pct = None if raw_max_dd is None else max(float(raw_max_dd), live_max_dd)
+    brier = metrics.get("overall_brier_score")
+    base_brier = metrics.get("baseline_brier_score")
+    ece = metrics.get("overall_ece")
 
     by_mkt = metrics.get("performance_by_market", {})
     ml_roi = float(by_mkt.get("moneyline", {}).get("roi_pct", roi_pct))
     tot_roi = float(by_mkt.get("total_points", {}).get("roi_pct", roi_pct))
     both_markets_positive = (ml_roi > 0.0) and (tot_roi > 0.0)
 
-    brier_ok = bool(
-        gates.get("gate_3_calibration_non_inferior_to_baseline", {}).get(
-            "passed", brier <= base_brier
-        )
+    # Calibration criterion requires BOTH: not worse than the naive baseline (gate 3) AND not worse than
+    # the de-vigged market on the same games (gate 10). Missing gates fail.
+    brier_ok = bool(gates.get("gate_3_calibration_non_inferior_to_baseline", {}).get("passed", False)) and bool(
+        gates.get("gate_10_non_inferior_to_devigged_market", {}).get("passed", False)
     )
-    leakage_ok = bool(
-        gates.get("gate_4_zero_information_leakage", {}).get(
-            "passed",
-            gates.get("gate_7_zero_temporal_leakage", {}).get("passed", True),
-        )
+    leakage_ok = bool(gates.get("gate_4_zero_information_leakage", {}).get("passed", False)) and bool(
+        gates.get("gate_8_data_and_odds_integrity", {}).get("passed", True)
     )
 
     # 8 Strict Quantitative Criteria for Tier 1 (Piloto Micro-Banca: 500 total / 200 live)
     t1_c1_total_sample = settled_count >= 500
     t1_c2_live_sample = live_settled >= 200
     t1_c3_brier_vs_base = brier_ok
-    t1_c4_ece_bound = ece <= 0.050
+    t1_c4_ece_bound = ece is not None and float(ece) <= 0.050
     t1_c5_net_roi = (roi_pct >= 2.0) and (yield_pct >= 1.5)
-    t1_c6_drawdown_cap = max_dd_pct <= 15.0
+    t1_c6_drawdown_cap = max_dd_pct is not None and settled_count > 0 and max_dd_pct <= 15.0
     t1_c7_bootstrap_ci = (ci_low_90 > 0.0) or (ci_low_95 > 0.0)
     t1_c8_audit_integrity = leakage_ok
 
@@ -141,9 +139,9 @@ def evaluate_and_notify_readiness(
     t2_c1_total_sample = settled_count >= 1000
     t2_c2_live_sample = live_settled >= 500
     t2_c3_brier_vs_base = brier_ok
-    t2_c4_ece_bound = ece <= 0.035
+    t2_c4_ece_bound = ece is not None and float(ece) <= 0.035
     t2_c5_net_roi = (roi_pct >= 3.5) and (yield_pct >= 3.0) and both_markets_positive
-    t2_c6_drawdown_cap = max_dd_pct <= 15.0
+    t2_c6_drawdown_cap = max_dd_pct is not None and settled_count > 0 and max_dd_pct <= 15.0
     t2_c7_bootstrap_ci = ci_low_95 > 0.0
     t2_c8_audit_integrity = leakage_ok
 
@@ -161,6 +159,9 @@ def evaluate_and_notify_readiness(
     is_tier2_ready = all(tier2_flags)
 
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dd_txt = "n/d" if max_dd_pct is None else f"{max_dd_pct:.2f}%"
+    ece_txt = "n/d" if ece is None else f"{float(ece):.4f}"
+    brier_txt = "n/d" if brier is None else f"{float(brier):.4f}"
     missing_total_t1 = max(0, 500 - settled_count)
     missing_live_t1 = max(0, 200 - live_settled)
     progress_t1_pct = min(100.0, round((settled_count / 500.0) * 100.0, 1))
@@ -171,22 +172,24 @@ def evaluate_and_notify_readiness(
         headline = "🟢 ¡MODELO CERTIFICADO NIVEL 2: LISTO PARA ENTORNO REAL COMPLETO! (8/8 Criterios Nivel 2)"
         detail_msg = (
             f"Superados los 8 criterios de sindicato con {settled_count} apuestas totales ({live_settled} en vivo). "
-            f"Bankroll: S/{bankroll:.2f} PEN | ROI: {roi_pct:+.2f}% | Max Drawdown: {max_dd_pct:.2f}% | "
-            f"ECE: {ece:.4f} | IC 95%: [{ci_low_95:+.2f}%, {ci_high_95:+.2f}%]."
+            f"Bankroll: S/{bankroll:.2f} PEN | ROI: {roi_pct:+.2f}% | Max Drawdown: {dd_txt} | "
+            f"ECE: {ece_txt} | IC 95%: [{ci_low_95:+.2f}%, {ci_high_95:+.2f}%]. "
+            "Elegible solo para REVISIÓN HUMANA EXTENDIDA (AGENTS.md): no es una recomendación de apostar dinero real."
         )
     elif is_tier1_ready:
         graduation_level = "NIVEL_1_MICRO_BANCA"
         headline = "🟡 ¡MODELO LISTO PARA NIVEL 1 (PILOTO MICRO-BANCA)! (8/8 Criterios Nivel 1 Superados)"
         detail_msg = (
             f"Superados los 8 criterios del Nivel 1 ({settled_count}/500 totales, {live_settled}/200 en vivo). "
-            f"Puedes iniciar pruebas reales con Micro-Banca (25% de tu stake objetivo) mientras acumula 1,000 apuestas para el Nivel 2."
+            "Elegible solo para REVISIÓN HUMANA EXTENDIDA (AGENTS.md): el sistema sigue en paper trading y "
+            "no recomienda apostar dinero real."
         )
     else:
         graduation_level = "FASE_0_SIMULACION_Y_CALIBRACION"
         headline = f"🚦 Estado del Modelo: EN CALIBRACIÓN ({tier1_passed_count}/8 Criterios Nivel 1 en VERDE — No usar dinero real aún)"
         detail_msg = (
             f"Muestra Total: {settled_count}/500 ({progress_t1_pct:.1f}%) | Muestra 100% En Vivo: {live_settled}/200 ({progress_live_pct:.1f}%, {live_pending} en espera hoy) | "
-            f"Bankroll: S/{bankroll:.2f} PEN (ROI {roi_pct:+.2f}%, MaxDD {max_dd_pct:.2f}%) | Brier: {brier:.4f} (ECE {ece:.4f}). "
+            f"Bankroll: S/{bankroll:.2f} PEN (ROI {roi_pct:+.2f}%, MaxDD {dd_txt}) | Brier: {brier_txt} (ECE {ece_txt}). "
             f"Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2."
         )
 
@@ -259,10 +262,15 @@ def evaluate_and_notify_readiness(
         "bankroll_pen": round(bankroll, 2),
         "roi_pct": round(roi_pct, 2),
         "yield_pct": round(yield_pct, 2),
-        "max_drawdown_pct": round(max_dd_pct, 2),
-        "brier_score": round(brier, 4),
-        "baseline_brier_score": round(base_brier, 4),
-        "ece_score": round(ece, 4),
+        "max_drawdown_pct": None if max_dd_pct is None else round(max_dd_pct, 2),
+        "brier_score": None if brier is None else round(float(brier), 4),
+        "baseline_brier_score": None if base_brier is None else round(float(base_brier), 4),
+        "market_brier_score": None if metrics.get("market_brier_score") is None else round(float(metrics["market_brier_score"]), 4),
+        "model_brier_on_market_subset": (
+            None if metrics.get("model_brier_on_market_subset") is None
+            else round(float(metrics["model_brier_on_market_subset"]), 4)
+        ),
+        "ece_score": None if ece is None else round(float(ece), 4),
         "roi_ci_90_lower_pct": round(ci_low_90, 2),
         "roi_ci_90_upper_pct": round(ci_high_90, 2),
         "roi_ci_95_lower_pct": round(ci_low_95, 2),
@@ -270,7 +278,7 @@ def evaluate_and_notify_readiness(
         "criteria_flags_tier1": {
             "c1_total_sample_500": t1_c1_total_sample,
             "c2_live_sample_200": t1_c2_live_sample,
-            "c3_brier_beats_baseline": t1_c3_brier_vs_base,
+            "c3_brier_beats_baseline_and_market": t1_c3_brier_vs_base,
             "c4_ece_under_5pct": t1_c4_ece_bound,
             "c5_positive_net_roi": t1_c5_net_roi,
             "c6_max_drawdown_under_15pct": t1_c6_drawdown_cap,
@@ -476,12 +484,12 @@ def _dispatch_readiness_alerts(
     bankroll: float,
     roi_pct: float,
     yield_pct: float,
-    max_dd_pct: float,
-    ece: float,
+    max_dd_pct: float | None,
+    ece: float | None,
     ci_low: float,
     ci_high: float,
-    brier: float,
-    base_brier: float,
+    brier: float | None,
+    base_brier: float | None,
     is_test: bool = False,
 ) -> list[str]:
     """
@@ -505,10 +513,10 @@ def _dispatch_readiness_alerts(
         f"| :-: | :--- | :--- | :---: |\n"
         f"| 1 | **Muestra Total Liquidada** | `{settled_count} apuestas` | ✅ VERDE |\n"
         f"| 2 | **Muestra 100% En Vivo (ESPN/OddsAPI)** | `{live_settled} apuestas reales en vivo` | ✅ VERDE |\n"
-        f"| 3 | **Calibración Probabilística (Brier Score)** | `{brier:.4f}` (vs `{base_brier:.4f}` Base) | ✅ VERDE |\n"
-        f"| 4 | **Error de Calibración por Tramos (ECE)** | `{ece:.4f}` (`{ece * 100:.2f}%`) | ✅ VERDE |\n"
+        f"| 3 | **Calibración Probabilística (Brier Score)** | `{_nd(brier)}` (vs `{_nd(base_brier)}` Base) | ✅ VERDE |\n"
+        f"| 4 | **Error de Calibración por Tramos (ECE)** | `{_nd(ece)}` | ✅ VERDE |\n"
         f"| 5 | **Rentabilidad Neta (ROI / Yield)** | `ROI {roi_pct:+.2f}% / Yield {yield_pct:+.2f}%` | ✅ VERDE |\n"
-        f"| 6 | **Caída Máxima Histórica (Max Drawdown)** | `{max_dd_pct:.2f}%` (`<= 15.0%`) | ✅ VERDE |\n"
+        f"| 6 | **Caída Máxima Histórica (Max Drawdown)** | `{_nd(max_dd_pct, '.2f')}%` (`<= 15.0%`) | ✅ VERDE |\n"
         f"| 7 | **Intervalo de Confianza Bootstrap** | `[{ci_low:+.2f}%, {ci_high:+.2f}%]` (`> 0%`) | ✅ VERDE |\n"
         f"| 8 | **Integridad Temporal y SQLite** | `0 violaciones / S/{bankroll:.2f} PEN` | ✅ VERDE |\n\n"
         f"---\n"

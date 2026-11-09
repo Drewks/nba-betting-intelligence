@@ -18,17 +18,20 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from src.config import load_config
 from src.validation.validator import parse_iso_utc
 
 SYNTHETIC_PREFIX = "SYN_"
 
 LEAGUE_PPG_PRIOR = 114.2
 LEAGUE_PACE_BASE = 99.5
-# Baseline Bayesian Hyperparameters (Structural EWMA & Decoupled Tempo Adaptation)
-EWMA_ALPHA_SLOW = 0.020     # Structural opponent-adjusted efficiency
-EWMA_ALPHA_FAST = 0.155     # High-frequency recent momentum/surge
-TEMPO_ALPHA_SLOW = 0.035    # Decoupled pace adaptation
-TEMPO_ALPHA_FAST = 0.080
+# Untuned structural EWMA priors, loaded from config/model_config.yaml (single source of truth).
+# The former values 0.020 / 0.155 / 0.035 / 0.080 came from a leaked Optuna objective and were removed.
+_MODEL_CFG = load_config().model
+EWMA_ALPHA_SLOW = _MODEL_CFG.ewma_alpha_slow      # Structural opponent-adjusted efficiency
+EWMA_ALPHA_FAST = _MODEL_CFG.ewma_alpha_fast      # High-frequency recent momentum/surge
+TEMPO_ALPHA_SLOW = _MODEL_CFG.tempo_alpha_slow    # Decoupled pace adaptation
+TEMPO_ALPHA_FAST = _MODEL_CFG.tempo_alpha_fast
 LEAGUE_ALPHA = 0.015        # slow-moving league averages
 OFFSEASON_GAP_DAYS = 60
 OFFSEASON_CARRYOVER = 0.68  # retain 68% of prior season's true efficiency deviation

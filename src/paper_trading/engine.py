@@ -68,7 +68,7 @@ class PaperTradingEngine:
         db: DatabaseManager,
         initial_bankroll_pen: float = 100.00,
         base_stake_pen: float = 1.00,
-        max_stake_pen: float = 2.00,
+        max_stake_pen: float = 1.00,
         max_selections_per_matchday: int = 3,
         min_ev_threshold: float = 0.05,
         dynamic_conviction_staking: bool = False,
@@ -81,7 +81,8 @@ class PaperTradingEngine:
     ) -> None:
         self.is_backtest = is_backtest
         self.max_portfolio_exposure_pct = max_portfolio_exposure_pct
-        max_allowed = 25.00 if dynamic_conviction_staking else 2.00
+        # AGENTS.md v1: max S/1.00 per selection. The dynamic-conviction mode is a research mode only.
+        max_allowed = 25.00 if dynamic_conviction_staking else 1.00
         if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
             raise RiskLimitError(
                 f"Stake limits must satisfy 0 < base_stake <= max_stake <= S/{max_allowed:.2f} PEN."
@@ -123,7 +124,7 @@ class PaperTradingEngine:
             SELECT b.bet_id, b.decimal_odds,
                    (
                        SELECT o.decimal_odds
-                       FROM odds_snapshots o
+                       FROM v_observed_odds_snapshots o
                        WHERE o.game_id = b.game_id
                          AND o.market = b.market
                          AND o.selection = b.selection
@@ -133,7 +134,7 @@ class PaperTradingEngine:
                                 o.captured_at DESC
                        LIMIT 1
                    ) AS closing_odds
-            FROM simulated_bets b
+            FROM v_observed_simulated_bets b
             WHERE b.status IN ('WON', 'LOST', 'PUSH')
               AND {self.scope_predicate("b")}
               AND closing_odds IS NOT NULL
@@ -164,9 +165,12 @@ class PaperTradingEngine:
 
     def persist_closing_lines_for_games(self, as_of_utc: str | None = None) -> int:
         """
-        Promotes the latest strictly pre-tipoff odds capture to a formal closing line (is_closing_line = 1)
-        for real games that are FINAL or within 45 minutes of tip-off (or already started).
-        Ensures zero temporal leakage by strictly requiring captured_at <= game_start_time.
+        Promotes the latest strictly pre-tipoff OBSERVED odds capture to a formal closing line
+        (is_closing_line = 1) for real games that are FINAL or within 45 minutes of tip-off.
+        - Only rows from `v_observed_odds_snapshots` are eligible (never quarantined/derived/synthetic odds),
+          so a fabricated quote can never be laundered into an "observed" closing line.
+        - The closing copy inherits the source row's provider and source_type.
+        - Strictly requires captured_at < game_start_time (zero temporal leakage).
         Returns the count of newly inserted closing odds rows.
         """
         now_dt = parse_iso_utc(as_of_utc) if as_of_utc else datetime.now(timezone.utc)
@@ -178,15 +182,16 @@ class PaperTradingEngine:
             WHERE g.game_id NOT LIKE 'SYN%'
               AND (g.status IN ('FINAL', 'POSTPONED', 'CANCELLED') OR g.game_start_time <= ?)
               AND EXISTS (
-                  SELECT 1 FROM odds_snapshots o
-                  WHERE o.game_id = g.game_id AND o.is_closing_line = 0
+                  SELECT 1 FROM v_observed_odds_snapshots o
+                  WHERE o.game_id = g.game_id AND o.is_closing_line = 0 AND o.captured_at < g.game_start_time
               )
               AND NOT EXISTS (
-                  SELECT 1 FROM odds_snapshots o
+                  SELECT 1 FROM v_observed_odds_snapshots o
                   WHERE o.game_id = g.game_id AND o.is_closing_line = 1
                     AND o.captured_at >= (
-                        SELECT MAX(o2.captured_at) FROM odds_snapshots o2
-                        WHERE o2.game_id = g.game_id AND o2.is_closing_line = 0 AND o2.captured_at <= g.game_start_time
+                        SELECT MAX(o2.captured_at) FROM v_observed_odds_snapshots o2
+                        WHERE o2.game_id = g.game_id AND o2.is_closing_line = 0
+                          AND o2.captured_at < g.game_start_time
                     )
               )
             """,
@@ -200,8 +205,8 @@ class PaperTradingEngine:
                 latest_time_row = conn.execute(
                     """
                     SELECT MAX(captured_at) AS max_captured
-                    FROM odds_snapshots
-                    WHERE game_id = ? AND is_closing_line = 0 AND captured_at <= ?
+                    FROM v_observed_odds_snapshots
+                    WHERE game_id = ? AND is_closing_line = 0 AND captured_at < ?
                     """,
                     (gid, start_ts),
                 ).fetchone()
@@ -211,7 +216,7 @@ class PaperTradingEngine:
 
                 snapshots = conn.execute(
                     """
-                    SELECT * FROM odds_snapshots
+                    SELECT * FROM v_observed_odds_snapshots
                     WHERE game_id = ? AND is_closing_line = 0 AND captured_at = ?
                     """,
                     (gid, max_captured),
@@ -223,28 +228,24 @@ class PaperTradingEngine:
                     if existing_close:
                         ts_compact = s["captured_at"].replace("-", "").replace(":", "").replace("T", "_").replace("Z", "")
                         close_id = f"{s['odds_id']}_CLOSE_{ts_compact}"
-                    conn.execute(
-                        """
-                        INSERT OR IGNORE INTO odds_snapshots (
-                            odds_id, game_id, provider, market, selection, line_value,
-                            decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                        """,
-                        (
-                            close_id,
-                            s["game_id"],
-                            s["provider"],
-                            s["market"],
-                            s["selection"],
-                            s["line_value"],
-                            s["decimal_odds"],
-                            s["counterpart_decimal_odds"],
-                            s["captured_at"],
-                        ),
+                    inserted = self.db.insert_odds_snapshot(
+                        {
+                            "odds_id": close_id,
+                            "game_id": s["game_id"],
+                            "provider": s["provider"],
+                            "market": s["market"],
+                            "selection": s["selection"],
+                            "line_value": s["line_value"],
+                            "decimal_odds": s["decimal_odds"],
+                            "counterpart_decimal_odds": s["counterpart_decimal_odds"],
+                            "captured_at": s["captured_at"],
+                            "is_closing_line": 1,
+                            "source_type": s["source_type"],
+                        },
+                        conn=conn,
                     )
-                    inserted_count += 1
+                    inserted_count += int(inserted)
         return inserted_count
-
 
     def compute_contextual_stake_pen(
         self,
@@ -1067,11 +1068,16 @@ class PaperTradingEngine:
         self,
         prop_dict: dict[str, Any],
         enforce_scheduled_status: bool = False,
+        allow_parlay: bool = False,
     ) -> str:
         """
-        Records a single player prop or SGP parlay paper bet with PENDING status.
+        Records a single player prop paper bet with PENDING status.
         Enforces game existence, scheduled status, pre-tipoff timing, and official active roster verification.
+        Combined bets (SGP / parlays) are prohibited by AGENTS.md and rejected unless a research caller
+        opts in explicitly with allow_parlay=True.
         """
+        if str(prop_dict.get("prop_category", "")).upper() == "SGP" and not allow_parlay:
+            raise RiskLimitError("Combined bets (SGP/parlays) are prohibited by AGENTS.md (apuestas combinadas).")
         prop_id = prop_dict.get("prop_id") or f"PROP_{uuid.uuid4().hex[:10].upper()}"
         emitted_at = prop_dict.get("emitted_at") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         gid = prop_dict["game_id"]

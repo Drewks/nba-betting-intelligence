@@ -20,6 +20,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard - audit database is written only by the automation bot
+        run: |
+          # data/nba_intelligence.sqlite3 is the immutable audit trail. Manual commits of this binary file
+          # replaced history on 2026-11-09. Only the bot (commits marked [skip ci]) may change it.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="origin/${{ github.base_ref }}...HEAD"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+          else
+            RANGE=""
+          fi
+          if [ -n "$RANGE" ] && git diff --name-only $RANGE | grep -qx "data/nba_intelligence.sqlite3"; then
+            echo "::error::This change modifies data/nba_intelligence.sqlite3. Use migrations (src/storage/migrations.py) instead."
+            exit 1
+          fi
 
       - name: Install uv and configure Python 3.12
         run: |
@@ -38,6 +56,6 @@ jobs:
         run: |
           uv run mypy src/
 
-      - name: Pytest Suite (50 Tests, Isolated in tmp_path)
+      - name: Pytest Suite (isolated in tmp_path)
         run: |
           uv run pytest

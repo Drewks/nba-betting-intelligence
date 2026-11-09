@@ -1,8 +1,12 @@
 """
 V7 Fase 4 — Bayesian Walk-Forward Hyperparameter Optimization with Optuna (TPE Sampler).
 Strictly chronological cross-validation with zero temporal leakage.
-Optimizes multi-horizon EWMA rates, Huber blowout caps, Four Factors weights,
-and Bayesian market-anchoring parameters minimizing combined (Brier Score + 0.5 * Log-Loss).
+Optimizes multi-horizon EWMA rates, Huber blowout caps, spread sigma and momentum blend on a
+validation window, minimizing (Brier Score + 0.5 * Log-Loss) of the RAW model probability, and adopts
+the result only if it also improves an untouched holdout window.
+
+History note: before 2026-11-09 the objective used a "market proxy" computed from the FINAL score of
+each game (target leakage), which produced an impossible Brier of 0.072. Those results are invalid.
 """
 
 from __future__ import annotations
@@ -67,6 +71,7 @@ def _simulate_parametric_ratings_and_preds(
     spread_sigma: float = 11.6,
     momentum_blend_weight: float = 0.88,
     eval_slice_size: int = 150,
+    holdout_size: int = 0,
 ) -> tuple[list[float], list[float], list[int]]:
     """
     Computes strict chronological ratings with trial parameters and returns
@@ -82,7 +87,12 @@ def _simulate_parametric_ratings_and_preds(
         return [], [], []
 
     eval_n = min(eval_slice_size, len(real) // 3)
-    train_end_idx = len(real) - eval_n
+    # Evaluation window [window_start, window_end): the last `holdout_size` games are excluded so they
+    # can be kept as an untouched final holdout by the caller.
+    window_end = len(real) - max(0, int(holdout_size))
+    train_end_idx = window_end - eval_n
+    if train_end_idx < 40:
+        return [], [], []
 
     league_ppg = LEAGUE_PPG_PRIOR
     league_total = 2.0 * LEAGUE_PPG_PRIOR
@@ -130,11 +140,16 @@ def _simulate_parametric_ratings_and_preds(
         p_home_model = float(np.clip(1.0 - norm.cdf(0.0, loc=expected_margin, scale=spread_sigma), 0.05, 0.95))
 
         # Out-of-sample evaluation slice (never in-sample, strictly pre-game without score leakage)
-        if idx >= train_end_idx:
+        if train_end_idx <= idx < window_end:
             actual_y = 1 if int(g["home_score"]) > int(g["away_score"]) else 0
-            # Pre-game market anchor: uses pre-game odds/prob if available, or neutral 0.50 (NEVER final scores)
-            pregame_mkt = float(g.get("market_prob") or 0.50)
-            anchored_p = market_anchored_probability(p_home_model, market_prob=pregame_mkt, model_weight=market_model_weight)
+            # Anchor ONLY to a genuine pre-game market probability when the record carries one.
+            # Without it there is no anchoring at all (a constant 0.50 "market" is not a market).
+            pregame_mkt = g.get("market_prob")
+            anchored_p = (
+                market_anchored_probability(p_home_model, market_prob=float(pregame_mkt), model_weight=market_model_weight)
+                if pregame_mkt is not None
+                else p_home_model
+            )
 
             raw_preds.append(round(p_home_model, 5))
             anchored_preds.append(round(anchored_p, 5))
@@ -205,7 +220,15 @@ class OptunaWalkForwardOptimizer:
         n_trials: int = 25,
         eval_slice_size: int = 150,
         output_json_path: Path | str | None = None,
+        holdout_size: int | None = None,
     ) -> dict[str, Any]:
+        """
+        Tunes rating hyperparameters on a VALIDATION window and decides adoption on an untouched
+        HOLDOUT window (the most recent games). Selecting and reporting on the same games would overfit
+        the selection; here the holdout is evaluated exactly twice (baseline vs. best) after tuning.
+        The objective scores the raw model probability; no market anchoring is tuned because historical
+        games carry no observed pre-game market probability.
+        """
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         if games is None:
@@ -213,73 +236,90 @@ class OptunaWalkForwardOptimizer:
                 raise ValueError("OptunaWalkForwardOptimizer requires games or an active DatabaseManager.")
             games = self.db.fetch_all("SELECT * FROM games WHERE status = 'FINAL' ORDER BY game_start_time ASC")
 
-        # Baseline evaluation (default prior parameters)
-        base_raw, base_anch, base_y = _simulate_parametric_ratings_and_preds(
-            games=games,
-            alpha_slow=0.045,
-            alpha_fast=0.110,
-            tempo_alpha_slow=0.055,
-            tempo_alpha_fast=0.130,
-            blowout_cap=28.0,
-            market_model_weight=DEFAULT_MODEL_WEIGHT,
-            eval_slice_size=eval_slice_size,
-        )
-        if not base_y:
-            raise ValueError("Insufficient games for walk-forward optimization (need >= 80 final games).")
+        hold_n = eval_slice_size if holdout_size is None else int(holdout_size)
+        defaults: dict[str, float] = {
+            "alpha_slow": 0.045,
+            "alpha_fast": 0.110,
+            "tempo_alpha_slow": 0.055,
+            "tempo_alpha_fast": 0.130,
+            "blowout_cap": 28.0,
+            "spread_sigma": 11.6,
+            "momentum_blend_weight": 0.88,
+        }
 
-        base_brier = compute_brier_score(base_anch, base_y)
-        base_logloss = compute_log_loss(base_anch, base_y)
-        baseline_score = round(base_brier + 0.5 * base_logloss, 5)
+        def _score(params: dict[str, float], holdout: bool) -> tuple[float, float, float, int]:
+            raw, _anch, y = _simulate_parametric_ratings_and_preds(
+                games=games,
+                alpha_slow=params["alpha_slow"],
+                alpha_fast=params["alpha_fast"],
+                tempo_alpha_slow=params["tempo_alpha_slow"],
+                tempo_alpha_fast=params["tempo_alpha_fast"],
+                blowout_cap=params["blowout_cap"],
+                market_model_weight=DEFAULT_MODEL_WEIGHT,
+                spread_sigma=params["spread_sigma"],
+                momentum_blend_weight=params["momentum_blend_weight"],
+                eval_slice_size=eval_slice_size if not holdout else hold_n,
+                holdout_size=hold_n if not holdout else 0,
+            )
+            if not y:
+                raise ValueError("Insufficient games for walk-forward optimization (need validation + holdout windows).")
+            brier = compute_brier_score(raw, y)
+            logloss = compute_log_loss(raw, y)
+            return round(brier + 0.5 * logloss, 5), brier, logloss, len(y)
+
+        baseline_score, base_brier, base_logloss, val_n = _score(defaults, holdout=False)
 
         sampler = optuna.samplers.TPESampler(seed=self.seed)
         study = optuna.create_study(direction="minimize", sampler=sampler)
 
         def objective(trial: optuna.Trial) -> float:
-            alpha_slow = trial.suggest_float("alpha_slow", 0.016, 0.040, step=0.002)
-            alpha_fast = trial.suggest_float("alpha_fast", 0.120, 0.190, step=0.005)
-            tempo_alpha_slow = trial.suggest_float("tempo_alpha_slow", 0.020, 0.050, step=0.002)
-            tempo_alpha_fast = trial.suggest_float("tempo_alpha_fast", 0.060, 0.110, step=0.005)
-            blowout_cap = trial.suggest_float("blowout_cap", 22.0, 30.0, step=1.0)
-            market_weight = trial.suggest_float("market_model_weight", 0.10, 0.25, step=0.01)
-            spread_sigma = trial.suggest_float("spread_sigma", 10.2, 13.0, step=0.1)
-            momentum_blend = trial.suggest_float("momentum_blend_weight", 0.75, 0.95, step=0.01)
-
-            _, anch_preds, y_true = _simulate_parametric_ratings_and_preds(
-                games=games,
-                alpha_slow=alpha_slow,
-                alpha_fast=alpha_fast,
-                tempo_alpha_slow=tempo_alpha_slow,
-                tempo_alpha_fast=tempo_alpha_fast,
-                blowout_cap=blowout_cap,
-                market_model_weight=market_weight,
-                spread_sigma=spread_sigma,
-                momentum_blend_weight=momentum_blend,
-                eval_slice_size=eval_slice_size,
-            )
-            brier = compute_brier_score(anch_preds, y_true)
-            logloss = compute_log_loss(anch_preds, y_true)
-            return round(brier + 0.5 * logloss, 5)
+            params = {
+                "alpha_slow": trial.suggest_float("alpha_slow", 0.016, 0.060, step=0.002),
+                "alpha_fast": trial.suggest_float("alpha_fast", 0.090, 0.190, step=0.005),
+                "tempo_alpha_slow": trial.suggest_float("tempo_alpha_slow", 0.020, 0.070, step=0.002),
+                "tempo_alpha_fast": trial.suggest_float("tempo_alpha_fast", 0.060, 0.150, step=0.005),
+                "blowout_cap": trial.suggest_float("blowout_cap", 22.0, 30.0, step=1.0),
+                "spread_sigma": trial.suggest_float("spread_sigma", 10.2, 13.0, step=0.1),
+                "momentum_blend_weight": trial.suggest_float("momentum_blend_weight", 0.75, 0.95, step=0.01),
+            }
+            return _score(params, holdout=False)[0]
 
         study.optimize(objective, n_trials=n_trials)
 
         best_score = float(study.best_value)
-        best_params = study.best_params
+        best_params = {k: float(v) for k, v in study.best_params.items()}
         improvement = round(max(0.0, (baseline_score - best_score) / baseline_score) * 100.0, 2)
 
+        hold_base, hold_base_brier, hold_base_ll, hold_count = _score(defaults, holdout=True)
+        hold_best, hold_best_brier, hold_best_ll, _ = _score(best_params, holdout=True)
+        adopt = hold_best < hold_base
+
         summary: dict[str, Any] = {
+            "objective": "raw model Brier + 0.5 * LogLoss (no market anchoring tuned)",
             "n_trials": len(study.trials),
-            "eval_sample_size": len(base_y),
+            "eval_sample_size": val_n,
+            "holdout_sample_size": hold_count,
             "baseline_score": baseline_score,
             "baseline_brier": base_brier,
             "baseline_log_loss": base_logloss,
             "best_score": best_score,
             "improvement_pct": improvement,
             "best_hyperparameters": best_params,
+            "default_hyperparameters": defaults,
+            "holdout": {
+                "baseline_score": hold_base,
+                "baseline_brier": hold_base_brier,
+                "baseline_log_loss": hold_base_ll,
+                "best_score": hold_best,
+                "best_brier": hold_best_brier,
+                "best_log_loss": hold_best_ll,
+            },
+            "adoption_decision": "ADOPT_ON_HOLDOUT_IMPROVEMENT" if adopt else "REJECT_NO_HOLDOUT_IMPROVEMENT",
         }
 
         if output_json_path:
-            p = Path(output_json_path)
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+            out_path = Path(output_json_path)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
         return summary

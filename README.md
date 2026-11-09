@@ -3,46 +3,38 @@
 Sistema cuantitativo de investigación probabilística, calibración estadística y **paper trading exclusivo (S/ 100.00 PEN virtual)** para la NBA.
 
 > [!WARNING]
-> **Aviso de Integridad y Riesgo**:
-> Este sistema opera exclusivamente como un entorno de investigación y paper trading sin dinero real. Ninguna métrica aquí presentada garantiza rentabilidad futura. La muestra observada actual es de **25 apuestas reales con cuotas observadas** con un retorno neto de **+S/ 0.09 PEN (ROI +0.28%)** y un intervalo de confianza al 95% de **[-24.0%, +28.0%]**, lo que indica que estadísticamente **no se puede descartar la ausencia de ventaja (azar)**. Se requieren al menos 500 a 1,400 apuestas observadas para confirmar significancia estadística.
+> **Aviso de Integridad y Riesgo**: entorno exclusivo de investigación y paper trading (S/ 100.00 PEN virtuales, stake fijo S/ 1.00, AGENTS.md).
+> Muestra actual con cuotas observadas: **25 apuestas liquidadas, ROI ≈ 0%, IC 95% ≈ [-24%, +28%]**. No hay evidencia de ventaja.
+> Confirmar un edge del 5% exige ~1,400 apuestas; uno del 2%, ~8,800. Por eso la métrica principal es el **CLV contra el cierre sin margen**.
 
 ---
 
-## 🏛️ Estado Actual del Sistema: Implementado vs. Planificado
+## 🏛️ Estado actual: implementado vs. pendiente
 
-Siguiendo la auditoría de integridad técnica, separamos de manera estricta lo que está verificado en producción frente a lo que permanece en desarrollo o requiere suscripciones comerciales de pago:
-
-| Componente | Estado | Descripción Técnica |
+| Componente | Estado | Detalle |
 | :--- | :---: | :--- |
-| **Ingesta de Cartelera & Resultados** | ✅ Operativo | Ingesta oficial de partidos, marcadores y estados vía ESPN Public API (sin costo). |
-| **Cuotas de Mercado Observadas** | ✅ Operativo | Ingesta de cuotas pre-partido reales de casas de referencia (The Odds API / DraftKings, Pinnacle, etc.). |
-| **Cuarentena de Cuotas Sintéticas** | ✅ Operativo | Tabla `quarantined_odds` y vistas `v_observed_*` que aíslan y excluyen cuotas no observadas o simuladas. |
-| **Gestión de Riesgo & Kelly Estricto** | ✅ Operativo | Stakes limitados a **S/ 1.00 - S/ 2.00 PEN (1-2% banca)**, umbral EV $\ge 5\%$. Si EV $\le 0$, el stake es estrictamente **S/ 0.00 PEN**. |
-| **Prevención de Fuga Temporal** | ✅ Operativo | Triggers SQLite inmutables (`prevent_prediction_update`, `prevent_settled_bet_tampering`) y validación pre-tipoff. |
-| **Automatización Cloud & Concurrencia** | ✅ Operativo | GitHub Actions (Python 3.12 + Astral `uv`) en 4 ventanas diarias PET, con bloqueo `concurrency: nba-pipeline-execution`. |
-| **Interfaz Telegram Interactiva** | ✅ Operativo | Bot interactivo (`@notideclau_bot`) con botonera táctil (`[💰 Mi Banca]`, `[🎯 Picks +EV]`, `[⚡ Cuotas Perú]`, etc.) y lista de control de acceso estricta. |
-| **Web Scraping en Vivo de Casas Perú** | 🟡 Heurístico / Mock | Modelado de cuotas locales y comparación Shin; requiere proxies rotativos residenciales y scrapers activos por casa. |
-| **Liquidación Automática de Player Props** | 🟡 En Desarrollo | Requiere parser de boxscores individuales por jugador; los props se evalúan únicamente cuando existen cuotas observadas. |
-| **Sportradar Synergy Enterprise** | ⚪ Planificado | Requiere licencia comercial corporativa; actualmente opera con datos públicos y priors de posesión. |
+| Ingesta de cartelera y resultados (ESPN) | ✅ | Los resultados FINAL actualizan solo estado/marcador; nunca sobrescriben las features pre-partido. |
+| Cuotas observadas (The Odds API / ESPN-DraftKings) | ✅ | Toda escritura pasa por `DatabaseManager.insert_odds_snapshot`, que exige `source_type` explícito. |
+| Apuestas solo con cuotas observadas | ✅ | El ciclo lee `v_observed_odds_snapshots` (excluye cuarentena, DERIVED/SYNTHETIC y proveedores autogenerados). |
+| Historial inmutable + detección de borrados | ✅ | Triggers SQLite + `audit_row_registry` append-only verificado por el auditor en cada ciclo. |
+| Restauración del historial borrado el 2026-11-09 | ✅ | Migración `2026_11_09_003` (bundle con checksum en `data/recovery/`), cada acción en `audit_repairs`. |
+| Gestión de riesgo | ✅ | Config única `config/model_config.yaml` validada contra AGENTS.md: stake S/1, máx. 3/jornada, EV > 5%. |
+| Métricas y gates | ✅ | Fail-closed; el modelo se compara contra el **mercado sin margen** (gate 10), no solo contra el baseline ingenuo. |
+| CLV | ✅ | `100·(cuota × p_cierre_sin_margen − 1)`, cierre Pinnacle preferido; valores > 15% se excluyen como error de datos. |
+| Injury Sniper | 🟡 | Ancla en el mercado; solo cambios de estado NUEVOS (vs. snapshot previo) mueven la probabilidad. Tabla de impacto aún sin calibrar. |
+| Casas peruanas (RETAbet, Betsson, ...) | ⚪ | No se capturan cuotas reales. El comparador solo produce **estimaciones**, que nunca se guardan ni se usan para apostar. |
+| Player props / SGP / parlays | ⚪ | Desactivados: no hay líneas observadas y AGENTS.md prohíbe apuestas combinadas. |
+| Backtest con cuotas históricas reales | ⚪ | Pendiente: el proyecto no almacena cuotas históricas de cierre. El backtest sintético NO es evidencia. |
+| Hiperparámetros optimizados | ⚪ | El estudio Optuna anterior tenía fuga del resultado (inválido). Se usan priors sin ajustar hasta re-optimizar con holdout. |
 
 ---
 
-## 📐 Principios Cuantitativos y Reglas Operativas
+## 📐 Reglas operativas
 
-1. **Benchmark de Mercado Sharp (Pinnacle De-Vigged)**:
-   * El rival del modelo no es un baseline ingenuo sino la línea de cierre de mercado libre de margen calculada mediante el algoritmo de Shin.
-   * La métrica reina es el **CLV en espacio de probabilidad** frente al cierre *sharp*:
-     $$\text{CLV}_{prob} = P_{modelo} - P_{sharp\_cierre}$$
-
-2. **Cero Tolerancia a Valores Negativos de EV**:
-   * A diferencia de sistemas heurísticos, si el valor esperado unitario $\text{EV} \le 0$, la asignación de capital es estrictamente **S/ 0.00 PEN**.
-   * Se prohíben multiplicadores arbitrarios en apuestas combinadas y límites mínimos artificiales de cuota.
-
-3. **Tope de Exposición de Portafolio**:
-   * La exposición simultánea máxima en toda la cartelera del día no puede exceder el **20% de la banca liquidada**.
-
-4. **Predicción Conformal Adaptativa (Venn-Abers)**:
-   * Intervalos $[p_0, p_1]$ adaptativos con cobertura estadística calibrada para modelar la incertidumbre epistémica de cada partido.
+1. **Benchmark = mercado sin margen**: el modelo debe ser no peor que el mercado (Brier/LogLoss) en los mismos partidos.
+2. **Cero EV negativo**: si EV ≤ 0 el stake es S/ 0.00. Stake fijo S/ 1.00 hasta tener evidencia de CLV positivo.
+3. **Solo cuotas observadas**: ninguna cuota estimada, derivada o sintética puede generar una apuesta.
+4. **Historial inmutable**: la base de datos solo la escribe el bot; los cambios de datos se hacen con migraciones auditadas (`src/storage/migrations.py`). El CI falla si un commit humano modifica `data/nba_intelligence.sqlite3`.
 
 ---
 
