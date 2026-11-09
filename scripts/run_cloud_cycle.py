@@ -42,9 +42,11 @@ from src.calibration.calibrator import (
     VennAbersConformalInterval,
     compute_reliability_curve,
 )
+from src.features.boxscore_features import compute_boxscore_features
 from src.features.builder import build_pregame_features
 from src.features.team_ratings import apply_pregame_team_ratings, is_synthetic_game_id
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
+from src.ingestion.boxscores import backfill_boxscores, load_boxscores
 from src.models.statistical_models import (
     BaselineModel,
     EnsembleStackingModel,
@@ -71,6 +73,7 @@ from src.validation.validator import parse_iso_utc, validate_game_record, valida
 MODEL_VERSION_ID = load_config().model.version_id
 MARKET_ANCHOR_MODEL_WEIGHT = load_config().model.market_anchor_model_weight
 MIN_REAL_GAMES_FOR_TRAINING = 120
+BOXSCORE_BACKFILL_PER_CYCLE = 600
 
 
 def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
@@ -234,6 +237,19 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     if len(real_final_games) >= MIN_REAL_GAMES_FOR_TRAINING:
         # Never let synthetic fixtures shape real-game predictions
         all_final_games = real_final_games
+
+    # 3b. Real box scores (possessions, Four Factors, player minutes): fetch the missing ones and attach
+    #     leakage-free pre-game bx_* features to every real game (FINAL and SCHEDULED).
+    try:
+        bx_res = backfill_boxscores(db, limit=BOXSCORE_BACKFILL_PER_CYCLE)
+        logger.info("Box score backfill: %s", bx_res)
+    except Exception as exc:
+        logger.warning("Box score backfill failed: %s", exc)
+    bx_features = compute_boxscore_features(
+        [g for g in db.fetch_all("SELECT * FROM games ORDER BY game_start_time ASC") if not is_synthetic_game_id(g["game_id"])],
+        load_boxscores(db),
+    )
+    all_final_games = [{**g, **bx_features.get(g["game_id"], {})} for g in all_final_games]
 
     model_a = BaselineModel("model_a_baseline_v1")
     model_f = EnsembleStackingModel(MODEL_VERSION_ID)
@@ -413,6 +429,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             (now_str,),
         )
         for g in scheduled_games:
+            g = {**g, **bx_features.get(g["game_id"], {})}
             existing_bet = db.fetch_one("SELECT bet_id FROM simulated_bets WHERE game_id = ?", (g["game_id"],))
             if existing_bet:
                 continue

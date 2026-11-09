@@ -455,3 +455,53 @@ def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> No
     assert b["bets"] <= 3 * len({g["matchday_date"] for g in games})
     for bet in res["bets_sample"]:
         assert bet["ev_unit"] > 0.05 and bet["kelly_stake_pen"] <= 3.0
+
+
+# 12. Box-score features are leakage-free and feed the ensemble adjustment
+def _bx_game(i: int, home: str, away: str, hs: int, as_: int, status: str = "FINAL") -> dict[str, Any]:
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=i)
+    return {"game_id": f"ESPN_{1000 + i}_X_{away}_AT_{home}", "game_start_time": _iso(start), "home_team": home,
+            "away_team": away, "status": status, "home_score": hs, "away_score": as_}
+
+
+def _bx_box(home: str, away: str, star_plays: bool = True) -> dict[str, Any]:
+    team = {"fgm": 42.0, "fga": 88.0, "tpm": 13.0, "tpa": 36.0, "ftm": 18.0, "fta": 22.0, "orb": 10.0, "drb": 34.0,
+            "tov": 13.0, "pts": 115.0}
+    roster = [{"name": f"{home}_P{k}", "min": 30.0, "pts": 15.0, "starter": True} for k in range(5)]
+    if not star_plays:
+        roster[0] = {**roster[0], "min": 0.0, "pts": 0.0}
+    return {"teams": {home: dict(team), away: dict(team)},
+            "players": {home: roster, away: [{"name": f"{away}_P{k}", "min": 30.0, "pts": 15.0, "starter": True} for k in range(5)]}}
+
+
+def test_boxscore_features_use_only_earlier_games_and_flag_absences() -> None:
+    from src.features.boxscore_features import compute_boxscore_features
+    from src.ingestion.boxscores import parse_boxscore
+
+    games = [_bx_game(i, "BOS", "NYK", 110, 100) for i in range(6)]
+    boxes = {g["game_id"]: _bx_box("BOS", "NYK", star_plays=(i != 4)) for i, g in enumerate(games)}
+    feats = compute_boxscore_features(games, boxes)
+    assert feats[games[0]["game_id"]]["bx_min_games"] == 0.0  # nothing known before the first game
+    # The star sat out game index 4 -> flagged as missing BEFORE game 5, not before game 4 (no lookahead)
+    assert feats[games[4]["game_id"]]["bx_missing_pts_diff"] == 0.0
+    assert feats[games[5]["game_id"]]["bx_missing_pts_diff"] < -10.0  # home team is missing ~15 pts
+    assert feats[games[5]["game_id"]]["bx_new_absence_pts_diff"] < -10.0
+    # Changing the LAST game's box score must not change its own pre-game features
+    boxes2 = dict(boxes)
+    boxes2[games[5]["game_id"]] = _bx_box("BOS", "NYK", star_plays=False)
+    assert compute_boxscore_features(games, boxes2)[games[5]["game_id"]] == feats[games[5]["game_id"]]
+    # With a 2-day information lag the absence in game 4 is not yet known before game 5
+    assert compute_boxscore_features(games, boxes, info_lag_days=2)[games[5]["game_id"]]["bx_missing_pts_diff"] == 0.0
+
+    parsed = parse_boxscore({"boxscore": {"teams": [
+        {"team": {"abbreviation": ab}, "statistics": [
+            {"name": "fieldGoalsMade-fieldGoalsAttempted", "displayValue": "40-90"},
+            {"name": "threePointFieldGoalsMade-threePointFieldGoalsAttempted", "displayValue": "10-30"},
+            {"name": "freeThrowsMade-freeThrowsAttempted", "displayValue": "20-25"},
+            {"name": "offensiveRebounds", "displayValue": "10"}, {"name": "defensiveRebounds", "displayValue": "33"},
+            {"name": "totalTurnovers", "displayValue": "12"}]} for ab in ("BOS", "NY")],
+        "players": [{"team": {"abbreviation": "BOS"}, "statistics": [{"labels": ["MIN", "PTS"], "athletes": [
+            {"athlete": {"displayName": "A"}, "starter": True, "stats": ["35", "28"]},
+            {"athlete": {"displayName": "B"}, "starter": False, "stats": []}]}]}]}})
+    assert parsed is not None and parsed["teams"]["BOS"]["pts"] == 110.0 and set(parsed["teams"]) == {"BOS", "NYK"}
+    assert parsed["players"]["BOS"][1]["min"] == 0.0  # DNP
