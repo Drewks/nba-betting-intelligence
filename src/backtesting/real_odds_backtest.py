@@ -175,6 +175,39 @@ def _with_current_ratings(games: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+_RATING_FIELDS = ("off_rtg", "def_rtg", "pace")
+
+
+def _team_rating_history(games: list[dict[str, Any]]) -> dict[str, list[tuple[str, dict[str, float]]]]:
+    """Per team, chronological (game_start_time, pre-game ratings of that team) pairs."""
+    hist: dict[str, list[tuple[str, dict[str, float]]]] = defaultdict(list)
+    for g in games:
+        for side in ("home", "away"):
+            vals = {f: g.get(f"{side}_{f}") for f in _RATING_FIELDS}
+            if all(v is not None for v in vals.values()):
+                hist[g[f"{side}_team"]].append((str(g["game_start_time"]), {k: float(v) for k, v in vals.items() if v is not None}))
+    for team in hist:
+        hist[team].sort(key=lambda t: t[0])
+    return hist
+
+
+def _lagged_team_ratings(
+    g: dict[str, Any], hist: dict[str, list[tuple[str, dict[str, float]]]], info_cutoff: str
+) -> dict[str, float]:
+    """
+    Ratings as known at `info_cutoff`: the pre-game ratings of each team's last game that started before
+    the cutoff (this excludes that game's own result, so it is conservative: never more information).
+    Rest days stay as scheduled (the schedule is public in advance).
+    """
+    out: dict[str, float] = {}
+    for side in ("home", "away"):
+        prior = [vals for ts, vals in hist.get(g[f"{side}_team"], []) if ts < info_cutoff]
+        if prior:
+            for f, v in prior[-1].items():
+                out[f"{side}_{f}"] = v
+    return out
+
+
 def run_real_odds_backtest(
     games: list[dict[str, Any]],
     market_rows: list[dict[str, Any]],
@@ -192,10 +225,17 @@ def run_real_odds_backtest(
     kelly_min_stake: float = 0.50,
     kelly_max_stake: float = 3.00,
     kelly_max_fraction: float = 0.03,
+    history_lag_days: int = 0,
 ) -> dict[str, Any]:
+    """
+    `history_lag_days` > 0 drops the most recent days of results from the model's information set, as a
+    robustness check: the "opening" line may be posted a day or more before the matchday, before the
+    previous night's games finished. A signal that survives the lag is not an artifact of that timing.
+    """
     real = [g for g in games if not is_synthetic_game_id(g.get("game_id"))]
     real.sort(key=lambda g: (str(g["game_start_time"]), str(g["game_id"])))
     real = _with_current_ratings(real)
+    team_rating_hist = _team_rating_history(real)
     final_games = [g for g in real if g.get("status") == "FINAL" and g.get("home_score") is not None]
     market_by_game = match_market_to_games(market_rows, final_games)
 
@@ -225,24 +265,27 @@ def run_real_odds_backtest(
         day_games = sorted(days[day], key=lambda g: g["game_start_time"])
         cutoff = min(str(g["game_start_time"]) for g in day_games)
         cutoff_dt = parse_iso_utc(cutoff)
-        history = [g for g in final_games if str(g["game_start_time"]) < cutoff]
+        info_cutoff = (cutoff_dt - timedelta(days=history_lag_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        history = [g for g in final_games if str(g["game_start_time"]) < info_cutoff]
         if len(history) < 150:
             continue
         if last_train is None or (cutoff_dt - last_train) >= timedelta(days=retrain_every_days):
-            model.fit(history, cutoff)
-            past_ml = [r for r in oos_ml if r["game_start_time"] < cutoff]
-            past_tot = [r for r in oos_tot if r["game_start_time"] < cutoff]
+            model.fit(history, info_cutoff)
+            past_ml = [r for r in oos_ml if r["game_start_time"] < info_cutoff]
+            past_tot = [r for r in oos_tot if r["game_start_time"] < info_cutoff]
             if len(past_ml) >= 25:
-                ml_cal.fit(past_ml, cutoff)
-                ml_va.fit(past_ml, cutoff)
+                ml_cal.fit(past_ml, info_cutoff)
+                ml_va.fit(past_ml, info_cutoff)
             if len(past_tot) >= 25:
-                tot_cal.fit(past_tot, cutoff)
-                tot_va.fit(past_tot, cutoff)
+                tot_cal.fit(past_tot, info_cutoff)
+                tot_va.fit(past_tot, info_cutoff)
             last_train = cutoff_dt
 
         candidates: list[dict[str, Any]] = []
         day_records: list[tuple[dict[str, Any], dict[str, Any]]] = []
         for g in day_games:
+            if history_lag_days > 0:
+                g = {**g, **_lagged_team_ratings(g, team_rating_hist, info_cutoff)}
             m = market_by_game[g["game_id"]]
             start_dt = parse_iso_utc(g["game_start_time"])
             decision_ts = (start_dt - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -374,7 +417,7 @@ def run_real_odds_backtest(
 
     return _summarize(eval_rows, bets, initial_bankroll, kelly_bankroll, {
         "start_date": start_date, "end_date": end_date, "retrain_every_days": retrain_every_days,
-        "vig_assumption": vig, "model_weight": model_weight, "min_ev": min_ev,
+        "vig_assumption": vig, "model_weight": model_weight, "min_ev": min_ev, "history_lag_days": history_lag_days,
         "max_disagreement": max_disagreement, "max_bets_per_day": max_bets_per_day,
         "kelly": {"fraction": kelly_fraction, "min_stake": kelly_min_stake, "max_stake": kelly_max_stake,
                   "max_bankroll_fraction": kelly_max_fraction},

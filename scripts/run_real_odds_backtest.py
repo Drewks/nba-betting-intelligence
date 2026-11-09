@@ -38,6 +38,7 @@ def main() -> None:
     parser.add_argument("--end", default=None)
     parser.add_argument("--vig", type=float, default=0.045)
     parser.add_argument("--retrain-every", type=int, default=7)
+    parser.add_argument("--history-lag-days", type=int, default=0, help="Robustness: hide the last N days of results")
     parser.add_argument("--sensitivity", action="store_true", help="Also run with 2.5% and 6% margins")
     parser.add_argument("--out-json", default=str(PROJECT_ROOT / "data" / "evaluation" / "real_odds_backtest.json"))
     parser.add_argument("--out-md", default=str(PROJECT_ROOT / "reports" / "real_odds_backtest.md"))
@@ -50,6 +51,7 @@ def main() -> None:
         start_date=args.start,
         end_date=args.end,
         retrain_every_days=args.retrain_every,
+        history_lag_days=args.history_lag_days,
         model_weight=cfg.model.market_anchor_model_weight,
         min_ev=cfg.risk.min_ev_threshold,
         max_bets_per_day=cfg.risk.max_selections_per_matchday,
