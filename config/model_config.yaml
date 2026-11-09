@@ -18,21 +18,24 @@ model:
   tempo_alpha_fast: 0.130
   market_anchor_model_weight: 0.30   # p_final = 0.30 * p_model + 0.70 * p_market (de-vigged)
 
-risk_management:                     # AGENTS.md section 4 (paper_trading_manager)
+risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
   virtual_bankroll_initial_pen: 100.00
-  # Stake grows with the model's calibrated, market-anchored win probability for a given price
-  # (fractional Kelly). It is 0 when EV <= threshold and never rounded up to a floor.
+  # High-conviction staking: the stake grows with the model's calibrated, market-anchored win probability
+  # for a given price (half Kelly). It is 0 when EV <= threshold and is never rounded up to a floor.
   staking_mode: "fractional_kelly"   # "fractional_kelly" | "flat"
-  kelly_fraction: 0.25               # 25% of full Kelly (p is an estimate with error)
-  min_stake_pen: 0.50                # smaller Kelly stakes are skipped
-  max_stake_pen: 3.00                # hard cap per selection (AGENTS.md)
-  max_stake_bankroll_fraction: 0.03  # hard cap per selection as % of bankroll (AGENTS.md)
+  kelly_fraction: 0.50               # half Kelly
+  min_stake_pen: 1.00                # smaller Kelly stakes are skipped
+  max_stake_pen: 10.00               # hard cap per selection
+  max_stake_bankroll_fraction: 0.10  # hard cap per selection as % of bankroll
   base_stake_pen: 1.00               # only used when staking_mode = "flat"
   max_selections_per_matchday: 3
   min_ev_threshold: 0.05             # EV > 5%
-  max_portfolio_exposure_pct: 0.20
-  allow_parlays: false               # Prohibidas apuestas combinadas
-  allow_player_props_betting: false  # No observed player-prop prices are ingested yet
+  max_portfolio_exposure_pct: 0.30
+  # Combined bets and player props are paper-traded in their own ledger (player_prop_picks).
+  # No bookmaker prop/SGP prices are captured, so their lines and prices are ESTIMATES and every pick is
+  # labelled as such; they are never mixed into the observed-odds metrics.
+  allow_parlays: true
+  allow_player_props_betting: true
 
 sources:
   betting_allowed_source_types: ["OBSERVED"]

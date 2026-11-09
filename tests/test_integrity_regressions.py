@@ -318,13 +318,12 @@ def test_config_enforces_agents_md_limits() -> None:
     }
     assert parse_config(base).risk.max_stake_pen == 3.0
     for patch in (
-        {"max_stake_pen": 4.0},
-        {"max_stake_bankroll_fraction": 0.05},
-        {"kelly_fraction": 0.8},
+        {"max_stake_pen": 25.0},
+        {"max_stake_bankroll_fraction": 0.25},
+        {"kelly_fraction": 1.5},
         {"staking_mode": "martingale"},
         {"min_stake_pen": 3.5},
         {"min_ev_threshold": 0.02},
-        {"allow_parlays": True},
         {"max_selections_per_matchday": 5},
     ):
         bad = json.loads(json.dumps(base))
@@ -339,7 +338,60 @@ def test_engine_default_cap_and_parlay_rejection(tmp_path: Path) -> None:
         PaperTradingEngine(db, base_stake_pen=1.0, max_stake_pen=2.0)
     engine = PaperTradingEngine(db)
     with pytest.raises(RiskLimitError):
-        engine.record_player_prop_pick({"game_id": "X", "prop_category": "SGP"})
+        engine.record_player_prop_pick({"game_id": "X", "prop_category": "SGP"}, allow_parlay=False)
+    with pytest.raises(RiskLimitError):
+        PaperTradingEngine(db, base_stake_pen=1.0, max_stake_pen=25.0, staking_mode="FRACTIONAL_KELLY")
+
+
+def test_production_engine_matches_config_and_props_exposure_is_capped(tmp_path: Path) -> None:
+    from src.config import load_config
+    from src.paper_trading.engine import build_production_engine
+    from src.prediction.player_props import PlayerPropsEngine
+
+    db = DatabaseManager(tmp_path / "t.sqlite3")
+    risk = load_config().risk
+    engine = build_production_engine(db)
+    assert engine.staking_mode == "FRACTIONAL_KELLY"
+    assert (engine.max_stake_pen, engine.kelly_fraction) == (risk.max_stake_pen, risk.kelly_fraction)
+
+    props = PlayerPropsEngine(db=db)
+    assert props._props_exposure_allows(0.0, 100.0) is False  # no edge -> never recorded
+    assert props._props_exposure_allows(5.0, 100.0) is True
+    _seed_game(db, game_id="G1", start="2030-01-01T00:00:00Z")
+    for i in range(6):  # 6 x S/5 = S/30 pending = the 30% exposure cap
+        engine.record_player_prop_pick({
+            "prop_id": f"P{i}", "game_id": "G1", "matchday_date": "2030-01-01", "player_name": "LeBron James",
+            "team": "NYK", "prop_category": "PTS", "line_value": 20.5, "selection": "OVER", "decimal_odds": 1.9,
+            "model_prob": 0.6, "stake_pen": 5.0,
+        })
+    assert props._props_exposure_allows(1.0, 100.0) is False
+
+
+def test_props_recording_is_idempotent_and_capped_per_matchday(tmp_path: Path) -> None:
+    from src.config import load_config
+    from src.prediction.player_props import PlayerPropsEngine
+
+    db = DatabaseManager(tmp_path / "t.sqlite3")
+    _seed_game(db, game_id="G1", start="2030-01-01T00:00:00Z")
+    props = PlayerPropsEngine(db=db)
+
+    def pick(player: str, n: int) -> dict:
+        return {
+            "prop_id": f"PX{n}", "game_id": "G1", "matchday_date": "2030-01-01", "player_name": player,
+            "team": "NYK", "prop_category": "PTS", "line_value": 20.5, "selection": "OVER", "decimal_odds": 1.9,
+            "projected_mean": 24.0, "projected_std": 6.0, "model_prob": 0.6, "conformal_p_low": 0.55,
+            "conformal_p_high": 0.65, "ev_pct": 14.0, "ev_lower_bound_pct": 4.5, "kelly_stake_pen": 2.0,
+            "usage_bump_pct": 0.0, "rationale": "[LÍNEA ESTIMADA, no observada] test",
+            "emitted_at": "2029-12-31T12:00:00Z",
+        }
+
+    assert props._persist_prop_pick(pick("Player A", 1), 100.0) is True
+    # A second cycle evaluating the same selection (fresh prop_id) must not create another stake
+    assert props._persist_prop_pick(pick("Player A", 2), 100.0) is False
+    cap = load_config().risk.max_selections_per_matchday
+    recorded = 1 + sum(props._persist_prop_pick(pick(f"Player {c}", 10 + i), 100.0) for i, c in enumerate("BCDEFG"))
+    assert recorded == cap
+    assert db.fetch_one("SELECT COUNT(*) AS c FROM player_prop_picks")["c"] == cap
 
 
 # 8. Backtest mode is scoped to the walk-forward call
@@ -455,3 +507,53 @@ def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> No
     assert b["bets"] <= 3 * len({g["matchday_date"] for g in games})
     for bet in res["bets_sample"]:
         assert bet["ev_unit"] > 0.05 and bet["kelly_stake_pen"] <= 3.0
+
+
+# 12. Box-score features are leakage-free and feed the ensemble adjustment
+def _bx_game(i: int, home: str, away: str, hs: int, as_: int, status: str = "FINAL") -> dict[str, Any]:
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=i)
+    return {"game_id": f"ESPN_{1000 + i}_X_{away}_AT_{home}", "game_start_time": _iso(start), "home_team": home,
+            "away_team": away, "status": status, "home_score": hs, "away_score": as_}
+
+
+def _bx_box(home: str, away: str, star_plays: bool = True) -> dict[str, Any]:
+    team = {"fgm": 42.0, "fga": 88.0, "tpm": 13.0, "tpa": 36.0, "ftm": 18.0, "fta": 22.0, "orb": 10.0, "drb": 34.0,
+            "tov": 13.0, "pts": 115.0}
+    roster = [{"name": f"{home}_P{k}", "min": 30.0, "pts": 15.0, "starter": True} for k in range(5)]
+    if not star_plays:
+        roster[0] = {**roster[0], "min": 0.0, "pts": 0.0}
+    return {"teams": {home: dict(team), away: dict(team)},
+            "players": {home: roster, away: [{"name": f"{away}_P{k}", "min": 30.0, "pts": 15.0, "starter": True} for k in range(5)]}}
+
+
+def test_boxscore_features_use_only_earlier_games_and_flag_absences() -> None:
+    from src.features.boxscore_features import compute_boxscore_features
+    from src.ingestion.boxscores import parse_boxscore
+
+    games = [_bx_game(i, "BOS", "NYK", 110, 100) for i in range(6)]
+    boxes = {g["game_id"]: _bx_box("BOS", "NYK", star_plays=(i != 4)) for i, g in enumerate(games)}
+    feats = compute_boxscore_features(games, boxes)
+    assert feats[games[0]["game_id"]]["bx_min_games"] == 0.0  # nothing known before the first game
+    # The star sat out game index 4 -> flagged as missing BEFORE game 5, not before game 4 (no lookahead)
+    assert feats[games[4]["game_id"]]["bx_missing_pts_diff"] == 0.0
+    assert feats[games[5]["game_id"]]["bx_missing_pts_diff"] < -10.0  # home team is missing ~15 pts
+    assert feats[games[5]["game_id"]]["bx_new_absence_pts_diff"] < -10.0
+    # Changing the LAST game's box score must not change its own pre-game features
+    boxes2 = dict(boxes)
+    boxes2[games[5]["game_id"]] = _bx_box("BOS", "NYK", star_plays=False)
+    assert compute_boxscore_features(games, boxes2)[games[5]["game_id"]] == feats[games[5]["game_id"]]
+    # With a 2-day information lag the absence in game 4 is not yet known before game 5
+    assert compute_boxscore_features(games, boxes, info_lag_days=2)[games[5]["game_id"]]["bx_missing_pts_diff"] == 0.0
+
+    parsed = parse_boxscore({"boxscore": {"teams": [
+        {"team": {"abbreviation": ab}, "statistics": [
+            {"name": "fieldGoalsMade-fieldGoalsAttempted", "displayValue": "40-90"},
+            {"name": "threePointFieldGoalsMade-threePointFieldGoalsAttempted", "displayValue": "10-30"},
+            {"name": "freeThrowsMade-freeThrowsAttempted", "displayValue": "20-25"},
+            {"name": "offensiveRebounds", "displayValue": "10"}, {"name": "defensiveRebounds", "displayValue": "33"},
+            {"name": "totalTurnovers", "displayValue": "12"}]} for ab in ("BOS", "NY")],
+        "players": [{"team": {"abbreviation": "BOS"}, "statistics": [{"labels": ["MIN", "PTS"], "athletes": [
+            {"athlete": {"displayName": "A"}, "starter": True, "stats": ["35", "28"]},
+            {"athlete": {"displayName": "B"}, "starter": False, "stats": []}]}]}]}})
+    assert parsed is not None and parsed["teams"]["BOS"]["pts"] == 110.0 and set(parsed["teams"]) == {"BOS", "NYK"}
+    assert parsed["players"]["BOS"][1]["min"] == 0.0  # DNP

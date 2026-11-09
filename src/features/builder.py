@@ -7,6 +7,7 @@ import math
 from typing import Any
 import numpy as np
 
+from src.features.boxscore_features import FEATURE_NAMES as BOXSCORE_FEATURE_NAMES
 from src.validation.validator import parse_iso_utc, validate_essential_features
 
 _INDEX_STORE: dict[str, dict[str, Any]] = {}
@@ -615,4 +616,8 @@ def build_pregame_features(
         "league_avg_total": round(league_avg_total, 4),
         "dynamic_total_std": round(dynamic_total_std, 4),
         "home_court_indicator": 1.0,
+        # Real box-score features (possessions, Four Factors, availability) attached to the game record by
+        # src/features/boxscore_features.py; 0.0 when no box-score history is available.
+        **{k: float(target_game.get(k) or 0.0) for k in BOXSCORE_FEATURE_NAMES},
+        "bx_available": 1.0 if target_game.get("bx_min_games") else 0.0,
     }

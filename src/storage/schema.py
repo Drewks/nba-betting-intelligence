@@ -331,6 +331,16 @@ DDL_STATEMENTS = [
     CREATE INDEX IF NOT EXISTS idx_injury_snapshots_game ON injury_status_snapshots (game_id, captured_at);
     """,
     """
+    CREATE TABLE IF NOT EXISTS game_boxscores (
+        game_id TEXT PRIMARY KEY,
+        team_stats_json TEXT NOT NULL,
+        players_json TEXT NOT NULL,
+        source TEXT NOT NULL,
+        fetched_at TEXT NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_predictions_lookup
     ON predictions (game_id, market, selection, model_version_id, emitted_at);
     """,

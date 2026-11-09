@@ -27,6 +27,7 @@ from src.backtesting.real_odds_backtest import (  # noqa: E402
     run_real_odds_backtest,
 )
 from src.config import load_config  # noqa: E402
+from src.ingestion.boxscores import load_boxscores  # noqa: E402
 from src.storage.db import DatabaseManager  # noqa: E402
 
 
@@ -39,19 +40,23 @@ def main() -> None:
     parser.add_argument("--vig", type=float, default=0.045)
     parser.add_argument("--retrain-every", type=int, default=7)
     parser.add_argument("--history-lag-days", type=int, default=0, help="Robustness: hide the last N days of results")
+    parser.add_argument("--no-boxscores", action="store_true", help="Ablation: ignore box-score features")
     parser.add_argument("--sensitivity", action="store_true", help="Also run with 2.5% and 6% margins")
     parser.add_argument("--out-json", default=str(PROJECT_ROOT / "data" / "evaluation" / "real_odds_backtest.json"))
     parser.add_argument("--out-md", default=str(PROJECT_ROOT / "reports" / "real_odds_backtest.md"))
     args = parser.parse_args()
 
     cfg = load_config()
-    games = DatabaseManager(args.db).fetch_all("SELECT * FROM games ORDER BY game_start_time ASC")
+    db = DatabaseManager(args.db)
+    games = db.fetch_all("SELECT * FROM games ORDER BY game_start_time ASC")
+    boxscores = None if args.no_boxscores else (load_boxscores(db) or None)
     market_rows = load_market_rows(download_market_csvs(Path(args.data_dir)))
     common = dict(
         start_date=args.start,
         end_date=args.end,
         retrain_every_days=args.retrain_every,
         history_lag_days=args.history_lag_days,
+        boxscores=boxscores,
         model_weight=cfg.model.market_anchor_model_weight,
         min_ev=cfg.risk.min_ev_threshold,
         max_bets_per_day=cfg.risk.max_selections_per_matchday,

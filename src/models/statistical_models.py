@@ -908,6 +908,45 @@ class EnsembleStackingModel:
         self.model_c.fit(historical_games, cutoff_time_str)
         self.model_d.fit(historical_games, cutoff_time_str)
         self.model_e.fit(historical_games, cutoff_time_str)
+        self._fit_boxscore_adjustment(prior)
+
+    BOXSCORE_ADJ_FEATURES: tuple[str, ...] = (
+        "bx_missing_pts_diff", "bx_new_absence_pts_diff", "bx_efg_diff", "bx_tov_diff", "bx_orb_diff", "bx_ftr_diff",
+    )
+    BOXSCORE_ADJ_MIN_GAMES = 300
+    BOXSCORE_ADJ_MAX_POINTS = 4.0
+    BOXSCORE_ADJ_SIGMA = 12.0
+
+    def _fit_boxscore_adjustment(self, prior: list[dict[str, Any]]) -> None:
+        """
+        Learns how much real box-score information (regular-rotation points absent in the last game,
+        real Four Factors) shifts the expected margin beyond the score-only structural margin.
+        Ridge on (actual margin - structural margin); only games that carry box-score features are used.
+        Validated out of sample on real data: margin RMSE 14.59 -> 14.49 (see reports/model_research.md).
+        """
+        self.bx_reg = None
+        rows = [g for g in prior[-1500:] if g.get("bx_min_games") and float(g["bx_min_games"]) >= 10]
+        if len(rows) < self.BOXSCORE_ADJ_MIN_GAMES:
+            return
+        X_rows: list[list[float]] = []
+        y_vals: list[float] = []
+        for g in rows:
+            feats = build_pregame_features(g, prior, market="moneyline")
+            X_rows.append([feats[c] for c in self.BOXSCORE_ADJ_FEATURES])
+            y_vals.append(float(g["home_score"] - g["away_score"]) - float(feats["structural_margin"]))
+        reg = make_pipeline(StandardScaler(), RidgeCV(alphas=[10.0, 100.0, 1000.0, 5000.0]))
+        reg.fit(np.asarray(X_rows, dtype=float), np.asarray(y_vals, dtype=float))
+        # Keep only the feature-driven part: the intercept (a global home bias) is not this layer's job
+        reg[-1].intercept_ = 0.0
+        self.bx_reg = reg
+
+    def boxscore_margin_shift(self, game: dict[str, Any], historical_games: list[dict[str, Any]]) -> float:
+        reg = getattr(self, "bx_reg", None)
+        if reg is None or not game.get("bx_min_games") or float(game["bx_min_games"]) < 10:
+            return 0.0
+        feats = build_pregame_features(game, historical_games, market="moneyline")
+        x = np.asarray([[feats[c] for c in self.BOXSCORE_ADJ_FEATURES]], dtype=float)
+        return float(np.clip(reg.predict(x)[0], -self.BOXSCORE_ADJ_MAX_POINTS, self.BOXSCORE_ADJ_MAX_POINTS))
 
     @staticmethod
     def _pool_probs_log_odds(probs: list[float], weights: list[float]) -> float:
@@ -935,14 +974,21 @@ class EnsembleStackingModel:
         sub_std = float(np.std([pb, pc, pe, pg]))
         unc_std = round(max(0.032, min(0.095, 0.036 + 0.45 * sub_std)), 4)
 
+        # Box-score adjustment (availability + real Four Factors), applied as a margin shift in probit space
+        bx_shift = self.boxscore_margin_shift(game, historical_games)
+        if bx_shift != 0.0:
+            z = float(norm.ppf(np.clip(p_home, 1e-4, 1.0 - 1e-4))) + bx_shift / self.BOXSCORE_ADJ_SIGMA
+            p_home = float(np.clip(norm.cdf(z), 0.05, 0.95))
+
         return {
+            "boxscore_margin_shift": round(bx_shift, 3),
             "p_home": round(p_home, 6),
             "p_away": round(1.0 - p_home, 6),
             "p_elo": pb,
             "p_margin": pc,
             "p_gbm": pe,
             "p_montecarlo": pg,
-            "expected_margin": round(0.55 * c_res["expected_margin"] + 0.45 * mc_res["mc_expected_margin"], 3),
+            "expected_margin": round(0.55 * c_res["expected_margin"] + 0.45 * mc_res["mc_expected_margin"] + bx_shift, 3),
             "ensemble_weights": self.ml_weights,
             "overtime_prob": mc_res["overtime_prob"],
             "blowout_prob": mc_res["blowout_prob"],

@@ -46,6 +46,7 @@ from src.calibration.calibrator import (
     compute_brier_score,
     compute_log_loss,
 )
+from src.features.boxscore_features import attach_boxscore_features
 from src.features.team_ratings import compute_pregame_team_ratings, is_synthetic_game_id
 from src.ingestion.normalizer import normalize_team_code
 from src.models.statistical_models import EnsembleStackingModel
@@ -226,6 +227,7 @@ def run_real_odds_backtest(
     kelly_max_stake: float = 3.00,
     kelly_max_fraction: float = 0.03,
     history_lag_days: int = 0,
+    boxscores: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     `history_lag_days` > 0 drops the most recent days of results from the model's information set, as a
@@ -235,6 +237,8 @@ def run_real_odds_backtest(
     real = [g for g in games if not is_synthetic_game_id(g.get("game_id"))]
     real.sort(key=lambda g: (str(g["game_start_time"]), str(g["game_id"])))
     real = _with_current_ratings(real)
+    if boxscores:
+        real = attach_boxscore_features(real, boxscores, info_lag_days=history_lag_days)
     team_rating_hist = _team_rating_history(real)
     final_games = [g for g in real if g.get("status") == "FINAL" and g.get("home_score") is not None]
     market_by_game = match_market_to_games(market_rows, final_games)
@@ -380,20 +384,24 @@ def run_real_odds_backtest(
         # Selection: best EV first, one bet per game, at most `max_bets_per_day`
         chosen: list[dict[str, Any]] = []
         seen_games: set[str] = set()
+        # Size every candidate first: one whose Kelly stake falls below the minimum is not a bet in
+        # production, so it must not consume a slot of the daily cap either.
+        start_kelly_bankroll = kelly_bankroll
         for c in sorted(candidates, key=lambda c: c["ev_unit"], reverse=True):
             if c["game_id"] in seen_games or len(chosen) >= max_bets_per_day:
                 continue
-            seen_games.add(c["game_id"])
-            chosen.append(c)
-
-        start_kelly_bankroll = kelly_bankroll
-        for c in chosen:
-            odds = c["decimal_odds"]
             k_stake = fractional_kelly_stake(
-                prob=c["anchored_prob"], decimal_odds=odds, bankroll_pen=start_kelly_bankroll,
+                prob=c["anchored_prob"], decimal_odds=c["decimal_odds"], bankroll_pen=start_kelly_bankroll,
                 kelly_fraction=kelly_fraction, min_stake_pen=kelly_min_stake,
                 max_stake_pen=kelly_max_stake, max_bankroll_fraction=kelly_max_fraction,
             )
+            if k_stake <= 0.0:
+                continue
+            seen_games.add(c["game_id"])
+            chosen.append({**c, "_k_stake": k_stake})
+        for c in chosen:
+            odds = c["decimal_odds"]
+            k_stake = c.pop("_k_stake")
             mult = (odds - 1.0) if c["result"] == "WON" else (-1.0 if c["result"] == "LOST" else 0.0)
             clv_pct = 100.0 * (odds * c["p_close"] - 1.0)
             kelly_bankroll += k_stake * mult
@@ -422,6 +430,7 @@ def run_real_odds_backtest(
         "kelly": {"fraction": kelly_fraction, "min_stake": kelly_min_stake, "max_stake": kelly_max_stake,
                   "max_bankroll_fraction": kelly_max_fraction},
         "market_rows": len(market_rows), "matched_games": len(market_by_game), "test_games": len(test_games),
+        "boxscore_features": bool(boxscores),
     })
 
 

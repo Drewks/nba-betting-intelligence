@@ -33,7 +33,7 @@ from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.prediction.injury_sniper import InjurySniperMonitor
 from src.prediction.player_props import PlayerPropsEngine
 from src.reporting.telegram_bot import TelegramAlertBot
-from src.paper_trading.engine import PaperTradingEngine
+from src.paper_trading.engine import build_production_engine
 from src.storage.db import DatabaseManager
 
 logging.basicConfig(
@@ -62,17 +62,7 @@ class NBADailyScheduler:
         self.db_path = Path(db_path or (PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"))
         self.db = DatabaseManager(self.db_path)
         self.bot = TelegramAlertBot()
-        self.paper_engine = PaperTradingEngine(
-            db=self.db,
-            initial_bankroll_pen=100.00,
-            base_stake_pen=1.00,
-            max_stake_pen=2.00,
-            min_ev_threshold=0.05,
-            dynamic_conviction_staking=True,
-            enable_cppi_shield=True,
-            staking_mode="CONSERVATIVE",
-            exclude_synthetic=True,
-        )
+        self.paper_engine = build_production_engine(self.db)
 
     def execute_morning_cycle(self) -> dict[str, Any]:
         """

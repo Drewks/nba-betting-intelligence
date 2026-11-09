@@ -42,15 +42,17 @@ from src.calibration.calibrator import (
     VennAbersConformalInterval,
     compute_reliability_curve,
 )
+from src.features.boxscore_features import compute_boxscore_features
 from src.features.builder import build_pregame_features
 from src.features.team_ratings import apply_pregame_team_ratings, is_synthetic_game_id
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
+from src.ingestion.boxscores import backfill_boxscores, load_boxscores
 from src.models.statistical_models import (
     BaselineModel,
     EnsembleStackingModel,
 )
 from src.orchestrator import Orchestrator
-from src.paper_trading.engine import PaperTradingEngine
+from src.paper_trading.engine import build_production_engine
 from src.prediction.ev_calculator import (
     MAX_MODEL_MARKET_DISAGREEMENT,
     compute_line_steam,
@@ -71,6 +73,7 @@ from src.validation.validator import parse_iso_utc, validate_game_record, valida
 MODEL_VERSION_ID = load_config().model.version_id
 MARKET_ANCHOR_MODEL_WEIGHT = load_config().model.market_anchor_model_weight
 MIN_REAL_GAMES_FOR_TRAINING = 120
+BOXSCORE_BACKFILL_PER_CYCLE = 600
 
 
 def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
@@ -88,25 +91,8 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         return {"cycle_type": "INITIAL_BOOTSTRAP_AND_LIVE_SYNC", "run_id": init_res["run_id"]}
 
     db = DatabaseManager(db_path)
-    risk_cfg = load_config().risk
-    # AGENTS.md: stake grows with the model's calibrated probability (fractional Kelly, S/0.50-S/3.00,
-    # max 3% of bankroll), max 3 selections per matchday, EV > 5%; see config/model_config.yaml.
-    paper_engine = PaperTradingEngine(
-        db=db,
-        initial_bankroll_pen=risk_cfg.virtual_bankroll_initial_pen,
-        base_stake_pen=risk_cfg.base_stake_pen,
-        max_stake_pen=risk_cfg.max_stake_pen,
-        max_selections_per_matchday=risk_cfg.max_selections_per_matchday,
-        min_ev_threshold=risk_cfg.min_ev_threshold,
-        dynamic_conviction_staking=False,
-        enable_cppi_shield=True,
-        staking_mode="FRACTIONAL_KELLY" if risk_cfg.staking_mode == "fractional_kelly" else "CONSERVATIVE",
-        exclude_synthetic=True,
-        max_portfolio_exposure_pct=risk_cfg.max_portfolio_exposure_pct,
-        kelly_fraction=risk_cfg.kelly_fraction,
-        min_stake_pen=risk_cfg.min_stake_pen,
-        max_stake_bankroll_fraction=risk_cfg.max_stake_bankroll_fraction,
-    )
+    # Stake sizing, caps and EV threshold come from config/model_config.yaml (see AGENTS.md).
+    paper_engine = build_production_engine(db)
     scout = NBADataScoutAgent(db)
     visual = VisualResearcherAgent()
     calibrator_agent = ModelCalibratorAgent()
@@ -234,6 +220,19 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     if len(real_final_games) >= MIN_REAL_GAMES_FOR_TRAINING:
         # Never let synthetic fixtures shape real-game predictions
         all_final_games = real_final_games
+
+    # 3b. Real box scores (possessions, Four Factors, player minutes): fetch the missing ones and attach
+    #     leakage-free pre-game bx_* features to every real game (FINAL and SCHEDULED).
+    try:
+        bx_res = backfill_boxscores(db, limit=BOXSCORE_BACKFILL_PER_CYCLE)
+        logger.info("Box score backfill: %s", bx_res)
+    except Exception as exc:
+        logger.warning("Box score backfill failed: %s", exc)
+    bx_features = compute_boxscore_features(
+        [g for g in db.fetch_all("SELECT * FROM games ORDER BY game_start_time ASC") if not is_synthetic_game_id(g["game_id"])],
+        load_boxscores(db),
+    )
+    all_final_games = [{**g, **bx_features.get(g["game_id"], {})} for g in all_final_games]
 
     model_a = BaselineModel("model_a_baseline_v1")
     model_f = EnsembleStackingModel(MODEL_VERSION_ID)
@@ -413,6 +412,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             (now_str,),
         )
         for g in scheduled_games:
+            g = {**g, **bx_features.get(g["game_id"], {})}
             existing_bet = db.fetch_one("SELECT bet_id FROM simulated_bets WHERE game_id = ?", (g["game_id"],))
             if existing_bet:
                 continue

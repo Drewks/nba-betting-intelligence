@@ -34,6 +34,7 @@ import numpy as np
 from scipy.stats import norm, poisson
 
 from src.calibration.calibrator import VennAbersConformalInterval
+from src.config import load_config
 from src.prediction.ev_calculator import (
     calculate_ev,
     devig_multiplicative,
@@ -311,9 +312,115 @@ class PlayerPropsEngine:
     def __init__(self, db: DatabaseManager | None = None, min_ev_threshold: float = 0.05) -> None:
         self.db = db
         self.min_ev_threshold = min_ev_threshold
+        risk = load_config().risk
+        self.risk = risk
+        self.kelly_fraction = risk.kelly_fraction
+        self.max_stake_pen = risk.max_stake_pen
+        self.max_bankroll_fraction = risk.max_stake_bankroll_fraction
         self.calibrator = VennAbersConformalInterval(window=1200)
         self.minutes_engine = MinutesProjectionEngine()
         self.vine_copula_engine = VineCopulaSGP()
+
+    def _props_exposure_allows(self, stake_pen: float, bankroll_pen: float) -> bool:
+        """Props/SGP ledger exposure cap: pending stakes may not exceed max_portfolio_exposure_pct of bankroll."""
+        if stake_pen <= 0.0:
+            return False
+        if self.db is None:
+            return True
+        row = self.db.fetch_one("SELECT COALESCE(SUM(stake_pen), 0.0) AS s FROM player_prop_picks WHERE status = 'PENDING'")
+        pending = float(row["s"]) if row else 0.0
+        return (pending + stake_pen) <= self.risk.max_portfolio_exposure_pct * max(0.0, bankroll_pen) + 0.01
+
+    def _props_may_record(
+        self, game_id: str, matchday_date: str, player_key: str, category: str, selection: str,
+        stake_pen: float, bankroll_pen: float,
+    ) -> bool:
+        """
+        Single gate for every props/SGP paper bet: positive stake, exposure cap, game not finished,
+        idempotency (the same selection is recorded once, however many cycles evaluate it) and the
+        per-matchday selection cap of the props ledger.
+        """
+        if self.db is None or not self._props_exposure_allows(stake_pen, bankroll_pen):
+            return False
+        g_rec = self.db.fetch_one("SELECT status FROM games WHERE game_id = ?", (game_id,))
+        if g_rec and g_rec.get("status") in ("FINAL", "POSTPONED", "CANCELLED"):
+            return False
+        dup = self.db.fetch_one(
+            """
+            SELECT 1 AS x FROM player_prop_picks
+            WHERE game_id = ? AND player_name = ? AND prop_category = ? AND selection = ? LIMIT 1
+            """,
+            (game_id, player_key, category, selection),
+        )
+        if dup:
+            return False
+        row = self.db.fetch_one("SELECT COUNT(*) AS c FROM player_prop_picks WHERE matchday_date = ?", (matchday_date,))
+        return int(row["c"] if row else 0) < self.risk.max_selections_per_matchday
+
+    def _persist_prop_pick(self, prop_pick: dict[str, Any], bankroll_pen: float) -> bool:
+        if not self._props_may_record(
+            prop_pick["game_id"], prop_pick["matchday_date"], prop_pick["player_name"], prop_pick["prop_category"],
+            prop_pick["selection"], float(prop_pick.get("kelly_stake_pen") or 0.0), bankroll_pen,
+        ):
+            return False
+        assert self.db is not None
+        try:
+            self.db.execute_insert(
+                """
+                INSERT OR IGNORE INTO player_prop_picks (
+                    prop_id, game_id, matchday_date, player_name, team, prop_category,
+                    line_value, selection, decimal_odds, projected_mean, projected_std,
+                    model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
+                    stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                """,
+                (
+                    prop_pick["prop_id"], prop_pick["game_id"], prop_pick["matchday_date"], prop_pick["player_name"],
+                    prop_pick["team"], prop_pick["prop_category"], prop_pick["line_value"], prop_pick["selection"],
+                    prop_pick["decimal_odds"], prop_pick["projected_mean"], prop_pick["projected_std"],
+                    prop_pick["model_prob"], prop_pick["conformal_p_low"], prop_pick["conformal_p_high"],
+                    prop_pick["ev_pct"], prop_pick["ev_lower_bound_pct"], prop_pick["kelly_stake_pen"],
+                    prop_pick["kelly_stake_pen"], prop_pick["usage_bump_pct"], prop_pick["rationale"],
+                    prop_pick["emitted_at"],
+                ),
+            )
+            return True
+        except Exception as exc:
+            logger.warning(f"Failed to persist player prop opportunity: {exc}")
+            return False
+
+    def _persist_sgp_pick(self, sgp_cand: dict[str, Any], bankroll_pen: float) -> bool:
+        player_key = f"{sgp_cand['player_name']} + {sgp_cand['game_selection']}"
+        if not self._props_may_record(
+            sgp_cand["game_id"], sgp_cand["matchday_date"], player_key, "SGP", "SGP",
+            float(sgp_cand.get("kelly_stake_pen") or 0.0), bankroll_pen,
+        ):
+            return False
+        assert self.db is not None
+        try:
+            self.db.execute_insert(
+                """
+                INSERT OR IGNORE INTO player_prop_picks (
+                    prop_id, game_id, matchday_date, player_name, team, prop_category,
+                    line_value, selection, decimal_odds, projected_mean, projected_std,
+                    model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
+                    stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
+                ) VALUES (?, ?, ?, ?, ?, 'SGP', ?, 'SGP', ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 0.0, ?, ?, 'PENDING')
+                """,
+                (
+                    sgp_cand["sgp_id"], sgp_cand["game_id"], sgp_cand["matchday_date"], player_key, sgp_cand["team"],
+                    float(sgp_cand["prop_line"]), float(sgp_cand["offered_sgp_odds"]), float(sgp_cand["p_joint"]),
+                    round(max(0.01, float(sgp_cand["p_joint"]) * 0.85), 4),
+                    round(min(0.99, float(sgp_cand["p_joint"]) * 1.15), 4),
+                    float(sgp_cand["ev_pct"]), round(float(sgp_cand["ev_pct"]) * 0.8, 2),
+                    float(sgp_cand["kelly_stake_pen"]), float(sgp_cand["kelly_stake_pen"]), sgp_cand["rationale"],
+                    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                ),
+            )
+            return True
+        except Exception as exc:
+            logger.warning(f"Failed to persist SGP opportunity: {exc}")
+            return False
 
     def project_player_stats(
         self,
@@ -488,6 +595,7 @@ class PlayerPropsEngine:
         expected_game_pace: float | None = None,
         spread_blowout_risk: float | None = None,
         persist: bool = True,
+        line_source: str = "OBSERVED",
     ) -> list[dict[str, Any]]:
         """
         Evaluates a specific player prop line against our tactical & injury-adjusted projection.
@@ -558,17 +666,18 @@ class PlayerPropsEngine:
             if is_edge_qualified and conf_w <= 0.35:
                 b_val = dec_odds - 1.0
                 f_star = max(0.0, (anchored_prob * (b_val + 1.0) - 1.0) / max(0.05, b_val))
-                eff_f = min(0.05, f_star * 0.50)
+                eff_f = min(self.max_bankroll_fraction, f_star * self.kelly_fraction)
                 raw_s = bankroll_pen * eff_f
                 # Respect quarter-Kelly without artificial floors
                 if eff_f <= 0.0 or ev_pct <= 0.0:
                     stake_pen = 0.00
                 else:
-                    stake_pen = round(max(0.0, min(2.00, raw_s)), 2)
+                    stake_pen = round(max(0.0, min(self.max_stake_pen, raw_s)), 2)
                 kelly_frac = round(eff_f, 4)
 
                 rationale = (
-                    f"[{prop_category} {sel} {line_value}] {player_name} ({team}). "
+                    ("" if line_source == "OBSERVED" else "[LÍNEA ESTIMADA, no observada] ")
+                    + f"[{prop_category} {sel} {line_value}] {player_name} ({team}). "
                     f"Proyección: {mu:.1f} (std: {sigma:.1f}, Ventaja vs Línea: {line_diff:+0.1f} pts). "
                     f"Prob Modelo: {anchored_prob * 100:.1f}% vs Casa: {mkt_fair * 100:.1f}%. "
                     f"Ajustes: +{proj_info['usage_bump_pct']:.1f}% USG, Rival {proj_info.get('opponent_team') or 'NBA'} ({proj_info['matchup_tier']}). "
@@ -604,53 +713,13 @@ class PlayerPropsEngine:
                     "usage_bump_pct": proj_info["usage_bump_pct"],
                     "effective_minutes": proj_info["effective_minutes"],
                     "rationale": rationale,
+                    "line_source": line_source,
                     "emitted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 }
                 opportunities.append(prop_pick)
 
-                # Persist to SQLite table player_prop_picks if db provided
-                if self.db is not None and persist:
-                    try:
-                        # Guard: strictly prevent recording props for games that are finished or cancelled
-                        g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (prop_pick["game_id"],))
-                        if g_rec and g_rec.get("status") in ("FINAL", "POSTPONED", "CANCELLED"):
-                            continue
-
-                        self.db.execute_insert(
-                            """
-                            INSERT OR IGNORE INTO player_prop_picks (
-                                prop_id, game_id, matchday_date, player_name, team, prop_category,
-                                line_value, selection, decimal_odds, projected_mean, projected_std,
-                                model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
-                                stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-                            """,
-                            (
-                                prop_pick["prop_id"],
-                                prop_pick["game_id"],
-                                prop_pick["matchday_date"],
-                                prop_pick["player_name"],
-                                prop_pick["team"],
-                                prop_pick["prop_category"],
-                                prop_pick["line_value"],
-                                prop_pick["selection"],
-                                prop_pick["decimal_odds"],
-                                prop_pick["projected_mean"],
-                                prop_pick["projected_std"],
-                                prop_pick["model_prob"],
-                                prop_pick["conformal_p_low"],
-                                prop_pick["conformal_p_high"],
-                                prop_pick["ev_pct"],
-                                prop_pick["ev_lower_bound_pct"],
-                                prop_pick["kelly_stake_pen"],
-                                prop_pick["kelly_stake_pen"],
-                                prop_pick["usage_bump_pct"],
-                                prop_pick["rationale"],
-                                prop_pick["emitted_at"],
-                            ),
-                        )
-                    except Exception as exc:
-                        logger.warning(f"Failed to persist player prop opportunity: {exc}")
+                if persist:
+                    self._persist_prop_pick(prop_pick, bankroll_pen)
 
         return opportunities
 
@@ -733,19 +802,14 @@ class PlayerPropsEngine:
         # Kelly allocation with longshot variance shield
         b = offered_sgp_odds - 1.0
         f_star = max(0.0, (p_joint * (b + 1.0) - 1.0) / max(0.05, b))
-        if pure_alpha:
-            eff_f = min(0.18, f_star * 0.70)
-            raw_stake = bankroll_pen * eff_f
-            stake_pen = round(max(3.50, min(18.00, raw_stake if raw_stake > 0 else 5.00)), 2)
-        else:
-            eff_f = min(0.04, f_star * 0.35)
-            raw_stake = bankroll_pen * eff_f
-            stake_pen = round(max(1.00, min(3.50, raw_stake if raw_stake > 0 else 1.00)), 2)
+        # Fractional Kelly from config; no floors: without positive EV the stake is 0
+        eff_f = min(self.max_bankroll_fraction, f_star * self.kelly_fraction) if ev_unit > 0.0 else 0.0
+        stake_pen = round(min(self.max_stake_pen, bankroll_pen * eff_f), 2)
 
         is_value = ev_pct >= 3.0 and p_joint >= 0.18
 
         rationale = (
-            f"[RETAbet Crea tu Apuesta SGP] {game_selection_label} + {player_name} {prop_category} {prop_selection} {prop_line}. "
+            f"[SGP — CUOTA ESTIMADA, no observada] {game_selection_label} + {player_name} {prop_category} {prop_selection} {prop_line}. "
             f"Prob Conjunta Cópula: {p_joint * 100:.1f}% (vs {p_independent * 100:.1f}% Independiente, Impulso: +{corr_boost_pct}%). "
             f"Cuota Ofrecida: {offered_sgp_odds:.2f} vs Justa: {fair_sgp_odds:.2f} (EV: {ev_pct:+.1f}%). "
             f"Stake Sugerido: S/ {stake_pen:.2f} PEN."
@@ -811,7 +875,8 @@ class PlayerPropsEngine:
             p_p = float(prop.get("model_prob", 0.55))
             odds_g = 1.0 / max(0.05, game_prob)
             odds_p = float(prop.get("decimal_odds") or (1.0 / max(0.05, p_p)))
-            sim_offered_odds = round(max(2.15, odds_g * odds_p * 0.94), 2)
+            # ESTIMATED SGP price: independent product of the legs minus a 10% combined margin (no floor).
+            sim_offered_odds = round(max(1.01, odds_g * odds_p * 0.90), 2)
 
             sgp_cand = self.simulate_same_game_parlay_copula(
                 game_id=gid or "NBA_GAME",
@@ -831,42 +896,8 @@ class PlayerPropsEngine:
             if sgp_cand["ev_pct"] >= min_ev_pct and sgp_cand["p_joint"] >= 0.18:
                 sgp_cand["is_value_sgp"] = True
                 sgp_opportunities.append(sgp_cand)
-                if self.db is not None and persist:
-                    try:
-                        g_rec = self.db.fetch_one("SELECT game_start_time, status FROM games WHERE game_id = ?", (sgp_cand["game_id"],))
-                        if g_rec and g_rec.get("status") in ("FINAL", "POSTPONED", "CANCELLED"):
-                            continue
-
-                        self.db.execute_insert(
-                            """
-                            INSERT OR IGNORE INTO player_prop_picks (
-                                prop_id, game_id, matchday_date, player_name, team, prop_category,
-                                line_value, selection, decimal_odds, projected_mean, projected_std,
-                                model_prob, conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct,
-                                stake_pen, kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
-                            ) VALUES (?, ?, ?, ?, ?, 'SGP', ?, 'SGP', ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 0.0, ?, ?, 'PENDING')
-                            """,
-                            (
-                                sgp_cand["sgp_id"],
-                                sgp_cand["game_id"],
-                                sgp_cand["matchday_date"],
-                                f"{sgp_cand['player_name']} + {sgp_cand['game_selection']}",
-                                sgp_cand["team"],
-                                float(sgp_cand["prop_line"]),
-                                float(sgp_cand["offered_sgp_odds"]),
-                                float(sgp_cand["p_joint"]),
-                                round(max(0.01, float(sgp_cand["p_joint"]) * 0.85), 4),
-                                round(min(0.99, float(sgp_cand["p_joint"]) * 1.15), 4),
-                                float(sgp_cand["ev_pct"]),
-                                round(float(sgp_cand["ev_pct"]) * 0.8, 2),
-                                float(sgp_cand["kelly_stake_pen"]),
-                                float(sgp_cand["kelly_stake_pen"]),
-                                sgp_cand["rationale"],
-                                datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            ),
-                        )
-                    except Exception as exc:
-                        logging.warning(f"Handled exception in player_props (line 864): {exc}")
+                if persist:
+                    self._persist_sgp_pick(sgp_cand, bankroll_pen)
 
         return sgp_opportunities
 
@@ -966,8 +997,8 @@ class PlayerPropsEngine:
                     suggested_stake = 0.00
                 else:
                     f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / b)
-                    eff_f = min(0.02, f_k * 0.25)
-                    suggested_stake = round(max(0.0, min(2.00, bankroll_pen * eff_f)), 2)
+                    eff_f = min(self.max_bankroll_fraction, f_k * self.kelly_fraction)
+                    suggested_stake = round(max(0.0, min(self.max_stake_pen, bankroll_pen * eff_f)), 2)
 
                 parlays.append({
                     "parlay_id": f"HP_SGP_{gid}_{uuid.uuid4().hex[:6]}",
@@ -1033,8 +1064,8 @@ class PlayerPropsEngine:
                 suggested_stake = 0.00
             else:
                 f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / max(0.05, b))
-                eff_f = min(0.02, f_k * 0.25)
-                suggested_stake = round(max(0.0, min(2.00, bankroll_pen * eff_f)), 2)
+                eff_f = min(self.max_bankroll_fraction, f_k * self.kelly_fraction)
+                suggested_stake = round(max(0.0, min(self.max_stake_pen, bankroll_pen * eff_f)), 2)
 
             parlays.append({
                 "parlay_id": f"HP_POWER_PARLAY_{uuid.uuid4().hex[:6]}",
@@ -1068,8 +1099,8 @@ class PlayerPropsEngine:
         min_ev_pct: float = 3.0,
         injuries_by_team: dict[str, list[str]] | None = None,
         output_file: Path | str | None = None,
-        allow_synthetic_lines: bool = False,
-        allow_parlays: bool = False,
+        allow_synthetic_lines: bool | None = None,
+        allow_parlays: bool | None = None,
     ) -> list[dict[str, Any]]:
         """
         V8 Institutional End-to-End Prop & SGP Slate Generator:
@@ -1081,6 +1112,11 @@ class PlayerPropsEngine:
         """
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Defaults come from config: props / parlays are paper-traded on ESTIMATED lines (labelled as such)
+        if allow_synthetic_lines is None:
+            allow_synthetic_lines = self.risk.allow_player_props_betting
+        if allow_parlays is None:
+            allow_parlays = self.risk.allow_parlays
 
         if slate_games is None and self.db is not None:
             slate_games = self.db.fetch_all(
@@ -1249,10 +1285,9 @@ class PlayerPropsEngine:
                             continue
 
                         # Strict Data Integrity: Require observed prop lines unless allow_synthetic_lines=True
-                        # Strict data integrity: synthetic lines ONLY when a research caller asks for them
-                        # explicitly, and even then they are never persisted as paper bets.
-                        # (The odds schema cannot store a 'player_prop' market yet, so in production there
-                        # are no observed prop lines and therefore no prop picks at all.)
+                        # Observed prop lines are preferred. When none exist (no bookmaker prop prices are
+                        # captured), an ESTIMATED line (season baseline, 1.90/1.90) is used if enabled, and the
+                        # pick is labelled "LÍNEA ESTIMADA" so it is never mistaken for an observed price.
                         use_synthetic = bool(allow_synthetic_lines)
 
                         observed_quotes: list[dict[str, Any]] = []
@@ -1298,7 +1333,8 @@ class PlayerPropsEngine:
                                 opponent_team=opp_code,
                                 expected_game_pace=pace_val,
                                 spread_blowout_risk=spread_val,
-                                persist=bool(observed_quotes),
+                                persist=False,
+                                line_source="OBSERVED" if observed_quotes else "ESTIMATED",
                             )
                             for pk in picks:
                                 if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:
@@ -1308,8 +1344,8 @@ class PlayerPropsEngine:
         qualified_props.sort(key=lambda x: (x.get("ev_lower_bound_pct", 0.0), x.get("ev_pct", 0.0)), reverse=True)
         top_individual_props = qualified_props[:15]
 
-        # Combined bets (SGP / parlays) are prohibited by AGENTS.md and their offered prices are not
-        # observed anywhere, so they are only generated when a research caller opts in explicitly.
+        # Combined bets (SGP / parlays): prices are ESTIMATED (no bookmaker SGP price is captured) and
+        # labelled as such; enabled by risk_management.allow_parlays.
         top_sgp_candidates: list[dict[str, Any]] = []
         high_prob_parlays: list[dict[str, Any]] = []
         if allow_parlays:
@@ -1327,6 +1363,17 @@ class PlayerPropsEngine:
                 props_list=top_individual_props,
                 bankroll_pen=bankroll_pen,
             )
+
+        # Record paper bets only after ranking, so the per-matchday cap keeps the best selections rather
+        # than the first ones evaluated. The best combined bet goes first so combinadas are not crowded
+        # out by single props; `_props_may_record` enforces cap, exposure and idempotency across cycles.
+        if self.db is not None:
+            for sgp in top_sgp_candidates[:1]:
+                self._persist_sgp_pick(sgp, bankroll_pen)
+            for pk in top_individual_props:
+                self._persist_prop_pick(pk, bankroll_pen)
+            for sgp in top_sgp_candidates[1:]:
+                self._persist_sgp_pick(sgp, bankroll_pen)
 
         consolidated = high_prob_parlays + top_sgp_candidates + top_individual_props
 
