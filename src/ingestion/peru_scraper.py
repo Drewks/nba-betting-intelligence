@@ -16,16 +16,13 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
-import json
 import logging
-import os
-from pathlib import Path
 from typing import Any
 import uuid
 
-from src.ingestion.peru_sportsbooks import PERU_SPORTSBOOKS, calculate_peru_odds_comparison
+from src.ingestion.peru_sportsbooks import calculate_peru_odds_comparison
 from src.storage.db import DatabaseManager
-from src.utils.team_dictionary import format_matchup, get_team_full_name
+from src.utils.team_dictionary import format_matchup
 from src.validation.validator import parse_iso_utc
 
 logger = logging.getLogger(__name__)
@@ -72,7 +69,7 @@ class PeruLiveOddsScraper:
         now = as_of_utc or datetime.now(timezone.utc)
         start_dt = parse_iso_utc(game_start_time)
         hours_to_tipoff = (start_dt - now).total_seconds() / 3600.0
-        
+
         min_hours = max(0.5, self.target_hours_before - self.tolerance_hours)
         max_hours = self.target_hours_before + self.tolerance_hours
         in_window = min_hours <= hours_to_tipoff <= max_hours
@@ -156,6 +153,9 @@ class PeruLiveOddsScraper:
             return
 
         for book_id, quote in snapshot.sportsbook_quotes.items():
+            # Strict Data Integrity: Only persist genuine observed market quotes (never synthetic estimations)
+            if not quote.get("is_observed", False):
+                continue
             book_name = quote["name"]
             provider_tag = f"{book_name} [T-6H Peru]"
 

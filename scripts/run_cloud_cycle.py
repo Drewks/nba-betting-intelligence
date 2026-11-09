@@ -86,13 +86,12 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     paper_engine = PaperTradingEngine(
         db=db,
         initial_bankroll_pen=100.00,
-        base_stake_pen=3.50,
-        max_stake_pen=20.00,
-        min_ev_threshold=0.02,
+        base_stake_pen=1.00,
+        max_stake_pen=2.00,
+        min_ev_threshold=0.05,
         dynamic_conviction_staking=True,
-        enable_cppi_shield=False,
-        staking_mode="AGGRESSIVE_ALPHA",
-        # Real-money readiness is judged ONLY on real games; synthetic SYN_* bets are an archived benchmark
+        enable_cppi_shield=True,
+        staking_mode="CONSERVATIVE",
         exclude_synthetic=True,
     )
     scout = NBADataScoutAgent(db)

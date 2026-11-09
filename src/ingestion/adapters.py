@@ -653,13 +653,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 synergy_detail=syn_details_map.get(away_code),
             )
 
-            try:
-                start_dt = datetime.fromisoformat(game_start_time.replace("Z", "+00:00"))
-                now_dt_parsed = datetime.fromisoformat(now_utc.replace("Z", "+00:00"))
-                pregame_avail_dt = min(now_dt_parsed, start_dt - timedelta(hours=2))
-                features_available_at = pregame_avail_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-            except Exception:
-                features_available_at = now_utc
+            # Honest audit trail: features_available_at is the true ingestion timestamp
+            features_available_at = now_utc
 
             games_out.append(
                 {
@@ -942,22 +937,8 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             base_off = round(base_off + 0.6 * alt_bonus, 2)
             base_def = round(base_def - 0.4 * alt_bonus, 2)
 
-        # 5. Bayesian Anchor with Pre-Game Market Consensus (prevents unmodeled lineup shocks)
-        if first_odds:
-            ou = first_odds.get("overUnder")
-            spread = first_odds.get("spread")
-            if ou is not None and spread is not None:
-                try:
-                    ou_f = float(ou)
-                    sp_f = float(spread)
-                    implied_home_pts = 0.5 * (ou_f - sp_f)
-                    implied_away_pts = 0.5 * (ou_f + sp_f)
-                    target_pts = implied_home_pts if is_home else implied_away_pts
-                    opp_pts = implied_away_pts if is_home else implied_home_pts
-                    base_off = round(0.60 * base_off + 0.40 * target_pts, 2)
-                    base_def = round(0.60 * base_def + 0.40 * opp_pts, 2)
-                except ValueError:
-                    pass
+        # 5. No circular market blending: Fundamental team ratings reflect purely statistical
+        # and roster-adjusted performance without leaking pre-game market spread.
 
         return base_off, base_def, base_pace
 

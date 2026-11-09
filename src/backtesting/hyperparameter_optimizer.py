@@ -15,20 +15,16 @@ import optuna
 
 from src.calibration.calibrator import compute_brier_score, compute_log_loss
 from src.features.team_ratings import (
-    DEFAULT_REST_DAYS,
     HCA_PER_SIDE,
     LEAGUE_ALPHA,
     LEAGUE_PACE_BASE,
     LEAGUE_PPG_PRIOR,
-    MAX_REST_DAYS,
     OFFSEASON_CARRYOVER,
     OFFSEASON_GAP_DAYS,
     is_synthetic_game_id,
 )
-from src.models.statistical_models import _filter_strictly_prior_final_games
 from src.prediction.ev_calculator import (
     DEFAULT_MODEL_WEIGHT,
-    MAX_MODEL_MARKET_DISAGREEMENT,
     market_anchored_probability,
 )
 from src.storage.db import DatabaseManager
@@ -131,12 +127,12 @@ def _simulate_parametric_ratings_and_preds(
         expected_margin = (h_off - a_def) - (a_off - h_def) + (2.0 * HCA_PER_SIDE)
         p_home_model = float(np.clip(1.0 - norm.cdf(0.0, loc=expected_margin, scale=spread_sigma), 0.05, 0.95))
 
-        # Out-of-sample evaluation slice (never in-sample)
+        # Out-of-sample evaluation slice (never in-sample, strictly pre-game without score leakage)
         if idx >= train_end_idx:
             actual_y = 1 if int(g["home_score"]) > int(g["away_score"]) else 0
-            # Rough sharp market proxy based on real score expectation with small noise
-            true_p = float(np.clip(1.0 - norm.cdf(0.0, loc=(int(g["home_score"]) - int(g["away_score"])), scale=12.5), 0.10, 0.90))
-            anchored_p = market_anchored_probability(p_home_model, market_prob=true_p, model_weight=market_model_weight)
+            # Pre-game market anchor: uses pre-game odds/prob if available, or neutral 0.50 (NEVER final scores)
+            pregame_mkt = float(g.get("market_prob") or 0.50)
+            anchored_p = market_anchored_probability(p_home_model, market_prob=pregame_mkt, model_weight=market_model_weight)
 
             raw_preds.append(round(p_home_model, 5))
             anchored_preds.append(round(anchored_p, 5))

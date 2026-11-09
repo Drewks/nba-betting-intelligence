@@ -65,16 +65,20 @@ class PaperTradingEngine:
         db: DatabaseManager,
         initial_bankroll_pen: float = 100.00,
         base_stake_pen: float = 1.00,
-        max_stake_pen: float = 1.00,
+        max_stake_pen: float = 2.00,
         max_selections_per_matchday: int = 3,
         min_ev_threshold: float = 0.05,
         dynamic_conviction_staking: bool = False,
         exclude_synthetic: bool = False,
         single_bet_per_game: bool = True,
-        enable_cppi_shield: bool = False,
+        enable_cppi_shield: bool = True,
         staking_mode: str = "CONSERVATIVE",
+        is_backtest: bool = False,
+        max_portfolio_exposure_pct: float = 0.20,
     ) -> None:
-        max_allowed = 25.00 if dynamic_conviction_staking else 1.00
+        self.is_backtest = is_backtest
+        self.max_portfolio_exposure_pct = max_portfolio_exposure_pct
+        max_allowed = 25.00 if dynamic_conviction_staking else 2.00
         if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
             raise RiskLimitError(
                 f"Stake limits must satisfy 0 < base_stake <= max_stake <= S/{max_allowed:.2f} PEN."
@@ -683,7 +687,7 @@ class PaperTradingEngine:
                 )
                 continue
 
-            if game_record["status"] != "SCHEDULED":
+            if not self.is_backtest and game_record["status"] != "SCHEDULED":
                 no_bet_decisions.append(
                     self._record_decision(
                         game_id, matchday_date, market, selection, "NO_BET",
@@ -734,12 +738,25 @@ class PaperTradingEngine:
             else:
                 bet_stake = stake
 
-            if state["available_balance_pen"] < bet_stake:
+            # Check Portfolio Exposure Cap (max 20% total exposure per AGENTS.md)
+            max_allowed_exposure = state["settled_bankroll_pen"] * self.max_portfolio_exposure_pct
+            if (state["pending_exposure_pen"] + bet_stake) > (max_allowed_exposure + 0.01):
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "PORTFOLIO_EXPOSURE_LIMIT",
+                        f"Pending exposure S/{state['pending_exposure_pen']:.2f} + S/{bet_stake:.2f} exceeds cap of S/{max_allowed_exposure:.2f} (20% bankroll).",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
+
+            if state["available_balance_pen"] < bet_stake or bet_stake <= 0.0:
                 no_bet_decisions.append(
                     self._record_decision(
                         game_id, matchday_date, market, selection, "NO_BET",
                         "INSUFFICIENT_VIRTUAL_BALANCE",
-                        f"Available balance S/{state['available_balance_pen']:.2f} < stake S/{bet_stake:.2f}",
+                        f"Available balance S/{state['available_balance_pen']:.2f} < stake S/{bet_stake:.2f} or zero stake",
                         ev_pct, emitted_at, model_version_id
                     )
                 )

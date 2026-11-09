@@ -24,7 +24,7 @@ SYNTHETIC_PREFIX = "SYN_"
 
 LEAGUE_PPG_PRIOR = 114.2
 LEAGUE_PACE_BASE = 99.5
-# V7.1 Optimal Bayesian Hyperparameters (Tuned with 1,000 Optuna TPE Trials on 2,989 NBA Games, +20.60% Score Gain)
+# Baseline Bayesian Hyperparameters (Structural EWMA & Decoupled Tempo Adaptation)
 EWMA_ALPHA_SLOW = 0.020     # Structural opponent-adjusted efficiency
 EWMA_ALPHA_FAST = 0.155     # High-frequency recent momentum/surge
 TEMPO_ALPHA_SLOW = 0.035    # Decoupled pace adaptation

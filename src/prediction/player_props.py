@@ -23,6 +23,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import math
+import os
 from pathlib import Path
 from typing import Any
 import uuid
@@ -31,12 +32,10 @@ import numpy as np
 from scipy.stats import norm, poisson
 
 from src.calibration.calibrator import VennAbersConformalInterval
-from src.features.team_ratings import PLAYER_ON_OFF_SYNERGY_PROFILES
 from src.prediction.ev_calculator import (
     calculate_ev,
     devig_multiplicative,
     market_anchored_probability,
-    optimize_simultaneous_kelly_portfolio,
 )
 from src.prediction.minutes_model import MinutesProjectionEngine
 from src.prediction.vine_copula import VineCopulaSGP
@@ -557,13 +556,11 @@ class PlayerPropsEngine:
                 f_star = max(0.0, (anchored_prob * (b_val + 1.0) - 1.0) / max(0.05, b_val))
                 eff_f = min(0.05, f_star * 0.50)
                 raw_s = bankroll_pen * eff_f
-                # Bounded by conviction tiers
-                if anchored_prob < 0.55:
-                    stake_pen = round(max(1.00, min(1.75, raw_s)), 2)
-                elif anchored_prob < 0.65:
-                    stake_pen = round(max(1.50, min(3.50, raw_s)), 2)
+                # Respect quarter-Kelly without artificial floors
+                if eff_f <= 0.0 or ev_pct <= 0.0:
+                    stake_pen = 0.00
                 else:
-                    stake_pen = round(max(2.00, min(5.00, raw_s)), 2)
+                    stake_pen = round(max(0.0, min(2.00, raw_s)), 2)
                 kelly_frac = round(eff_f, 4)
 
                 rationale = (
@@ -955,13 +952,16 @@ class PlayerPropsEngine:
                 z_draws = np.random.default_rng(42).multivariate_normal([0.0, 0.0], cov, size=5000)
                 joint_p = float(np.mean((norm.cdf(z_draws[:, 0]) <= p1) & (norm.cdf(z_draws[:, 1]) <= p2)))
 
-                combined_odds = round(anchor["odds"] * best_prop["odds"] * 1.25, 2)
-                combined_odds = max(2.10, combined_odds)
+                combined_odds = round(anchor["odds"] * best_prop["odds"], 2)
                 ev_pct = round(((joint_p * combined_odds) - 1.0) * 100.0, 2)
 
                 b = combined_odds - 1.0
-                f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / b)
-                suggested_stake = round(max(6.00, min(16.00, bankroll_pen * f_k * 0.70)), 2)
+                if b <= 0.0 or ev_pct <= 0.0:
+                    suggested_stake = 0.00
+                else:
+                    f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / b)
+                    eff_f = min(0.02, f_k * 0.25)
+                    suggested_stake = round(max(0.0, min(2.00, bankroll_pen * eff_f)), 2)
 
                 parlays.append({
                     "parlay_id": f"HP_SGP_{gid}_{uuid.uuid4().hex[:6]}",
@@ -1020,11 +1020,15 @@ class PlayerPropsEngine:
                 combined_odds *= l["odds"]
                 joint_p *= l["prob"]
 
-            combined_odds = round(max(2.05, combined_odds), 2)
+            combined_odds = round(combined_odds, 2)
             ev_pct = round(((joint_p * combined_odds) - 1.0) * 100.0, 2)
             b = combined_odds - 1.0
-            f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / max(0.05, b))
-            suggested_stake = round(max(5.00, min(14.00, bankroll_pen * f_k * 0.65)), 2)
+            if b <= 0.0 or ev_pct <= 0.0:
+                suggested_stake = 0.00
+            else:
+                f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / max(0.05, b))
+                eff_f = min(0.02, f_k * 0.25)
+                suggested_stake = round(max(0.0, min(2.00, bankroll_pen * eff_f)), 2)
 
             parlays.append({
                 "parlay_id": f"HP_POWER_PARLAY_{uuid.uuid4().hex[:6]}",
@@ -1057,6 +1061,7 @@ class PlayerPropsEngine:
         bankroll_pen: float = 100.0,
         min_ev_pct: float = 3.0,
         injuries_by_team: dict[str, list[str]] | None = None,
+        output_file: Path | str | None = None,
     ) -> list[dict[str, Any]]:
         """
         V8 Institutional End-to-End Prop & SGP Slate Generator:
@@ -1234,7 +1239,7 @@ class PlayerPropsEngine:
                         p_data = proj["projections"].get(cat)
                         if not p_data:
                             continue
-                        
+
                         # Retail lines track season averages rounded to half-points
                         base_val = baseline_map.get(cat, p_data["mean"])
                         std_line = math.floor(base_val) + 0.5
@@ -1284,12 +1289,20 @@ class PlayerPropsEngine:
 
         consolidated = high_prob_parlays + top_sgp_candidates + top_individual_props
 
-        # Persist to data/evaluation/latest_player_props.json
-        out_file = Path("data/evaluation/latest_player_props.json")
-        try:
-            out_file.parent.mkdir(parents=True, exist_ok=True)
-            out_file.write_text(json.dumps(consolidated, indent=2, ensure_ascii=False), encoding="utf-8")
-        except Exception:
-            pass
+        # Persist safely without polluting versioned repo files during tests
+        if output_file is not None:
+            out_file = Path(output_file)
+            try:
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                out_file.write_text(json.dumps(consolidated, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception as exc:
+                logger.debug(f"Failed to write props output file: {exc}")
+        elif not os.environ.get("PYTEST_CURRENT_TEST"):
+            out_file = Path("data/evaluation/latest_player_props.json")
+            try:
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                out_file.write_text(json.dumps(consolidated, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception as exc:
+                logger.debug(f"Failed to write props output file: {exc}")
 
         return consolidated

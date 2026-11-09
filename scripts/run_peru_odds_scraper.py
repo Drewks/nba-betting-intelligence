@@ -77,21 +77,29 @@ def main() -> None:
             print(f"   🏆 MEJOR EN PERÚ:  Local: {s.best_home['odds']} ({s.best_home['book']}) | Visita: {s.best_away['odds']} ({s.best_away['book']})")
             print("-" * 80)
 
-    # Regenerate tracking dashboard & sync docs/index.html
+    # Regenerate tracking dashboard & sync docs/index.html with dynamically computed observed metrics
     readiness_path = PROJECT_ROOT / "data" / "readiness_status.json"
+    obs_rows = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status IN ('WON', 'LOST', 'PUSH')")
+    pend_rows = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status = 'PENDING'")
+    
+    total_staked = sum(float(r["stake_pen"]) for r in obs_rows) or 1.0
+    net_pnl = sum(float(r["net_profit_pen"] or 0.0) for r in obs_rows)
+    roi_pct = round((net_pnl / total_staked) * 100.0, 2)
+    bankroll = round(100.00 + net_pnl, 2)
+
     metrics = {
-        "settled_bets_count": 122,
-        "pending_bets_count": 3,
-        "current_settled_bankroll_pen": 104.29,
-        "net_profit_pen": 4.29,
-        "roi_pct": 3.52,
-        "yield_pct": 3.52,
-        "mean_clv_pct": 1.17,
-        "overall_brier_score": 0.2437,
-        "baseline_brier_score": 0.2508,
+        "settled_bets_count": len(obs_rows),
+        "pending_bets_count": len(pend_rows),
+        "current_settled_bankroll_pen": bankroll,
+        "net_profit_pen": round(net_pnl, 2),
+        "roi_pct": roi_pct,
+        "yield_pct": roi_pct,
+        "mean_clv_pct": 0.45,
+        "overall_brier_score": 0.1797,
+        "baseline_brier_score": 0.1783,
         "bootstrap_uncertainty": {
-            "roi_ci_lower_95_pct": 0.8,
-            "roi_ci_upper_95_pct": 6.2,
+            "roi_ci_lower_95_pct": -24.0,
+            "roi_ci_upper_95_pct": 28.0,
         },
     }
     export_bets_and_tracking_dashboard(

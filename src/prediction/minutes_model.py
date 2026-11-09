@@ -8,7 +8,6 @@ and referee-conditioned foul trouble hazard survival.
 from __future__ import annotations
 
 import math
-from typing import Any
 
 
 class MinutesProjectionEngine:

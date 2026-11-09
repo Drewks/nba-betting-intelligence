@@ -12,12 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.ingestion.normalizer import NBA_TEAMS
 from src.utils.team_dictionary import (
     format_matchup,
-    format_matchup_string,
-    get_team,
-    get_team_code,
     get_team_full_name,
     get_teams_json_for_frontend,
 )
@@ -26,7 +22,6 @@ from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dis
 from src.storage.db import DatabaseManager
 from src.ingestion.peru_sportsbooks import (
     calculate_peru_odds_comparison,
-    get_peru_sportsbooks_catalog,
     get_peru_sportsbooks_json_for_frontend,
 )
 from src.validation.validator import parse_iso_utc
@@ -53,7 +48,7 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
     for b in db.fetch_all(
         """
         SELECT b.*, p.odds_provider, p.raw_probability, p.implied_prob_gross
-        FROM simulated_bets b
+        FROM v_observed_simulated_bets b
         LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
         WHERE b.status = 'PENDING'
         """
@@ -69,7 +64,7 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
         odds_rows = db.fetch_all(
             """
             SELECT market, selection, line_value, decimal_odds, provider, captured_at
-            FROM odds_snapshots
+            FROM v_observed_odds_snapshots
             WHERE game_id = ?
             ORDER BY decimal_odds DESC, captured_at DESC
             """,
@@ -1707,7 +1702,7 @@ def generate_interactive_html_dashboard(
     out = Path(html_output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
-    
+
     # Sync to docs/index.html for automatic GitHub Pages deployment and to conversation artifact
     has_real_content = (len(slate_items) > 0 or len(espn_real_bets) > 0)
     if has_real_content:
@@ -1749,7 +1744,7 @@ def export_bets_and_tracking_dashboard(
         """
         SELECT b.*, g.home_team, g.away_team, g.game_start_time, g.status AS game_status,
                g.home_score, g.away_score, g.source_provider, p.odds_provider
-        FROM simulated_bets b
+        FROM v_observed_simulated_bets b
         JOIN games g ON b.game_id = g.game_id
         LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
         ORDER BY g.game_start_time DESC, b.emitted_at DESC
@@ -1758,7 +1753,7 @@ def export_bets_and_tracking_dashboard(
 
     closing_lookup: dict[tuple[str, str, str, float | None], float] = {}
     for cr in db.fetch_all(
-        "SELECT game_id, market, selection, line_value, decimal_odds FROM odds_snapshots WHERE is_closing_line = 1 ORDER BY captured_at ASC"
+        "SELECT game_id, market, selection, line_value, decimal_odds FROM v_observed_odds_snapshots WHERE is_closing_line = 1 ORDER BY captured_at ASC"
     ):
         closing_lookup[(cr["game_id"], cr["market"], cr["selection"], cr["line_value"])] = float(cr["decimal_odds"])
 
@@ -2016,7 +2011,7 @@ def export_bets_and_tracking_dashboard(
                     f"- **Stake y Ganancia Potencial**: Stake **`S/{bd['stake_pen']:.2f} PEN`** → Ganancia neta potencial: **`+S/{bd['potential_profit_pen']:.2f} PEN`** *(Retorno total: `S/{bd['stake_pen'] + bd['potential_profit_pen']:.2f} PEN`)*",
                     f"- **Probabilidades**: Modelo Calibrado **`{bd['model_prob_pct']:.1f}%`** vs Probabilidad Implícita Limpia Casa **`{ab['mkt_p_home_pct'] if 'Local' in bd['selection_label'] else ab['mkt_p_away_pct']:.1f}%`**",
                     f"- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `{ab['home_team']} {ab['expected_margin']:+.1f} pts` | Total esperado **`{ab['expected_total']:.1f} pts`** *(Rango 80% Conformal: `{ab['conformal_q10']:.0f} – {ab['conformal_q90']:.0f} pts` | Prob. Prórroga: `{ab['overtime_prob_pct']:.1f}%` | Prob. Paliza: `{ab['blowout_prob_pct']:.1f}%`)*",
-                    f"- **Estadísticas Clave Tomadas en Cuenta**:",
+                    "- **Estadísticas Clave Tomadas en Cuenta**:",
                     f"  - **Rating Elo**: `{ab['home_team']} {st['elo_home']}` vs `{ab['away_team']} {st['elo_away']}` | **Eficiencia Neta (Off/Def)**: `{ab['home_team']} ({st['home_off']}/{st['home_def']})` vs `{ab['away_team']} ({st['away_off']}/{st['away_def']})` (`Dif: {st['net_rtg_diff']:+.1f} pts/100`)",
                     f"  - **Ritmo (Pace)**: `{st['expected_pace']:.1f} posesiones` | **Descanso**: `{ab['home_team']} {st['home_rest_days']:.0f}d` vs `{ab['away_team']} {st['away_rest_days']:.0f}d` | **Viaje Geodésico (Millas Haversine)**: `Dif. {st['travel_miles_diff']:+d} millas` (`{st['away_tz_change']:.0f} husos horarios`)",
                     f"- **Por qué apostó el modelo**: _{ab['verdict_reason']}_",
@@ -2178,10 +2173,10 @@ def generate_daily_report(
         (target_date,),
     )
     bets = db.fetch_all(
-        "SELECT * FROM simulated_bets WHERE matchday_date = ? ORDER BY emitted_at",
+        "SELECT * FROM v_observed_simulated_bets WHERE matchday_date = ? ORDER BY emitted_at",
         (target_date,),
     )
-    pending_all = db.fetch_all("SELECT * FROM simulated_bets WHERE status = 'PENDING'")
+    pending_all = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status = 'PENDING'")
 
     discarded_games = live_games_summary.get("discarded_games", []) if live_games_summary else []
     no_bets = [d for d in decisions if d["decision_type"] == "NO_BET"]
@@ -2397,9 +2392,9 @@ def generate_audit_report(
     lines.extend([
         "",
         "## 3. Estado Real de Herramientas y Fuentes Inspeccionadas",
-        f"- **Coordinador**: `Gemini Argon` en Google Antigravity (Ejecución secuencial verificada)",
+        "- **Coordinador**: `Gemini Argon` en Google Antigravity (Ejecución secuencial verificada)",
         f"- **Python & Entorno Virtual**: `{environment_status.get('python_version', 'Python 3.12 via uv')}`",
-        f"- **Fuente Primaria Activa sin Credenciales**: `ESPNPublicAdapter` (`site.api.espn.com` — Calendario, marcadores, estadísticas y cuotas pre-partido DraftKings)",
+        "- **Fuente Primaria Activa sin Credenciales**: `ESPNPublicAdapter` (`site.api.espn.com` — Calendario, marcadores, estadísticas y cuotas pre-partido DraftKings)",
         f"- **Sportradar (`SportradarAdapter`)**: `{environment_status.get('sportradar_status', 'Adaptador implementado; requiere SPORTRADAR_API_KEY')}`",
         f"- **NBA.com/stats (`NBAStatsAdapter`)**: `{environment_status.get('nba_stats_status', 'Adaptador implementado; filtrado por Akamai TLS sin sesión navegador; no incluye cuotas históricas')}`",
         f"- **Playwright (`PlaywrightAuthorizedScraper`)**: `{environment_status.get('playwright_status', 'Paquete instalado v1.64.1')}`",

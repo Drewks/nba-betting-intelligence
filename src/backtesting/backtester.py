@@ -613,6 +613,17 @@ class WalkForwardBacktester:
 
                 home_won = 1 if int(r["home_score"]) > int(r["away_score"]) else 0
                 over_hit = 1 if (int(t_row["home_score"]) + int(t_row["away_score"])) > line_v else 0
+
+                raw_p_ml = float(r.get("raw_probability") or r["calibrated_probability"])
+                cal_p_ml = float(r["calibrated_probability"])
+                fair_mkt = float(r.get("implied_prob_fair") or 0.50)
+                # Model E is shrinkage ensemble between calibrated model and market fair
+                ens_p_ml = round(0.30 * cal_p_ml + 0.70 * fair_mkt, 4)
+
+                cal_p_tot = float(t_row["calibrated_probability"])
+                raw_p_tot = float(t_row.get("raw_probability") or cal_p_tot)
+                ens_p_tot = round(0.35 * cal_p_tot + 0.65 * 0.50, 4)
+
                 reconstructed.append(
                     {
                         "game_id": gid,
@@ -621,12 +632,12 @@ class WalkForwardBacktester:
                         "home_won": home_won,
                         "over_hit": over_hit,
                         "model_a_ml": p_base_ml,
-                        "model_b_ml": float(r["calibrated_probability"]),
-                        "model_c_ml": float(r["calibrated_probability"]),
-                        "model_e_ml": float(r["calibrated_probability"]),
+                        "model_b_ml": raw_p_ml,
+                        "model_c_ml": cal_p_ml,
+                        "model_e_ml": ens_p_ml,
                         "model_a_tot": p_base_tot,
-                        "model_d_tot": float(t_row["calibrated_probability"]),
-                        "model_e_tot": float(t_row["calibrated_probability"]),
+                        "model_d_tot": cal_p_tot,
+                        "model_e_tot": ens_p_tot,
                     }
                 )
             model_comparison_records = reconstructed

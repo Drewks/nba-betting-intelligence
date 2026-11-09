@@ -16,29 +16,25 @@ Detects:
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone, timedelta
 import json
 import logging
 from pathlib import Path
-import re
 from typing import Any
 import uuid
 
 import httpx
-import numpy as np
 
 from src.ingestion.peru_sportsbooks import (
-    PERU_SPORTSBOOKS,
     calculate_peru_odds_comparison,
-    detect_peru_market_inefficiencies,
 )
 from src.ingestion.stale_line_hunter import StaleLineHunter
 from src.reporting.telegram_bot import TelegramAlertBot
 from src.storage.db import DatabaseManager
-from src.utils.team_dictionary import format_matchup, get_team_full_name
-from src.ingestion.normalizer import normalize_team_code
-from src.validation.validator import parse_iso_utc
+from src.utils.team_dictionary import format_matchup
 
 logger = logging.getLogger("PeruOddsScraper")
 
@@ -57,6 +53,7 @@ class LiveGameOddsQuote:
     total_over_odds: float | None = None
     captured_at: str = ""
     source: str = "LIVE_EXTRACTOR"
+    is_observed: bool = False
 
 
 class LivePeruOddsScraper:
@@ -307,6 +304,8 @@ class LivePeruOddsScraper:
             return
 
         for bid, q in quotes.items():
+            if not getattr(q, "is_observed", False):
+                continue
             provider = f"{q.book_name} [LIVE_SCRAPER]"
             oid_h = f"ODDS_LIVE_{game_id}_{bid}_H_{uuid.uuid4().hex[:6]}"
             oid_a = f"ODDS_LIVE_{game_id}_{bid}_A_{uuid.uuid4().hex[:6]}"
@@ -396,10 +395,11 @@ class LivePeruOddsScraper:
                     self.bot.send_raw_message(msg)
                     alerts_sent += 1
 
-        # Persist results summary to data/evaluation
-        out_file = Path("data/evaluation/latest_peru_odds_scan.json")
-        out_file.parent.mkdir(parents=True, exist_ok=True)
-        out_file.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+        # Persist results summary to data/evaluation only during live runs (not during tests)
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            out_file = Path("data/evaluation/latest_peru_odds_scan.json")
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            out_file.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
 
         logger.info(f"Escaneo de cuotas peruanas completado para {len(results)} partidos. Alertas despachadas: {alerts_sent}.")
         return results

@@ -16,24 +16,20 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import math
-from pathlib import Path
 from typing import Any
 import uuid
 
 import numpy as np
 
-from src.calibration.calibrator import VennAbersConformalInterval, conformal_lower_bound_ev
+from src.calibration.calibrator import VennAbersConformalInterval
 from src.features.team_ratings import (
     PLAYER_ON_OFF_SYNERGY_PROFILES,
     compute_lineup_synergy_penalty,
 )
 from src.ingestion.adapters import ESPNPublicAdapter, PlaywrightAuthorizedScraper, SportradarAdapter
 from src.prediction.ev_calculator import (
-    calculate_ev,
     compute_market_consensus,
-    devig_multiplicative,
     evaluate_market_opportunity,
-    market_anchored_probability,
     optimize_simultaneous_kelly_portfolio,
 )
 from src.storage.db import DatabaseManager
@@ -405,38 +401,16 @@ class InjurySniperMonitor:
                 """
                 SELECT odds_id, game_id, provider, market, selection, line_value, decimal_odds,
                        counterpart_decimal_odds, captured_at
-                FROM odds_snapshots
+                FROM v_observed_odds_snapshots
                 WHERE game_id = ? AND market = 'moneyline'
                 """,
                 (g_id,),
             )
 
-            # Fallback synthetic bookmaker odds if not yet captured
+            # Strict Data Integrity: If no genuine observed market odds exist, do not snipe
             if not odds_rows:
-                odds_rows = [
-                    {
-                        "odds_id": f"EST_{g_id}_HOME",
-                        "game_id": g_id,
-                        "provider": "draftkings",
-                        "market": "moneyline",
-                        "selection": "HOME",
-                        "line_value": None,
-                        "decimal_odds": 1.90,
-                        "counterpart_decimal_odds": 1.90,
-                        "captured_at": ref_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    },
-                    {
-                        "odds_id": f"EST_{g_id}_AWAY",
-                        "game_id": g_id,
-                        "provider": "draftkings",
-                        "market": "moneyline",
-                        "selection": "AWAY",
-                        "line_value": None,
-                        "decimal_odds": 1.90,
-                        "counterpart_decimal_odds": 1.90,
-                        "captured_at": ref_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    },
-                ]
+                logger.info(f"Skipping sniper scan for game {g_id}: no observed odds found in database.")
+                continue
 
             # Ingest live injury context from adapters
             live_injuries: list[dict[str, Any]] = []

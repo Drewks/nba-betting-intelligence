@@ -5,11 +5,6 @@ from __future__ import annotations
 from src.utils.team_dictionary import (
     NBA_TEAMS as RAW_NBA_TEAMS,
     TEAM_ALIASES,
-    format_matchup,
-    format_matchup_string,
-    get_team,
-    get_team_code,
-    get_team_full_name,
 )
 
 # Backward-compatible dictionary of dicts

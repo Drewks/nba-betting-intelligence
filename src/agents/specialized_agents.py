@@ -10,6 +10,9 @@ Implementation of the 6 specialized agents (Section 3):
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger('SpecializedAgents')
+
 from datetime import datetime, timezone
 import json
 import os
@@ -268,15 +271,16 @@ class VisualResearcherAgent:
             ),
         }
 
-        try:
-            out_dir = Path(__file__).resolve().parent.parent.parent / "data" / "visual_rag"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            (out_dir / "latest_visual_context.json").write_text(
-                json.dumps(result_payload, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                out_dir = Path(__file__).resolve().parent.parent.parent / "data" / "visual_rag"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                (out_dir / "latest_visual_context.json").write_text(
+                    json.dumps(result_payload, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+            except Exception as exc:
+                logger.debug(f"Failed to persist visual context: {exc}")
 
         return result_payload
 
@@ -385,12 +389,20 @@ class NBAAuditorAgent:
             immutability_verified = True
 
         integrity_errors = 0 if (bankroll_reconciled and immutability_verified) else 1
+        reproducibility_verified = bool(leakage_violations == 0 and integrity_errors == 0)
+        # Auditor approval requires zero leakage, full bankroll reconciliation, and verified exit criteria
+        auditor_approved = bool(
+            reproducibility_verified
+            and bankroll_reconciled
+            and immutability_verified
+            and backtest_metrics.get("overall_brier_score", 1.0) <= backtest_metrics.get("baseline_brier_score", 1.0)
+        )
         exit_gates = evaluate_simulation_exit_gates(
             metrics=backtest_metrics,
             leakage_violations=leakage_violations,
             integrity_errors=integrity_errors,
-            reproducibility_verified=True,
-            auditor_approved=True,
+            reproducibility_verified=reproducibility_verified,
+            auditor_approved=auditor_approved,
         )
 
         return {

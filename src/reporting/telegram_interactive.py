@@ -9,7 +9,6 @@ Zero third-party dependencies — built purely on standard library (urllib.reque
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -59,20 +58,21 @@ class TelegramInteractiveListener:
         offset_file: Path | str | None = None,
     ) -> None:
         self.bot_token = bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-        
+
         # Configure authorized chat IDs
         raw_allowed = allowed_chat_ids or os.environ.get("TELEGRAM_CHAT_ID", "").strip().split(",")
         self.allowed_chat_ids: set[str] = {str(c).strip() for c in raw_allowed if str(c).strip()}
-        
+
         self.db = db or DatabaseManager(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3")
         self.paper_engine = PaperTradingEngine(
             db=self.db,
             initial_bankroll_pen=100.00,
-            base_stake_pen=3.50,
-            max_stake_pen=20.00,
+            base_stake_pen=1.00,
+            max_stake_pen=2.00,
+            min_ev_threshold=0.05,
             dynamic_conviction_staking=True,
-            enable_cppi_shield=False,
-            staking_mode="AGGRESSIVE_ALPHA",
+            enable_cppi_shield=True,
+            staking_mode="CONSERVATIVE",
             exclude_synthetic=True,
         )
         self.bot = TelegramAlertBot(bot_token=self.bot_token, chat_id=list(self.allowed_chat_ids)[0] if self.allowed_chat_ids else None)
@@ -164,13 +164,13 @@ class TelegramInteractiveListener:
         chat_id_str = str(chat_id)
         user_name = from_user.get("first_name") or from_user.get("username") or "Usuario"
 
-        # Security check: verify allowed chat
-        if self.allowed_chat_ids and chat_id_str not in self.allowed_chat_ids:
+        # Security check: strictly require chat_id in allowed_chat_ids
+        if not self.allowed_chat_ids or chat_id_str not in self.allowed_chat_ids:
             logger.warning(f"Unauthorized access attempt from chat_id={chat_id_str} ({user_name})")
             return (
                 f"⛔ *Acceso No Autorizado*\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Hola {user_name}, este bot está vinculado exclusivamente a la banca privada de Andre (@andbo06).\n\n"
+                f"Hola {user_name}, este bot cuenta con lista de control de acceso estricta.\n\n"
                 f"Tu Chat ID (`{chat_id_str}`) no tiene permisos de consulta ni ejecución."
             )
 
@@ -211,7 +211,7 @@ class TelegramInteractiveListener:
             f"👋 ¡Hola, *{user_name}*! Bot de comando interactivo activo.\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 *Banca Virtual:* `S/ 100.00 PEN` (Paper Trading Estricto)\n"
-            f"⚡ *Modo Alfa:* Stakes agresivos de S/ 3.50 a S/ 20.00 PEN\n"
+            f"🛡️ *Gestión de Riesgo:* Stakes de S/ 1.00 a S/ 2.00 PEN (Quarter-Kelly, EV ≥ 5%)\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📱 *BOTONERA TÁCTIL ACTIVADA:*\n"
             f"Toca cualquiera de los botones táctiles o escribe los comandos:\n\n"
@@ -299,19 +299,19 @@ class TelegramInteractiveListener:
 
         if not pending_bets:
             return (
-                f"🎯 *PRONÓSTICOS DE LA JORNADA*\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"ℹ️ *No hay apuestas pendientes en este momento.*\n\n"
-                f"Las próximas oportunidades +EV se publican automáticamente en:\n"
-                f"• ☀️ *10:15 AM PET* (Apertura y Props)\n"
-                f"• 🎯 *05:15 PM PET* (Injury Sniper T-2H)\n"
-                f"• ⚡ *06:35 PM PET* (Pre-Tipoff)\n\n"
-                f"Puedes consultar la cartelera de hoy con /partidos."
+                "🎯 *PRONÓSTICOS DE LA JORNADA*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "ℹ️ *No hay apuestas pendientes en este momento.*\n\n"
+                "Las próximas oportunidades +EV se publican automáticamente en:\n"
+                "• ☀️ *10:15 AM PET* (Apertura y Props)\n"
+                "• 🎯 *05:15 PM PET* (Injury Sniper T-2H)\n"
+                "• ⚡ *06:35 PM PET* (Pre-Tipoff)\n\n"
+                "Puedes consultar la cartelera de hoy con /partidos."
             )
 
         lines = [
             f"🎯 *PRONÓSTICOS ACTIVOS ({len(pending_bets)} APUESTAS)*",
-            f"━━━━━━━━━━━━━━━━━━━━━━",
+            "━━━━━━━━━━━━━━━━━━━━━━",
         ]
         for b in pending_bets:
             mkt = b.get("market", "").upper()
@@ -326,8 +326,8 @@ class TelegramInteractiveListener:
                 f"   • Stake Sugerido: *S/ {stake:.2f} PEN*"
             )
 
-        lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"💡 _Verifica cuotas en RETAbet, Betsson o Coolbet antes de confirmar._")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("💡 _Verifica cuotas en RETAbet, Betsson o Coolbet antes de confirmar._")
         return "\n".join(lines)
 
     def handle_sgp(self) -> str:
@@ -335,10 +335,10 @@ class TelegramInteractiveListener:
         props_path = PROJECT_ROOT / "data" / "evaluation" / "latest_player_props.json"
         if not props_path.exists():
             return (
-                f"🔥 *PLAYER PROPS & RETABET SGPs*\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"ℹ️ No hay props generados para la jornada actual.\n"
-                f"El motor de props corre automáticamente a las *10:15 AM PET*."
+                "🔥 *PLAYER PROPS & RETABET SGPs*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "ℹ️ No hay props generados para la jornada actual.\n"
+                "El motor de props corre automáticamente a las *10:15 AM PET*."
             )
 
         try:
@@ -354,8 +354,8 @@ class TelegramInteractiveListener:
         indiv = [p for p in props_data if p.get("type") != "RETABET_SGP" and "sgp_id" not in p]
 
         lines = [
-            f"🔥 *PROPS DESTACADOS & COMBINADAS RETAbet*",
-            f"━━━━━━━━━━━━━━━━━━━━━━",
+            "🔥 *PROPS DESTACADOS & COMBINADAS RETAbet*",
+            "━━━━━━━━━━━━━━━━━━━━━━",
         ]
 
         if sgps:
@@ -375,10 +375,10 @@ class TelegramInteractiveListener:
             lines.append(f"   🎯 *Probabilidad de Acierto:* *{win_p:.1f}%*")
             lines.append(f"   💰 *Cuota Combinada:* `{odds:.2f}` (EV: `+{ev:.1f}%`)")
             lines.append(f"   💵 *Stake Alfa Sugerido:* *S/ {stake:.2f} PEN* ({book})")
-            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
         if indiv:
-            lines.append(f"🎯 *Top 3 Player Props Individuales:*")
+            lines.append("🎯 *Top 3 Player Props Individuales:*")
             sorted_indiv = sorted(indiv, key=lambda x: float(x.get("ev_pct", 0.0)), reverse=True)[:3]
             for p in sorted_indiv:
                 name = p.get("player_name", "Player")
@@ -393,14 +393,14 @@ class TelegramInteractiveListener:
                     f"      Línea: *{cat} {sel} {line_val}* @ `{odds:.2f}`\n"
                     f"      EV: `+{ev:.1f}%` | Stake: *S/ {stake:.2f} PEN*"
                 )
-            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
         return "\n".join(lines)
 
     def handle_cuotas(self) -> str:
         """Returns comparison across Peruvian bookmakers and identifies any Surebets."""
         scan_path = PROJECT_ROOT / "data" / "evaluation" / "latest_peru_odds_scan.json"
-        
+
         scan_data: Any = None
         if scan_path.exists():
             try:
@@ -431,14 +431,14 @@ class TelegramInteractiveListener:
                 stale_lines.append((g, sl))
 
         lines = [
-            f"⚡ *COMPARADOR DE CUOTAS PERÚ*",
-            f"━━━━━━━━━━━━━━━━━━━━━━",
-            f"📊 *Casas Analizadas:* RETAbet, Betsson, Doradobet, Coolbet, Apuesta Total vs Pinnacle",
-            f"━━━━━━━━━━━━━━━━━━━━━━",
+            "⚡ *COMPARADOR DE CUOTAS PERÚ*",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "📊 *Casas Analizadas:* RETAbet, Betsson, Doradobet, Coolbet, Apuesta Total vs Pinnacle",
+            "━━━━━━━━━━━━━━━━━━━━━━",
         ]
 
         if surebets:
-            lines.append(f"🚨 *¡ARBITRAJE SUREBET DETECTADO!*")
+            lines.append("🚨 *¡ARBITRAJE SUREBET DETECTADO!*")
             for sb in surebets[:2]:
                 bh = sb.get("best_home", {})
                 ba = sb.get("best_away", {})
@@ -450,9 +450,9 @@ class TelegramInteractiveListener:
                     f"   • Visita: `{ba.get('odds', 1.90):.2f}` ({ba.get('book', 'Visita')})\n"
                     f"   💰 *Ganancia Garantizada:* `+{profit:.2f}%` (Margen: `{margin:.1f}%`)\n"
                 )
-            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         elif stale_lines:
-            lines.append(f"📈 *Líneas Desfasadas (+CLV vs Pinnacle):*")
+            lines.append("📈 *Líneas Desfasadas (+CLV vs Pinnacle):*")
             for g, sl in stale_lines[:2]:
                 book = sl.get("retail_bookmaker") or sl.get("sportsbook") or "Casa Local"
                 r_odds = float(sl.get("retail_odds") or sl.get("local_odds") or 1.90)
@@ -464,9 +464,9 @@ class TelegramInteractiveListener:
                     f"   • Casa: *{book}* @ `{r_odds:.2f}`\n"
                     f"   • Pinnacle Benchmark: `{s_odds:.2f}` (Edge: `+{clv:.1f}%`)"
                 )
-            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         else:
-            lines.append(f"✅ *Margen promedio de mercado en Perú:* ~`104.2%` (Líneas balanceadas)")
+            lines.append("✅ *Margen promedio de mercado en Perú:* ~`104.2%` (Líneas balanceadas)")
             # Show best odds for first 2 games
             for g in games[:2]:
                 bh = g.get("best_home", {})
@@ -476,7 +476,7 @@ class TelegramInteractiveListener:
                     f"   • Local: `{bh.get('odds', 1.90):.2f}` ({bh.get('book', '')})\n"
                     f"   • Visita: `{ba.get('odds', 1.90):.2f}` ({ba.get('book', '')})"
                 )
-            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
         return "\n".join(lines)
 
@@ -496,8 +496,8 @@ class TelegramInteractiveListener:
             return "ℹ️ No se registraron partidos recientes en la base de datos."
 
         lines = [
-            f"📅 *CARTELERA NBA (HORA DE PERÚ)*",
-            f"━━━━━━━━━━━━━━━━━━━━━━",
+            "📅 *CARTELERA NBA (HORA DE PERÚ)*",
+            "━━━━━━━━━━━━━━━━━━━━━━",
         ]
         for g in games:
             h = g.get("home_team")
@@ -514,8 +514,8 @@ class TelegramInteractiveListener:
             else:
                 lines.append(f"🏀 `{a}` @ `{h}` — *{mdate}* *(Programado)*")
 
-        lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"💡 _Tip: Usa /picks para ver las recomendaciones del modelo._")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("💡 _Tip: Usa /picks para ver las recomendaciones del modelo._")
         return "\n".join(lines)
 
     def handle_liquidar(self) -> str:

@@ -27,6 +27,10 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: nba-pipeline-execution
+  cancel-in-progress: false
+
 jobs:
   run-nba-intelligence-cycle:
     runs-on: ubuntu-24.04

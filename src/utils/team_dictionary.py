@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 import re
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -205,7 +204,7 @@ def format_matchup_string(text: str | None) -> str:
     """
     if not text or not isinstance(text, str):
         return ""
-    
+
     # Check if already fully formatted with franchise names
     if any(team.full_name in text for team in NBA_TEAMS.values()):
         return text

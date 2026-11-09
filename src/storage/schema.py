@@ -48,8 +48,34 @@ DDL_STATEMENTS = [
         counterpart_decimal_odds REAL CHECK (counterpart_decimal_odds IS NULL OR counterpart_decimal_odds > 1.0),
         captured_at TEXT NOT NULL,
         is_closing_line INTEGER NOT NULL DEFAULT 0,
+        source_type TEXT NOT NULL DEFAULT 'OBSERVED' CHECK (source_type IN ('OBSERVED', 'DERIVED', 'SYNTHETIC')),
         FOREIGN KEY (game_id) REFERENCES games(game_id)
     );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS quarantined_odds (
+        odds_id TEXT PRIMARY KEY,
+        reason TEXT NOT NULL,
+        quarantined_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE VIEW IF NOT EXISTS v_observed_odds_snapshots AS
+    SELECT * FROM odds_snapshots
+    WHERE odds_id NOT IN (SELECT odds_id FROM quarantined_odds)
+      AND source_type = 'OBSERVED';
+    """,
+    """
+    CREATE VIEW IF NOT EXISTS v_observed_predictions AS
+    SELECT p.* FROM predictions p
+    WHERE odds_provider NOT LIKE '%T-6H%'
+      AND odds_provider NOT LIKE '%Synthetic%'
+      AND NOT (odds_provider = 'draftkings' AND p.decimal_odds_used = 1.90);
+    """,
+    """
+    CREATE VIEW IF NOT EXISTS v_observed_simulated_bets AS
+    SELECT b.* FROM simulated_bets b
+    JOIN v_observed_predictions p ON b.prediction_id = p.prediction_id;
     """,
     """
     CREATE TRIGGER IF NOT EXISTS prevent_odds_update

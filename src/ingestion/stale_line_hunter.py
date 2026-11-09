@@ -6,7 +6,6 @@ between global sharp books and Peruvian retail bookmakers.
 
 from __future__ import annotations
 
-import math
 from datetime import datetime, timezone
 from typing import Any
 import numpy as np

@@ -7,11 +7,9 @@ Eliminates static roster obsolescence, traded player hallucinations, and phantom
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 import logging
-from pathlib import Path
-from typing import Any
 import urllib.request
 
 from src.storage.db import DatabaseManager

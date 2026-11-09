@@ -420,18 +420,24 @@ def optimize_simultaneous_kelly_portfolio(
         p_val = p_arr[0]
         o_val = o_arr[0]
         b_val = o_val - 1.0
-        f_star = max(0.0, (p_val * (b_val + 1.0) - 1.0) / b_val)
-        eff_f = min(effective_max_indiv, f_star * effective_mult)
-        if p_val < 0.50:
-            t_cap, t_min = 1.75, 1.00
-        elif p_val < 0.58:
-            t_cap, t_min = 3.35, 2.00
-        elif p_val < 0.65:
-            t_cap, t_min = 4.75, 3.50
+        ev_unit = (p_val * o_val) - 1.0
+        if b_val <= 0.0 or ev_unit <= 0.0:
+            eff_f = 0.0
+            stake = 0.00
         else:
-            t_cap, t_min = min(6.00, bankroll_pen * max_individual_fraction), 4.80
-        raw_s = bankroll_pen * eff_f
-        stake = round(max(t_min, min(t_cap, raw_s if raw_s > 0 else t_min)), 2)
+            f_star = max(0.0, (p_val * (b_val + 1.0) - 1.0) / b_val)
+            eff_f = min(effective_max_indiv, f_star * effective_mult)
+            max_s = bankroll_pen * effective_max_indiv
+            if p_val < 0.50:
+                t_cap, t_min = 1.75, 1.00
+            elif p_val < 0.58:
+                t_cap, t_min = 3.35, 2.00
+            elif p_val < 0.65:
+                t_cap, t_min = 4.75, 3.50
+            else:
+                t_cap, t_min = max_s, 4.80
+            raw_s = bankroll_pen * eff_f
+            stake = round(max(t_min, min(t_cap, raw_s)), 2)
         enriched[0]["kelly_optimal_fraction"] = round(float(eff_f), 5)
         enriched[0]["kelly_recommended_stake_pen"] = stake
         return enriched
@@ -463,17 +469,23 @@ def optimize_simultaneous_kelly_portfolio(
     for i, c in enumerate(enriched):
         frac = float(scaled_fractions[i])
         p_c = p_arr[i]
-        if p_c < 0.50:
-            tier_cap, tier_min = 1.75, 1.00
-        elif p_c < 0.58:
-            tier_cap, tier_min = 3.35, 2.00
-        elif p_c < 0.65:
-            tier_cap, tier_min = 4.75, 3.50
+        o_c = o_arr[i]
+        ev_c = (p_c * o_c) - 1.0
+        if frac <= 0.0 or ev_c <= 0.0:
+            stake = 0.00
+            frac = 0.0
         else:
-            tier_cap, tier_min = min(6.00, bankroll_pen * max_individual_fraction), 4.80
-
-        raw_stake = bankroll_pen * frac
-        stake = round(max(tier_min, min(tier_cap, raw_stake if raw_stake > 0 else tier_min)), 2)
+            max_s = bankroll_pen * effective_max_indiv
+            if p_c < 0.50:
+                t_cap, t_min = 1.75, 1.00
+            elif p_c < 0.58:
+                t_cap, t_min = 3.35, 2.00
+            elif p_c < 0.65:
+                t_cap, t_min = 4.75, 3.50
+            else:
+                t_cap, t_min = max_s, 4.80
+            raw_stake = bankroll_pen * frac
+            stake = round(max(t_min, min(t_cap, raw_stake)), 2)
         c["kelly_optimal_fraction"] = round(frac, 5)
         c["kelly_recommended_stake_pen"] = stake
 
