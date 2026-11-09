@@ -281,6 +281,7 @@ def run_real_odds_backtest(
                     "raw_over": raw_over, "cal_over": cal_over,
                     "anchored_over": model_weight * cal_over + (1.0 - model_weight) * 0.5,
                     "close_over_at_open_line": p_close_over,
+                    "close_total_line": m.get("close_total"),
                 })
                 if p_close_over is not None:
                     over_res = "PUSH" if tot_result == "push" else ("WON" if tot_result == "over" else "LOST")
@@ -412,6 +413,8 @@ def _summarize(
                 "market_close_normal_approx": _score([r["close_over_at_open_line"] for r in tot], yt),
             }
 
+    out["line_movement_signal"] = _line_movement_signal(eval_rows)
+
     settled = [b for b in bets if b["status"] in ("WON", "LOST")]
     staked = sum(b["stake_pen"] for b in settled)
     profit = sum(b["net_profit_pen"] for b in bets)
@@ -479,6 +482,51 @@ def _summarize(
     return out
 
 
+def _line_movement_signal(eval_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Rule-free test of whether the model anticipates the market: across ALL games, does the model's
+    disagreement with the opening line predict the direction of the move from open to close?
+      - moneyline: x = calibrated p_home - open p_home, y = close p_home - open p_home
+      - totals:    x = calibrated p_over - 0.5 (at the opening line), y = close total - open total
+    Reports Pearson correlation, a 95% bootstrap CI (resampling matchdays) and the directional hit rate.
+    """
+    def _stats(rows: list[tuple[str, float, float]]) -> dict[str, Any]:
+        moved = [(d, x, y) for d, x, y in rows if abs(y) > 1e-9 and abs(x) > 1e-9]
+        if len(moved) < 30:
+            return {"n": len(moved)}
+        xs = np.asarray([x for _, x, _ in moved])
+        ys = np.asarray([y for _, _, y in moved])
+        corr = float(np.corrcoef(xs, ys)[0, 1])
+        by_day: dict[str, list[int]] = defaultdict(list)
+        for i, (d, _, _) in enumerate(moved):
+            by_day[d].append(i)
+        keys = sorted(by_day)
+        rng = np.random.default_rng(42)
+        boots = []
+        for _ in range(500):
+            idx = [i for k in rng.choice(len(keys), size=len(keys)) for i in by_day[keys[int(k)]]]
+            if len(idx) > 2:
+                boots.append(float(np.corrcoef(xs[idx], ys[idx])[0, 1]))
+        return {
+            "n": len(moved),
+            "correlation": round(corr, 4),
+            "correlation_ci95": [round(float(np.percentile(boots, 2.5)), 4), round(float(np.percentile(boots, 97.5)), 4)],
+            "directional_hit_rate": round(float(np.mean(np.sign(xs) == np.sign(ys))), 4),
+        }
+
+    out: dict[str, Any] = {}
+    for season in sorted({str(r["season"]) for r in eval_rows}) + ["ALL"]:
+        rows = [r for r in eval_rows if season == "ALL" or str(r["season"]) == season]
+        out[season] = {
+            "moneyline": _stats([(r["matchday_date"], r["cal_home"] - r["open_home"], r["close_home"] - r["open_home"]) for r in rows]),
+            "totals": _stats([
+                (r["matchday_date"], r["cal_over"] - 0.5, float(r["close_total_line"]) - float(r["total_line"]))
+                for r in rows if r.get("cal_over") is not None and r.get("close_total_line") is not None
+            ]),
+        }
+    return out
+
+
 def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None = None) -> str:
     cfg = result["config"]
     lines = [
@@ -539,6 +587,24 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
                     f"| {vig_label} | `{mk}` | {v['bets']} | {v['won']} | {v['roi_flat_pct']}% {_ci(v.get('roi_ci95'))} | "
                     f"{v['mean_clv_pct']}% {_ci(v.get('clv_ci95'))} |"
                 )
+    sig = result.get("line_movement_signal") or {}
+    if sig:
+        lines += [
+            "",
+            "## 4. ¿El modelo anticipa el movimiento de línea? (todos los partidos, sin reglas de apuesta)",
+            "",
+            "Correlación entre la discrepancia del modelo con la apertura y el movimiento apertura→cierre.",
+            "",
+            "| Temporada | Mercado | N | Correlación [IC95] | Acierto de dirección |",
+            "| :--- | :--- | ---: | ---: | ---: |",
+        ]
+        for season, mk in sig.items():
+            for market_name, st in mk.items():
+                if "correlation" in st:
+                    lines.append(
+                        f"| {season} | {market_name} | {st['n']} | {st['correlation']:+.3f} "
+                        f"[{st['correlation_ci95'][0]:+.3f}, {st['correlation_ci95'][1]:+.3f}] | {st['directional_hit_rate']:.1%} |"
+                    )
     lines += [
         "",
         "## Supuestos",
