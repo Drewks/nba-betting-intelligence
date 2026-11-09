@@ -17,9 +17,9 @@ import yaml
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "model_config.yaml"
 
 # Hard caps from AGENTS.md (paper_trading_manager). Config can be stricter, never looser.
-AGENTS_MAX_STAKE_PEN = 20.00
-AGENTS_MAX_STAKE_BANKROLL_FRACTION = 0.20
-AGENTS_MAX_KELLY_FRACTION = 1.00
+AGENTS_MAX_STAKE_PEN = 10.00
+AGENTS_MAX_STAKE_BANKROLL_FRACTION = 0.10
+AGENTS_MAX_KELLY_FRACTION = 0.50
 AGENTS_MIN_EV_THRESHOLD = 0.05
 AGENTS_MAX_SELECTIONS_PER_MATCHDAY = 3
 

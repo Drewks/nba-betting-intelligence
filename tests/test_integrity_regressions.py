@@ -367,6 +367,33 @@ def test_production_engine_matches_config_and_props_exposure_is_capped(tmp_path:
     assert props._props_exposure_allows(1.0, 100.0) is False
 
 
+def test_props_recording_is_idempotent_and_capped_per_matchday(tmp_path: Path) -> None:
+    from src.config import load_config
+    from src.prediction.player_props import PlayerPropsEngine
+
+    db = DatabaseManager(tmp_path / "t.sqlite3")
+    _seed_game(db, game_id="G1", start="2030-01-01T00:00:00Z")
+    props = PlayerPropsEngine(db=db)
+
+    def pick(player: str, n: int) -> dict:
+        return {
+            "prop_id": f"PX{n}", "game_id": "G1", "matchday_date": "2030-01-01", "player_name": player,
+            "team": "NYK", "prop_category": "PTS", "line_value": 20.5, "selection": "OVER", "decimal_odds": 1.9,
+            "projected_mean": 24.0, "projected_std": 6.0, "model_prob": 0.6, "conformal_p_low": 0.55,
+            "conformal_p_high": 0.65, "ev_pct": 14.0, "ev_lower_bound_pct": 4.5, "kelly_stake_pen": 2.0,
+            "usage_bump_pct": 0.0, "rationale": "[LÍNEA ESTIMADA, no observada] test",
+            "emitted_at": "2029-12-31T12:00:00Z",
+        }
+
+    assert props._persist_prop_pick(pick("Player A", 1), 100.0) is True
+    # A second cycle evaluating the same selection (fresh prop_id) must not create another stake
+    assert props._persist_prop_pick(pick("Player A", 2), 100.0) is False
+    cap = load_config().risk.max_selections_per_matchday
+    recorded = 1 + sum(props._persist_prop_pick(pick(f"Player {c}", 10 + i), 100.0) for i, c in enumerate("BCDEFG"))
+    assert recorded == cap
+    assert db.fetch_one("SELECT COUNT(*) AS c FROM player_prop_picks")["c"] == cap
+
+
 # 8. Backtest mode is scoped to the walk-forward call
 def test_backtester_does_not_leave_engine_in_backtest_mode(tmp_path: Path) -> None:
     from src.ingestion.adapters import SyntheticFixtureAdapter
