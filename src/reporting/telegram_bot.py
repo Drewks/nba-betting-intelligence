@@ -262,6 +262,8 @@ class TelegramAlertBot:
         initial_bankroll_pen: float = 100.0,
         peak_bankroll_pen: float | None = None,
         cppi_multiplier: float = 1.0,
+        parlay_bankroll_state: dict[str, Any] | None = None,
+        settled_parlays: list[dict[str, Any]] | None = None,
     ) -> str:
         """
         Formats comprehensive end-of-day settlement summary in Soles (S/. PEN).
@@ -312,19 +314,41 @@ class TelegramAlertBot:
         if total_count > 8:
             items_detail += f"  ... y {total_count - 8} selecciones más.\n"
 
+        parlay_section = ""
+        if parlay_bankroll_state:
+            p_bal = float(parlay_bankroll_state.get("settled_bankroll_pen") or 50.0)
+            p_profit = float(parlay_bankroll_state.get("cumulative_net_profit_pen") or 0.0)
+            p_roi = float(parlay_bankroll_state.get("roi_pct") or 0.0)
+            p_sign = "+" if p_profit >= 0 else ""
+            p_sym = "🟢" if p_profit >= 0 else "🔴"
+            s_parlays = settled_parlays or []
+            p_detail = ""
+            for sp in s_parlays:
+                s_icon = "✅" if sp.get("status") == "WON" else ("❌" if sp.get("status") == "LOST" else "⏸️")
+                p_detail += f"    • {s_icon} `{sp.get('parlay_id')}`: {sp.get('summary', '')} ({sp.get('net_profit_pen', 0):+.2f} PEN)\n"
+
+            parlay_section = (
+                f"\n🔥 *Sub-Bankroll Combinadas (S/ 50.00 PEN — Alpha Lab):*\n"
+                f"  • Saldo Liquidado: *S/ {p_bal:.2f} PEN*\n"
+                f"  • {p_sym} PnL Acumulado: `{p_sign}S/ {p_profit:.2f} PEN` ({p_sign}{p_roi:.1f}% ROI)\n"
+            )
+            if p_detail:
+                parlay_section += f"  • Combinadas Resueltas Hoy:\n{p_detail}"
+
         msg = (
             f"🌙 *RESUMEN DIARIO DE LIQUIDACIÓN | NBA INTELLIGENCE*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📅 *Jornada:* `{matchday_date}`\n"
-            f"💰 *Bankroll Actual:* `S/ {current_bankroll_pen:.2f} PEN` (Pico: `S/ {peak:.2f}`)\n"
+            f"💰 *Bankroll Principal:* `S/ {current_bankroll_pen:.2f} PEN` (Pico: `S/ {peak:.2f}`)\n"
             f"🛡️ *Escudo CPPI:* `{cppi_multiplier * 100:.1f}%` (Piso 85%: `S/ {cppi_floor:.2f} PEN`)\n\n"
-            f"📊 *Balance de la Jornada:*\n"
+            f"📊 *Balance de la Jornada (Banca Principal):*\n"
             f"  • Total Selecciones: `{total_count}`\n"
             f"  • {won_count} Ganadas ✅ | {lost_count} Perdidas ❌ | {push_count} PUSH ⏸️\n"
             f"  • *Win Rate:* `{win_rate:.1f}%`\n"
             f"  • {pnl_symbol} *Resultado Neto:* `{pnl_sign}S/ {daily_profit:.2f} PEN` (ROI: `{pnl_sign}{daily_roi:.1f}%`)\n\n"
-            f"📋 *Desglose de Resultados:*\n{items_detail}"
+            f"📋 *Desglose de Resultados (Banca Principal):*\n{items_detail}"
+            f"{parlay_section}"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔒 _Historial y balance auditado e inmutable en SQLite._"
+            f"🔒 _Historial y balance auditado e inmutable en SQLite (Dual Bankroll: S/100 + S/50)._"
         )
         return msg

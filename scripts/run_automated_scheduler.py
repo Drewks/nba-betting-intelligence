@@ -12,6 +12,7 @@ Supports running as a continuous background daemon, or executing specific window
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import datetime, timezone, timedelta
 import logging
 from pathlib import Path
@@ -33,7 +34,9 @@ from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.prediction.injury_sniper import InjurySniperMonitor
 from src.prediction.player_props import PlayerPropsEngine
 from src.reporting.telegram_bot import TelegramAlertBot
+from src.ingestion.playwright_scraper import PeruPlaywrightScraper
 from src.paper_trading.engine import build_production_engine
+from src.paper_trading.parlay_engine import ParlayTradingEngine
 from src.storage.db import DatabaseManager
 
 logging.basicConfig(
@@ -63,6 +66,32 @@ class NBADailyScheduler:
         self.db = DatabaseManager(self.db_path)
         self.bot = TelegramAlertBot()
         self.paper_engine = build_production_engine(self.db)
+        self.parlay_engine = ParlayTradingEngine(self.db)
+
+    def run_peru_playwright_odds_harvest(self) -> int:
+        """
+        Executes dynamic Playwright scraping for RETAbet and Betano Perú.
+        Persists newly discovered observed quotes into odds_snapshots with source_type='OBSERVED'.
+        """
+        try:
+            now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            slate_games = self.db.fetch_all(
+                "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_start_time > ? ORDER BY game_start_time ASC",
+                (now_utc_str,),
+            )
+            if not slate_games:
+                return 0
+
+            scraper = PeruPlaywrightScraper(db=self.db, timeout_ms=12000, headless=True)
+            r_quotes = scraper.scrape_retabet_odds()
+            b_quotes = scraper.scrape_betano_odds()
+            all_quotes = r_quotes + b_quotes
+            persisted = scraper.persist_scraped_quotes(all_quotes, slate_games)
+            logger.info(f"🕷️ [PLAYWRIGHT] {persisted} cuotas observadas cosechadas de Betano y RETAbet.")
+            return persisted
+        except Exception as exc:
+            logger.warning(f"Peru Playwright odds harvest warning: {exc}")
+            return 0
 
     def execute_morning_cycle(self) -> dict[str, Any]:
         """
@@ -75,6 +104,9 @@ class NBADailyScheduler:
         """
         now_pet = get_peru_time()
         logger.info(f"🌅 INICIANDO VENTANA MATUTINA (10:00 AM PET) — Hora actual: {now_pet.strftime('%Y-%m-%d %H:%M:%S PET')}")
+
+        # 0. Dynamic Headless Scraping for Peruvian Sportsbooks (Betano & RETAbet)
+        self.run_peru_playwright_odds_harvest()
 
         # 1. Run incremental cycle in pregame mode
         res_cycle = run_incremental_cloud_cycle(mode="pregame")
@@ -98,6 +130,15 @@ class NBADailyScheduler:
             bankroll_pen=self.paper_engine.get_bankroll_state()["settled_bankroll_pen"],
             min_ev_pct=3.0,
         )
+
+        # 2b. Auto-reserve top correlated SGPs / Parlays in isolated S/50 sub-bankroll
+        today_matchday_str = now_pet.strftime("%Y-%m-%d")
+        placed_parlays = self.parlay_engine.record_candidate_parlays(
+            candidates=props_list,
+            matchday_date=today_matchday_str,
+        )
+        if placed_parlays:
+            logger.info(f"🔥 [SUB-BANKROLL] {len(placed_parlays)} combinadas reservadas automáticamente en la banca S/50.")
 
         # 3. Dispatch fresh alerts to Telegram
         dispatched_count = 0
@@ -132,6 +173,7 @@ class NBADailyScheduler:
         now_pet = get_peru_time()
         logger.info(f"🎯 INICIANDO VENTANA INJURY SNIPER (05:30 PM PET) — Hora actual: {now_pet.strftime('%Y-%m-%d %H:%M:%S PET')}")
 
+        self.run_peru_playwright_odds_harvest()
         sniper = InjurySniperMonitor(db=self.db)
         sniper_res = sniper.scan_pregame_slate(force_scan_all=False)
 
@@ -219,6 +261,32 @@ class NBADailyScheduler:
             """
         )
 
+        # 2c. Settle pending Parlays in S/50 Sub-Bankroll
+        pending_parlays = self.db.fetch_all("SELECT * FROM parlay_bets WHERE status = 'PENDING'")
+        parlay_boxscores: dict[str, dict[str, dict[str, float]]] = {}
+        if pending_parlays:
+            from src.ingestion.adapters import ESPNPublicAdapter
+            espn_adapter = ESPNPublicAdapter(timeout_seconds=10)
+            for p_row in pending_parlays:
+                try:
+                    p_legs = json.loads(p_row["legs_json"])
+                    for pl in p_legs:
+                        pgid = pl.get("game_id")
+                        if pgid and pgid not in parlay_boxscores and pgid != "CROSS_SLATE":
+                            ev_id = pgid.replace("ESPN_", "").split("_")[0]
+                            b_stats = espn_adapter.fetch_player_boxscores(ev_id)
+                            if b_stats:
+                                parlay_boxscores[pgid] = b_stats
+                except Exception as exc:
+                    logger.debug(f"Error preparing boxscores for parlay settlement: {exc}")
+
+        now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        settled_parlays = self.parlay_engine.settle_pending_parlays(
+            game_boxscores=parlay_boxscores,
+            settled_at=now_utc_str,
+        )
+        parlay_state = self.parlay_engine.get_bankroll_state()
+
         curr_br = self.paper_engine.get_bankroll_state()["settled_bankroll_pen"]
         cppi_mult = self.paper_engine.compute_cppi_multiplier(curr_br)
         peak_row = self.db.fetch_one("SELECT MAX(bankroll_after_pen) AS max_br FROM simulated_bets WHERE bankroll_after_pen IS NOT NULL")
@@ -233,6 +301,8 @@ class NBADailyScheduler:
             initial_bankroll_pen=100.00,
             peak_bankroll_pen=peak_val,
             cppi_multiplier=cppi_mult,
+            parlay_bankroll_state=parlay_state,
+            settled_parlays=settled_parlays,
         )
 
         if self.bot.is_live:

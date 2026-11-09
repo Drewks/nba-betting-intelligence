@@ -346,3 +346,176 @@ def test_telegram_listener_dual_banca(tmp_path: Path) -> None:
     assert "CENTRO FINANCIERO DUAL" in reply
     assert "BANKROLL PRINCIPAL (S/ 100.00 PEN" in reply
     assert "SUB-BANKROLL COMBINADAS (S/ 50.00 PEN" in reply
+
+
+def test_parlay_engine_record_candidate_parlays(tmp_path: Path) -> None:
+    db = DatabaseManager(tmp_path / "cand_parlays.sqlite3")
+    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00, max_parlays_per_matchday=2)
+
+    candidates = [
+        {
+            "parlay_id": "HP_TEST_01",
+            "strategy": "SAME_GAME_ANCHOR",
+            "type": "RETABET_SGP",
+            "legs": [
+                {"game_id": "G1", "market": "moneyline", "selection": "HOME", "odds": 1.75},
+                {"game_id": "G1", "market": "player_points", "selection": "OVER", "line_value": 24.5, "player_name": "J. Tatum", "odds": 1.85},
+            ],
+            "decimal_odds": 3.20,
+            "p_joint": 0.38,
+            "ev_pct": 21.6,
+            "stake_pen": 2.50,
+            "emitted_at": "2026-11-10T12:00:00Z",
+        },
+        {
+            "sgp_id": "SGP_TEST_02",
+            "game_id": "G2",
+            "game_selection": "AWAY",
+            "team": "LAL",
+            "player_name": "A. Davis",
+            "prop_category": "rebounds",
+            "prop_selection": "OVER",
+            "prop_line": 12.5,
+            "offered_sgp_odds": 2.90,
+            "p_joint": 0.40,
+            "ev_pct": 16.0,
+            "kelly_stake_pen": 2.00,
+            "emitted_at": "2026-11-10T12:00:00Z",
+        },
+        {
+            "parlay_id": "HP_TEST_03_EXCESS",
+            "strategy": "SAME_GAME_ANCHOR",
+            "legs": [
+                {"game_id": "G3", "market": "moneyline", "selection": "HOME", "odds": 1.50},
+                {"game_id": "G3", "market": "total_points", "selection": "OVER", "line_value": 220.5, "odds": 1.90},
+            ],
+            "decimal_odds": 2.85,
+            "p_joint": 0.42,
+            "ev_pct": 19.7,
+            "stake_pen": 2.00,
+        },
+    ]
+
+    placed = engine.record_candidate_parlays(candidates, matchday_date="2026-11-10")
+    # Only 2 placed because max_parlays_per_matchday == 2
+    assert len(placed) == 2
+    assert placed[0]["parlay_id"] == "HP_TEST_01"
+    assert placed[1]["parlay_id"] == "SGP_TEST_02"
+
+    state = engine.get_bankroll_state()
+    assert state["pending_exposure_pen"] == 4.50
+    assert state["available_balance_pen"] == 45.50
+
+    # Idempotency check: recording again should place 0 new bets
+    placed_again = engine.record_candidate_parlays(candidates, matchday_date="2026-11-10")
+    assert len(placed_again) == 0
+
+
+def test_parlay_engine_settle_pending_parlays_end_to_end(tmp_path: Path) -> None:
+    db = DatabaseManager(tmp_path / "settle_parlays.sqlite3")
+    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00)
+
+    # 1. Seed two games
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
+            away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
+            features_available_at, source_provider, ingested_at
+        ) VALUES
+        ('GAME_A', '2026-27', '2026-11-10', '2026-11-10T20:00:00Z', 'BOS', 'NYK', 'FINAL', 115, 105, 115.0, 110.0, 100.0, 112.0, 111.0, 99.0, 2, 1, '2026-11-10T12:00:00Z', 'ESPN', '2026-11-10T12:00:00Z'),
+        ('GAME_B', '2026-27', '2026-11-10', '2026-11-10T22:30:00Z', 'GSW', 'LAC', 'FINAL', 120, 110, 116.0, 112.0, 102.0, 114.0, 113.0, 100.0, 1, 2, '2026-11-10T12:00:00Z', 'ESPN', '2026-11-10T12:00:00Z')
+        """
+    )
+
+    # 2. Record a winning parlay (Game A ML Home + Game B Total Over 215.5)
+    p1 = {
+        "parlay_id": "PARLAY_WIN_01",
+        "matchday_date": "2026-11-10",
+        "strategy_type": "HIGH_PROB_PARLAY",
+        "legs": [
+            {"game_id": "GAME_A", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.50},
+            {"game_id": "GAME_B", "market": "total_points", "selection": "OVER", "line_value": 215.5, "decimal_odds": 1.90},
+        ],
+        "compound_odds": 2.85,
+        "joint_prob": 0.45,
+        "compound_ev_pct": 28.25,
+        "stake_pen": 4.00,
+        "emitted_at": "2026-11-10T12:00:00Z",
+    }
+    engine.record_parlay_bet(p1)
+
+    # 3. Record a losing parlay (Game A ML Away + Player Prop)
+    p2 = {
+        "parlay_id": "PARLAY_LOSS_02",
+        "matchday_date": "2026-11-10",
+        "strategy_type": "SGP_COPULA",
+        "legs": [
+            {"game_id": "GAME_A", "market": "moneyline", "selection": "AWAY", "decimal_odds": 2.60},
+            {"game_id": "GAME_A", "market": "player_points", "selection": "OVER", "line_value": 25.5, "player_name": "J. Brown", "decimal_odds": 1.85},
+        ],
+        "compound_odds": 4.81,
+        "joint_prob": 0.25,
+        "compound_ev_pct": 20.25,
+        "stake_pen": 2.00,
+        "emitted_at": "2026-11-10T12:00:00Z",
+    }
+    engine.record_parlay_bet(p2)
+
+    boxscores = {
+        "GAME_A": {
+            "J. Brown": {"minutes": 34.0, "pts": 28.0, "reb": 6.0, "ast": 4.0},
+        }
+    }
+
+    settled = engine.settle_pending_parlays(game_boxscores=boxscores, settled_at="2026-11-11T03:00:00Z")
+    assert len(settled) == 2
+
+    res_map = {r["parlay_id"]: r for r in settled}
+    # P1 won: 4.00 * (2.85 - 1.0) = 7.40 net profit
+    assert res_map["PARLAY_WIN_01"]["status"] == "WON"
+    assert res_map["PARLAY_WIN_01"]["net_profit_pen"] == 7.40
+
+    # P2 lost: -2.00 net profit
+    assert res_map["PARLAY_LOSS_02"]["status"] == "LOST"
+    assert res_map["PARLAY_LOSS_02"]["net_profit_pen"] == -2.00
+
+    state = engine.get_bankroll_state()
+    # 50.00 + 7.40 - 2.00 = 55.40
+    assert state["settled_bankroll_pen"] == 55.40
+    assert state["pending_exposure_pen"] == 0.00
+    assert state["cumulative_net_profit_pen"] == 5.40
+
+
+def test_telegram_daily_settlement_report_dual_bankroll() -> None:
+    from src.reporting.telegram_bot import TelegramAlertBot
+    bot = TelegramAlertBot(bot_token=None)
+
+    settled_bets = [
+        {"status": "WON", "net_profit_pen": 2.85, "stake_pen": 3.00, "game_id": "G1", "market": "total_points", "selection": "OVER"},
+    ]
+    parlay_state = {
+        "settled_bankroll_pen": 54.50,
+        "cumulative_net_profit_pen": 4.50,
+        "roi_pct": 9.0,
+    }
+    settled_parlays = [
+        {"parlay_id": "HP_01", "status": "WON", "summary": "WON: odds 2.50", "net_profit_pen": 4.50},
+    ]
+
+    msg = bot.format_daily_settlement_report(
+        matchday_date="2026-11-10",
+        settled_bets=settled_bets,
+        settled_props=[],
+        current_bankroll_pen=102.85,
+        initial_bankroll_pen=100.0,
+        parlay_bankroll_state=parlay_state,
+        settled_parlays=settled_parlays,
+    )
+
+    assert "Bankroll Principal:*" in msg
+    assert "102.85 PEN" in msg
+    assert "Sub-Bankroll Combinadas (S/ 50.00 PEN — Alpha Lab)" in msg
+    assert "S/ 54.50 PEN" in msg
+    assert "HP_01" in msg

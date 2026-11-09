@@ -354,3 +354,244 @@ class ParlayTradingEngine:
             "SELECT * FROM parlay_bets WHERE status IN ('WON', 'LOST', 'PUSH', 'VOID') ORDER BY settled_at DESC LIMIT ?",
             (limit,),
         )
+
+    def record_candidate_parlays(
+        self,
+        candidates: list[dict[str, Any]],
+        matchday_date: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Evaluates candidate parlays / SGPs (e.g. from PlayerPropsEngine), formats them,
+        and registers them transactionally into parlay_bets and parlay_bankroll_ledger.
+        Respects per-matchday limits and compound EV threshold.
+        """
+        placed_parlays: list[dict[str, Any]] = []
+        if not candidates:
+            return placed_parlays
+
+        state = self.get_bankroll_state()
+        if state["available_balance_pen"] < self.min_stake_pen:
+            return placed_parlays
+
+        # Check existing count for this matchday
+        existing_day = self.db.fetch_one(
+            "SELECT COUNT(*) AS c FROM parlay_bets WHERE matchday_date = ?", (matchday_date,)
+        )
+        day_count = int(existing_day["c"]) if existing_day else 0
+        if day_count >= self.max_parlays_per_matchday:
+            return placed_parlays
+
+        for cand in candidates:
+            if day_count >= self.max_parlays_per_matchday:
+                break
+
+            p_id = cand.get("parlay_id") or cand.get("sgp_id")
+            if not p_id:
+                continue
+
+            # Idempotency check: already in parlay_bets?
+            existing = self.db.fetch_one("SELECT parlay_id FROM parlay_bets WHERE parlay_id = ?", (p_id,))
+            if existing:
+                continue
+
+            # Build standard parlay dict
+            ev_pct = float(cand.get("ev_pct") or 0.0)
+            if ev_pct < self.min_compound_ev_pct:
+                continue
+
+            odds = float(cand.get("decimal_odds") or cand.get("offered_sgp_odds") or 0.0)
+            if odds <= 1.05:
+                continue
+
+            joint_p = float(cand.get("p_joint") or cand.get("joint_prob") or cand.get("win_probability_pct", 0) / 100.0)
+            if joint_p <= 0.0 or joint_p > 1.0:
+                continue
+
+            strat = str(cand.get("strategy") or "SGP_COPULA")
+            if "POWER_PARLAY" in strat or "CROSS" in strat:
+                strategy_type = "CROSS_GAME_PARLAY"
+            elif "HIGH_PROB" in strat or cand.get("type") != "RETABET_SGP":
+                strategy_type = "HIGH_PROB_PARLAY"
+            else:
+                strategy_type = "SGP_COPULA"
+
+            legs = cand.get("legs")
+            if not legs and "sgp_id" in cand:
+                # Reconstruct legs from SGP candidate
+                gid = cand.get("game_id", "")
+                legs = [
+                    {
+                        "game_id": gid,
+                        "market": "moneyline",
+                        "selection": cand.get("game_selection", "HOME"),
+                        "odds": 1.70,
+                        "desc": f"{cand.get('team', 'Game')} Victoria",
+                    },
+                    {
+                        "game_id": gid,
+                        "market": f"player_{cand.get('prop_category', 'points')}",
+                        "selection": cand.get("prop_selection", "OVER"),
+                        "line_value": float(cand.get("prop_line") or 0.0),
+                        "player_name": cand.get("player_name", "Player"),
+                        "odds": 1.85,
+                        "desc": f"{cand.get('player_name')} {cand.get('prop_category')} {cand.get('prop_selection')} {cand.get('prop_line')}",
+                    },
+                ]
+
+            if not legs or len(legs) < 2:
+                continue
+
+            # Sizing
+            stake = cand.get("stake_pen") or cand.get("kelly_stake_pen")
+            parlay_record = {
+                "parlay_id": p_id,
+                "matchday_date": matchday_date,
+                "strategy_type": strategy_type,
+                "legs": legs,
+                "compound_odds": odds,
+                "joint_prob": joint_p,
+                "compound_ev_pct": ev_pct,
+                "stake_pen": stake,
+                "emitted_at": cand.get("emitted_at"),
+            }
+
+            try:
+                res = self.record_parlay_bet(parlay_record)
+                placed_parlays.append(res)
+                day_count += 1
+            except Exception as exc:
+                logger.debug(f"Could not record candidate parlay {p_id}: {exc}")
+
+        return placed_parlays
+
+    def _evaluate_single_leg(
+        self,
+        leg: dict[str, Any],
+        game: dict[str, Any],
+        boxscore: dict[str, dict[str, float]],
+    ) -> dict[str, Any]:
+        """Evaluates a single parlay leg against final game score or player boxscore."""
+        g_status = game.get("status")
+        if g_status in ("POSTPONED", "CANCELLED"):
+            return {"status": "VOID", "summary": f"Game {game.get('game_id')} postponed/cancelled"}
+
+        market = str(leg.get("market") or "").lower()
+        sel = str(leg.get("selection") or "").upper()
+        h_score = float(game.get("home_score") or 0.0)
+        a_score = float(game.get("away_score") or 0.0)
+
+        # Moneyline
+        if market in ("moneyline", "ml") or "victoria" in str(leg.get("desc", "")).lower():
+            if "HOME" in sel or "1" in sel:
+                st = "WON" if h_score > a_score else ("LOST" if h_score < a_score else "PUSH")
+            elif "AWAY" in sel or "2" in sel:
+                st = "WON" if a_score > h_score else ("LOST" if a_score < h_score else "PUSH")
+            else:
+                # If selection contains team code or name, check against home/away team
+                h_team = str(game.get("home_team") or "").upper()
+                a_team = str(game.get("away_team") or "").upper()
+                if h_team and h_team in sel:
+                    st = "WON" if h_score > a_score else ("LOST" if h_score < a_score else "PUSH")
+                elif a_team and a_team in sel:
+                    st = "WON" if a_score > h_score else ("LOST" if a_score < h_score else "PUSH")
+                else:
+                    st = "LOST"
+            return {"status": st, "summary": f"ML {sel} ({h_score:.0f}-{a_score:.0f})"}
+
+        # Totals
+        if market in ("total_points", "total", "totals", "over_under") or "over" in sel or "under" in sel:
+            tot = h_score + a_score
+            line = float(leg.get("line_value") or leg.get("line") or 0.0)
+            if line > 0:
+                if tot == line:
+                    return {"status": "PUSH", "summary": f"Total {tot:.0f} == Line {line:.1f}"}
+                st = "WON" if (("OVER" in sel and tot > line) or ("UNDER" in sel and tot < line)) else "LOST"
+                return {"status": st, "summary": f"Total {tot:.0f} vs Line {line:.1f}"}
+
+        # Player Prop
+        player_name = leg.get("player_name")
+        if player_name or market.startswith("player_") or "alt_prop" in leg:
+            p_stats = boxscore.get(player_name, {}) if player_name else {}
+            # If boxscore is present and player didn't play a single minute, leg is VOID
+            if boxscore and (not p_stats or p_stats.get("minutes", 0.0) == 0.0):
+                return {"status": "VOID", "summary": f"{player_name} DNP (Void)"}
+
+            cat = str(leg.get("prop_category") or leg.get("category") or "").lower()
+            if not cat:
+                for k in ["points", "assists", "rebounds", "threes", "pra"]:
+                    if k in market or k in str(leg.get("desc", "")).lower():
+                        cat = k
+                        break
+
+            stat_map = {
+                "points": "pts",
+                "pts": "pts",
+                "assists": "ast",
+                "ast": "ast",
+                "rebounds": "reb",
+                "reb": "reb",
+                "threes": "threes",
+                "3pm": "threes",
+                "pra": "pra",
+            }
+            stat_key = stat_map.get(cat, "pts")
+            actual_val = float(p_stats.get(stat_key, 0.0))
+            if cat == "pra" and "pra" not in p_stats:
+                actual_val = float(p_stats.get("pts", 0.0)) + float(p_stats.get("reb", 0.0)) + float(p_stats.get("ast", 0.0))
+
+            line = float(leg.get("line_value") or leg.get("line") or 0.0)
+            if actual_val == line and line > 0:
+                return {"status": "PUSH", "summary": f"{player_name} {cat} {actual_val:.0f} == {line:.1f}"}
+
+            st = "WON" if (("OVER" in sel and actual_val > line) or ("UNDER" in sel and actual_val < line)) else "LOST"
+            return {"status": st, "summary": f"{player_name} {cat} {actual_val:.0f} vs {line:.1f}"}
+
+        return {"status": "PUSH", "summary": "Unrecognized leg"}
+
+    def settle_pending_parlays(
+        self,
+        game_boxscores: dict[str, dict[str, dict[str, float]]] | None = None,
+        settled_at: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Scans all PENDING parlay bets and settles those whose constituent games have finished.
+        Returns the list of settlement outcome dictionaries.
+        """
+        pending = self.db.fetch_all("SELECT * FROM parlay_bets WHERE status = 'PENDING'")
+        settled_results: list[dict[str, Any]] = []
+        now_str = settled_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        boxscores = game_boxscores or {}
+
+        for parlay in pending:
+            parlay_id = parlay["parlay_id"]
+            legs = json.loads(parlay["legs_json"])
+
+            leg_evaluations: list[dict[str, Any]] = []
+            can_settle_all = True
+
+            for leg in legs:
+                gid = leg.get("game_id")
+                if not gid or gid == "CROSS_SLATE":
+                    # Cannot resolve game id
+                    can_settle_all = False
+                    break
+
+                game = self.db.fetch_one(
+                    "SELECT game_id, status, home_score, away_score, home_team, away_team FROM games WHERE game_id = ?",
+                    (gid,),
+                )
+                if not game or game["status"] not in ("FINAL", "POSTPONED", "CANCELLED"):
+                    can_settle_all = False
+                    break
+
+                leg_res = self._evaluate_single_leg(leg, game, boxscores.get(gid, {}))
+                leg_evaluations.append(leg_res)
+
+            if can_settle_all and len(leg_evaluations) == len(legs):
+                try:
+                    res = self.settle_parlay_bet(parlay_id, leg_evaluations, settled_at=now_str)
+                    settled_results.append(res)
+                except Exception as exc:
+                    logger.warning(f"Error settling parlay {parlay_id}: {exc}")
+
+        return settled_results

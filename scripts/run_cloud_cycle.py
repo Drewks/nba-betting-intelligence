@@ -53,6 +53,7 @@ from src.models.statistical_models import (
 )
 from src.orchestrator import Orchestrator
 from src.paper_trading.engine import build_production_engine
+from src.paper_trading.parlay_engine import ParlayTradingEngine
 from src.prediction.ev_calculator import (
     MAX_MODEL_MARKET_DISAGREEMENT,
     compute_line_steam,
@@ -93,6 +94,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     db = DatabaseManager(db_path)
     # Stake sizing, caps and EV threshold come from config/model_config.yaml (see AGENTS.md).
     paper_engine = build_production_engine(db)
+    parlay_engine = ParlayTradingEngine(db)
     scout = NBADataScoutAgent(db)
     visual = VisualResearcherAgent()
     calibrator_agent = ModelCalibratorAgent()
@@ -195,6 +197,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         except Exception as exc:
             logger.warning(f"Failed to fetch boxscore for game {gid}: {exc}")
     paper_engine.settle_pending_player_props(game_boxscores=game_boxscores, settled_at=now_str)
+    parlay_engine.settle_pending_parlays(game_boxscores=game_boxscores, settled_at=now_str)
 
     # 3. Auto-Calibration Step: Fit calibrators & models on all strictly prior FINAL games
     # Refresh current timestamp post-ingestion to encompass recently settled games without temporal leakage
@@ -592,9 +595,13 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             """,
             (now_str,),
         )
-        props_engine.generate_slate_prop_opportunities(
+        slate_props = props_engine.generate_slate_prop_opportunities(
             slate_games=slate_records,
             bankroll_pen=paper_engine.get_bankroll_state()["settled_bankroll_pen"],
+        )
+        parlay_engine.record_candidate_parlays(
+            candidates=slate_props,
+            matchday_date=today_str,
         )
     except Exception as exc:
         logging.warning(f"Handled exception in run_cloud_cycle (line 568): {exc}")
@@ -624,6 +631,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         "new_bets_placed_in_cycle": new_bets_placed,
         "active_calibration_methods": {"moneyline": ml_method, "total_points": tot_method},
         "bankroll_state": paper_engine.get_bankroll_state(),
+        "sub_bankroll_state": parlay_engine.get_bankroll_state(),
         "audit_verdict": audit_res["exit_gates_evaluation"]["recommendation"],
         "financial_and_statistical_summary": {
             "initial_bankroll_pen": 100.0,
