@@ -1,8 +1,8 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 124 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
   "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
@@ -45,13 +45,13 @@
       "source": "playwright_espn_injuries_table",
       "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 7: Diabate (quadriceps) has been ruled out for Friday's game against Boston, according to the Hornets' official injury report.",
       "relevance_score": 0.1617,
-      "captured_at": "2026-11-08T23:45:50Z"
+      "captured_at": "2026-11-09T00:18:03Z"
     },
     {
       "source": "playwright_espn_injuries_table",
       "snippet": "Mitchell Robinson C Nov 8 Day-To-Day Nov 8: Robinson (illness) is questionable for Sunday's game versus Milwaukee, Bobby Krivitsky of Forbes.com reports.",
       "relevance_score": 0.1593,
-      "captured_at": "2026-11-08T23:45:50Z"
+      "captured_at": "2026-11-09T00:18:03Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

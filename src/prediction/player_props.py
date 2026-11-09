@@ -38,6 +38,8 @@ from src.prediction.ev_calculator import (
     market_anchored_probability,
     optimize_simultaneous_kelly_portfolio,
 )
+from src.prediction.minutes_model import MinutesProjectionEngine
+from src.prediction.vine_copula import VineCopulaSGP
 from src.storage.db import DatabaseManager
 
 
@@ -309,6 +311,8 @@ class PlayerPropsEngine:
         self.db = db
         self.min_ev_threshold = min_ev_threshold
         self.calibrator = VennAbersConformalInterval(window=1200)
+        self.minutes_engine = MinutesProjectionEngine()
+        self.vine_copula_engine = VineCopulaSGP()
 
     def project_player_stats(
         self,
@@ -318,6 +322,9 @@ class PlayerPropsEngine:
         opponent_team: str | None = None,
         expected_game_pace: float | None = None,
         spread_blowout_risk: float | None = None,
+        referee_foul_rate: float = 1.0,
+        injury_status: str = "ACTIVE",
+        foul_trouble_prone: bool = False,
     ) -> dict[str, Any]:
         """
         Computes projected Points, Rebounds, Assists, 3PM, PRA, PR, PA, and RA.
@@ -375,6 +382,15 @@ class PlayerPropsEngine:
             blowout_min_discount = min(2.5, round((abs(spread_blowout_risk) - 10.5) * 0.35, 1))
 
         effective_minutes = round(max(18.0, base_min + minutes_bump - blowout_min_discount), 1)
+        hurdle_minutes = self.minutes_engine.predict_minutes_quantiles(
+            base_minutes=base_min,
+            spread=spread_blowout_risk or 0.0,
+            is_starter=(base_min >= 28.0),
+            injury_status=injury_status,
+            referee_foul_rate=referee_foul_rate,
+            foul_trouble_prone=foul_trouble_prone,
+            expected_pace=pace_val or 99.5,
+        )
         usg_factor = 1.0 + (usage_bump_pct / 100.0)
 
         # Adjusted scoring and stat rates scale with usage factor, matchup factor, and pace factor
@@ -412,6 +428,7 @@ class PlayerPropsEngine:
             "matchup_adjustment_pct": avg_matchup_adj,
             "pace_factor": round(pace_factor, 3),
             "effective_minutes": effective_minutes,
+            "hurdle_minutes": hurdle_minutes,
             "usage_bump_pct": round(usage_bump_pct, 1),
             "blowout_min_discount": blowout_min_discount,
             "projections": {
@@ -635,6 +652,33 @@ class PlayerPropsEngine:
                         pass
 
         return opportunities
+
+    def simulate_multi_leg_sgp_vine_copula(
+        self,
+        legs: list[dict[str, Any]],
+        offered_sgp_odds: float,
+        correlation_matrix: np.ndarray | None = None,
+        copula_family: str = "student_t",
+        df: int = 5,
+        bankroll_pen: float = 100.0,
+        n_simulations: int = 25000,
+        random_seed: int = 42,
+    ) -> dict[str, Any]:
+        """
+        V9 Phase 2: Multi-leg Same Game Parlay (3 to 5 legs) Vine Copula Engine.
+        Leverages C-Vine / Student-t heavy tail simulation to accurately price correlated
+        parlays offered by Peruvian bookmakers (RETAbet 'Crea tu Apuesta', Betsson).
+        """
+        return self.vine_copula_engine.simulate_multivariate_copula(
+            legs=legs,
+            offered_sgp_odds=offered_sgp_odds,
+            correlation_matrix=correlation_matrix,
+            copula_family=copula_family,
+            df=df,
+            bankroll_pen=bankroll_pen,
+            n_simulations=n_simulations,
+            random_seed=random_seed,
+        )
 
     def simulate_same_game_parlay_copula(
         self,

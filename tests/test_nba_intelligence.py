@@ -2140,7 +2140,7 @@ def test_37_v8_market_residual_model_and_clv_meta_labeling(tmp_path: Path) -> No
 
     # 3. Test PaperTradingEngine blocking candidates that fail CLV meta-labeling
     db = DatabaseManager(tmp_path / "test_p37.sqlite3")
-    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0)
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0, dynamic_conviction_staking=True, max_stake_pen=6.00)
     p_fail = _seed_sample_game_and_prediction(db, "G_CLV_FAIL")
 
     decisions = engine.evaluate_and_record_matchday_selections(
@@ -2754,3 +2754,267 @@ def test_42_data_integrity_and_dynamic_roster_audit(tmp_path: Path) -> None:
             enforce_scheduled_status=True,
         )
 
+
+
+# 43. V9 Fase 1: Hurdle Model for Player Minutes, Blowout Hazard & Referee Foul Trouble
+def test_43_hurdle_minutes_model() -> None:
+    """
+    Test 43 (V9 Phase 1 Verification):
+    1. Hurdle model stage 1: P(Minutes > 0) classification (ACTIVE vs QUESTIONABLE vs OUT).
+    2. Quantile regression stage 2: P10 floor, P50 median, P90 ceiling.
+    3. Logistic blowout hazard: Starters in blowouts (|spread| >= 12.5) lose minutes.
+    4. Referee crew chief foul trouble hazard model.
+    5. Integration into PlayerPropsEngine.project_player_stats.
+    """
+    from src.prediction.minutes_model import MinutesProjectionEngine
+    from src.prediction.player_props import PlayerPropsEngine
+
+    engine = MinutesProjectionEngine()
+
+    # 1. Participation hurdle probability
+    p_act = engine.predict_participation_probability("ACTIVE", days_rest=2)
+    p_q = engine.predict_participation_probability("QUESTIONABLE", days_rest=1)
+    p_out = engine.predict_participation_probability("OUT", days_rest=0)
+    assert p_act >= 0.95
+    assert 0.40 <= p_q <= 0.60
+    assert p_out == 0.0
+
+    # 2. Quantile ordering and validity
+    proj = engine.predict_minutes_quantiles(base_minutes=35.0, spread=3.0, is_starter=True)
+    assert proj["p10_floor"] < proj["p50_median"] < proj["p90_ceiling"]
+    assert 30.0 <= proj["p50_median"] <= 36.0
+
+    # 3. Logistic Blowout Risk: Close game vs blowout game
+    proj_close = engine.predict_minutes_quantiles(base_minutes=35.0, spread=2.0, is_starter=True)
+    proj_blowout = engine.predict_minutes_quantiles(base_minutes=35.0, spread=15.0, is_starter=True)
+    assert proj_blowout["blowout_risk"] > proj_close["blowout_risk"]
+    assert proj_blowout["p50_median"] < proj_close["p50_median"]
+    assert proj_blowout["blowout_delta_minutes"] < -1.5
+
+    # 4. Referee foul trouble hazard
+    proj_lenient_ref = engine.predict_minutes_quantiles(
+        base_minutes=32.0, spread=3.0, is_starter=True, referee_foul_rate=0.85, foul_trouble_prone=False
+    )
+    proj_strict_ref = engine.predict_minutes_quantiles(
+        base_minutes=32.0, spread=3.0, is_starter=True, referee_foul_rate=1.40, foul_trouble_prone=True
+    )
+    assert proj_strict_ref["foul_trouble_hazard"] > proj_lenient_ref["foul_trouble_hazard"]
+    assert proj_strict_ref["p10_floor"] < proj_lenient_ref["p10_floor"]
+
+    # 5. Integration with PlayerPropsEngine
+    props_engine = PlayerPropsEngine()
+    player_proj = props_engine.project_player_stats(
+        player_name="Nikola Jokic",
+        team="DEN",
+        spread_blowout_risk=14.0,
+        referee_foul_rate=1.25,
+        foul_trouble_prone=True,
+    )
+    assert "hurdle_minutes" in player_proj
+    assert "p10_floor" in player_proj["hurdle_minutes"]
+    assert "p50_median" in player_proj["hurdle_minutes"]
+    assert "p90_ceiling" in player_proj["hurdle_minutes"]
+    assert player_proj["hurdle_minutes"]["blowout_risk"] > 0.40
+
+
+# 44. V9 Fase 2: Multivariate Vine Copula Engine for 3 to 5-Leg Same Game Parlays (SGP)
+def test_44_vine_copula_multivariate_sgp() -> None:
+    """
+    Test 44 (V9 Phase 2 Verification):
+    1. Multi-dimensional Vine Copula Simulator for 3-leg and 4-leg Same Game Parlays (SGP).
+    2. Student-t heavy tail dependence vs Gaussian copula.
+    3. Positive correlation matrix ensures joint probability exceeds independent product.
+    4. Fractional Kelly staking and EV pricing for Peruvian retail books (RETAbet, Betsson).
+    5. Integration into PlayerPropsEngine.simulate_multi_leg_sgp_vine_copula.
+    """
+    import numpy as np
+    from src.prediction.vine_copula import VineCopulaSGP, nearest_positive_definite
+    from src.prediction.player_props import PlayerPropsEngine
+
+    copula = VineCopulaSGP()
+
+    # 1. 3-Leg SGP definition
+    legs = [
+        {"player_name": "Jayson Tatum", "team": "BOS", "category": "PTS", "selection": "OVER", "line": 26.5, "model_prob": 0.58},
+        {"player_name": "Jaylen Brown", "team": "BOS", "category": "REB", "selection": "OVER", "line": 6.5, "model_prob": 0.55},
+        {"team": "BOS", "category": "GAME_WIN", "selection": "OVER", "line": 0.0, "model_prob": 0.65},
+    ]
+
+    res_student = copula.simulate_multivariate_copula(
+        legs=legs,
+        offered_sgp_odds=5.50,
+        copula_family="student_t",
+        df=5,
+        bankroll_pen=100.0,
+        n_simulations=15000,
+        random_seed=42,
+    )
+
+    assert res_student["num_legs"] == 3
+    assert res_student["p_joint"] > res_student["p_independent"]
+    assert res_student["correlation_boost_pct"] > 10.0
+    assert res_student["ev_pct"] > 0.0
+    assert 1.0 <= res_student["kelly_stake_pen"] <= 3.50
+
+    # 2. Gaussian Copula comparison
+    res_gauss = copula.simulate_multivariate_copula(
+        legs=legs,
+        offered_sgp_odds=5.50,
+        copula_family="gaussian",
+        bankroll_pen=100.0,
+        n_simulations=15000,
+        random_seed=42,
+    )
+    assert res_gauss["p_joint"] > 0.0
+
+    # 3. Higham nearest positive definite repair
+    invalid_corr = np.array([
+        [1.0, 0.95, 0.95],
+        [0.95, 1.0, -0.90],
+        [0.95, -0.90, 1.0],
+    ])
+    repaired_corr = nearest_positive_definite(invalid_corr)
+    eigvals = np.linalg.eigvalsh(repaired_corr)
+    assert np.all(eigvals >= -1e-7)
+    assert np.allclose(np.diag(repaired_corr), 1.0)
+
+    # 4. Integration with PlayerPropsEngine
+    props_engine = PlayerPropsEngine()
+    sgp_res = props_engine.simulate_multi_leg_sgp_vine_copula(
+        legs=legs,
+        offered_sgp_odds=5.80,
+        bankroll_pen=100.0,
+    )
+    assert sgp_res["num_legs"] == 3
+    assert sgp_res["p_joint"] > 0.15
+    assert "rationale" in sgp_res
+
+
+# 45. V9 Fase 3: Stale Line Hunter & Risk-Free Cross-Bookmaker Surebet Arbitrage
+def test_45_stale_line_latency_and_surebet_arbitrage() -> None:
+    """
+    Test 45 (V9 Phase 3 Verification):
+    1. Stale Line Hunter: Monitors velocity differentials between sharp market-makers (Pinnacle)
+       and Peruvian retail bookmakers (RETAbet, Betsson, Doradobet, Inkabet).
+    2. Closing Line Value (+CLV) estimation and Kelly stake sizing in Soles (S/. PEN).
+    3. Cross-bookmaker Arbitrage / Surebet detection guaranteeing risk-free profit.
+    """
+    from src.ingestion.stale_line_hunter import StaleLineHunter
+
+    hunter = StaleLineHunter(min_clv_pct=5.0, min_arb_margin_pct=1.0)
+
+    # 1. Stale Line Detection: Sharp line moved to 1.72, RETAbet remains lagged at 1.95
+    sharp_line = {
+        "bookmaker": "Pinnacle",
+        "market": "moneyline",
+        "selection": "HOME",
+        "decimal_odds": 1.72,
+        "is_sharp": True,
+        "timestamp": "2026-11-08T22:30:00Z",
+    }
+    retail_lines = [
+        {
+            "bookmaker": "RETAbet Perú",
+            "market": "moneyline",
+            "selection": "HOME",
+            "decimal_odds": 1.95,
+            "timestamp": "2026-11-08T22:10:00Z",  # 20 mins older!
+        },
+        {
+            "bookmaker": "Doradobet",
+            "market": "moneyline",
+            "selection": "HOME",
+            "decimal_odds": 1.75,
+            "timestamp": "2026-11-08T22:28:00Z",
+        },
+    ]
+
+    stale_picks = hunter.identify_stale_lines(
+        game_id="G_STALE_TEST_01",
+        matchday_date="2026-11-09",
+        sharp_line=sharp_line,
+        retail_lines=retail_lines,
+        bankroll_pen=100.0,
+    )
+    assert len(stale_picks) >= 1
+    top_stale = stale_picks[0]
+    assert top_stale["retail_bookmaker"] == "RETAbet Perú"
+    assert top_stale["expected_clv_pct"] > 10.0
+    assert 1.0 <= top_stale["kelly_stake_pen"] <= 5.0
+    assert top_stale["is_stale_line"] is True
+
+    # 2. Cross-Bookmaker Surebet Arbitrage Calculation
+    surebet = hunter.compute_surebet_arbitrage(
+        game_id="G_SUREBET_TEST",
+        matchday_date="2026-11-09",
+        book_a="Betsson Perú",
+        selection_a="HOME",
+        odds_a=2.15,
+        book_b="Coolbet",
+        selection_b="AWAY",
+        odds_b=2.10,
+        total_investment_pen=100.0,
+    )
+    assert surebet["is_arbitrage"] is True
+    assert surebet["arb_margin_pct"] > 5.0
+    assert surebet["guaranteed_net_profit_pen"] > 5.0
+    assert round(surebet["stake_a_pen"] + surebet["stake_b_pen"], 2) == 100.00
+    assert surebet["payout_a_pen"] > 100.00
+    assert surebet["payout_b_pen"] > 100.00
+
+
+# 46. V9 Fase 5: CPPI Capital Preservation Shield (Constant Proportion Portfolio Insurance)
+def test_46_cppi_capital_preservation_shield(tmp_path: Path) -> None:
+    """
+    Test 46 (V9 Phase 5 Verification):
+    1. Constant Proportion Portfolio Insurance (CPPI) capital preservation shield.
+    2. Multiplier is 1.0 when bankroll is at peak equity.
+    3. Multiplier scales down as bankroll drops towards the 85% floor.
+    4. Strict lower clamp (0.15) prevents ruin while maintaining fractional skin in the game.
+    5. Integration into PaperTradingEngine.compute_contextual_stake_pen.
+    """
+    from src.paper_trading.engine import PaperTradingEngine, compute_cppi_multiplier
+    from src.storage.db import DatabaseManager
+
+    # 1. Multiplier behavior across drawdown regimes
+    m_peak = compute_cppi_multiplier(current_bankroll=100.0, peak_bankroll=100.0, floor_fraction=0.85)
+    assert m_peak == 1.0
+
+    # Mild drawdown: 95.0 -> Cushion = 10.0 / Max Cushion = 15.0 -> 0.67
+    m_mild = compute_cppi_multiplier(current_bankroll=95.0, peak_bankroll=100.0, floor_fraction=0.85)
+    assert 0.60 <= m_mild <= 0.75
+
+    # Severe distress near floor: 86.0 -> Cushion = 1.0 / Max Cushion = 15.0 -> small
+    m_distress = compute_cppi_multiplier(current_bankroll=86.0, peak_bankroll=100.0, floor_fraction=0.85)
+    assert 0.15 <= m_distress <= 0.25
+
+    # Breach of floor: 83.0 -> Floor clamped to 0.15
+    m_breach = compute_cppi_multiplier(current_bankroll=83.0, peak_bankroll=100.0, floor_fraction=0.85)
+    assert m_breach == 0.15
+
+    # 2. Integration into PaperTradingEngine contextual staking
+    db = DatabaseManager(tmp_path / "test_cppi.sqlite3")
+    engine = PaperTradingEngine(db=db, initial_bankroll_pen=100.0, dynamic_conviction_staking=True, max_stake_pen=6.00)
+
+    # Healthy bankroll stake
+    stake_healthy = engine.compute_contextual_stake_pen(
+        calibrated_prob=0.60,
+        decimal_odds=1.95,
+        ev_unit=0.17,
+        current_bankroll_pen=100.0,
+        apply_cppi_shield=True,
+        peak_bankroll_pen=100.0,
+    )
+
+    # Distressed bankroll stake (in drawdown to 87.0 PEN from peak 100.0 PEN)
+    stake_distressed = engine.compute_contextual_stake_pen(
+        calibrated_prob=0.60,
+        decimal_odds=1.95,
+        ev_unit=0.17,
+        current_bankroll_pen=87.0,
+        apply_cppi_shield=True,
+        peak_bankroll_pen=100.0,
+    )
+
+    assert stake_healthy > stake_distressed
+    assert stake_distressed >= 1.00  # Never below minimum bet S/ 1.00 PEN

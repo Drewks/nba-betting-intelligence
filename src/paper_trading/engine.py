@@ -32,6 +32,31 @@ class DoubleSettlementError(RuntimeError):
     """Raised when attempting to settle a bet that has already been settled."""
 
 
+def compute_cppi_multiplier(
+    current_bankroll: float,
+    peak_bankroll: float,
+    floor_fraction: float = 0.85,
+) -> float:
+    """
+    V9 Phase 5: Constant Proportion Portfolio Insurance (CPPI) Capital Preservation Shield.
+    Calculates dynamic risk multiplier based on cushion above an 85% high-water mark floor:
+    - When bankroll is at or above peak: multiplier = 1.0 (full capacity).
+    - When bankroll approaches the floor: exposure scales down towards 0.15.
+    """
+    peak = max(1.0, float(peak_bankroll))
+    floor_val = peak * floor_fraction
+    cushion = max(0.0, float(current_bankroll) - floor_val)
+    target_cushion = max(1.0, peak * (1.0 - floor_fraction))
+
+    cushion_ratio = cushion / target_cushion
+    if cushion_ratio >= 1.0:
+        return 1.0
+    elif cushion_ratio <= 0.0:
+        return 0.15
+    else:
+        return round(max(0.15, min(1.0, float(cushion_ratio))), 4)
+
+
 class PaperTradingEngine:
     """Manages virtual S/100.00 PEN bankroll, selection filtering, and immutable settlement."""
 
@@ -223,6 +248,8 @@ class PaperTradingEngine:
         apply_clv_governor: bool = True,
         conformal_width: float | None = None,
         ev_lower_bound: float | None = None,
+        apply_cppi_shield: bool = True,
+        peak_bankroll_pen: float | None = None,
     ) -> float:
         """
         Calculates contextual Kelly-Conviction stake (S/1.00 to S/6.00 PEN on ~S/100 bankroll):
@@ -301,7 +328,31 @@ class PaperTradingEngine:
         bankroll_scale = max(0.80, min(1.50, float(current_bankroll_pen) / max(1.0, self.initial_bankroll_pen)))
         scaled_stake = raw_stake * bankroll_scale
 
+        # V9 Phase 5: Constant Proportion Portfolio Insurance (CPPI) Capital Preservation Shield
+        if apply_cppi_shield:
+            cppi_mult = self.compute_cppi_multiplier(current_bankroll_pen, peak_bankroll_override=peak_bankroll_pen)
+            scaled_stake *= cppi_mult
+
         return round(max(1.00, min(self.max_stake_pen, scaled_stake)), 2)
+
+    def compute_cppi_multiplier(
+        self,
+        current_bankroll_pen: float,
+        floor_fraction: float = 0.85,
+        peak_bankroll_override: float | None = None,
+    ) -> float:
+        """
+        V9 Phase 5: Constant Proportion Portfolio Insurance (CPPI) Capital Preservation Shield.
+        """
+        if peak_bankroll_override is not None:
+            peak = float(peak_bankroll_override)
+        elif self.db is not None:
+            peak_row = self.db.fetch_one("SELECT MAX(bankroll_after_pen) AS max_br FROM simulated_bets WHERE bankroll_after_pen IS NOT NULL")
+            peak = max(self.initial_bankroll_pen, float(peak_row["max_br"] or self.initial_bankroll_pen) if peak_row else self.initial_bankroll_pen)
+        else:
+            peak = self.initial_bankroll_pen
+
+        return compute_cppi_multiplier(current_bankroll_pen, peak, floor_fraction)
 
     def _ensure_initial_ledger(self) -> None:
         existing = self.db.fetch_one("SELECT COUNT(*) AS cnt FROM bankroll_ledger")
