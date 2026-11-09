@@ -429,11 +429,17 @@ def _summarize(
         for k, items in sorted(groups.items()):
             s = [b for b in items if b["status"] in ("WON", "LOST")]
             st = sum(b["stake_pen"] for b in s)
+            roi_ci = compute_block_bootstrap_roi_ci(items)
+            clv_ci = compute_block_bootstrap_roi_ci(
+                [{"matchday_date": b["matchday_date"], "net_profit_pen": b["clv_ev_pct"] / 100.0, "stake_pen": 1.0} for b in items]
+            )
             res[k] = {
                 "bets": len(items),
                 "won": sum(1 for b in s if b["status"] == "WON"),
                 "roi_flat_pct": round(100.0 * sum(b["net_profit_pen"] for b in items) / st, 2) if st else None,
+                "roi_ci95": [roi_ci.get("roi_ci_lower_95_pct"), roi_ci.get("roi_ci_upper_95_pct")],
                 "mean_clv_pct": round(float(np.mean([b["clv_ev_pct"] for b in items])), 3) if items else None,
+                "clv_ci95": [clv_ci.get("roi_ci_lower_95_pct"), clv_ci.get("roi_ci_upper_95_pct")],
             }
         return res
 
@@ -469,6 +475,7 @@ def _summarize(
         "by_season": _group("season"),
     }
     out["bets_sample"] = bets[:20]
+    out["bets"] = bets
     return out
 
 
@@ -509,18 +516,29 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         f"- **CLV vs cierre sin margen**: media `{clv['mean_clv_ev_pct']}%` | gana al cierre `{clv['beat_close_rate']}` | "
         f"IC95 `[{(clv.get('bootstrap_95_pct') or {}).get('lower')}%, {(clv.get('bootstrap_95_pct') or {}).get('upper')}%]`",
         "",
-        "| Grupo | Apuestas | Ganadas | ROI stake fijo | CLV medio |",
+        "| Grupo | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |",
         "| :--- | ---: | ---: | ---: | ---: |",
     ]
+
+    def _ci(v: list[Any] | None) -> str:
+        return f"[{v[0]:.1f}, {v[1]:.1f}]" if v and v[0] is not None and v[1] is not None else "[n/d]"
+
     for label, grp in (("mercado", b["by_market"]), ("temporada", b["by_season"])):
         for k, v in grp.items():
-            lines.append(f"| {label}: `{k}` | {v['bets']} | {v['won']} | {v['roi_flat_pct']}% | {v['mean_clv_pct']}% |")
+            lines.append(
+                f"| {label}: `{k}` | {v['bets']} | {v['won']} | {v['roi_flat_pct']}% {_ci(v.get('roi_ci95'))} | "
+                f"{v['mean_clv_pct']}% {_ci(v.get('clv_ci95'))} |"
+            )
     if sensitivity:
         lines += ["", "## 3. Sensibilidad al margen supuesto", "",
-                  "| Margen | Apuestas | ROI stake fijo | CLV medio |", "| ---: | ---: | ---: | ---: |"]
+                  "| Margen | Mercado | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |",
+                  "| ---: | :--- | ---: | ---: | ---: | ---: |"]
         for vig_label, res in sensitivity.items():
-            bb = res["betting"]
-            lines.append(f"| {vig_label} | {bb['bets']} | {bb['flat_stake']['roi_pct']}% | {bb['clv']['mean_clv_ev_pct']}% |")
+            for mk, v in res["betting"]["by_market"].items():
+                lines.append(
+                    f"| {vig_label} | `{mk}` | {v['bets']} | {v['won']} | {v['roi_flat_pct']}% {_ci(v.get('roi_ci95'))} | "
+                    f"{v['mean_clv_pct']}% {_ci(v.get('clv_ci95'))} |"
+                )
     lines += [
         "",
         "## Supuestos",

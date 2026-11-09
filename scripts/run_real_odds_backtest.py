@@ -67,7 +67,11 @@ def main() -> None:
             sensitivity[f"{v * 100:.1f}%"] = run_real_odds_backtest(games, market_rows, vig=v, **common)
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
-    payload = {"main": result, "sensitivity": {k: v["betting"] for k, v in (sensitivity or {}).items()}}
+    payload = {
+        "main": {k: v for k, v in result.items() if k != "bets"},
+        "main_bets": result.get("bets", []),
+        "sensitivity": {k: v["betting"] for k, v in (sensitivity or {}).items()},
+    }
     Path(args.out_json).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out_md).write_text(render_markdown(result, sensitivity), encoding="utf-8")
