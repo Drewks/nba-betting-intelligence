@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-09T01:01:03Z
+date_generated: 2026-11-09T01:59:44Z
 report_type: weekly_report
 model_versions: [model_a_baseline_v1, model_b_elo_v1, model_c_point_margin_v1, model_d_total_points_v1, model_e_lightgbm_v1]
 settled_predictions: 27
@@ -8,7 +8,7 @@ simulation_only: true
 # Informe Semanal y Consolidado Walk-Forward — NBA Betting Intelligence
 
 ## 1. Resumen Financiero Virtual (Bankroll Inicial: S/100.00 PEN)
-- **Fecha de generación (UTC)**: `2026-11-09T01:01:03Z`
+- **Fecha de generación (UTC)**: `2026-11-09T01:59:44Z`
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll virtual liquidado actual**: `S/99.97 PEN`
 - **Beneficio neto acumulado**: `S/-0.03 PEN`
@@ -34,13 +34,13 @@ simulation_only: true
 
 | Modelo | Mercado | Brier Score (menor es mejor) | Log Loss (menor es mejor) | ECE |
 | :--- | :--- | ---: | ---: | ---: |
-| `Modelo A (Baseline)` | `moneyline` | 0.22942 | 0.65143 | — |
-| `Modelo B (Elo)` | `moneyline` | 0.15184 | 0.48151 | — |
-| `Modelo C (Point Margin)` | `moneyline` | **0.15184** | **0.48151** | 0.18170 |
-| `Modelo E (LightGBM)` | `moneyline` | 0.15184 | 0.48151 | — |
-| `Modelo A (Baseline)` | `total_points` | 0.27248 | 0.74328 | — |
-| `Modelo D (Total Points + Cov)` | `total_points` | **0.25802** | **0.71118** | 0.17152 |
-| `Modelo E (LightGBM)` | `total_points` | 0.25802 | 0.71118 | — |
+| `Modelo A (Baseline)` | `moneyline` | 0.23108 | 0.65478 | — |
+| `Modelo B (Elo)` | `moneyline` | 0.15909 | 0.49669 | — |
+| `Modelo C (Point Margin)` | `moneyline` | **0.15909** | **0.49669** | 0.15682 |
+| `Modelo E (LightGBM)` | `moneyline` | 0.15909 | 0.49669 | — |
+| `Modelo A (Baseline)` | `total_points` | 0.26814 | 0.73428 | — |
+| `Modelo D (Total Points + Cov)` | `total_points` | **0.25803** | **0.71114** | 0.15044 |
+| `Modelo E (LightGBM)` | `total_points` | 0.25803 | 0.71114 | — |
 
 ## 4. Análisis de Incertidumbre Estadística (Block Bootstrap por Jornada)
 - **Método**: `temporal_matchday_block_bootstrap` (10 bloques temporales)
@@ -48,7 +48,7 @@ simulation_only: true
 - **¿Resultados compatibles con ausencia de ventaja (ROI <= 0% dentro del IC 95%)?**: `SÍ (No se puede descartar azar)`
 
 ## 5. Evaluación de Reentrenamiento y Cambios Propuestos (Proceso C)
-- **Muestra OOS evaluada**: `125` partidos
+- **Muestra OOS evaluada**: `129` partidos
 - **Criterio de selección**: `OOS_BRIER_AND_LOG_LOSS (never ROI alone)`
 - **¿Supera al modelo vigente en Brier y Log Loss?**: `True`
 - **¿Supera al Baseline en Brier y Log Loss?**: `True`

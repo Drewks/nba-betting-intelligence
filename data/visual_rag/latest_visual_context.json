@@ -1,18 +1,24 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
-  "indexed_documents_count": 34,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
+      "relevance_score": 0.2311,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Jarrett Allen C Nov 9 Day-To-Day Nov 8: Allen (knee) is questionable for Monday's game against Charlotte.",
       "relevance_score": 0.3623,
       "captured_at": "2026-11-09T03:02:27Z"
     },
     {
-      "source": "playwright_espn_injuries_table",
+      "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Moussa Diabate F Nov 9 Day-To-Day Nov 8: Diabate (quadriceps) is questionable for Monday's game against the Cavaliers.",
       "relevance_score": 0.3612,
       "captured_at": "2026-11-09T03:02:27Z"
