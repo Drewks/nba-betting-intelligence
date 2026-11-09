@@ -7,50 +7,50 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "UTA Keyonte George (PG) Day To Day (Ankle): George won't return Sunday due to an ankle injury.",
-      "relevance_score": 0.2693,
+      "snippet": "UTA Keyonte George (PG) Day To Day (Ankle): George will not return to Sunday's (Nov. 8) game against the Timberwolves due to a right ankle injury.",
+      "relevance_score": 0.2812,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DEN DeMar DeRozan (SF) Day To Day (Back): Braun is Questionable for Monday's (Nov. 9) game against Houston.",
-      "relevance_score": 0.2155,
+      "relevance_score": 0.2272,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DEN Nikola Jokić (C) Day To Day (Elbow): Jokic is Questionable for Monday's (Nov. 9) game against Houston.",
-      "relevance_score": 0.2101,
+      "relevance_score": 0.2201,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CHA Moussa Diabaté (C) Day To Day (Quadriceps): Diabate is Questionable for Monday's (Nov. 9) game against Cleveland.",
-      "relevance_score": 0.2099,
+      "relevance_score": 0.2199,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
-      "relevance_score": 0.2067,
-      "captured_at": "2026-11-08"
-    },
-    {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Jarrett Allen C Nov 9 Day-To-Day Nov 8: Allen (knee) is questionable for Monday's game against Charlotte.",
-      "relevance_score": 0.2029,
-      "captured_at": "2026-11-09T06:28:26Z"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis as Questionable for Monday's (Nov. 9) game against Detroit.",
-      "relevance_score": 0.2016,
+      "relevance_score": 0.2164,
       "captured_at": "2026-11-08"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Monday's (Nov. 9) game against Dallas.",
-      "relevance_score": 0.2015,
+      "relevance_score": 0.2113,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "WAS Anthony Davis (PF) Day To Day (Ankle): Davis as Questionable for Monday's (Nov. 9) game against Detroit.",
+      "relevance_score": 0.2109,
+      "captured_at": "2026-11-08"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DEN Christian Braun (SG) Day To Day (Calf): Braun is Questionable for Monday's (Nov. 9) game against Houston.",
+      "relevance_score": 0.2091,
       "captured_at": "2026-11-08"
     }
   ],
