@@ -1,6 +1,6 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-09 02:23 (Hora Perú UTC-5)` (`2026-11-09T07:23:24Z`)
+- **Última actualización**: `2026-11-09 02:27 (Hora Perú UTC-5)` (`2026-11-09T07:27:38Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/100.09 PEN`** (`+0.09 PEN`)
 - **ROI Actual**: `+0.28%` | **Yield Actual**: `+0.28%` | **CLV Promedio**: `+0.45%` | **Max Drawdown**: `0.00%` | **Apuestas en espera**: `1` (`S/1.12 PEN` reservados)
 - **Motor Predictivo Activo**: `Modelo F+G (ML LightGBM/Ridge + 10,000 Simulaciones Monte Carlo de Posesiones con Overtime, Fouling y Blowout + Conformal Prediction)`.
@@ -79,9 +79,9 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 - **Probabilidades**: Modelo Calibrado **`30.8%`** vs Probabilidad Implícita Limpia Casa **`28.1%`**
 - **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `HOU +3.4 pts` | Total esperado **`222.6 pts`** *(Rango 80% Conformal: `200 – 245 pts` | Prob. Prórroga: `8.4%` | Prob. Paliza: `10.7%`)*
 - **Estadísticas Clave Tomadas en Cuenta**:
-  - **Rating Elo**: `HOU 1615` vs `DEN 1562` | **Eficiencia Neta (Off/Def)**: `HOU (113.2/108.6)` vs `DEN (116.0/113.8)` (`Dif: +2.5 pts/100`)
+  - **Rating Elo**: `HOU 1615` vs `DEN 1562` | **Eficiencia Neta (Off/Def)**: `HOU (113.2/108.7)` vs `DEN (116.0/113.8)` (`Dif: +2.3 pts/100`)
   - **Ritmo (Pace)**: `98.7 posesiones` | **Descanso**: `HOU 2d` vs `DEN 3d` | **Viaje Geodésico (Millas Haversine)**: `Dif. -149 millas` (`1 husos horarios`)
-- **Por qué apostó el modelo**: _Ajuste de retorno de gira para Houston Rockets · Eficiencia neta favorable (Houston Rockets [HOU] +2.5 pts/100) · Cuota 3.370 en DraftKings supera la cuota justa del modelo (3.247)._
+- **Por qué apostó el modelo**: _Ajuste de retorno de gira para Houston Rockets · Eficiencia neta favorable (Houston Rockets [HOU] +2.3 pts/100) · Cuota 3.370 en DraftKings supera la cuota justa del modelo (3.247)._
 
 ### 📋 2.B Cartelera Completa de Próximos Partidos: Cuotas, Estadísticas a Tomar en Cuenta y Veredicto
 
@@ -124,8 +124,6 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Bet ID | Fecha | Partido | Mercado | Selección | Cuota | Prob. | EV (%) | Estado | Beneficio | Bankroll Post. |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :---: | ---: | ---: |
-| `BET_20261109_A985B0D3` | `2026-11-09` | `New Orleans Pelicans @ LA Clippers (NOP @ LAC)` | Ganador (Moneyline) | **Gana LA Clippers (LAC)** | 1.917 | 54.3% | `+4.0%` | ✅ WON | **S/+1.83** | `S/101.80` |
-| `BET_20261109_0E342DCD` | `2026-11-09` | `Miami Heat @ Sacramento Kings (MIA @ SAC)` | Ganador (Moneyline) | **Gana Miami Heat (MIA)** | 1.917 | 53.5% | `+2.6%` | ✅ WON | **S/+1.83** | `S/103.63` |
 | `BET_20261108_2DE83152` | `2026-11-08` | `San Antonio Spurs @ Portland Trail Blazers (SAS @ POR)` | Total Puntos (Over/Under) | **UNDER 228.5 (San Antonio Spurs @ Portland Trail Blazers)** | 1.909 | 53.5% | `+2.2%` | ✅ WON | **S/+1.22** | `S/103.00` |
 | `BET_20261107_7EA0942D` | `2026-11-07` | `San Antonio Spurs @ Sacramento Kings (SAS @ SAC)` | Total Puntos (Over/Under) | **UNDER 228.5 (San Antonio Spurs @ Sacramento Kings)** | 1.930 | 53.2% | `+2.8%` | ❌ LOST | **S/-1.68** | `S/98.87` |
 | `BET_20261107_7C4523D5` | `2026-11-07` | `Oklahoma City Thunder @ Memphis Grizzlies (OKC @ MEM)` | Ganador (Moneyline) | **Gana Oklahoma City Thunder (OKC)** | 1.606 | 63.5% | `+2.0%` | ✅ WON | **S/+1.19** | `S/100.55` |
@@ -161,29 +159,29 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Categoría | Liquidadas | Ganadas | Perdidas | Acierto (%) | Total Apostado (S/) | Beneficio Neto (S/) | ROI (%) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **PTS** | 10 | 0 | 6 | `0.0%` | S/21.00 | **S/-21.00** | `-100.0%` |
-| **REB** | 8 | 5 | 0 | `100.0%` | S/17.50 | **S/+15.75** | `+90.0%` |
-| **AST** | 16 | 3 | 11 | `21.4%` | S/49.00 | **S/-29.05** | `-59.3%` |
-| **PRA** | 16 | 3 | 6 | `33.3%` | S/31.50 | **S/-11.55** | `-36.7%` |
-| **3PM** | 36 | 8 | 0 | `100.0%` | S/28.00 | **S/+25.20** | `+90.0%` |
+| **PTS** | 8 | 0 | 4 | `0.0%` | S/14.00 | **S/-14.00** | `-100.0%` |
+| **REB** | 6 | 3 | 0 | `100.0%` | S/10.50 | **S/+9.45** | `+90.0%` |
+| **AST** | 9 | 3 | 4 | `42.9%` | S/24.50 | **S/-4.55** | `-18.6%` |
+| **PRA** | 14 | 3 | 4 | `42.9%` | S/24.50 | **S/-4.55** | `-18.6%` |
+| **3PM** | 28 | 0 | 0 | `0.0%` | S/0.00 | **S/+0.00** | `+0.0%` |
 | **SGP** | 29 | 0 | 0 | `0.0%` | S/0.00 | **S/+0.00** | `+0.0%` |
 
 ### 📜 Últimas Apuestas de Props Liquidadas (Auditoría Inmutable)
 
 | Fecha | Partido | Jugador / Combinada | Mercado | Selección | Línea | Cuota | Stat Real | Estado | Beneficio | Bankroll Post. |
 | :--- | :--- | :--- | :--- | :--- | :--- | ---: | ---: | :---: | ---: | ---: |
-| `2026-11-09` | `ESPN_401909950_2026-11-09_NOP_AT_LAC` | **Jordan Poole** | 3PM | UNDER | `3.5` | `1.90` | `0.0` | ✅ WON | **S/+3.15** | `S/76.20` |
-| `2026-11-09` | `ESPN_401909951_2026-11-09_MIA_AT_SAC` | **Zach LaVine** | 3PM | UNDER | `3.5` | `1.90` | `1.0` | ✅ WON | **S/+3.15** | `S/79.35` |
-| `2026-11-09` | `ESPN_401909947_2026-11-09_UTA_AT_MIN` | **LaMelo Ball** | PTS | OVER | `28.5` | `1.90` | `24.0` | ❌ LOST | **S/-3.50** | `S/67.45` |
-| `2026-11-09` | `ESPN_401909947_2026-11-09_UTA_AT_MIN` | **LaMelo Ball** | PRA | OVER | `41.5` | `1.90` | `32.0` | ❌ LOST | **S/-3.50** | `S/63.95` |
-| `2026-11-09` | `ESPN_401909947_2026-11-09_UTA_AT_MIN` | **Keyonte George** | AST | UNDER | `6.5` | `1.90` | `8.0` | ❌ LOST | **S/-3.50** | `S/60.45` |
-| `2026-11-09` | `ESPN_401909949_2026-11-09_BOS_AT_MIL` | **Tyler Herro** | 3PM | UNDER | `3.5` | `1.90` | `1.0` | ✅ WON | **S/+3.15** | `S/63.60` |
-| `2026-11-09` | `ESPN_401909949_2026-11-09_BOS_AT_MIL` | **Myles Turner** | REB | UNDER | `7.5` | `1.90` | `5.0` | ✅ WON | **S/+3.15** | `S/66.75` |
-| `2026-11-09` | `ESPN_401909950_2026-11-09_NOP_AT_LAC` | **Jordan Poole** | 3PM | UNDER | `3.5` | `1.90` | `0.0` | ✅ WON | **S/+3.15** | `S/69.90` |
-| `2026-11-09` | `ESPN_401909951_2026-11-09_MIA_AT_SAC` | **Zach LaVine** | 3PM | UNDER | `3.5` | `1.90` | `1.0` | ✅ WON | **S/+3.15** | `S/73.05` |
-| `2026-11-09` | `ESPN_401909947_2026-11-09_UTA_AT_MIN` | **Keyonte George** | AST | UNDER | `6.5` | `1.90` | `8.0` | ❌ LOST | **S/-3.50** | `S/58.35` |
-| `2026-11-09` | `ESPN_401909949_2026-11-09_BOS_AT_MIL` | **Tyler Herro** | 3PM | UNDER | `3.5` | `1.90` | `1.0` | ✅ WON | **S/+3.15** | `S/61.50` |
-| `2026-11-09` | `ESPN_401909949_2026-11-09_BOS_AT_MIL` | **Myles Turner** | REB | UNDER | `7.5` | `1.90` | `5.0` | ✅ WON | **S/+3.15** | `S/64.65` |
-| `2026-11-09` | `ESPN_401909950_2026-11-09_NOP_AT_LAC` | **Jordan Poole** | 3PM | UNDER | `3.5` | `1.90` | `0.0` | ✅ WON | **S/+3.15** | `S/67.80` |
-| `2026-11-09` | `ESPN_401909951_2026-11-09_MIA_AT_SAC` | **Zach LaVine** | 3PM | UNDER | `3.5` | `1.90` | `1.0` | ✅ WON | **S/+3.15** | `S/70.95` |
-| `2026-11-09` | `ESPN_401909947_2026-11-09_UTA_AT_MIN` | **LaMelo Ball** | PTS | OVER | `28.5` | `1.90` | `24.0` | ❌ LOST | **S/-3.50** | `S/65.35` |
+| `2026-11-08` | `ESPN_401909941_2026-11-08_WAS_AT_OKC` | **Shai Gilgeous-Alexander** | PTS | OVER | `30.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/87.40` |
+| `2026-11-08` | `ESPN_401909941_2026-11-08_WAS_AT_OKC` | **Shai Gilgeous-Alexander** | PRA | OVER | `42.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/87.40` |
+| `2026-11-08` | `ESPN_401909941_2026-11-08_WAS_AT_OKC` | **Jalen Williams** | PRA | OVER | `28.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/87.40` |
+| `2026-11-08` | `ESPN_401909941_2026-11-08_WAS_AT_OKC` | **Jordan Poole** | 3PM | UNDER | `3.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/87.40` |
+| `2026-11-08` | `ESPN_401909942_2026-11-08_ORL_AT_GSW` | **Stephen Curry** | PTS | UNDER | `27.5` | `1.90` | `41.0` | ❌ LOST | **S/-3.50** | `S/83.90` |
+| `2026-11-08` | `ESPN_401909942_2026-11-08_ORL_AT_GSW` | **Stephen Curry** | PRA | UNDER | `37.5` | `1.90` | `53.0` | ❌ LOST | **S/-3.50** | `S/80.40` |
+| `2026-11-08` | `ESPN_401909942_2026-11-08_ORL_AT_GSW` | **Draymond Green** | AST | UNDER | `6.5` | `1.90` | `13.0` | ❌ LOST | **S/-3.50** | `S/76.90` |
+| `2026-11-08` | `ESPN_401909942_2026-11-08_ORL_AT_GSW` | **Draymond Green** | REB | UNDER | `7.5` | `1.90` | `6.0` | ✅ WON | **S/+3.15** | `S/80.05` |
+| `2026-11-08` | `ESPN_401909942_2026-11-08_ORL_AT_GSW` | **Draymond Green** | PRA | UNDER | `22.5` | `1.90` | `21.0` | ✅ WON | **S/+3.15** | `S/83.20` |
+| `2026-11-08` | `ESPN_401909942_2026-11-08_ORL_AT_GSW` | **Buddy Hield** | 3PM | UNDER | `3.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/83.20` |
+| `2026-11-08` | `ESPN_401909942_2026-11-08_ORL_AT_GSW` | **Jalen Suggs** | 3PM | UNDER | `2.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/83.20` |
+| `2026-11-08` | `ESPN_401909943_2026-11-08_HOU_AT_PHX` | **Devin Booker** | AST | UNDER | `7.5` | `1.90` | `3.0` | ✅ WON | **S/+3.15** | `S/86.35` |
+| `2026-11-08` | `ESPN_401909943_2026-11-08_HOU_AT_PHX` | **Jusuf Nurkic** | REB | UNDER | `10.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/86.35` |
+| `2026-11-08` | `ESPN_401909944_2026-11-08_SAS_AT_POR` | **Anfernee Simons** | 3PM | UNDER | `3.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/86.35` |
+| `2026-11-08` | `ESPN_401909945_2026-11-08_PHI_AT_CHI` | **Zach LaVine** | 3PM | UNDER | `3.5` | `1.90` | `0.0` | VOID | **S/+0.00** | `S/86.35` |
