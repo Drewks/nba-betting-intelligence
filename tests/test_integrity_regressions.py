@@ -342,3 +342,13 @@ def test_backtester_does_not_leave_engine_in_backtest_mode(tmp_path: Path) -> No
     bundle = SyntheticFixtureAdapter(seed=3, num_matchdays=12, games_per_day=3).fetch_games_and_odds()
     bt.run_walk_forward(bundle["games"], bundle["odds"])
     assert engine.is_backtest is False
+
+
+# 9. Config is the single source of truth for the production cycle
+def test_cloud_cycle_uses_configured_model_identity_and_anchor_weight() -> None:
+    import scripts.run_cloud_cycle as cycle
+    from src.config import load_config
+
+    cfg = load_config()
+    assert cycle.MODEL_VERSION_ID == cfg.model.version_id
+    assert cycle.MARKET_ANCHOR_MODEL_WEIGHT == cfg.model.market_anchor_model_weight

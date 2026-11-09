@@ -52,7 +52,6 @@ from src.models.statistical_models import (
 from src.orchestrator import Orchestrator
 from src.paper_trading.engine import PaperTradingEngine
 from src.prediction.ev_calculator import (
-    DEFAULT_MODEL_WEIGHT,
     MAX_MODEL_MARKET_DISAGREEMENT,
     compute_line_steam,
     compute_market_consensus,
@@ -68,7 +67,9 @@ from src.reporting.reporter import (
 from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
 
-MODEL_VERSION_ID = "model_f_ensemble_v8"
+# Model identity and market-anchor weight come from config/model_config.yaml (single source of truth).
+MODEL_VERSION_ID = load_config().model.version_id
+MARKET_ANCHOR_MODEL_WEIGHT = load_config().model.market_anchor_model_weight
 MIN_REAL_GAMES_FOR_TRAINING = 120
 
 
@@ -247,7 +248,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             json.dumps(
                 {
                     "montecarlo_sims": 10000,
-                    "market_anchor_model_weight": DEFAULT_MODEL_WEIGHT,
+                    "market_anchor_model_weight": MARKET_ANCHOR_MODEL_WEIGHT,
                     "max_model_market_disagreement": MAX_MODEL_MARKET_DISAGREEMENT,
                     "training_data": "real_espn_history_only",
                     "team_ratings": "pace_decoupled_huber_multi_horizon_ewma",
@@ -514,7 +515,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
                     model_version_id=m_ver,
                     simulated_prediction_time=pred_ts,
                     market_consensus_prob=cons_p,
-                    model_weight=DEFAULT_MODEL_WEIGHT,
+                    model_weight=MARKET_ANCHOR_MODEL_WEIGHT,
                     max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
                     steam_delta=s_delta,
                     conformal_interval=conf_int,
