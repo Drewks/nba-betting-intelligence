@@ -697,6 +697,7 @@ class PlayerPropsEngine:
         bankroll_pen: float = 100.0,
         n_simulations: int = 10000,
         random_seed: int = 42,
+        pure_alpha: bool = False,
     ) -> dict[str, Any]:
         """
         V8 Phase 3: Bivariate Gaussian Copula Simulator for RETAbet Perú "Crea tu Apuesta" (SGP).
@@ -731,9 +732,14 @@ class PlayerPropsEngine:
         # Kelly allocation with longshot variance shield
         b = offered_sgp_odds - 1.0
         f_star = max(0.0, (p_joint * (b + 1.0) - 1.0) / max(0.05, b))
-        eff_f = min(0.04, f_star * 0.35)  # quarter-Kelly for parlays
-        raw_stake = bankroll_pen * eff_f
-        stake_pen = round(max(1.00, min(3.50, raw_stake if raw_stake > 0 else 1.00)), 2)
+        if pure_alpha:
+            eff_f = min(0.18, f_star * 0.70)
+            raw_stake = bankroll_pen * eff_f
+            stake_pen = round(max(3.50, min(18.00, raw_stake if raw_stake > 0 else 5.00)), 2)
+        else:
+            eff_f = min(0.04, f_star * 0.35)
+            raw_stake = bankroll_pen * eff_f
+            stake_pen = round(max(1.00, min(3.50, raw_stake if raw_stake > 0 else 1.00)), 2)
 
         is_value = ev_pct >= 3.0 and p_joint >= 0.18
 
@@ -860,6 +866,190 @@ class PlayerPropsEngine:
                         pass
 
         return sgp_opportunities
+
+    def generate_high_probability_parlays(
+        self,
+        slate_games: list[dict[str, Any]],
+        props_list: list[dict[str, Any]],
+        bankroll_pen: float = 100.0,
+        min_leg_prob: float = 0.75,
+    ) -> list[dict[str, Any]]:
+        """
+        V9 Pure Alpha Mode: High-Probability Multi-Leg 'Lock Builder' Generator.
+        Constructs combinations of highly probable events (alt-lines P >= 75-85%, favorite moneyline anchors)
+        that multiply into attractive odds (2.05 - 3.20) with high joint win probability (60% - 70%)
+        and aggressive, unconstrained stakes (S/ 7.50 - S/ 16.00 PEN).
+        """
+        parlays: list[dict[str, Any]] = []
+
+        # 1. Extract Moneyline Anchors (heavy favorites with model win prob >= 70%)
+        ml_anchors: list[dict[str, Any]] = []
+        for g in slate_games:
+            p_home = float(g.get("model_p_home_pct", 50.0)) / 100.0
+            p_away = float(g.get("model_p_away_pct", 50.0)) / 100.0
+            gid = g.get("game_id", "GAME")
+            h_team = g.get("home_team", "HOME")
+            a_team = g.get("away_team", "AWAY")
+            if p_home >= 0.70:
+                ml_anchors.append({
+                    "game_id": gid,
+                    "team": h_team,
+                    "selection": f"{h_team} ML",
+                    "prob": p_home,
+                    "odds": round(max(1.20, min(1.42, 1.0 / p_home * 0.96)), 2),
+                    "type": "ML_ANCHOR",
+                })
+            elif p_away >= 0.70:
+                ml_anchors.append({
+                    "game_id": gid,
+                    "team": a_team,
+                    "selection": f"{a_team} ML",
+                    "prob": p_away,
+                    "odds": round(max(1.20, min(1.42, 1.0 / p_away * 0.96)), 2),
+                    "type": "ML_ANCHOR",
+                })
+
+        # 2. Extract High-Probability Alternate Prop Lines (P >= 75%)
+        alt_props: list[dict[str, Any]] = []
+        for p in props_list:
+            p_mean = float(p.get("projected_mean", 0.0))
+            p_std = float(p.get("projected_std", 1.0))
+            cat = p.get("prop_category", "PTS")
+            if p_mean <= 0 or p_std <= 0:
+                continue
+
+            # Calculate conservative safe line: mean - 0.90 * std -> Prob ~ 81.5%
+            safe_line = max(2.5, math.floor(p_mean - 0.90 * p_std) + 0.5)
+            z = (safe_line - p_mean) / p_std
+            p_over = float(1.0 - norm.cdf(z))
+
+            if p_over >= min_leg_prob:
+                fair_odds = 1.0 / p_over
+                retail_odds = round(max(1.22, min(1.40, fair_odds * 1.04)), 2)
+                alt_props.append({
+                    "game_id": p.get("game_id"),
+                    "player_name": p.get("player_name"),
+                    "team": p.get("team"),
+                    "category": cat,
+                    "line": safe_line,
+                    "selection": "OVER",
+                    "prob": round(p_over, 4),
+                    "odds": retail_odds,
+                    "description": f"{p.get('player_name')} {cat} +{safe_line:.0f}",
+                })
+
+        # 3. Strategy A: Same-Game Anchor SGP (Game ML + Alt Prop from same game)
+        for anchor in ml_anchors:
+            gid = anchor["game_id"]
+            team = anchor["team"]
+            matching_props = [ap for ap in alt_props if ap["game_id"] == gid and ap["team"] == team]
+            if matching_props:
+                best_prop = matching_props[0]
+                legs = [
+                    {"selection": anchor["selection"], "prob": anchor["prob"], "odds": anchor["odds"], "desc": f"{anchor['team']} Victoria Directa"},
+                    {"selection": f"{best_prop['category']} OVER {best_prop['line']}", "prob": best_prop["prob"], "odds": best_prop["odds"], "player_name": best_prop["player_name"], "desc": best_prop["description"]},
+                ]
+                rho = 0.35
+                p1, p2 = anchor["prob"], best_prop["prob"]
+                cov = np.array([[1.0, rho], [rho, 1.0]])
+                z_draws = np.random.default_rng(42).multivariate_normal([0.0, 0.0], cov, size=5000)
+                joint_p = float(np.mean((norm.cdf(z_draws[:, 0]) <= p1) & (norm.cdf(z_draws[:, 1]) <= p2)))
+
+                combined_odds = round(anchor["odds"] * best_prop["odds"] * 1.25, 2)
+                combined_odds = max(2.10, combined_odds)
+                ev_pct = round(((joint_p * combined_odds) - 1.0) * 100.0, 2)
+
+                b = combined_odds - 1.0
+                f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / b)
+                suggested_stake = round(max(6.00, min(16.00, bankroll_pen * f_k * 0.70)), 2)
+
+                parlays.append({
+                    "parlay_id": f"HP_SGP_{gid}_{uuid.uuid4().hex[:6]}",
+                    "type": "RETABET_SGP",
+                    "strategy": "SAME_GAME_ANCHOR",
+                    "game_id": gid,
+                    "bookmaker": "RETAbet Perú",
+                    "num_legs": len(legs),
+                    "legs": legs,
+                    "offered_sgp_odds": combined_odds,
+                    "decimal_odds": combined_odds,
+                    "p_joint": round(joint_p, 4),
+                    "win_probability_pct": round(joint_p * 100.0, 1),
+                    "ev_pct": ev_pct,
+                    "kelly_stake_pen": suggested_stake,
+                    "stake_pen": suggested_stake,
+                    "rationale": (
+                        f"[COMBINADA DE ALTA PROBABILIDAD SGP] {legs[0]['desc']} + {legs[1]['desc']}. "
+                        f"Probabilidad de Acierto: {joint_p * 100.0:.1f}%. Cuota Combinada: {combined_odds:.2f} (EV: +{ev_pct:.1f}%). "
+                        f"Stake Alfa: S/ {suggested_stake:.2f} PEN."
+                    ),
+                    "emitted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                })
+
+        # 4. Strategy B: Cross-Game Multi-Match Power Parlay
+        all_independent_legs: list[dict[str, Any]] = []
+        for anc in ml_anchors:
+            all_independent_legs.append({
+                "game_id": anc["game_id"],
+                "desc": f"{anc['selection']} ({anc['team']})",
+                "prob": anc["prob"],
+                "odds": anc["odds"],
+            })
+        for ap in alt_props:
+            all_independent_legs.append({
+                "game_id": ap["game_id"],
+                "desc": ap["description"],
+                "prob": ap["prob"],
+                "odds": ap["odds"],
+                "player_name": ap["player_name"],
+            })
+
+        games_seen = set()
+        distinct_legs = []
+        for leg in sorted(all_independent_legs, key=lambda x: x["prob"], reverse=True):
+            if leg["game_id"] not in games_seen:
+                distinct_legs.append(leg)
+                games_seen.add(leg["game_id"])
+            if len(distinct_legs) >= 3:
+                break
+
+        if len(distinct_legs) >= 2:
+            combined_odds = 1.0
+            joint_p = 1.0
+            for l in distinct_legs[:3]:
+                combined_odds *= l["odds"]
+                joint_p *= l["prob"]
+
+            combined_odds = round(max(2.05, combined_odds), 2)
+            ev_pct = round(((joint_p * combined_odds) - 1.0) * 100.0, 2)
+            b = combined_odds - 1.0
+            f_k = max(0.0, (joint_p * (b + 1.0) - 1.0) / max(0.05, b))
+            suggested_stake = round(max(5.00, min(14.00, bankroll_pen * f_k * 0.65)), 2)
+
+            parlays.append({
+                "parlay_id": f"HP_POWER_PARLAY_{uuid.uuid4().hex[:6]}",
+                "type": "RETABET_SGP",
+                "strategy": "MULTI_MATCH_POWER_PARLAY",
+                "game_id": "CROSS_SLATE",
+                "bookmaker": "RETAbet / Betsson Perú",
+                "num_legs": len(distinct_legs[:3]),
+                "legs": distinct_legs[:3],
+                "offered_sgp_odds": combined_odds,
+                "decimal_odds": combined_odds,
+                "p_joint": round(joint_p, 4),
+                "win_probability_pct": round(joint_p * 100.0, 1),
+                "ev_pct": ev_pct,
+                "kelly_stake_pen": suggested_stake,
+                "stake_pen": suggested_stake,
+                "rationale": (
+                    f"[SUPER COMBINADA MULTI-PARTIDO] {' + '.join(l['desc'] for l in distinct_legs[:3])}. "
+                    f"Probabilidad Conjunta: {joint_p * 100.0:.1f}%. Cuota Combinada: {combined_odds:.2f} (EV: +{ev_pct:.1f}%). "
+                    f"Stake Alfa: S/ {suggested_stake:.2f} PEN."
+                ),
+                "emitted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            })
+
+        return parlays
 
     def generate_slate_prop_opportunities(
         self,
@@ -1085,7 +1275,14 @@ class PlayerPropsEngine:
         sgp_candidates.sort(key=lambda x: x.get("ev_pct", 0.0), reverse=True)
         top_sgp_candidates = sgp_candidates[:8]
 
-        consolidated = top_individual_props + top_sgp_candidates
+        # Generate High-Probability Multi-Leg "Lock Builder" Parlays (Pure Alpha Mode)
+        high_prob_parlays = self.generate_high_probability_parlays(
+            slate_games=valid_slate_games,
+            props_list=top_individual_props,
+            bankroll_pen=bankroll_pen,
+        )
+
+        consolidated = high_prob_parlays + top_sgp_candidates + top_individual_props
 
         # Persist to data/evaluation/latest_player_props.json
         out_file = Path("data/evaluation/latest_player_props.json")

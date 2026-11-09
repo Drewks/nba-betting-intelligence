@@ -71,8 +71,10 @@ class PaperTradingEngine:
         dynamic_conviction_staking: bool = False,
         exclude_synthetic: bool = False,
         single_bet_per_game: bool = True,
+        enable_cppi_shield: bool = False,
+        staking_mode: str = "CONSERVATIVE",
     ) -> None:
-        max_allowed = 10.00 if dynamic_conviction_staking else 1.00
+        max_allowed = 25.00 if dynamic_conviction_staking else 1.00
         if max_stake_pen > max_allowed or base_stake_pen > max_stake_pen or base_stake_pen <= 0.0:
             raise RiskLimitError(
                 f"Stake limits must satisfy 0 < base_stake <= max_stake <= S/{max_allowed:.2f} PEN."
@@ -84,6 +86,8 @@ class PaperTradingEngine:
         self.max_selections_per_matchday = int(max_selections_per_matchday)
         self.min_ev_threshold = float(min_ev_threshold)
         self.dynamic_conviction_staking = bool(dynamic_conviction_staking)
+        self.enable_cppi_shield = bool(enable_cppi_shield)
+        self.staking_mode = str(staking_mode)
         # When True, bankroll / metrics only count bets on REAL games (synthetic SYN_* fixtures are archived benchmarks)
         self.exclude_synthetic = bool(exclude_synthetic)
         # Anti-correlation: limit maximum exposure to at most 1 active bet per game across all markets
@@ -248,51 +252,71 @@ class PaperTradingEngine:
         apply_clv_governor: bool = True,
         conformal_width: float | None = None,
         ev_lower_bound: float | None = None,
-        apply_cppi_shield: bool = True,
+        apply_cppi_shield: bool | None = None,
         peak_bankroll_pen: float | None = None,
     ) -> float:
         """
-        Calculates contextual Kelly-Conviction stake (S/1.00 to S/6.00 PEN on ~S/100 bankroll):
-        - Low probability / Underdog (<50%): S/1.00 - S/1.75 PEN
-        - Medium probability (50% - 58%): S/2.00 - S/3.25 PEN
-        - High probability (58% - 65%): S/3.50 - S/4.75 PEN
-        - Maximum conviction (>=65%): S/4.80 - S/6.00 PEN
-        Also integrates 10,000-Simulation Monte Carlo Overtime Risk (protects UNDERs when OT risk >= 6.8%),
-        V7 Venn-Abers Conformal Interval tight-spread bonus / wide-spread discount,
-        and Lower-Bound EV conservatism.
+        Calculates contextual Kelly-Conviction stake:
+        - MODO ALFA PURO (Confianza Ciega en el Modelo, sin freno CPPI por defecto):
+          * Underdog (<50%): S/ 3.50 - S/ 5.50 PEN
+          * Medium probability (50% - 58%): S/ 6.00 - S/ 9.50 PEN
+          * High probability (58% - 65%): S/ 10.00 - S/ 14.50 PEN
+          * Maximum conviction (>=65%): S/ 15.00 - S/ 20.00 PEN
+        Also integrates Monte Carlo Overtime Guard, Venn-Abers Conformal bounds,
+        and sharp steam move modulation.
         """
         p = max(0.01, min(0.99, float(calibrated_prob)))
         b = max(0.05, float(decimal_odds) - 1.0)
         f_kelly = max(0.0, (p * (b + 1.0) - 1.0) / b)
 
-        # Human-like probability conviction tiers
-        if p < 0.50:
-            # Underdog / lower win rate -> protect capital with small stake
-            tier_base = 1.00 + max(0.0, (p - 0.35) / 0.15) * 0.55
-            kelly_bonus = min(0.25, f_kelly * 1.2)
-        elif p < 0.58:
-            # Medium probability -> moderate contextual stake
-            tier_base = 2.00 + ((p - 0.50) / 0.08) * 0.95
-            kelly_bonus = min(0.35, f_kelly * 1.5)
-        elif p < 0.65:
-            # High probability -> strong conviction stake
-            tier_base = 3.50 + ((p - 0.58) / 0.07) * 0.95
-            kelly_bonus = min(0.40, f_kelly * 1.8)
+        mode = getattr(self, "staking_mode", "AGGRESSIVE_ALPHA")
+
+        if mode == "AGGRESSIVE_ALPHA":
+            # Pure Alpha Mode: Blindly trust the model, high-impact conviction sizing
+            if p < 0.50:
+                tier_base = 3.50 + max(0.0, (p - 0.35) / 0.15) * 2.00
+                kelly_bonus = min(2.00, f_kelly * 4.0)
+            elif p < 0.58:
+                tier_base = 6.00 + ((p - 0.50) / 0.08) * 3.50
+                kelly_bonus = min(3.00, f_kelly * 6.0)
+            elif p < 0.65:
+                tier_base = 10.00 + ((p - 0.58) / 0.07) * 4.50
+                kelly_bonus = min(4.50, f_kelly * 8.0)
+            else:
+                # Star Pick / Lock (>=65% win probability)
+                tier_base = 15.00 + min(1.0, (p - 0.65) / 0.10) * 5.00
+                kelly_bonus = min(5.00, f_kelly * 10.0)
+
+            edge_modulator = min(1.0, max(0.40, float(ev_unit) / 0.06))
+            modulated_tier = 3.00 + (tier_base - 3.00) * edge_modulator
+            raw_stake = modulated_tier + kelly_bonus
+            min_stake_floor = 2.50
+
+            # Reasonable longshot moderation only on extreme outliers (odds > 4.00)
+            if decimal_odds > 4.00:
+                raw_stake = min(raw_stake, 6.00)
         else:
-            # Star Pick (>=65% win probability) -> maximum conviction stake
-            tier_base = 4.80 + min(1.0, (p - 0.65) / 0.10) * 0.85
-            kelly_bonus = min(0.45, f_kelly * 2.0)
+            # Conservative baseline tiers
+            if p < 0.50:
+                tier_base = 1.00 + max(0.0, (p - 0.35) / 0.15) * 0.55
+                kelly_bonus = min(0.25, f_kelly * 1.2)
+            elif p < 0.58:
+                tier_base = 2.00 + ((p - 0.50) / 0.08) * 0.95
+                kelly_bonus = min(0.35, f_kelly * 1.5)
+            elif p < 0.65:
+                tier_base = 3.50 + ((p - 0.58) / 0.07) * 0.95
+                kelly_bonus = min(0.40, f_kelly * 1.8)
+            else:
+                tier_base = 4.80 + min(1.0, (p - 0.65) / 0.10) * 0.85
+                kelly_bonus = min(0.45, f_kelly * 2.0)
 
-        # Edge-Scaling Modulator (Priority 1 Improvement):
-        # A high probability pick with a tiny edge (e.g. EV <= 2%) should NOT risk maximum capital.
-        # Dampen the conviction tier when EV is small, and allow full conviction when EV >= 8%.
-        edge_modulator = min(1.0, max(0.20, float(ev_unit) / 0.08))
-        modulated_tier = 1.00 + (tier_base - 1.00) * edge_modulator
-        raw_stake = modulated_tier + kelly_bonus
+            edge_modulator = min(1.0, max(0.20, float(ev_unit) / 0.08))
+            modulated_tier = 1.00 + (tier_base - 1.00) * edge_modulator
+            raw_stake = modulated_tier + kelly_bonus
+            min_stake_floor = 1.00
 
-        # Extra caution on high-variance longshots (odds > 2.50)
-        if decimal_odds > 2.50:
-            raw_stake = min(raw_stake, 1.65)
+            if decimal_odds > 2.50:
+                raw_stake = min(raw_stake, 1.65)
 
         # Monte Carlo Overtime Guard: if betting UNDER in a game with high OT probability (>= 6.8%), trim stake 15%
         if str(selection).upper() == "UNDER" and float(overtime_prob) >= 0.068:
@@ -300,9 +324,9 @@ class PaperTradingEngine:
 
         # Conformal Agreement / Uncertainty adjustment
         if uncertainty_std > 0.08:
-            raw_stake *= 0.82
+            raw_stake *= 0.85
         elif uncertainty_std <= 0.045:
-            raw_stake *= 1.08
+            raw_stake *= 1.10
 
         # V7 Venn-Abers Conformal Interval & Lower-Bound EV Modulation
         if conformal_width is not None:
@@ -315,7 +339,7 @@ class PaperTradingEngine:
 
         # Sharp Steam Move Modulation (V6)
         if float(steam_delta) >= 0.020:
-            raw_stake *= 1.06
+            raw_stake *= 1.08
         elif float(steam_delta) <= -0.020:
             raw_stake *= 0.85
 
@@ -328,12 +352,14 @@ class PaperTradingEngine:
         bankroll_scale = max(0.80, min(1.50, float(current_bankroll_pen) / max(1.0, self.initial_bankroll_pen)))
         scaled_stake = raw_stake * bankroll_scale
 
-        # V9 Phase 5: Constant Proportion Portfolio Insurance (CPPI) Capital Preservation Shield
-        if apply_cppi_shield:
+        # CPPI Capital Preservation Shield: disabled by default in Pure Alpha Mode
+        # Only activates if explicitly requested or if enable_cppi_shield is set to True
+        should_apply_cppi = apply_cppi_shield if apply_cppi_shield is not None else getattr(self, "enable_cppi_shield", False)
+        if should_apply_cppi:
             cppi_mult = self.compute_cppi_multiplier(current_bankroll_pen, peak_bankroll_override=peak_bankroll_pen)
             scaled_stake *= cppi_mult
 
-        return round(max(1.00, min(self.max_stake_pen, scaled_stake)), 2)
+        return round(max(min_stake_floor, min(self.max_stake_pen, scaled_stake)), 2)
 
     def compute_cppi_multiplier(
         self,

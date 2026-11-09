@@ -3223,8 +3223,8 @@ def test_49_telegram_interactive_listener_and_commands(tmp_path: Path) -> None:
     )
     assert "ESTADO DE LA BANCA VIRTUAL" in banca_resp
     assert "S/ 100.00 PEN" in banca_resp or "S/ 99." in banca_resp
-    assert "Suelo CPPI (85%):" in banca_resp
-    assert "Paper Trading Estricto" in banca_resp
+    assert "MODO ALFA PURO" in banca_resp or "Suelo CPPI" in banca_resp
+    assert "Régimen:" in banca_resp
 
     # 4. Authorized /picks
     picks_resp = listener.process_message(
@@ -3289,3 +3289,112 @@ def test_49_telegram_interactive_listener_and_commands(tmp_path: Path) -> None:
     assert replies_sent[0][0] == 5198335170
     assert "ESTADO DE LA BANCA VIRTUAL" in replies_sent[0][1]
     assert listener.last_update_id == 1002
+
+
+# 50. V9 Pure Alpha Mode: Unconstrained High-Conviction Staking & High-Probability Parlays
+def test_50_unconstrained_staking_and_high_prob_parlays(tmp_path: Path) -> None:
+    """
+    Test 50: Verification of Pure Alpha Mode:
+    1. Unconstrained Contextual Staking (No CPPI Shield):
+       - High conviction picks allocate S/ 10.00 to S/ 20.00 PEN.
+       - Stakes are NOT dampened by CPPI floor when enable_cppi_shield=False.
+    2. High-Probability Multi-Leg Parlay & SGP Generator:
+       - Uses safe alternate lines (P >= 75%) and moneyline anchors.
+       - Multiplies into solid odds (>= 2.05) with high joint probability (>= 55%).
+       - Produces aggressive stakes (>= S/ 6.00 PEN).
+    3. Telegram High-Probability Parlay alert formatting.
+    """
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.prediction.player_props import PlayerPropsEngine
+    from src.reporting.telegram_bot import TelegramAlertBot
+    from src.storage.db import DatabaseManager
+
+    db = DatabaseManager(tmp_path / "test_pure_alpha.sqlite3")
+
+    # 1. Unconstrained Staking Engine (Pure Alpha Mode)
+    engine_alpha = PaperTradingEngine(
+        db=db,
+        initial_bankroll_pen=100.0,
+        base_stake_pen=3.50,
+        max_stake_pen=20.00,
+        dynamic_conviction_staking=True,
+        enable_cppi_shield=False,
+        staking_mode="AGGRESSIVE_ALPHA",
+    )
+
+    stake_star = engine_alpha.compute_contextual_stake_pen(
+        calibrated_prob=0.66,
+        decimal_odds=1.85,
+        ev_unit=0.22,
+        current_bankroll_pen=100.0,
+    )
+    assert stake_star >= 15.00  # High conviction lock gets strong allocation
+
+    # Verify that without CPPI shield, a distressed bankroll does NOT get choked
+    stake_at_86_no_shield = engine_alpha.compute_contextual_stake_pen(
+        calibrated_prob=0.60,
+        decimal_odds=1.90,
+        ev_unit=0.14,
+        current_bankroll_pen=86.0,
+        apply_cppi_shield=False,
+    )
+    assert stake_at_86_no_shield >= 8.00  # Stays strong because model is trusted blindly
+
+    # 2. High-Probability Parlay Generator
+    props_engine = PlayerPropsEngine(db=db)
+    mock_slate = [
+        {
+            "game_id": "G_ALPHA_1",
+            "home_team": "BOS",
+            "away_team": "DET",
+            "model_p_home_pct": 82.0,  # Heavy favorite anchor
+            "model_p_away_pct": 18.0,
+        },
+        {
+            "game_id": "G_ALPHA_2",
+            "home_team": "DEN",
+            "away_team": "UTA",
+            "model_p_home_pct": 78.0,  # Heavy favorite anchor
+            "model_p_away_pct": 22.0,
+        },
+    ]
+    mock_props = [
+        {
+            "game_id": "G_ALPHA_1",
+            "player_name": "Jayson Tatum",
+            "team": "BOS",
+            "prop_category": "PTS",
+            "projected_mean": 27.5,
+            "projected_std": 6.0,
+        },
+        {
+            "game_id": "G_ALPHA_2",
+            "player_name": "Nikola Jokic",
+            "team": "DEN",
+            "prop_category": "REB",
+            "projected_mean": 12.5,
+            "projected_std": 3.0,
+        },
+    ]
+
+    parlays = props_engine.generate_high_probability_parlays(
+        slate_games=mock_slate,
+        props_list=mock_props,
+        bankroll_pen=100.0,
+        min_leg_prob=0.75,
+    )
+
+    assert len(parlays) >= 1
+    best_parlay = parlays[0]
+    assert best_parlay["offered_sgp_odds"] >= 2.05
+    assert best_parlay["p_joint"] >= 0.50
+    assert best_parlay["ev_pct"] > 0.0
+    assert best_parlay["stake_pen"] >= 6.00
+
+    # 3. Telegram High-Probability Parlay alert formatting
+    bot = TelegramAlertBot()
+    alert_msg = bot.format_high_prob_parlay_alert(best_parlay)
+    assert "COMBINADA DE ALTA PROBABILIDAD (MODO ALFA)" in alert_msg
+    assert "Probabilidad de Acierto:" in alert_msg
+    assert "Cuota Combinada:" in alert_msg
+    assert "Stake Alfa Sugerido:" in alert_msg

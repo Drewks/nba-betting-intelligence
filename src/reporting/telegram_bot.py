@@ -160,6 +160,40 @@ class TelegramAlertBot:
         )
         return msg
 
+    def format_high_prob_parlay_alert(self, parlay: dict[str, Any]) -> str:
+        """Formats a High-Probability Lock Builder Parlay (Pure Alpha Mode)."""
+        num_legs = parlay.get("num_legs", len(parlay.get("legs", [])))
+        strat = parlay.get("strategy", "SAME_GAME_ANCHOR")
+        strat_label = "Mismo Partido (SGP)" if strat == "SAME_GAME_ANCHOR" else "Cruzada Multi-Partido"
+        book = parlay.get("bookmaker", "RETAbet / Betsson Perú")
+        odds = float(parlay.get("decimal_odds") or parlay.get("offered_sgp_odds") or 2.30)
+        win_p = float(parlay.get("win_probability_pct") or (float(parlay.get("p_joint", 0.65)) * 100.0))
+        ev = float(parlay.get("ev_pct", 25.0))
+        stake = float(parlay.get("stake_pen") or parlay.get("kelly_stake_pen") or 8.50)
+
+        legs_text = ""
+        for i, leg in enumerate(parlay.get("legs", []), 1):
+            desc = leg.get("desc") or leg.get("selection") or f"Leg {i}"
+            leg_p = float(leg.get("prob", 0.80)) * 100.0
+            leg_odds = float(leg.get("odds", 1.28))
+            legs_text += f"  {i}. {desc} @ `{leg_odds:.2f}` (Prob: `{leg_p:.1f}%`)\n"
+
+        msg = (
+            f"🔥 *COMBINADA DE ALTA PROBABILIDAD (MODO ALFA)*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎯 *Estrategia:* *{strat_label}*\n"
+            f"🏦 *Casa Sugerida:* *{book}*\n"
+            f"📋 *Selecciones de Alta Consistencia:*\n{legs_text}"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 *Probabilidad de Acierto:* *{win_p:.1f}%*\n"
+            f"💰 *Cuota Combinada:* `{odds:.2f}`\n"
+            f"⚡ *Valor Esperado (EV):* `+{ev:.1f}%`\n"
+            f"💵 *Stake Alfa Sugerido:* *S/ {stake:.2f} PEN*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🚀 _Eventos de máxima probabilidad multiplicados para óptimo rendimiento._"
+        )
+        return msg
+
     def format_stale_line_alert(self, stale: dict[str, Any]) -> str:
         """Formats a fast-breaking stale line latency opportunity."""
         retail_book = stale.get("retail_provider", "RETAbet Perú")

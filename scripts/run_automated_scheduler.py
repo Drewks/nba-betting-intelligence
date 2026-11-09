@@ -65,9 +65,11 @@ class NBADailyScheduler:
         self.paper_engine = PaperTradingEngine(
             db=self.db,
             initial_bankroll_pen=100.00,
-            base_stake_pen=1.00,
-            max_stake_pen=6.00,
+            base_stake_pen=3.50,
+            max_stake_pen=20.00,
             dynamic_conviction_staking=True,
+            enable_cppi_shield=False,
+            staking_mode="AGGRESSIVE_ALPHA",
             exclude_synthetic=True,
         )
 

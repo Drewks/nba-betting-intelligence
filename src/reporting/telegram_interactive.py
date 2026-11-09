@@ -57,9 +57,11 @@ class TelegramInteractiveListener:
         self.paper_engine = PaperTradingEngine(
             db=self.db,
             initial_bankroll_pen=100.00,
-            base_stake_pen=1.00,
-            max_stake_pen=6.00,
+            base_stake_pen=3.50,
+            max_stake_pen=20.00,
             dynamic_conviction_staking=True,
+            enable_cppi_shield=False,
+            staking_mode="AGGRESSIVE_ALPHA",
             exclude_synthetic=True,
         )
         self.bot = TelegramAlertBot(bot_token=self.bot_token, chat_id=list(self.allowed_chat_ids)[0] if self.allowed_chat_ids else None)
@@ -230,10 +232,6 @@ class TelegramInteractiveListener:
         wr = (won / total_settled * 100.0) if total_settled > 0 else 0.0
         roi = ((settled - initial) / initial * 100.0)
 
-        # CPPI Floor
-        cppi_floor = peak * 0.85
-        cppi_cushion = max(0.0, settled - cppi_floor)
-
         pnl_symbol = "🟢" if pnl >= 0 else "🔴"
         pnl_sign = "+" if pnl >= 0 else ""
 
@@ -247,9 +245,10 @@ class TelegramInteractiveListener:
             f"{pnl_symbol} *PnL Acumulado:* *{pnl_sign}S/ {pnl:.2f} PEN* (`{roi:+.2f}% ROI`)\n"
             f"🏆 *Récord:* `{won}W - {lost}L - {push}P` (Win Rate: `{wr:.1f}%`)\n"
             f"📈 *Pico Histórico:* `S/ {peak:.2f} PEN`\n"
-            f"🛡️ *Suelo CPPI (85%):* `S/ {cppi_floor:.2f} PEN` (Cojín: `S/ {cppi_cushion:.2f}`)\n"
+            f"⚡ *Modo de Operación:* *MODO ALFA PURO (Sin Escudo)*\n"
+            f"🎯 *Rango de Stakes:* *S/ 3.50 a S/ 20.00 PEN (Alta Convicción)*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚙️ _Régimen: Paper Trading Estricto (Cero dinero real)_"
+            f"⚙️ _Régimen: Confianza Plena en el Modelo Cuantitativo_"
         )
 
     def handle_picks(self) -> str:
@@ -328,19 +327,20 @@ class TelegramInteractiveListener:
         if sgps:
             best_sgp = sgps[0]
             num_legs = best_sgp.get("num_legs", len(best_sgp.get("legs", []))) or 2
-            odds = float(best_sgp.get("offered_sgp_odds", 3.40))
-            ev = float(best_sgp.get("ev_pct", 15.0))
-            stake = float(best_sgp.get("kelly_stake_pen", 2.00))
+            odds = float(best_sgp.get("offered_sgp_odds", best_sgp.get("decimal_odds", 2.30)))
+            ev = float(best_sgp.get("ev_pct", 20.0))
+            stake = float(best_sgp.get("stake_pen") or best_sgp.get("kelly_stake_pen") or 8.50)
+            win_p = float(best_sgp.get("win_probability_pct") or (float(best_sgp.get("p_joint", 0.65)) * 100.0))
+            book = best_sgp.get("bookmaker", "RETAbet Perú")
 
-            lines.append(f"⚡ *Top SGP Correlacionado ({num_legs} Legs):*")
+            lines.append(f"⚡ *Top Combinada de Alta Probabilidad ({num_legs} Legs):*")
             for leg in best_sgp.get("legs", []):
-                p_n = leg.get("player_name", "Jugador")
-                cat = leg.get("category", "")
-                sel = leg.get("selection", "")
-                val = leg.get("line", "")
-                lines.append(f"   • {p_n}: {cat} {sel} {val}")
+                desc = leg.get("desc") or leg.get("selection") or "Leg"
+                leg_odds = float(leg.get("odds", 1.28))
+                lines.append(f"   • {desc} @ `{leg_odds:.2f}`")
+            lines.append(f"   🎯 *Probabilidad de Acierto:* *{win_p:.1f}%*")
             lines.append(f"   💰 *Cuota Combinada:* `{odds:.2f}` (EV: `+{ev:.1f}%`)")
-            lines.append(f"   💵 *Stake Sugerido:* *S/ {stake:.2f} PEN* (RETAbet)")
+            lines.append(f"   💵 *Stake Alfa Sugerido:* *S/ {stake:.2f} PEN* ({book})")
             lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
 
         if indiv:
