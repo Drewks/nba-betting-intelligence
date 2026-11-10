@@ -118,6 +118,36 @@ def calculate_ev(estimated_prob: float, decimal_odds: float) -> dict[str, float]
 
 SHARP_BOOK_KEYWORDS: tuple[str, ...] = ("pinnacle", "betfair", "matchbook", "lowvig", "circa", "bookmaker")
 
+
+def canonical_bookmaker_name(provider: str) -> str:
+    """Canonicalizes provider names across line-shopping and scraped data feeds."""
+    s = str(provider or "").strip().lower()
+    if "pinnacle" in s:
+        return "pinnacle"
+    if "draftkings" in s or "draft kings" in s:
+        return "draftkings"
+    if "fanduel" in s or "fan duel" in s:
+        return "fanduel"
+    if "betmgm" in s or "bet mgm" in s:
+        return "betmgm"
+    if "caesars" in s:
+        return "caesars"
+    if "bet365" in s:
+        return "bet365"
+    if "betfair" in s:
+        return "betfair"
+    if "retabet" in s:
+        return "retabet"
+    if "betano" in s:
+        return "betano"
+    if "inkabet" in s:
+        return "inkabet"
+    if "doradobet" in s:
+        return "doradobet"
+    if "bovada" in s:
+        return "bovada"
+    return s
+
 # Weight of the (calibrated) model probability when blending with the de-vigged market consensus.
 # Sharp NBA closing lines are very efficient; a pure model estimate that disagrees by 10+ points
 # is far more likely to be model error than edge. 0.30 is a conservative prior until enough real
@@ -131,31 +161,36 @@ def compute_market_consensus(odds_rows: list[dict[str, Any]], method: str = "shi
     De-vigged fair probability consensus per (market, selection, line_value).
     Prefers sharp books (Pinnacle, Betfair, Matchbook, LowVig...) and falls back to the median of
     all books. Only rows with a counterpart price (two-way market) are used.
+    Deduplicates across canonical bookmakers so repeated snapshots from the same bookmaker
+    do not distort the consensus median or inflate n_books.
     Supports method='shin' (default, corrects favorite-longshot bias), 'power', or 'multiplicative'.
     """
     devig_fn = devig_shin if method == "shin" else (devig_power if method == "power" else devig_multiplicative)
-    groups: dict[tuple[str, str, float | None], dict[str, list[float]]] = {}
-    for o in odds_rows:
+    groups: dict[tuple[str, str, float | None], dict[str, dict[str, float]]] = {}
+    sorted_rows = sorted(odds_rows, key=lambda r: str(r.get("captured_at") or ""))
+    for o in sorted_rows:
         cp = o.get("counterpart_decimal_odds")
         if cp is None or float(cp) <= 1.0 or float(o.get("decimal_odds") or 0.0) <= 1.0:
             continue
         p_fair, _, _ = devig_fn(float(o["decimal_odds"]), float(cp))
         key = (o["market"], o["selection"], o.get("line_value"))
-        bucket = groups.setdefault(key, {"sharp": [], "all": []})
-        bucket["all"].append(p_fair)
-        if any(k in str(o.get("provider", "")).lower() for k in SHARP_BOOK_KEYWORDS):
-            bucket["sharp"].append(p_fair)
+        bucket = groups.setdefault(key, {"sharp": {}, "all": {}})
+        canon = canonical_bookmaker_name(str(o.get("provider", "")))
+        bucket["all"][canon] = p_fair
+        if any(k in canon for k in SHARP_BOOK_KEYWORDS):
+            bucket["sharp"][canon] = p_fair
 
     out: dict[tuple[str, str, float | None], dict[str, Any]] = {}
     for key, b in groups.items():
-        src = b["sharp"] if b["sharp"] else b["all"]
+        src_map = b["sharp"] if b["sharp"] else b["all"]
+        src = list(src_map.values())
         srt = sorted(src)
         mid = len(srt) // 2
         median = srt[mid] if len(srt) % 2 else 0.5 * (srt[mid - 1] + srt[mid])
         out[key] = {
             "p_market": round(median, 6),
             "source": "sharp" if b["sharp"] else "consensus",
-            "n_books": len(src),
+            "n_books": len(src_map),
         }
     return out
 

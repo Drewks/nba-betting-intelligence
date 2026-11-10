@@ -12,10 +12,10 @@ All transactions are logged to `parlay_bankroll_ledger` and `parlay_bets` with i
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 import logging
 from typing import Any
-import uuid
 
 from src.storage.db import DatabaseManager
 
@@ -177,7 +177,12 @@ class ParlayTradingEngine:
                 f"Insufficient available sub-bankroll: S/{state['available_balance_pen']:.2f} available, S/{stake:.2f} requested."
             )
 
-        parlay_id = parlay_dict.get("parlay_id") or f"PARLAY_{uuid.uuid4().hex[:10].upper()}"
+        if parlay_dict.get("parlay_id"):
+            parlay_id = str(parlay_dict["parlay_id"])
+        else:
+            legs_repr = json.dumps(legs, sort_keys=True, ensure_ascii=False)
+            hash_id = hashlib.sha256(f"{m_date}_{strategy_type}_{legs_repr}".encode("utf-8")).hexdigest()[:12].upper()
+            parlay_id = f"PARLAY_{hash_id}"
         emitted_at = parlay_dict.get("emitted_at") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Atomic insert
@@ -417,28 +422,37 @@ class ParlayTradingEngine:
 
             legs = cand.get("legs")
             if not legs and "sgp_id" in cand:
-                # Reconstruct legs from SGP candidate
+                # Reconstruct legs from SGP candidate if missing, deriving odds dynamically without hardcoded constants
                 gid = cand.get("game_id", "")
+                total_sgp_odd = float(cand.get("offered_sgp_odds") or cand.get("decimal_odds") or 2.0)
+                p_game = float(cand.get("p_game") or 0.55)
+                g_odd = round(float(cand.get("game_odds") or (1.0 / max(0.05, p_game))), 2)
+                p_odd = round(float(cand.get("prop_odds") or (total_sgp_odd / max(1.05, g_odd))), 2)
                 legs = [
                     {
                         "game_id": gid,
                         "market": "moneyline",
                         "selection": cand.get("game_selection", "HOME"),
-                        "odds": 1.70,
+                        "odds": g_odd,
                         "desc": f"{cand.get('team', 'Game')} Victoria",
                     },
                     {
                         "game_id": gid,
                         "market": f"player_{cand.get('prop_category', 'points')}",
+                        "prop_category": cand.get("prop_category", "points"),
                         "selection": cand.get("prop_selection", "OVER"),
                         "line_value": float(cand.get("prop_line") or 0.0),
                         "player_name": cand.get("player_name", "Player"),
-                        "odds": 1.85,
+                        "odds": p_odd,
                         "desc": f"{cand.get('player_name')} {cand.get('prop_category')} {cand.get('prop_selection')} {cand.get('prop_line')}",
                     },
                 ]
 
             if not legs or len(legs) < 2:
+                continue
+
+            # Reject any legs with non-positive or sub-1.0 odds
+            if any(float(leg_item.get("odds") or leg_item.get("decimal_odds") or 0.0) <= 1.0 for leg_item in legs):
                 continue
 
             # Sizing
@@ -511,14 +525,29 @@ class ParlayTradingEngine:
         # Player Prop
         player_name = leg.get("player_name")
         if player_name or market.startswith("player_") or "alt_prop" in leg:
-            p_stats = boxscore.get(player_name, {}) if player_name else {}
-            # If boxscore is present and player didn't play a single minute, leg is VOID
-            if boxscore and (not p_stats or p_stats.get("minutes", 0.0) == 0.0):
-                return {"status": "VOID", "summary": f"{player_name} DNP (Void)"}
+            p_stats: dict[str, float] = {}
+            if player_name and boxscore:
+                p_lower = str(player_name).strip().lower()
+                for b_name, b_val in boxscore.items():
+                    b_lower = str(b_name).strip().lower()
+                    if b_lower == p_lower or b_lower in p_lower or p_lower in b_lower:
+                        p_stats = {str(k).strip().lower(): float(v) for k, v in b_val.items()}
+                        break
+
+            # If boxscore is present and player didn't record stats and played 0 minutes, leg is VOID
+            if boxscore and player_name:
+                has_minutes = "minutes" in p_stats or "min" in p_stats
+                minutes_val = float(p_stats.get("minutes", p_stats.get("min", 0.0)))
+                has_any_stats = any(
+                    v > 0.0 for k, v in p_stats.items()
+                    if k in ("pts", "reb", "ast", "3pm", "3pt", "pra", "fga", "fgm")
+                )
+                if not p_stats or (has_minutes and minutes_val == 0.0 and not has_any_stats):
+                    return {"status": "VOID", "summary": f"{player_name} DNP (Void)"}
 
             cat = str(leg.get("prop_category") or leg.get("category") or "").lower()
             if not cat:
-                for k in ["points", "assists", "rebounds", "threes", "pra"]:
+                for k in ["points", "assists", "rebounds", "threes", "pra", "pa", "pr", "ra"]:
                     if k in market or k in str(leg.get("desc", "")).lower():
                         cat = k
                         break
@@ -530,14 +559,33 @@ class ParlayTradingEngine:
                 "ast": "ast",
                 "rebounds": "reb",
                 "reb": "reb",
-                "threes": "threes",
-                "3pm": "threes",
+                "threes": "3pm",
+                "3pm": "3pm",
+                "3pt": "3pm",
                 "pra": "pra",
+                "pa": "pa",
+                "pr": "pr",
+                "ra": "ra",
             }
             stat_key = stat_map.get(cat, "pts")
-            actual_val = float(p_stats.get(stat_key, 0.0))
-            if cat == "pra" and "pra" not in p_stats:
-                actual_val = float(p_stats.get("pts", 0.0)) + float(p_stats.get("reb", 0.0)) + float(p_stats.get("ast", 0.0))
+
+            pts_val = float(p_stats.get("pts", 0.0))
+            reb_val = float(p_stats.get("reb", 0.0))
+            ast_val = float(p_stats.get("ast", 0.0))
+            threes_val = float(p_stats.get("3pm", p_stats.get("3pt", p_stats.get("threes", 0.0))))
+
+            if stat_key == "pra":
+                actual_val = float(p_stats.get("pra", pts_val + reb_val + ast_val))
+            elif stat_key == "pa":
+                actual_val = float(p_stats.get("pa", pts_val + ast_val))
+            elif stat_key == "pr":
+                actual_val = float(p_stats.get("pr", pts_val + reb_val))
+            elif stat_key == "ra":
+                actual_val = float(p_stats.get("ra", reb_val + ast_val))
+            elif stat_key == "3pm":
+                actual_val = threes_val
+            else:
+                actual_val = float(p_stats.get(stat_key, 0.0))
 
             line = float(leg.get("line_value") or leg.get("line") or 0.0)
             if actual_val == line and line > 0:

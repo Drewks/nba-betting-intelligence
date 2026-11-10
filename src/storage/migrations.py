@@ -353,6 +353,83 @@ def m006_add_sub_bankroll_and_parlays(conn: sqlite3.Connection, migration_id: st
     return {"action": "tables_created", "initial_bankroll_seeded": seeded, "initial_amount_pen": 50.0}
 
 
+
+
+def m007_invalidate_hardcoded_parlays(conn: sqlite3.Connection, migration_id: str) -> dict[str, Any]:
+    """
+    Invalidates pending parlay bets created with hardcoded placeholder odds (1.70/1.85).
+    Marks them VOID (0.0 net profit), refunds their exposure in the parlay ledger, and logs
+    the repair in audit_repairs.
+    """
+    now = _now()
+    if "parlay_bets" not in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]:
+        return {"action": "skipped", "reason": "parlay_bets table does not exist"}
+
+    rows = conn.execute(
+        """
+        SELECT parlay_id, stake_pen, legs_json
+        FROM parlay_bets
+        WHERE status = 'PENDING'
+          AND (legs_json LIKE '%"odds": 1.7%' OR legs_json LIKE '%"odds": 1.85%')
+        """
+    ).fetchall()
+
+    if not rows:
+        return {"action": "noop", "invalidated_count": 0}
+
+    last_ledger = conn.execute(
+        "SELECT settled_bankroll_pen, pending_exposure_pen FROM parlay_bankroll_ledger ORDER BY entry_id DESC LIMIT 1"
+    ).fetchone()
+    curr_settled = float(last_ledger[0]) if last_ledger else 50.0
+    curr_exposure = float(last_ledger[1]) if last_ledger else 0.0
+
+    invalidated = 0
+    for parlay_id, stake_pen, _ in rows:
+        stake = float(stake_pen)
+        curr_exposure = max(0.0, round(curr_exposure - stake, 2))
+        curr_avail = round(curr_settled - curr_exposure, 2)
+
+        conn.execute(
+            """
+            UPDATE parlay_bets
+            SET status = 'VOID', net_profit_pen = 0.0, bankroll_after_pen = ?,
+                actual_result_summary = ?, settled_at = ?
+            WHERE parlay_id = ? AND status = 'PENDING'
+            """,
+            (
+                curr_settled,
+                "INVALIDATED_HARDCODED_ODDS: Parlay candidate created with fabricated placeholder leg odds (1.70/1.85)",
+                now,
+                parlay_id,
+            ),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO parlay_bankroll_ledger (
+                timestamp, event_type, reference_parlay_id, amount_delta_pen,
+                settled_bankroll_pen, pending_exposure_pen, available_balance_pen
+            ) VALUES (?, 'BET_SETTLED', ?, 0.0, ?, ?, ?)
+            """,
+            (now, parlay_id, curr_settled, curr_exposure, curr_avail),
+        )
+
+        _log_repair(
+            conn,
+            migration_id,
+            "parlay_bets",
+            parlay_id,
+            "INVALIDATED_HARDCODED_PARLAY",
+            f"pending parlay with hardcoded leg odds (1.70/1.85) staked {stake:.2f} PEN refunded to available balance",
+        )
+        invalidated += 1
+
+    return {
+        "invalidated_count": invalidated,
+        "final_exposure_pen": curr_exposure,
+        "final_available_pen": curr_settled - curr_exposure,
+    }
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -360,6 +437,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_09_004_quarantine_unobserved_odds", m004_quarantine_unobserved_odds),
     ("2026_11_09_005_invalidate_pending_unobserved_props", m005_invalidate_pending_unobserved_props),
     ("2026_11_09_006_add_sub_bankroll_and_parlays", m006_add_sub_bankroll_and_parlays),
+    ("2026_11_09_007_invalidate_hardcoded_parlays", m007_invalidate_hardcoded_parlays),
 ]
 
 

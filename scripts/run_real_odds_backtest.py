@@ -41,7 +41,7 @@ def main() -> None:
     parser.add_argument("--retrain-every", type=int, default=7)
     parser.add_argument("--history-lag-days", type=int, default=0, help="Robustness: hide the last N days of results")
     parser.add_argument("--no-boxscores", action="store_true", help="Ablation: ignore box-score features")
-    parser.add_argument("--sensitivity", action="store_true", help="Also run with 2.5% and 6% margins")
+    parser.add_argument("--sensitivity", action="store_true", help="Also run with 2.5%% and 6%% margins")
     parser.add_argument("--out-json", default=str(PROJECT_ROOT / "data" / "evaluation" / "real_odds_backtest.json"))
     parser.add_argument("--out-md", default=str(PROJECT_ROOT / "reports" / "real_odds_backtest.md"))
     args = parser.parse_args()
@@ -81,8 +81,12 @@ def main() -> None:
     }
     Path(args.out_json).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out_md).write_text(render_markdown(result, sensitivity), encoding="utf-8")
-    print(render_markdown(result, sensitivity))
+    md_out = render_markdown(result, sensitivity)
+    Path(args.out_md).write_text(md_out, encoding="utf-8")
+    try:
+        print(md_out)
+    except UnicodeEncodeError:
+        print(md_out.encode("ascii", errors="replace").decode("ascii"))
 
 
 if __name__ == "__main__":

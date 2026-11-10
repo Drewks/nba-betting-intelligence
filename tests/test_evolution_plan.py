@@ -519,3 +519,130 @@ def test_telegram_daily_settlement_report_dual_bankroll() -> None:
     assert "Sub-Bankroll Combinadas (S/ 50.00 PEN — Alpha Lab)" in msg
     assert "S/ 54.50 PEN" in msg
     assert "HP_01" in msg
+
+
+
+def test_migration_007_invalidates_hardcoded_parlays_and_restores_ledger(tmp_path: Path) -> None:
+    import json
+    from src.storage.db import DatabaseManager
+    from src.storage.migrations import m006_add_sub_bankroll_and_parlays, m007_invalidate_hardcoded_parlays
+
+    db = DatabaseManager(tmp_path / "test_m007.sqlite3")
+    with db.connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_repairs (
+                repair_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                applied_at TEXT NOT NULL,
+                migration_id TEXT NOT NULL,
+                table_name TEXT NOT NULL,
+                row_pk TEXT NOT NULL,
+                action TEXT NOT NULL,
+                details TEXT NOT NULL
+            )
+            """
+        )
+        m006_add_sub_bankroll_and_parlays(conn, "test_006")
+
+        # Insert a parlay with hardcoded placeholder odds
+        legs = [
+            {"game_id": "G_FAKE", "market": "moneyline", "selection": "HOME", "odds": 1.70},
+            {"game_id": "G_FAKE", "market": "player_points", "selection": "OVER", "line_value": 20.5, "odds": 1.85},
+        ]
+        conn.execute(
+            """
+            INSERT INTO parlay_bets (
+                parlay_id, matchday_date, strategy_type, legs_json, num_legs,
+                compound_odds, joint_prob, compound_ev_pct, stake_pen, emitted_at, status
+            ) VALUES ('FAKE_PARLAY_01', '2026-11-10', 'SGP_COPULA', ?, 2, 3.14, 0.40, 25.0, 5.00, '2026-11-10T12:00:00Z', 'PENDING')
+            """,
+            (json.dumps(legs),),
+        )
+        conn.execute(
+            """
+            INSERT INTO parlay_bankroll_ledger (
+                timestamp, event_type, reference_parlay_id, amount_delta_pen,
+                settled_bankroll_pen, pending_exposure_pen, available_balance_pen
+            ) VALUES ('2026-11-10T12:00:00Z', 'BET_RESERVED', 'FAKE_PARLAY_01', -5.00, 50.0, 5.00, 45.00)
+            """
+        )
+
+        res = m007_invalidate_hardcoded_parlays(conn, "2026_11_09_007_invalidate_hardcoded_parlays")
+        assert res["invalidated_count"] == 1
+        assert res["final_exposure_pen"] == 0.0
+        assert res["final_available_pen"] == 50.0
+
+        row = conn.execute("SELECT status, net_profit_pen, actual_result_summary FROM parlay_bets WHERE parlay_id = 'FAKE_PARLAY_01'").fetchone()
+        assert row[0] == "VOID"
+        assert row[1] == 0.0
+        assert "INVALIDATED_HARDCODED_ODDS" in row[2]
+
+        repair = conn.execute("SELECT action FROM audit_repairs WHERE row_pk = 'FAKE_PARLAY_01'").fetchone()
+        assert repair[0] == "INVALIDATED_HARDCODED_PARLAY"
+
+
+def test_canonical_bookmaker_consensus_deduplication() -> None:
+    from src.prediction.ev_calculator import canonical_bookmaker_name, compute_market_consensus
+
+    assert canonical_bookmaker_name("DraftKings") == "draftkings"
+    assert canonical_bookmaker_name("Draft Kings") == "draftkings"
+    assert canonical_bookmaker_name("Pinnacle (LineShop)") == "pinnacle"
+    assert canonical_bookmaker_name("RETAbet Perú") == "retabet"
+
+    # Multi-entry snapshot with duplicated provider variants
+    odds_rows = [
+        {"provider": "DraftKings", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.95, "counterpart_decimal_odds": 1.95, "captured_at": "2026-11-10T10:00:00Z"},
+        {"provider": "Draft Kings", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.91, "counterpart_decimal_odds": 1.91, "captured_at": "2026-11-10T11:00:00Z"},
+        {"provider": "BetMGM", "market": "moneyline", "selection": "HOME", "decimal_odds": 1.90, "counterpart_decimal_odds": 1.90, "captured_at": "2026-11-10T10:30:00Z"},
+    ]
+    cons = compute_market_consensus(odds_rows)
+    entry = cons[("moneyline", "HOME", None)]
+    # Unique canonical books should be 2 (draftkings, betmgm), not 3!
+    assert entry["n_books"] == 2
+
+
+def test_parlay_engine_boxscore_case_insensitivity_and_compound_stats(tmp_path: Path) -> None:
+    from src.storage.db import DatabaseManager
+    from src.paper_trading.parlay_engine import ParlayTradingEngine
+
+    db = DatabaseManager(tmp_path / "test_eval.sqlite3")
+    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.0)
+
+    # Leg for Player PRA Over 30.5
+    leg_pra = {
+        "game_id": "G_LIVE",
+        "market": "player_pra",
+        "prop_category": "PRA",
+        "selection": "OVER",
+        "line_value": 30.5,
+        "player_name": "Luka Doncic",
+        "odds": 1.85,
+    }
+    game = {"game_id": "G_LIVE", "status": "FINAL", "home_score": 110, "away_score": 105}
+    # ESPN provides uppercase keys PTS, REB, AST and no minutes key
+    espn_boxscore = {
+        "Luka Doncic": {
+            "PTS": 25.0,
+            "REB": 8.0,
+            "AST": 9.0,
+            "3PM": 3.0,
+        }
+    }
+    # Total PRA = 25 + 8 + 9 = 42 > 30.5 -> WON! Must not be marked VOID due to missing minutes
+    res = engine._evaluate_single_leg(leg_pra, game, espn_boxscore)
+    assert res["status"] == "WON"
+    assert "42 vs 30.5" in res["summary"]
+
+    # Leg for 3PM
+    leg_3pm = {
+        "game_id": "G_LIVE",
+        "market": "player_threes",
+        "prop_category": "3PM",
+        "selection": "OVER",
+        "line_value": 2.5,
+        "player_name": "Luka Doncic",
+        "odds": 1.80,
+    }
+    res_3pm = engine._evaluate_single_leg(leg_3pm, game, espn_boxscore)
+    assert res_3pm["status"] == "WON"
+    assert "3 vs 2.5" in res_3pm["summary"]

@@ -23,6 +23,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import logging
+import hashlib
 import math
 logger = logging.getLogger(__name__)
 import os
@@ -815,8 +816,35 @@ class PlayerPropsEngine:
             f"Stake Sugerido: S/ {stake_pen:.2f} PEN."
         )
 
+        norm_name = player_name.replace(" ", "_")
+        slug_raw = f"{game_id}_{norm_name}_{prop_category}_{prop_selection}_{prop_line}"
+        slug = hashlib.sha256(slug_raw.encode("utf-8")).hexdigest()[:8]
+        sgp_id = f"SGP_{game_id}_{norm_name}_{prop_category}_{slug}"
+
+        odd_g = round(1.0 / max(0.05, p_game), 2)
+        odd_p = round(offered_sgp_odds / max(1.05, odd_g), 2)
+        legs = [
+            {
+                "game_id": game_id,
+                "market": "moneyline",
+                "selection": game_selection_label,
+                "odds": odd_g,
+                "desc": f"{team} Victoria",
+            },
+            {
+                "game_id": game_id,
+                "market": f"player_{prop_category.lower()}",
+                "prop_category": prop_category,
+                "selection": prop_selection,
+                "line_value": float(prop_line),
+                "player_name": player_name,
+                "odds": odd_p,
+                "desc": f"{player_name} {prop_category} {prop_selection} {prop_line}",
+            },
+        ]
+
         return {
-            "sgp_id": f"SGP_{game_id}_{player_name.replace(' ', '_')}_{prop_category}_{uuid.uuid4().hex[:6]}",
+            "sgp_id": sgp_id,
             "type": "RETABET_SGP",
             "game_id": game_id,
             "matchday_date": matchday_date,
@@ -835,6 +863,9 @@ class PlayerPropsEngine:
             "correlation_boost_pct": corr_boost_pct,
             "fair_sgp_odds": fair_sgp_odds,
             "offered_sgp_odds": offered_sgp_odds,
+            "decimal_odds": offered_sgp_odds,
+            "num_legs": 2,
+            "legs": legs,
             "ev_pct": ev_pct,
             "kelly_stake_pen": stake_pen,
             "is_value_sgp": is_value,
@@ -979,9 +1010,27 @@ class PlayerPropsEngine:
             matching_props = [ap for ap in alt_props if ap["game_id"] == gid and ap["team"] == team]
             if matching_props:
                 best_prop = matching_props[0]
+                p_slug = hashlib.sha256(f"{gid}_{best_prop['player_name']}_{best_prop['category']}_{best_prop['line']}".encode()).hexdigest()[:8]
                 legs = [
-                    {"selection": anchor["selection"], "prob": anchor["prob"], "odds": anchor["odds"], "desc": f"{anchor['team']} Victoria Directa"},
-                    {"selection": f"{best_prop['category']} OVER {best_prop['line']}", "prob": best_prop["prob"], "odds": best_prop["odds"], "player_name": best_prop["player_name"], "desc": best_prop["description"]},
+                    {
+                        "game_id": gid,
+                        "market": "moneyline",
+                        "selection": anchor["selection"],
+                        "prob": anchor["prob"],
+                        "odds": anchor["odds"],
+                        "desc": f"{anchor['team']} Victoria Directa",
+                    },
+                    {
+                        "game_id": gid,
+                        "market": f"player_{best_prop['category'].lower()}",
+                        "prop_category": best_prop["category"],
+                        "selection": best_prop["selection"],
+                        "line_value": float(best_prop["line"]),
+                        "player_name": best_prop["player_name"],
+                        "prob": best_prop["prob"],
+                        "odds": best_prop["odds"],
+                        "desc": best_prop["description"],
+                    },
                 ]
                 rho = 0.35
                 p1, p2 = anchor["prob"], best_prop["prob"]
@@ -1001,7 +1050,7 @@ class PlayerPropsEngine:
                     suggested_stake = round(max(0.0, min(self.max_stake_pen, bankroll_pen * eff_f)), 2)
 
                 parlays.append({
-                    "parlay_id": f"HP_SGP_{gid}_{uuid.uuid4().hex[:6]}",
+                    "parlay_id": f"HP_SGP_{gid}_{p_slug}",
                     "type": "RETABET_SGP",
                     "strategy": "SAME_GAME_ANCHOR",
                     "game_id": gid,
@@ -1028,6 +1077,8 @@ class PlayerPropsEngine:
         for anc in ml_anchors:
             all_independent_legs.append({
                 "game_id": anc["game_id"],
+                "market": "moneyline",
+                "selection": anc["selection"],
                 "desc": f"{anc['selection']} ({anc['team']})",
                 "prob": anc["prob"],
                 "odds": anc["odds"],
@@ -1035,10 +1086,14 @@ class PlayerPropsEngine:
         for ap in alt_props:
             all_independent_legs.append({
                 "game_id": ap["game_id"],
+                "market": f"player_{ap['category'].lower()}",
+                "prop_category": ap["category"],
+                "selection": ap["selection"],
+                "line_value": float(ap["line"]),
+                "player_name": ap["player_name"],
                 "desc": ap["description"],
                 "prob": ap["prob"],
                 "odds": ap["odds"],
-                "player_name": ap["player_name"],
             })
 
         games_seen = set()
@@ -1067,8 +1122,10 @@ class PlayerPropsEngine:
                 eff_f = min(self.max_bankroll_fraction, f_k * self.kelly_fraction)
                 suggested_stake = round(max(0.0, min(self.max_stake_pen, bankroll_pen * eff_f)), 2)
 
+            hash_str = "_".join(f"{leg['game_id']}_{leg.get('player_name', '')}_{leg.get('line_value', '')}" for leg in distinct_legs[:3])
+            p_slug = hashlib.sha256(hash_str.encode()).hexdigest()[:8]
             parlays.append({
-                "parlay_id": f"HP_POWER_PARLAY_{uuid.uuid4().hex[:6]}",
+                "parlay_id": f"HP_POWER_PARLAY_{p_slug}",
                 "type": "RETABET_SGP",
                 "strategy": "MULTI_MATCH_POWER_PARLAY",
                 "game_id": "CROSS_SLATE",

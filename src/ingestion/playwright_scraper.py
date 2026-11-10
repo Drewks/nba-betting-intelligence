@@ -394,7 +394,7 @@ class PeruPlaywrightScraper:
             if not gid:
                 continue
 
-            book_slug = "retabet" if "RETABet" in q["provider"] else "betano"
+            book_slug = "retabet" if "retabet" in str(q["provider"]).lower() else "betano"
             mkt_slug = "ML" if q["market"] == "moneyline" else "TOT"
             line_str = f"_{q['line_value']}" if q["line_value"] is not None else ""
             odds_id = f"ODDS_{book_slug.upper()}_{gid}_{mkt_slug}_{q['selection']}{line_str}_{q['captured_at']}"
