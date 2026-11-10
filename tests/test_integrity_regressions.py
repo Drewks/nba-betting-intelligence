@@ -493,7 +493,10 @@ def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> No
     from src.backtesting.real_odds_backtest import load_market_rows, match_market_to_games, run_real_odds_backtest
 
     # 1. Genuine historical games from sqlite3 database
-    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
+    db_path = Path("data/nba_intelligence.sqlite3")
+    if not db_path.exists():
+        db_path = Path(__file__).resolve().parent.parent / "data" / "nba_intelligence.sqlite3"
+    conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute("SELECT * FROM games WHERE season = '2024-25' AND status = 'FINAL' ORDER BY game_start_time LIMIT 220")
@@ -502,6 +505,8 @@ def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> No
 
     # 2. Genuine HuggingFace consensus market closing rows
     market_path = Path("data/raw/market_consensus_2024-25.csv")
+    if not market_path.exists():
+        market_path = Path(__file__).resolve().parent.parent / "data" / "raw" / "market_consensus_2024-25.csv"
     assert market_path.exists(), "Market consensus CSV must exist"
     market_rows = load_market_rows([market_path])
 

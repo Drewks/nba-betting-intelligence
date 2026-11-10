@@ -26,6 +26,7 @@ data/*.sqlite3-journal
 data/*.sqlite3-wal
 data/raw/*.parquet
 data/raw/*.csv
+!data/raw/market_consensus_*.csv
 
 # Playwright artifacts
 test-results/
