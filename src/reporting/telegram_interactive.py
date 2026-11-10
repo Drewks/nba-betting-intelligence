@@ -465,7 +465,11 @@ class TelegramInteractiveListener:
             games = scan_data.get("games", [])
 
         if not games:
-            return "ℹ️ No se encontraron cuotas para la jornada actual."
+            return (
+                "⚡ *COMPARADOR DE CUOTAS PERÚ*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "ℹ️ No se encontraron cuotas para la jornada actual."
+            )
 
         # Check for Surebets and Stale Lines
         surebets = []

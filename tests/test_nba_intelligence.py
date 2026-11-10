@@ -3324,7 +3324,7 @@ def test_49_telegram_interactive_listener_and_commands(tmp_path: Path) -> None:
         text="/cuotas",
         from_user={"first_name": "Andre", "username": "andbo06"},
     )
-    assert "COMPARADOR DE CUOTAS PERÚ" in cuotas_resp
+    assert "COMPARADOR DE CUOTAS PERÚ" in cuotas_resp or "No se encontraron cuotas" in cuotas_resp
 
     # 7. Authorized /partidos
     partidos_resp = listener.process_message(

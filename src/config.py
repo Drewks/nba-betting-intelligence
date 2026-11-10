@@ -173,12 +173,35 @@ class HybridAllocationConfig:
 
 
 @dataclass(frozen=True)
+class CLVMetaLabelingConfig:
+    enabled: bool = True
+    calibrated_weights_path: str = "config/calibrated_weights.json"
+    intercept: float = -0.2085
+    coef_steam_delta: float = 57.7103
+    coef_conformal_width_excess: float = -2.1211
+    coef_disagreement_excess: float = -0.1816
+    coef_overround_excess: float = -0.0556
+    time_decay_rate: float = 0.04
+    max_hours_to_tipoff: float = 12.0
+    adverse_steam_threshold: float = -0.040
+    min_p_clv_threshold: float = 0.48
+
+
+@dataclass(frozen=True)
+class CopulaCorrelationsConfig:
+    enabled: bool = True
+    calibrated_weights_path: str = "config/calibrated_weights.json"
+
+
+@dataclass(frozen=True)
 class AppConfig:
     model: ModelConfig
     risk: RiskConfig
     betting_allowed_source_types: tuple[str, ...]
     sub_bankroll: SubBankrollConfig = field(default_factory=SubBankrollConfig)
     hybrid_allocation: HybridAllocationConfig = field(default_factory=HybridAllocationConfig)
+    clv_meta_labeling: CLVMetaLabelingConfig = field(default_factory=CLVMetaLabelingConfig)
+    copula_correlations: CopulaCorrelationsConfig = field(default_factory=CopulaCorrelationsConfig)
 
 
 def _require(section: dict[str, Any], key: str, section_name: str) -> Any:
@@ -378,12 +401,43 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     else:
         hybrid_allocation = HybridAllocationConfig()
 
+    # Optional clv_meta_labeling section
+    clv_raw = raw.get("clv_meta_labeling")
+    if clv_raw:
+        clv_meta_labeling = CLVMetaLabelingConfig(
+            enabled=bool(clv_raw.get("enabled", True)),
+            calibrated_weights_path=str(clv_raw.get("calibrated_weights_path", "config/calibrated_weights.json")),
+            intercept=float(clv_raw.get("intercept", -0.2085)),
+            coef_steam_delta=float(clv_raw.get("coef_steam_delta", 57.7103)),
+            coef_conformal_width_excess=float(clv_raw.get("coef_conformal_width_excess", -2.1211)),
+            coef_disagreement_excess=float(clv_raw.get("coef_disagreement_excess", -0.1816)),
+            coef_overround_excess=float(clv_raw.get("coef_overround_excess", -0.0556)),
+            time_decay_rate=float(clv_raw.get("time_decay_rate", 0.04)),
+            max_hours_to_tipoff=float(clv_raw.get("max_hours_to_tipoff", 12.0)),
+            adverse_steam_threshold=float(clv_raw.get("adverse_steam_threshold", -0.040)),
+            min_p_clv_threshold=float(clv_raw.get("min_p_clv_threshold", 0.48)),
+        )
+    else:
+        clv_meta_labeling = CLVMetaLabelingConfig()
+
+    # Optional copula_correlations section
+    cop_raw = raw.get("copula_correlations")
+    if cop_raw:
+        copula_correlations = CopulaCorrelationsConfig(
+            enabled=bool(cop_raw.get("enabled", True)),
+            calibrated_weights_path=str(cop_raw.get("calibrated_weights_path", "config/calibrated_weights.json")),
+        )
+    else:
+        copula_correlations = CopulaCorrelationsConfig()
+
     return AppConfig(
         model=model,
         risk=risk,
         betting_allowed_source_types=allowed,
         sub_bankroll=sub_bankroll,
         hybrid_allocation=hybrid_allocation,
+        clv_meta_labeling=clv_meta_labeling,
+        copula_correlations=copula_correlations,
     )
 
 

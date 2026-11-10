@@ -7,6 +7,8 @@ and Canonical Vine (C-Vine) decompositions.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 import numpy as np
 from scipy.stats import norm, t as student_t
@@ -54,6 +56,29 @@ class VineCopulaSGP:
         ("REB", "PRA"): 0.50,
     }
 
+    def __init__(
+        self,
+        correlations: dict[tuple[str, str], float] | None = None,
+        weights_path: str | Path | None = None,
+    ) -> None:
+        self.correlations = dict(self.DEFAULT_CORRELATIONS)
+        if correlations:
+            self.correlations.update(correlations)
+        else:
+            w_path = Path(weights_path) if weights_path else Path("config/calibrated_weights.json")
+            if w_path.exists():
+                try:
+                    with open(w_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    cal_corrs = data.get("sgp_copula_correlations") or {}
+                    for k_str, val in cal_corrs.items():
+                        parts = k_str.split(",")
+                        if len(parts) == 2:
+                            self.correlations[(parts[0].strip(), parts[1].strip())] = float(val)
+                except Exception:
+                    pass
+
+
     def build_sgp_correlation_matrix(self, legs: list[dict[str, Any]]) -> np.ndarray:
         """
         Constructs a mathematically valid, positive semi-definite correlation matrix
@@ -75,7 +100,7 @@ class VineCopulaSGP:
                 # Lookup correlation pair
                 pair_key = (cat_i, cat_j)
                 rev_key = (cat_j, cat_i)
-                rho = self.DEFAULT_CORRELATIONS.get(pair_key) or self.DEFAULT_CORRELATIONS.get(rev_key) or 0.15
+                rho = self.correlations.get(pair_key) or self.correlations.get(rev_key) or self.DEFAULT_CORRELATIONS.get(pair_key) or self.DEFAULT_CORRELATIONS.get(rev_key) or 0.15
 
                 # Adjust for team context
                 if not same_team:

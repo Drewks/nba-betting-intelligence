@@ -163,3 +163,20 @@ hybrid_allocation:                   # Política de asignación 70% Totales / 30
   moneyline_weight: 0.30
   max_totals_per_matchday: 2
   max_moneyline_per_matchday: 1
+
+clv_meta_labeling:                   # V8 Phase 3: Calibración empírica CLV Meta-Labeling
+  enabled: true
+  calibrated_weights_path: "config/calibrated_weights.json"
+  intercept: -0.2085
+  coef_steam_delta: 57.7103
+  coef_conformal_width_excess: -2.1211
+  coef_disagreement_excess: -0.1816
+  coef_overround_excess: -0.0556
+  time_decay_rate: 0.04
+  max_hours_to_tipoff: 12.0
+  adverse_steam_threshold: -0.040
+  min_p_clv_threshold: 0.48
+
+copula_correlations:                 # V8 Phase 3: Correlaciones empíricas SGP / Cópulas Vine
+  enabled: true
+  calibrated_weights_path: "config/calibrated_weights.json"

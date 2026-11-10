@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import itertools
+import json
 import math
+from pathlib import Path
 from typing import Any
 import numpy as np
 from scipy.optimize import minimize
@@ -242,6 +244,66 @@ def market_anchored_probability(
     return round(w * float(model_prob) + (1.0 - w) * float(market_prob), 6)
 
 
+_CALIBRATED_WEIGHTS_CACHE: dict[str, float] | None = None
+
+
+def _get_clv_meta_labeling_weights() -> dict[str, float]:
+    global _CALIBRATED_WEIGHTS_CACHE
+    if _CALIBRATED_WEIGHTS_CACHE is not None:
+        return _CALIBRATED_WEIGHTS_CACHE
+
+    weights: dict[str, float] = {
+        "intercept": 0.15,
+        "coef_steam_delta": 14.0,
+        "coef_conformal_width_excess": -1.6,
+        "coef_disagreement_excess": -0.9,
+        "coef_overround_excess": -2.2,
+        "time_decay_rate": 0.04,
+        "max_hours_to_tipoff": 12.0,
+        "adverse_steam_threshold": -0.040,
+        "min_p_clv_threshold": 0.48,
+        "exp_clv_multiplier": 8.0,
+    }
+
+    try:
+        from src.config import load_config
+        cfg = load_config()
+        if cfg.clv_meta_labeling.enabled:
+            cal_p = Path(cfg.clv_meta_labeling.calibrated_weights_path)
+            if cal_p.exists():
+                with open(cal_p, "r", encoding="utf-8") as f:
+                    cal_data = json.load(f).get("clv_meta_labeling") or {}
+                if cal_data:
+                    weights.update({
+                        "intercept": float(cal_data.get("intercept", cfg.clv_meta_labeling.intercept)),
+                        "coef_steam_delta": float(cal_data.get("coef_steam_delta", cfg.clv_meta_labeling.coef_steam_delta)),
+                        "coef_conformal_width_excess": float(cal_data.get("coef_conformal_width_excess", cfg.clv_meta_labeling.coef_conformal_width_excess)),
+                        "coef_disagreement_excess": float(cal_data.get("coef_disagreement_excess", cfg.clv_meta_labeling.coef_disagreement_excess)),
+                        "coef_overround_excess": float(cal_data.get("coef_overround_excess", cfg.clv_meta_labeling.coef_overround_excess)),
+                        "time_decay_rate": float(cal_data.get("time_decay_rate", cfg.clv_meta_labeling.time_decay_rate)),
+                        "max_hours_to_tipoff": float(cal_data.get("max_hours_to_tipoff", cfg.clv_meta_labeling.max_hours_to_tipoff)),
+                        "adverse_steam_threshold": float(cal_data.get("adverse_steam_threshold", cfg.clv_meta_labeling.adverse_steam_threshold)),
+                        "min_p_clv_threshold": float(cal_data.get("min_p_clv_threshold", cfg.clv_meta_labeling.min_p_clv_threshold)),
+                    })
+            else:
+                weights.update({
+                    "intercept": cfg.clv_meta_labeling.intercept,
+                    "coef_steam_delta": cfg.clv_meta_labeling.coef_steam_delta,
+                    "coef_conformal_width_excess": cfg.clv_meta_labeling.coef_conformal_width_excess,
+                    "coef_disagreement_excess": cfg.clv_meta_labeling.coef_disagreement_excess,
+                    "coef_overround_excess": cfg.clv_meta_labeling.coef_overround_excess,
+                    "time_decay_rate": cfg.clv_meta_labeling.time_decay_rate,
+                    "max_hours_to_tipoff": cfg.clv_meta_labeling.max_hours_to_tipoff,
+                    "adverse_steam_threshold": cfg.clv_meta_labeling.adverse_steam_threshold,
+                    "min_p_clv_threshold": cfg.clv_meta_labeling.min_p_clv_threshold,
+                })
+    except Exception:
+        pass
+
+    _CALIBRATED_WEIGHTS_CACHE = weights
+    return weights
+
+
 def predict_clv_meta_label(
     odds_record: dict[str, Any],
     game_start_time: str,
@@ -249,6 +311,7 @@ def predict_clv_meta_label(
     conformal_width: float | None = None,
     model_market_disagreement: float | None = None,
     overround: float | None = None,
+    custom_weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """
     V8 Phase 2 Meta-Labeling CLV Filter (inspired by Marcos López de Prado).
@@ -270,25 +333,26 @@ def predict_clv_meta_label(
     except Exception:
         hours_to_tipoff = 2.0
 
-    time_factor = 1.0 / (1.0 + 0.04 * min(12.0, hours_to_tipoff))
+    w = custom_weights or _get_clv_meta_labeling_weights()
+    time_factor = 1.0 / (1.0 + w["time_decay_rate"] * min(w["max_hours_to_tipoff"], hours_to_tipoff))
     z_score = (
-        0.15
-        + 14.0 * s_delta
-        - 1.6 * max(0.0, width - 0.15)
-        - 0.9 * max(0.0, disag - 0.08)
-        - 2.2 * max(0.0, ov - 0.05)
+        w["intercept"]
+        + w["coef_steam_delta"] * s_delta
+        + w["coef_conformal_width_excess"] * max(0.0, width - 0.15)
+        + w["coef_disagreement_excess"] * max(0.0, disag - 0.08)
+        + w["coef_overround_excess"] * max(0.0, ov - 0.05)
     )
     p_clv = 1.0 / (1.0 + math.exp(-z_score * time_factor))
-    exp_clv = round(s_delta * 100.0 + (p_clv - 0.50) * 8.0, 2)
+    exp_clv = round(s_delta * 100.0 + (p_clv - 0.50) * w.get("exp_clv_multiplier", 8.0), 2)
 
-    if s_delta <= -0.040:
+    if s_delta <= w["adverse_steam_threshold"]:
         return {
             "p_positive_clv": round(p_clv, 4),
             "expected_clv_pct": exp_clv,
             "meta_label_pass": False,
             "reason_code": "ADVERSE_STEAM_DECAY",
         }
-    if p_clv < 0.48:
+    if p_clv < w["min_p_clv_threshold"]:
         return {
             "p_positive_clv": round(p_clv, 4),
             "expected_clv_pct": exp_clv,
