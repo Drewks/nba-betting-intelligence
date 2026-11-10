@@ -37,6 +37,112 @@ risk_management:                     # AGENTS.md section 2 (paper_trading_manage
   allow_parlays: true
   allow_player_props_betting: true
 
+  # V8 Phase 1: Contextual Staking Conviction Tiers (Single source of truth)
+  conviction_tiers:
+    aggressive:
+      tier_low:
+        prob_floor: 0.35
+        prob_ceil: 0.50
+        base: 3.50
+        slope: 2.00
+        kelly_cap: 2.00
+        kelly_multiplier: 4.0
+      tier_mid:
+        prob_floor: 0.50
+        prob_ceil: 0.58
+        base: 6.00
+        slope: 3.50
+        kelly_cap: 3.00
+        kelly_multiplier: 6.0
+      tier_high:
+        prob_floor: 0.58
+        prob_ceil: 0.65
+        base: 10.00
+        slope: 4.50
+        kelly_cap: 4.50
+        kelly_multiplier: 8.0
+      tier_star:
+        prob_floor: 0.65
+        prob_ceil: 1.00
+        base: 15.00
+        slope: 5.00
+        kelly_cap: 5.00
+        kelly_multiplier: 10.0
+      edge_modulator_floor: 0.40
+      edge_modulator_div: 0.06
+      min_stake_floor: 2.50
+      max_longshot_odds: 4.00
+      max_longshot_stake: 6.00
+    conservative:
+      tier_low:
+        prob_floor: 0.35
+        prob_ceil: 0.50
+        base: 1.00
+        slope: 0.55
+        kelly_cap: 0.25
+        kelly_multiplier: 1.2
+      tier_mid:
+        prob_floor: 0.50
+        prob_ceil: 0.58
+        base: 2.00
+        slope: 0.95
+        kelly_cap: 0.35
+        kelly_multiplier: 1.5
+      tier_high:
+        prob_floor: 0.58
+        prob_ceil: 0.65
+        base: 3.50
+        slope: 0.95
+        kelly_cap: 0.40
+        kelly_multiplier: 1.8
+      tier_star:
+        prob_floor: 0.65
+        prob_ceil: 1.00
+        base: 4.80
+        slope: 0.85
+        kelly_cap: 0.45
+        kelly_multiplier: 2.0
+      edge_modulator_floor: 0.20
+      edge_modulator_div: 0.08
+      min_stake_floor: 1.00
+      max_longshot_odds: 2.50
+      max_longshot_stake: 1.65
+
+  # Overtime Risk Guard
+  overtime_guard:
+    enabled: true
+    min_overtime_prob: 0.068
+    under_haircut: 0.85
+
+  # Closing Line Value (CLV) Governor
+  clv_governor:
+    enabled: true
+    lookback_bets: 25
+    min_sample_size: 4
+    severe_negative_threshold: -2.0
+    severe_negative_factor: 0.50
+    moderate_negative_threshold: 0.0
+    moderate_negative_factor: 0.75
+    positive_alpha_threshold: 2.0
+    positive_alpha_factor: 1.10
+    neutral_factor: 1.00
+
+  # Conformal Uncertainty & Steam Modulators
+  risk_modulators:
+    high_uncertainty_std: 0.08
+    high_uncertainty_factor: 0.85
+    low_uncertainty_std: 0.045
+    low_uncertainty_factor: 1.10
+    narrow_conformal_width: 0.035
+    narrow_conformal_factor: 1.06
+    wide_conformal_width: 0.080
+    wide_conformal_factor: 0.88
+    ev_lower_bound_boost_factor: 1.05
+    sharp_steam_delta: 0.020
+    sharp_steam_factor: 1.08
+    adverse_steam_delta: -0.020
+    adverse_steam_factor: 0.85
+
 sources:
   betting_allowed_source_types: ["OBSERVED"]
 

@@ -18,7 +18,12 @@ from typing import Any
 import uuid
 import numpy as np
 
-from src.config import load_config
+from src.config import (
+    DEFAULT_AGGRESSIVE_PROFILE,
+    DEFAULT_CONSERVATIVE_PROFILE,
+    RiskConfig,
+    load_config,
+)
 from src.paper_trading.staking import fractional_kelly_stake
 from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
 from src.storage.db import DatabaseManager
@@ -86,6 +91,7 @@ class PaperTradingEngine:
         hybrid_allocation_enabled: bool = False,
         max_totals_per_matchday: int = 2,
         max_moneyline_per_matchday: int = 1,
+        risk_config: RiskConfig | None = None,
     ) -> None:
         self.is_backtest = is_backtest
         self.hybrid_allocation_enabled = bool(hybrid_allocation_enabled)
@@ -120,6 +126,26 @@ class PaperTradingEngine:
         self.exclude_synthetic = bool(exclude_synthetic)
         # Anti-correlation: limit maximum exposure to at most 1 active bet per game across all markets
         self.single_bet_per_game = bool(single_bet_per_game)
+        if risk_config is not None:
+            self.risk_config = risk_config
+        else:
+            try:
+                self.risk_config = load_config().risk
+            except Exception:
+                self.risk_config = RiskConfig(
+                    virtual_bankroll_initial_pen=self.initial_bankroll_pen,
+                    staking_mode="fractional_kelly",
+                    kelly_fraction=self.kelly_fraction,
+                    min_stake_pen=self.min_stake_pen,
+                    max_stake_bankroll_fraction=self.max_stake_bankroll_fraction,
+                    base_stake_pen=self.base_stake_pen,
+                    max_stake_pen=self.max_stake_pen,
+                    max_selections_per_matchday=self.max_selections_per_matchday,
+                    min_ev_threshold=self.min_ev_threshold,
+                    max_portfolio_exposure_pct=self.max_portfolio_exposure_pct,
+                    allow_parlays=True,
+                    allow_player_props_betting=True,
+                )
         self._ensure_initial_ledger()
 
     def scope_predicate(self, alias: str = "") -> str:
@@ -132,13 +158,18 @@ class PaperTradingEngine:
         """SQL predicate restricting simulated_bets to the active accounting scope."""
         return self.scope_predicate()
 
-    def get_recent_clv_governor_factor(self, lookback: int = 25) -> tuple[float, float | None]:
+    def get_recent_clv_governor_factor(self, lookback: int | None = None) -> tuple[float, float | None]:
         """
         Active Risk Governor based on Closing Line Value (CLV).
         If the market has moved against our entry prices on recent bets (mean CLV < 0%),
         automatically trims stake scaling to protect bankroll during adverse market regimes.
+        Parameters and brackets are configured via config/model_config.yaml (clv_governor).
         Returns (scaling_factor, mean_clv_pct).
         """
+        gov_cfg = getattr(getattr(self, "risk_config", None), "clv_governor", None)
+        effective_lookback = lookback if lookback is not None else (gov_cfg.lookback_bets if gov_cfg else 25)
+        min_sample = gov_cfg.min_sample_size if gov_cfg else 4
+
         rows = self.db.fetch_all(
             f"""
             SELECT b.bet_id, b.decimal_odds,
@@ -161,9 +192,9 @@ class PaperTradingEngine:
             ORDER BY b.settled_at DESC
             LIMIT ?
             """,
-            (lookback,),
+            (effective_lookback,),
         )
-        if len(rows) < 4:
+        if len(rows) < min_sample:
             return 1.0, None
         clvs = [
             ((float(r["decimal_odds"]) / float(r["closing_odds"])) - 1.0) * 100.0
@@ -173,14 +204,24 @@ class PaperTradingEngine:
         if not clvs:
             return 1.0, None
         mean_clv = float(np.mean(clvs))
-        if mean_clv < -2.0:
-            factor = 0.50
-        elif mean_clv < 0.0:
-            factor = 0.75
-        elif mean_clv >= 2.0:
-            factor = 1.10
+        if gov_cfg:
+            if mean_clv < gov_cfg.severe_negative_threshold:
+                factor = gov_cfg.severe_negative_factor
+            elif mean_clv < gov_cfg.moderate_negative_threshold:
+                factor = gov_cfg.moderate_negative_factor
+            elif mean_clv >= gov_cfg.positive_alpha_threshold:
+                factor = gov_cfg.positive_alpha_factor
+            else:
+                factor = gov_cfg.neutral_factor
         else:
-            factor = 1.00
+            if mean_clv < -2.0:
+                factor = 0.50
+            elif mean_clv < 0.0:
+                factor = 0.75
+            elif mean_clv >= 2.0:
+                factor = 1.10
+            else:
+                factor = 1.00
         return factor, round(mean_clv, 2)
 
     def persist_closing_lines_for_games(self, as_of_utc: str | None = None) -> int:
@@ -298,78 +339,89 @@ class PaperTradingEngine:
         f_kelly = max(0.0, (p * (b + 1.0) - 1.0) / b)
 
         mode = getattr(self, "staking_mode", "AGGRESSIVE_ALPHA")
-
-        if mode == "AGGRESSIVE_ALPHA":
-            # Pure Alpha Mode: Blindly trust the model, high-impact conviction sizing
-            if p < 0.50:
-                tier_base = 3.50 + max(0.0, (p - 0.35) / 0.15) * 2.00
-                kelly_bonus = min(2.00, f_kelly * 4.0)
-            elif p < 0.58:
-                tier_base = 6.00 + ((p - 0.50) / 0.08) * 3.50
-                kelly_bonus = min(3.00, f_kelly * 6.0)
-            elif p < 0.65:
-                tier_base = 10.00 + ((p - 0.58) / 0.07) * 4.50
-                kelly_bonus = min(4.50, f_kelly * 8.0)
-            else:
-                # Star Pick / Lock (>=65% win probability)
-                tier_base = 15.00 + min(1.0, (p - 0.65) / 0.10) * 5.00
-                kelly_bonus = min(5.00, f_kelly * 10.0)
-
-            edge_modulator = min(1.0, max(0.40, float(ev_unit) / 0.06))
-            modulated_tier = 3.00 + (tier_base - 3.00) * edge_modulator
-            raw_stake = modulated_tier + kelly_bonus
-            min_stake_floor = 2.50
-
-            # Reasonable longshot moderation only on extreme outliers (odds > 4.00)
-            if decimal_odds > 4.00:
-                raw_stake = min(raw_stake, 6.00)
+        ct_cfg = getattr(getattr(self, "risk_config", None), "conviction_tiers", None)
+        if ct_cfg:
+            prof = ct_cfg.aggressive if mode == "AGGRESSIVE_ALPHA" else ct_cfg.conservative
         else:
-            # Conservative baseline tiers
-            if p < 0.50:
-                tier_base = 1.00 + max(0.0, (p - 0.35) / 0.15) * 0.55
-                kelly_bonus = min(0.25, f_kelly * 1.2)
-            elif p < 0.58:
-                tier_base = 2.00 + ((p - 0.50) / 0.08) * 0.95
-                kelly_bonus = min(0.35, f_kelly * 1.5)
-            elif p < 0.65:
-                tier_base = 3.50 + ((p - 0.58) / 0.07) * 0.95
-                kelly_bonus = min(0.40, f_kelly * 1.8)
-            else:
-                tier_base = 4.80 + min(1.0, (p - 0.65) / 0.10) * 0.85
-                kelly_bonus = min(0.45, f_kelly * 2.0)
+            prof = DEFAULT_AGGRESSIVE_PROFILE if mode == "AGGRESSIVE_ALPHA" else DEFAULT_CONSERVATIVE_PROFILE
 
-            edge_modulator = min(1.0, max(0.20, float(ev_unit) / 0.08))
-            modulated_tier = 1.00 + (tier_base - 1.00) * edge_modulator
-            raw_stake = modulated_tier + kelly_bonus
-            min_stake_floor = 1.00
+        t_low = prof.tier_low
+        t_mid = prof.tier_mid
+        t_high = prof.tier_high
+        t_star = prof.tier_star
 
-            if decimal_odds > 2.50:
-                raw_stake = min(raw_stake, 1.65)
+        if p < t_mid.prob_floor:
+            span = max(0.001, t_low.prob_ceil - t_low.prob_floor)
+            tier_base = t_low.base + max(0.0, (p - t_low.prob_floor) / span) * t_low.slope
+            kelly_bonus = min(t_low.kelly_cap, f_kelly * t_low.kelly_multiplier)
+        elif p < t_high.prob_floor:
+            span = max(0.001, t_mid.prob_ceil - t_mid.prob_floor)
+            tier_base = t_mid.base + ((p - t_mid.prob_floor) / span) * t_mid.slope
+            kelly_bonus = min(t_mid.kelly_cap, f_kelly * t_mid.kelly_multiplier)
+        elif p < t_star.prob_floor:
+            span = max(0.001, t_high.prob_ceil - t_high.prob_floor)
+            tier_base = t_high.base + ((p - t_high.prob_floor) / span) * t_high.slope
+            kelly_bonus = min(t_high.kelly_cap, f_kelly * t_high.kelly_multiplier)
+        else:
+            span = max(0.001, t_star.prob_ceil - t_star.prob_floor) if t_star.prob_ceil > t_star.prob_floor else 0.10
+            tier_base = t_star.base + min(1.0, (p - t_star.prob_floor) / span) * t_star.slope
+            kelly_bonus = min(t_star.kelly_cap, f_kelly * t_star.kelly_multiplier)
 
-        # Monte Carlo Overtime Guard: if betting UNDER in a game with high OT probability (>= 6.8%), trim stake 15%
-        if str(selection).upper() == "UNDER" and float(overtime_prob) >= 0.068:
+        edge_modulator = min(1.0, max(prof.edge_modulator_floor, float(ev_unit) / prof.edge_modulator_div))
+        modulated_tier = prof.min_stake_floor + (tier_base - prof.min_stake_floor) * edge_modulator
+        raw_stake = modulated_tier + kelly_bonus
+        min_stake_floor = prof.min_stake_floor
+
+        # Reasonable longshot moderation only on extreme outliers
+        if decimal_odds > prof.max_longshot_odds:
+            raw_stake = min(raw_stake, prof.max_longshot_stake)
+
+        # Monte Carlo Overtime Guard
+        ot_cfg = getattr(getattr(self, "risk_config", None), "overtime_guard", None)
+        if ot_cfg and ot_cfg.enabled:
+            if str(selection).upper() == "UNDER" and float(overtime_prob) >= ot_cfg.min_overtime_prob:
+                raw_stake *= ot_cfg.under_haircut
+        elif str(selection).upper() == "UNDER" and float(overtime_prob) >= 0.068:
             raw_stake *= 0.85
 
-        # Conformal Agreement / Uncertainty adjustment
-        if uncertainty_std > 0.08:
-            raw_stake *= 0.85
-        elif uncertainty_std <= 0.045:
-            raw_stake *= 1.10
+        # Risk Modulators: Conformal Agreement / Uncertainty adjustment & Steam Moves
+        rm_cfg = getattr(getattr(self, "risk_config", None), "risk_modulators", None)
+        if rm_cfg:
+            if uncertainty_std > rm_cfg.high_uncertainty_std:
+                raw_stake *= rm_cfg.high_uncertainty_factor
+            elif uncertainty_std <= rm_cfg.low_uncertainty_std:
+                raw_stake *= rm_cfg.low_uncertainty_factor
 
-        # V7 Venn-Abers Conformal Interval & Lower-Bound EV Modulation
-        if conformal_width is not None:
-            if float(conformal_width) <= 0.035:
-                raw_stake *= 1.06
-            elif float(conformal_width) >= 0.080:
-                raw_stake *= 0.88
-        if ev_lower_bound is not None and float(ev_lower_bound) > 0.0:
-            raw_stake *= 1.05
+            if conformal_width is not None:
+                if float(conformal_width) <= rm_cfg.narrow_conformal_width:
+                    raw_stake *= rm_cfg.narrow_conformal_factor
+                elif float(conformal_width) >= rm_cfg.wide_conformal_width:
+                    raw_stake *= rm_cfg.wide_conformal_factor
+            if ev_lower_bound is not None and float(ev_lower_bound) > 0.0:
+                raw_stake *= rm_cfg.ev_lower_bound_boost_factor
 
-        # Sharp Steam Move Modulation (V6)
-        if float(steam_delta) >= 0.020:
-            raw_stake *= 1.08
-        elif float(steam_delta) <= -0.020:
-            raw_stake *= 0.85
+            if float(steam_delta) >= rm_cfg.sharp_steam_delta:
+                raw_stake *= rm_cfg.sharp_steam_factor
+            elif float(steam_delta) <= rm_cfg.adverse_steam_delta:
+                raw_stake *= rm_cfg.adverse_steam_factor
+        else:
+            if uncertainty_std > 0.08:
+                raw_stake *= 0.85
+            elif uncertainty_std <= 0.045:
+                raw_stake *= 1.10
+
+            if conformal_width is not None:
+                if float(conformal_width) <= 0.035:
+                    raw_stake *= 1.06
+                elif float(conformal_width) >= 0.080:
+                    raw_stake *= 0.88
+            if ev_lower_bound is not None and float(ev_lower_bound) > 0.0:
+                raw_stake *= 1.05
+
+            if float(steam_delta) >= 0.020:
+                raw_stake *= 1.08
+            elif float(steam_delta) <= -0.020:
+                raw_stake *= 0.85
 
         # Active CLV Governor: scale down if market has been closing against us
         if apply_clv_governor:

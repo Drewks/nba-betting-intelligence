@@ -39,6 +39,98 @@ class ModelConfig:
 
 
 @dataclass(frozen=True)
+class TierConfig:
+    prob_floor: float
+    prob_ceil: float
+    base: float
+    slope: float
+    kelly_cap: float
+    kelly_multiplier: float
+
+
+@dataclass(frozen=True)
+class ConvictionProfileConfig:
+    tier_low: TierConfig
+    tier_mid: TierConfig
+    tier_high: TierConfig
+    tier_star: TierConfig
+    edge_modulator_floor: float
+    edge_modulator_div: float
+    min_stake_floor: float
+    max_longshot_odds: float
+    max_longshot_stake: float
+
+
+DEFAULT_AGGRESSIVE_PROFILE = ConvictionProfileConfig(
+    tier_low=TierConfig(0.35, 0.50, 3.50, 2.00, 2.00, 4.0),
+    tier_mid=TierConfig(0.50, 0.58, 6.00, 3.50, 3.00, 6.0),
+    tier_high=TierConfig(0.58, 0.65, 10.00, 4.50, 4.50, 8.0),
+    tier_star=TierConfig(0.65, 1.00, 15.00, 5.00, 5.00, 10.0),
+    edge_modulator_floor=0.40,
+    edge_modulator_div=0.06,
+    min_stake_floor=2.50,
+    max_longshot_odds=4.00,
+    max_longshot_stake=6.00,
+)
+
+DEFAULT_CONSERVATIVE_PROFILE = ConvictionProfileConfig(
+    tier_low=TierConfig(0.35, 0.50, 1.00, 0.55, 0.25, 1.2),
+    tier_mid=TierConfig(0.50, 0.58, 2.00, 0.95, 0.35, 1.5),
+    tier_high=TierConfig(0.58, 0.65, 3.50, 0.95, 0.40, 1.8),
+    tier_star=TierConfig(0.65, 1.00, 4.80, 0.85, 0.45, 2.0),
+    edge_modulator_floor=0.20,
+    edge_modulator_div=0.08,
+    min_stake_floor=1.00,
+    max_longshot_odds=2.50,
+    max_longshot_stake=1.65,
+)
+
+
+@dataclass(frozen=True)
+class ConvictionTiersConfig:
+    aggressive: ConvictionProfileConfig = DEFAULT_AGGRESSIVE_PROFILE
+    conservative: ConvictionProfileConfig = DEFAULT_CONSERVATIVE_PROFILE
+
+
+@dataclass(frozen=True)
+class OvertimeGuardConfig:
+    enabled: bool = True
+    min_overtime_prob: float = 0.068
+    under_haircut: float = 0.85
+
+
+@dataclass(frozen=True)
+class CLVGovernorConfig:
+    enabled: bool = True
+    lookback_bets: int = 25
+    min_sample_size: int = 4
+    severe_negative_threshold: float = -2.0
+    severe_negative_factor: float = 0.50
+    moderate_negative_threshold: float = 0.0
+    moderate_negative_factor: float = 0.75
+    positive_alpha_threshold: float = 2.0
+    positive_alpha_factor: float = 1.10
+    neutral_factor: float = 1.00
+
+
+@dataclass(frozen=True)
+class RiskModulatorsConfig:
+    high_uncertainty_std: float = 0.08
+    high_uncertainty_factor: float = 0.85
+    low_uncertainty_std: float = 0.045
+    low_uncertainty_factor: float = 1.10
+    narrow_conformal_width: float = 0.035
+    narrow_conformal_factor: float = 1.06
+    wide_conformal_width: float = 0.080
+    wide_conformal_factor: float = 0.88
+    ev_lower_bound_boost_factor: float = 1.05
+    sharp_steam_delta: float = 0.020
+    sharp_steam_factor: float = 1.08
+    adverse_steam_delta: float = -0.020
+    adverse_steam_factor: float = 0.85
+
+
+@dataclass(frozen=True)
 class RiskConfig:
     virtual_bankroll_initial_pen: float
     staking_mode: str
@@ -52,6 +144,10 @@ class RiskConfig:
     max_portfolio_exposure_pct: float
     allow_parlays: bool
     allow_player_props_betting: bool
+    conviction_tiers: ConvictionTiersConfig = field(default_factory=ConvictionTiersConfig)
+    overtime_guard: OvertimeGuardConfig = field(default_factory=OvertimeGuardConfig)
+    clv_governor: CLVGovernorConfig = field(default_factory=CLVGovernorConfig)
+    risk_modulators: RiskModulatorsConfig = field(default_factory=RiskModulatorsConfig)
 
 
 @dataclass(frozen=True)
@@ -97,6 +193,95 @@ def _in_range(name: str, value: float, low: float, high: float) -> float:
     return float(value)
 
 
+def _parse_tier_config(data: Any, default: TierConfig) -> TierConfig:
+    if not isinstance(data, dict):
+        return default
+    return TierConfig(
+        prob_floor=float(data.get("prob_floor", default.prob_floor)),
+        prob_ceil=float(data.get("prob_ceil", default.prob_ceil)),
+        base=float(data.get("base", default.base)),
+        slope=float(data.get("slope", default.slope)),
+        kelly_cap=float(data.get("kelly_cap", default.kelly_cap)),
+        kelly_multiplier=float(data.get("kelly_multiplier", default.kelly_multiplier)),
+    )
+
+
+def _parse_conviction_profile(data: Any, is_aggressive: bool) -> ConvictionProfileConfig:
+    default = DEFAULT_AGGRESSIVE_PROFILE if is_aggressive else DEFAULT_CONSERVATIVE_PROFILE
+    if not isinstance(data, dict):
+        return default
+    return ConvictionProfileConfig(
+        tier_low=_parse_tier_config(data.get("tier_low"), default.tier_low),
+        tier_mid=_parse_tier_config(data.get("tier_mid"), default.tier_mid),
+        tier_high=_parse_tier_config(data.get("tier_high"), default.tier_high),
+        tier_star=_parse_tier_config(data.get("tier_star"), default.tier_star),
+        edge_modulator_floor=float(data.get("edge_modulator_floor", default.edge_modulator_floor)),
+        edge_modulator_div=float(data.get("edge_modulator_div", default.edge_modulator_div)),
+        min_stake_floor=float(data.get("min_stake_floor", default.min_stake_floor)),
+        max_longshot_odds=float(data.get("max_longshot_odds", default.max_longshot_odds)),
+        max_longshot_stake=float(data.get("max_longshot_stake", default.max_longshot_stake)),
+    )
+
+
+def _parse_conviction_tiers(data: Any) -> ConvictionTiersConfig:
+    if not isinstance(data, dict):
+        return ConvictionTiersConfig()
+    return ConvictionTiersConfig(
+        aggressive=_parse_conviction_profile(data.get("aggressive"), is_aggressive=True),
+        conservative=_parse_conviction_profile(data.get("conservative"), is_aggressive=False),
+    )
+
+
+def _parse_overtime_guard(data: Any) -> OvertimeGuardConfig:
+    default = OvertimeGuardConfig()
+    if not isinstance(data, dict):
+        return default
+    return OvertimeGuardConfig(
+        enabled=bool(data.get("enabled", default.enabled)),
+        min_overtime_prob=float(data.get("min_overtime_prob", default.min_overtime_prob)),
+        under_haircut=float(data.get("under_haircut", default.under_haircut)),
+    )
+
+
+def _parse_clv_governor(data: Any) -> CLVGovernorConfig:
+    default = CLVGovernorConfig()
+    if not isinstance(data, dict):
+        return default
+    return CLVGovernorConfig(
+        enabled=bool(data.get("enabled", default.enabled)),
+        lookback_bets=int(data.get("lookback_bets", default.lookback_bets)),
+        min_sample_size=int(data.get("min_sample_size", default.min_sample_size)),
+        severe_negative_threshold=float(data.get("severe_negative_threshold", default.severe_negative_threshold)),
+        severe_negative_factor=float(data.get("severe_negative_factor", default.severe_negative_factor)),
+        moderate_negative_threshold=float(data.get("moderate_negative_threshold", default.moderate_negative_threshold)),
+        moderate_negative_factor=float(data.get("moderate_negative_factor", default.moderate_negative_factor)),
+        positive_alpha_threshold=float(data.get("positive_alpha_threshold", default.positive_alpha_threshold)),
+        positive_alpha_factor=float(data.get("positive_alpha_factor", default.positive_alpha_factor)),
+        neutral_factor=float(data.get("neutral_factor", default.neutral_factor)),
+    )
+
+
+def _parse_risk_modulators(data: Any) -> RiskModulatorsConfig:
+    default = RiskModulatorsConfig()
+    if not isinstance(data, dict):
+        return default
+    return RiskModulatorsConfig(
+        high_uncertainty_std=float(data.get("high_uncertainty_std", default.high_uncertainty_std)),
+        high_uncertainty_factor=float(data.get("high_uncertainty_factor", default.high_uncertainty_factor)),
+        low_uncertainty_std=float(data.get("low_uncertainty_std", default.low_uncertainty_std)),
+        low_uncertainty_factor=float(data.get("low_uncertainty_factor", default.low_uncertainty_factor)),
+        narrow_conformal_width=float(data.get("narrow_conformal_width", default.narrow_conformal_width)),
+        narrow_conformal_factor=float(data.get("narrow_conformal_factor", default.narrow_conformal_factor)),
+        wide_conformal_width=float(data.get("wide_conformal_width", default.wide_conformal_width)),
+        wide_conformal_factor=float(data.get("wide_conformal_factor", default.wide_conformal_factor)),
+        ev_lower_bound_boost_factor=float(data.get("ev_lower_bound_boost_factor", default.ev_lower_bound_boost_factor)),
+        sharp_steam_delta=float(data.get("sharp_steam_delta", default.sharp_steam_delta)),
+        sharp_steam_factor=float(data.get("sharp_steam_factor", default.sharp_steam_factor)),
+        adverse_steam_delta=float(data.get("adverse_steam_delta", default.adverse_steam_delta)),
+        adverse_steam_factor=float(data.get("adverse_steam_factor", default.adverse_steam_factor)),
+    )
+
+
 def parse_config(raw: dict[str, Any]) -> AppConfig:
     m = raw.get("model") or {}
     r = raw.get("risk_management") or {}
@@ -115,6 +300,12 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     staking_mode = str(_require(r, "staking_mode", "risk_management"))
     if staking_mode not in ("fractional_kelly", "flat"):
         raise ConfigError(f"staking_mode must be 'fractional_kelly' or 'flat', got {staking_mode!r}")
+
+    conviction_tiers = _parse_conviction_tiers(r.get("conviction_tiers"))
+    overtime_guard = _parse_overtime_guard(r.get("overtime_guard"))
+    clv_governor = _parse_clv_governor(r.get("clv_governor"))
+    risk_modulators = _parse_risk_modulators(r.get("risk_modulators"))
+
     risk = RiskConfig(
         virtual_bankroll_initial_pen=_in_range(
             "virtual_bankroll_initial_pen", _require(r, "virtual_bankroll_initial_pen", "risk_management"), 1.0, 1e6
@@ -144,6 +335,10 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         ),
         allow_parlays=bool(_require(r, "allow_parlays", "risk_management")),
         allow_player_props_betting=bool(_require(r, "allow_player_props_betting", "risk_management")),
+        conviction_tiers=conviction_tiers,
+        overtime_guard=overtime_guard,
+        clv_governor=clv_governor,
+        risk_modulators=risk_modulators,
     )
     if risk.base_stake_pen > risk.max_stake_pen:
         raise ConfigError("base_stake_pen cannot exceed max_stake_pen")
