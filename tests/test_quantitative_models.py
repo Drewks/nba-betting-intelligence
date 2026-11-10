@@ -17,7 +17,7 @@ from src.storage.db import DatabaseManager
 from src.validation.validator import (
     TemporalLeakageError,
 )
-from tests.test_helpers import _seed_sample_game_and_prediction
+from tests.helpers import _seed_sample_game_and_prediction
 
 
 

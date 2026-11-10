@@ -1157,7 +1157,7 @@ class PlayerPropsEngine:
         min_ev_pct: float = 3.0,
         injuries_by_team: dict[str, list[str]] | None = None,
         output_file: Path | str | None = None,
-        allow_synthetic_lines: bool | None = None,
+        allow_synthetic_lines: bool = False,
         allow_parlays: bool | None = None,
     ) -> list[dict[str, Any]]:
         """
@@ -1170,9 +1170,7 @@ class PlayerPropsEngine:
         """
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        # Defaults come from config: props / parlays are paper-traded on ESTIMATED lines (labelled as such)
-        if allow_synthetic_lines is None:
-            allow_synthetic_lines = self.risk.allow_player_props_betting
+        # Strict Data Integrity: require observed bookmaker lines by default
         if allow_parlays is None:
             allow_parlays = self.risk.allow_parlays
 

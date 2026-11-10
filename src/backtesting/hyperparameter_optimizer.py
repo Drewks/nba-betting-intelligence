@@ -234,7 +234,7 @@ class OptunaWalkForwardOptimizer:
         if games is None:
             if self.db is None:
                 raise ValueError("OptunaWalkForwardOptimizer requires games or an active DatabaseManager.")
-            games = self.db.fetch_all("SELECT * FROM games WHERE status = 'FINAL' ORDER BY game_start_time ASC")
+            games = self.db.fetch_all("SELECT * FROM v_observed_games WHERE status = 'FINAL' ORDER BY game_start_time ASC")
 
         hold_n = eval_slice_size if holdout_size is None else int(holdout_size)
         defaults: dict[str, float] = {

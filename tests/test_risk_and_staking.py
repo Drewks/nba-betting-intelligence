@@ -10,7 +10,7 @@ import sqlite3
 
 from src.paper_trading.engine import PaperTradingEngine
 from src.storage.db import DatabaseManager
-from tests.test_helpers import _seed_sample_game_and_prediction
+from tests.helpers import _seed_sample_game_and_prediction
 
 
 

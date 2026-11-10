@@ -1,5 +1,5 @@
 """
-Shared test helper fixtures and utilities (`tests/test_helpers.py`).
+Shared test helper fixtures and utilities (`tests/helpers.py`).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ def _seed_sample_game_and_prediction(db: DatabaseManager, game_id: str = "G_TEST
         ) VALUES (
             ?, '2026-27', '2026-10-20', '2026-10-20T23:00:00Z', 'BOS', 'MIA',
             'SCHEDULED', NULL, NULL, 118.5, 110.2, 99.0, 113.5, 112.0, 97.5, 2, 2,
-            '2026-10-20T18:00:00Z', 'synthetic_fixture', '2026-10-20T18:00:00Z', NULL
+            '2026-10-20T18:00:00Z', 'test_fixture', '2026-10-20T18:00:00Z', NULL
         )
         """,
         (game_id,),

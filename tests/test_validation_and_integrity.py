@@ -26,7 +26,7 @@ from src.validation.validator import (
     validate_odds_record,
     validate_temporal_split,
 )
-from tests.test_helpers import _seed_sample_game_and_prediction
+from tests.helpers import _seed_sample_game_and_prediction
 
 
 

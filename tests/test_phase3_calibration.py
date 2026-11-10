@@ -31,8 +31,14 @@ def test_phase3_config_loading_and_dataclasses() -> None:
 
 def test_phase3_calibrate_parameters_script_execution(tmp_path: Path) -> None:
     """Verifies that calibrate_parameters runs end-to-end and outputs valid empirical metrics."""
-    db_path = Path("data/nba_intelligence.sqlite3")
-    assert db_path.exists(), "Production SQLite database required for calibration test"
+    import shutil
+
+    prod_db = Path("data/nba_intelligence.sqlite3")
+    assert prod_db.exists(), "Production SQLite database required for calibration test"
+
+    # Isolate test execution to a temporary copy so production database is NEVER modified
+    db_path = tmp_path / "calibration_test.sqlite3"
+    shutil.copy2(prod_db, db_path)
 
     out_json = tmp_path / "test_calibrated_weights.json"
     payload = calibrate_all_and_save(db_path, out_json)

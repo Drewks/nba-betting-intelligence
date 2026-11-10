@@ -476,6 +476,41 @@ def m008_quarantine_legacy_synthetic_bets(conn: sqlite3.Connection, migration_id
     }
 
 
+def m009_enforce_observed_games_view(conn: sqlite3.Connection, migration_id: str) -> dict[str, Any]:
+    """
+    Creates v_observed_games view filtering out all legacy synthetic fixtures.
+    Guarantees feature extraction, rating calculations, and model backtesting
+    query only genuine NBA basketball games.
+    """
+    conn.execute(
+        """
+        CREATE VIEW IF NOT EXISTS v_observed_games AS
+        SELECT * FROM games
+        WHERE game_id NOT LIKE 'SYN%'
+          AND source_provider != 'synthetic_fixture';
+        """
+    )
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM v_observed_games;")
+    real_games_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM games WHERE game_id LIKE 'SYN%';")
+    syn_games_count = cursor.fetchone()[0]
+
+    _log_repair(
+        conn,
+        migration_id,
+        "games",
+        "OBSERVED_GAMES_VIEW",
+        "ENFORCE_OBSERVED_GAMES",
+        f"Created v_observed_games filtering {syn_games_count} synthetic games. {real_games_count} real games available.",
+    )
+    return {
+        "status": "APPLIED",
+        "real_games_count": real_games_count,
+        "synthetic_games_excluded": syn_games_count,
+    }
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -485,6 +520,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_09_006_add_sub_bankroll_and_parlays", m006_add_sub_bankroll_and_parlays),
     ("2026_11_09_007_invalidate_hardcoded_parlays", m007_invalidate_hardcoded_parlays),
     ("2026_11_10_008_quarantine_legacy_synthetic_bets", m008_quarantine_legacy_synthetic_bets),
+    ("2026_11_10_009_enforce_observed_games_view", m009_enforce_observed_games_view),
 ]
 
 

@@ -22,7 +22,6 @@ from src.agents.specialized_agents import (
 )
 from src.backtesting.backtester import WalkForwardBacktester
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
-from src.ingestion.synthetic_adapter import SyntheticFixtureAdapter
 from src.paper_trading.engine import PaperTradingEngine
 from src.reporting.reporter import (
     export_bets_and_tracking_dashboard,
@@ -137,13 +136,17 @@ class Orchestrator:
 
         # Step 2: Ingest and validate historical walk-forward dataset + optional live ESPN slate (nba_data_scout)
         def _step2_ingest() -> dict[str, Any]:
-            syn_router = DataSourceRouter([SyntheticFixtureAdapter(seed=42, num_matchdays=45, games_per_day=5)])
-            hist_bundle = self.scout_agent.ingest_and_validate_dataset(syn_router)
+            hist_games = self.db.fetch_all("SELECT * FROM v_observed_games")
+            hist_bundle: dict[str, Any] = {
+                "validated_games": hist_games,
+                "validated_odds": [],
+                "discarded_games": [],
+            }
             live_bundle: dict[str, Any] = {"validated_games": [], "validated_odds": [], "discarded_games": []}
-            if include_live_espn and sources_info["espn_public_api"]["reachable"]:
+            if include_live_espn and sources_info.get("espn_public_api", {}).get("reachable", False):
                 try:
-                    live_router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=8)])
-                    live_bundle = self.scout_agent.ingest_and_validate_dataset(live_router)
+                    espn_router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=8)])
+                    live_bundle = self.scout_agent.ingest_and_validate_dataset(espn_router)
                 except Exception as exc:
                     logger.warning(f"Live ESPN ingestion failed in step 2: {exc}")
             return {"historical": hist_bundle, "live_espn": live_bundle}

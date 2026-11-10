@@ -26,18 +26,18 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
     and clear Spanish explanations of why the bot placed a bet or decided NO_BET for each upcoming game.
     """
     all_final_games = db.fetch_all(
-        "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time"
+        "SELECT * FROM v_observed_games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time"
     )
     model_f = EnsembleStackingModel("model_f_ensemble_v2")
     if all_final_games:
         model_f.fit(all_final_games, all_final_games[-1]["game_start_time"])
 
     sched_games = db.fetch_all(
-        "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_id LIKE 'ESPN_%' ORDER BY game_start_time ASC"
+        "SELECT * FROM v_observed_games WHERE status = 'SCHEDULED' AND game_id LIKE 'ESPN_%' ORDER BY game_start_time ASC"
     )
     if not sched_games:
         sched_games = db.fetch_all(
-            "SELECT * FROM games WHERE status = 'SCHEDULED' ORDER BY game_start_time ASC LIMIT 10"
+            "SELECT * FROM v_observed_games WHERE status = 'SCHEDULED' ORDER BY game_start_time ASC LIMIT 10"
         )
 
     slate_items: list[dict[str, Any]] = []

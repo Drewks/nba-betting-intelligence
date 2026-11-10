@@ -6,7 +6,6 @@ Modular facade re-exporting specialized adapters:
 - SportradarAdapter (from src.ingestion.sportradar)
 - NBAStatsAdapter (from src.ingestion.nba_stats)
 - PlaywrightAuthorizedScraper (from src.ingestion.authorized_scraper)
-- SyntheticFixtureAdapter (from src.ingestion.synthetic_adapter)
 - DataSourceRouter (from src.ingestion.router)
 - BaseNBADataAdapter, AdapterUnavailableError (from src.ingestion.base)
 """
@@ -25,7 +24,6 @@ from src.ingestion.espn import ESPNPublicAdapter
 from src.ingestion.nba_stats import NBAStatsAdapter
 from src.ingestion.router import DataSourceRouter
 from src.ingestion.sportradar import SportradarAdapter
-from src.ingestion.synthetic_adapter import SyntheticFixtureAdapter
 from src.ingestion.the_odds_api import TheOddsAPIAdapter
 
 __all__ = [
@@ -35,7 +33,6 @@ __all__ = [
     "SportradarAdapter",
     "NBAStatsAdapter",
     "PlaywrightAuthorizedScraper",
-    "SyntheticFixtureAdapter",
     "DataSourceRouter",
     "AdapterUnavailableError",
     "STAR_PLAYER_IMPACT_PTS",

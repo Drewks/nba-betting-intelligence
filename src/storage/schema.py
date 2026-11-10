@@ -506,4 +506,10 @@ VIEW_DDL: dict[str, str] = {
     LEFT JOIN simulated_bets b ON l.reference_bet_id = b.bet_id
     WHERE l.reference_bet_id IS NULL OR b.game_id NOT LIKE 'SYN%';
     """,
+    "v_observed_games": """
+    CREATE VIEW v_observed_games AS
+    SELECT * FROM games
+    WHERE game_id NOT LIKE 'SYN%'
+      AND source_provider != 'synthetic_fixture';
+    """,
 }

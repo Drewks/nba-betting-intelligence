@@ -304,7 +304,7 @@ def apply_pregame_team_ratings(db: Any) -> int:
         """
         SELECT game_id, game_start_time, home_team, away_team, status, home_score, away_score,
                home_off_rtg, home_def_rtg, away_off_rtg, away_def_rtg, source_provider
-        FROM games
+        FROM v_observed_games
         """
     )
     ratings = compute_pregame_team_ratings(games)

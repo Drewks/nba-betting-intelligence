@@ -258,7 +258,7 @@ def test_config_path_resolution_across_working_dirs(tmp_path: Path, monkeypatch:
 
 
 def test_zero_synthetic_fixture_adapters_in_tests() -> None:
-    test_dir = Path("tests")
+    test_dir = Path(__file__).parent
     forbidden = "Synthetic" + "FixtureAdapter"
     for py_file in test_dir.glob("test_*.py"):
         if py_file.name == "test_audit_remediation_no_hardcoding.py":
@@ -267,3 +267,64 @@ def test_zero_synthetic_fixture_adapters_in_tests() -> None:
         assert forbidden not in content, (
             f"Found forbidden {forbidden} in test file {py_file.name}!"
         )
+
+
+def test_props_constants_and_situational_factors_dynamic_external_configs() -> None:
+    """Verifies external JSON configurations for props baselines, DvP, and situational factors."""
+    from src.prediction.props_constants import PLAYER_PROP_BASELINES, TEAM_DEFENSIVE_MULTIPLIERS
+    from src.ingestion.context_constants import (
+        STAR_PLAYER_IMPACT_PTS,
+        HIGH_ALTITUDE_BONUS_PTS,
+        NBA_REFEREE_CREW_PROFILE,
+        LONG_TERM_INJURY_KEYWORDS,
+    )
+
+    # 1. Player prop baselines: at least 140 star players loaded from JSON
+    assert len(PLAYER_PROP_BASELINES) >= 140
+    assert "Nikola Jokic" in PLAYER_PROP_BASELINES
+    assert "Luka Doncic" in PLAYER_PROP_BASELINES
+    assert "Jayson Tatum" in PLAYER_PROP_BASELINES
+    assert len(PLAYER_PROP_BASELINES["Nikola Jokic"]) == 6
+
+    # 2. Team defensive multipliers: all 30 NBA franchises loaded from JSON
+    assert len(TEAM_DEFENSIVE_MULTIPLIERS) == 30
+    assert "OKC" in TEAM_DEFENSIVE_MULTIPLIERS
+    assert "BOS" in TEAM_DEFENSIVE_MULTIPLIERS
+    assert "UTA" in TEAM_DEFENSIVE_MULTIPLIERS
+    assert TEAM_DEFENSIVE_MULTIPLIERS["OKC"]["tier"] == "ELITE"
+    assert TEAM_DEFENSIVE_MULTIPLIERS["UTA"]["tier"] == "TARGET"
+
+    # 3. Situational factors loaded from JSON
+    assert len(STAR_PLAYER_IMPACT_PTS) >= 30
+    assert STAR_PLAYER_IMPACT_PTS["Nikola Jokic"] >= 6.0
+    assert len(HIGH_ALTITUDE_BONUS_PTS) >= 2
+    assert HIGH_ALTITUDE_BONUS_PTS["DEN"] >= 1.5
+    assert len(NBA_REFEREE_CREW_PROFILE) >= 15
+    assert "Scott Foster" in NBA_REFEREE_CREW_PROFILE
+    assert len(LONG_TERM_INJURY_KEYWORDS) >= 5
+
+
+def test_migration_009_v_observed_games_view(tmp_path: Path) -> None:
+    """Verifies that migration 009 creates v_observed_games and isolates synthetic games."""
+    from src.storage.db import DatabaseManager
+
+    db = DatabaseManager(tmp_path / "test_m009.sqlite3")
+    # Insert one real game and one synthetic game
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, features_available_at, source_provider, ingested_at
+        ) VALUES
+        ('ESPN_REAL_001', '2026-27', '2026-11-10', '2026-11-10T20:00:00Z', 'BOS', 'NYK', 'FINAL', '2026-11-10T12:00:00Z', 'espn_public', '2026-11-10T12:00:00Z'),
+        ('SYN_20261110_BOS_AT_NYK', '2026-27', '2026-11-10', '2026-11-10T20:00:00Z', 'NYK', 'BOS', 'FINAL', '2026-11-10T12:00:00Z', 'synthetic_fixture', '2026-11-10T12:00:00Z')
+        """
+    )
+
+    all_games = db.fetch_all("SELECT game_id FROM games")
+    assert len(all_games) == 2
+
+    observed_games = db.fetch_all("SELECT game_id FROM v_observed_games")
+    assert len(observed_games) == 1
+    assert observed_games[0]["game_id"] == "ESPN_REAL_001"
+

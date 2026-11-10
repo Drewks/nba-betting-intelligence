@@ -1,0 +1,242 @@
+{
+  "OKC": {
+    "PTS": 0.94,
+    "REB": 0.96,
+    "AST": 0.93,
+    "3PM": 0.92,
+    "pace": 100.5,
+    "tier": "ELITE"
+  },
+  "MIN": {
+    "PTS": 0.93,
+    "REB": 0.95,
+    "AST": 0.92,
+    "3PM": 0.94,
+    "pace": 98.0,
+    "tier": "ELITE"
+  },
+  "BOS": {
+    "PTS": 0.94,
+    "REB": 0.96,
+    "AST": 0.94,
+    "3PM": 0.91,
+    "pace": 99.0,
+    "tier": "ELITE"
+  },
+  "ORL": {
+    "PTS": 0.93,
+    "REB": 0.94,
+    "AST": 0.93,
+    "3PM": 0.95,
+    "pace": 98.0,
+    "tier": "ELITE"
+  },
+  "HOU": {
+    "PTS": 0.95,
+    "REB": 0.95,
+    "AST": 0.94,
+    "3PM": 0.93,
+    "pace": 99.5,
+    "tier": "ELITE"
+  },
+  "MEM": {
+    "PTS": 0.95,
+    "REB": 0.96,
+    "AST": 0.94,
+    "3PM": 0.95,
+    "pace": 102.0,
+    "tier": "ELITE"
+  },
+  "CLE": {
+    "PTS": 0.97,
+    "REB": 0.98,
+    "AST": 0.96,
+    "3PM": 0.96,
+    "pace": 100.0,
+    "tier": "GOOD"
+  },
+  "GSW": {
+    "PTS": 0.96,
+    "REB": 0.97,
+    "AST": 0.96,
+    "3PM": 0.96,
+    "pace": 101.5,
+    "tier": "GOOD"
+  },
+  "MIA": {
+    "PTS": 0.97,
+    "REB": 0.98,
+    "AST": 0.96,
+    "3PM": 0.97,
+    "pace": 97.5,
+    "tier": "GOOD"
+  },
+  "LAL": {
+    "PTS": 0.98,
+    "REB": 0.98,
+    "AST": 0.98,
+    "3PM": 0.97,
+    "pace": 100.5,
+    "tier": "GOOD"
+  },
+  "PHX": {
+    "PTS": 0.98,
+    "REB": 0.98,
+    "AST": 0.98,
+    "3PM": 0.97,
+    "pace": 98.5,
+    "tier": "GOOD"
+  },
+  "DEN": {
+    "PTS": 1.0,
+    "REB": 1.0,
+    "AST": 1.0,
+    "3PM": 1.0,
+    "pace": 99.0,
+    "tier": "AVERAGE"
+  },
+  "NYK": {
+    "PTS": 0.99,
+    "REB": 0.99,
+    "AST": 1.0,
+    "3PM": 0.99,
+    "pace": 96.0,
+    "tier": "AVERAGE"
+  },
+  "SAC": {
+    "PTS": 1.0,
+    "REB": 1.0,
+    "AST": 1.0,
+    "3PM": 1.0,
+    "pace": 100.0,
+    "tier": "AVERAGE"
+  },
+  "DAL": {
+    "PTS": 0.99,
+    "REB": 1.0,
+    "AST": 1.0,
+    "3PM": 0.99,
+    "pace": 99.5,
+    "tier": "AVERAGE"
+  },
+  "MIL": {
+    "PTS": 1.01,
+    "REB": 1.0,
+    "AST": 1.01,
+    "3PM": 1.01,
+    "pace": 99.5,
+    "tier": "AVERAGE"
+  },
+  "PHI": {
+    "PTS": 1.0,
+    "REB": 1.01,
+    "AST": 1.0,
+    "3PM": 1.0,
+    "pace": 98.5,
+    "tier": "AVERAGE"
+  },
+  "IND": {
+    "PTS": 1.03,
+    "REB": 1.02,
+    "AST": 1.02,
+    "3PM": 1.01,
+    "pace": 103.5,
+    "tier": "AVERAGE"
+  },
+  "NOP": {
+    "PTS": 1.01,
+    "REB": 1.01,
+    "AST": 1.01,
+    "3PM": 1.01,
+    "pace": 98.5,
+    "tier": "AVERAGE"
+  },
+  "LAC": {
+    "PTS": 0.99,
+    "REB": 0.99,
+    "AST": 1.0,
+    "3PM": 0.99,
+    "pace": 98.0,
+    "tier": "AVERAGE"
+  },
+  "SAS": {
+    "PTS": 1.01,
+    "REB": 1.0,
+    "AST": 1.01,
+    "3PM": 1.02,
+    "pace": 100.5,
+    "tier": "AVERAGE"
+  },
+  "ATL": {
+    "PTS": 1.04,
+    "REB": 1.03,
+    "AST": 1.04,
+    "3PM": 1.04,
+    "pace": 103.0,
+    "tier": "VULNERABLE"
+  },
+  "CHI": {
+    "PTS": 1.03,
+    "REB": 1.03,
+    "AST": 1.04,
+    "3PM": 1.03,
+    "pace": 102.5,
+    "tier": "VULNERABLE"
+  },
+  "DET": {
+    "PTS": 1.03,
+    "REB": 1.02,
+    "AST": 1.03,
+    "3PM": 1.03,
+    "pace": 99.5,
+    "tier": "VULNERABLE"
+  },
+  "BKN": {
+    "PTS": 1.04,
+    "REB": 1.04,
+    "AST": 1.04,
+    "3PM": 1.05,
+    "pace": 98.0,
+    "tier": "VULNERABLE"
+  },
+  "POR": {
+    "PTS": 1.04,
+    "REB": 1.03,
+    "AST": 1.04,
+    "3PM": 1.04,
+    "pace": 100.0,
+    "tier": "VULNERABLE"
+  },
+  "UTA": {
+    "PTS": 1.07,
+    "REB": 1.06,
+    "AST": 1.07,
+    "3PM": 1.08,
+    "pace": 101.5,
+    "tier": "TARGET"
+  },
+  "WAS": {
+    "PTS": 1.08,
+    "REB": 1.07,
+    "AST": 1.08,
+    "3PM": 1.09,
+    "pace": 102.5,
+    "tier": "TARGET"
+  },
+  "CHA": {
+    "PTS": 1.06,
+    "REB": 1.06,
+    "AST": 1.06,
+    "3PM": 1.07,
+    "pace": 99.5,
+    "tier": "TARGET"
+  },
+  "TOR": {
+    "PTS": 1.06,
+    "REB": 1.06,
+    "AST": 1.07,
+    "3PM": 1.06,
+    "pace": 101.0,
+    "tier": "TARGET"
+  }
+}

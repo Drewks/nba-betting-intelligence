@@ -44,7 +44,7 @@ from src.calibration.calibrator import (
 )
 from src.features.boxscore_features import compute_boxscore_features
 from src.features.builder import build_pregame_features
-from src.features.team_ratings import apply_pregame_team_ratings, is_synthetic_game_id
+from src.features.team_ratings import apply_pregame_team_ratings
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
 from src.ingestion.boxscores import backfill_boxscores, load_boxscores
 from src.models.statistical_models import (
@@ -242,9 +242,9 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     apply_pregame_team_ratings(db)
 
     all_final_games = db.fetch_all(
-        "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
+        "SELECT * FROM v_observed_games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
     )
-    real_final_games = [g for g in all_final_games if not is_synthetic_game_id(g["game_id"])]
+    real_final_games = all_final_games
     if len(real_final_games) >= MIN_REAL_GAMES_FOR_TRAINING:
         # Never let synthetic fixtures shape real-game predictions
         all_final_games = real_final_games
@@ -257,7 +257,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     except Exception as exc:
         logger.warning("Box score backfill failed: %s", exc)
     bx_features = compute_boxscore_features(
-        [g for g in db.fetch_all("SELECT * FROM games ORDER BY game_start_time ASC") if not is_synthetic_game_id(g["game_id"])],
+        db.fetch_all("SELECT * FROM v_observed_games ORDER BY game_start_time ASC"),
         load_boxscores(db),
     )
     all_final_games = [{**g, **bx_features.get(g["game_id"], {})} for g in all_final_games]

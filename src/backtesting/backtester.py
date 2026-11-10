@@ -653,7 +653,7 @@ class WalkForwardBacktester:
         for r in rows:
             by_game[r["game_id"]][r["market"]] = r
         all_final_games = self.db.fetch_all(
-            "SELECT * FROM games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
+            "SELECT * FROM v_observed_games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
         )
         games_idx = {g["game_id"]: g for g in all_final_games}
         base_model = BaselineModel("model_a_baseline_v1")

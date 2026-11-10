@@ -20,7 +20,7 @@ from src.validation.validator import (
     DataValidationError,
     validate_odds_record,
 )
-from tests.test_helpers import _seed_sample_game_and_prediction
+from tests.helpers import _seed_sample_game_and_prediction
 
 
 
