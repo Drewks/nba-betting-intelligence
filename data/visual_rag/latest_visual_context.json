@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 124,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+  "indexed_documents_count": 34,
   "top_retrieved_context": [
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "UTA Keyonte George (PG) Day To Day (Ankle): George will not return to Sunday's (Nov. 8) game against the Timberwolves due to a right ankle injury.",
-      "relevance_score": 0.2704,
-      "captured_at": "2026-11-08"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Zach Collins F Nov 11 Day-To-Day Nov 9: Collins (illness) is out for Sunday's game against Philadelphia.",
+      "relevance_score": 0.2557,
+      "captured_at": "2026-11-10T14:07:09Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
-      "relevance_score": 0.2447,
-      "captured_at": "2026-11-08"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Sam Merrill G Nov 11 Day-To-Day Nov 9: Merrill (elbow) is listed as out for Monday's game against the Hornets.",
+      "relevance_score": 0.2527,
+      "captured_at": "2026-11-10T14:07:09Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Monday's (Nov. 9) game against Dallas.",
-      "relevance_score": 0.2421,
-      "captured_at": "2026-11-08"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Brandon Miller F Nov 12 Day-To-Day Nov 9: Miller (groin) is listed as out for Monday's game against Cleveland.",
+      "relevance_score": 0.2518,
+      "captured_at": "2026-11-10T14:07:09Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): Goodwin is Questionable for Monday's (Nov. 9) game against San Antonio.",
-      "relevance_score": 0.2137,
-      "captured_at": "2026-11-08"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Moussa Diabate F Nov 12 Day-To-Day Nov 9: Diabate (quadriceps) has been downgraded to out for Monday's game against Cleveland.",
+      "relevance_score": 0.2476,
+      "captured_at": "2026-11-10T14:07:09Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "NYK Josh Hart (SG) Day To Day (Ankle): Hart is Questionable for Tuesday's (Nov. 10) game against the Bucks.",
-      "relevance_score": 0.212,
-      "captured_at": "2026-11-09"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Morez Johnson Jr. F Nov 12 Day-To-Day Nov 9: Johnson (leg) has been ruled out for Monday's game against the Pacers.",
+      "relevance_score": 0.242,
+      "captured_at": "2026-11-10T14:07:09Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIL Tyler Herro (SG) Day To Day (Contusion): Herro is Questionable for Tuesday's (Nov. 10) game against the Knicks.",
-      "relevance_score": 0.2087,
-      "captured_at": "2026-11-09"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Norman Powell G Nov 11 Day-To-Day Nov 9: Powell (shoulder) has been ruled out for Sunday's game against the 76ers, Adam Aaronson of PhillyVoice.com reports.",
+      "relevance_score": 0.2054,
+      "captured_at": "2026-11-10T14:07:09Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "GSW Gary Payton II (SG) Day To Day (Knee): The Warriors have listed Payton II as Questionable for Monday's (Nov. 9) game against the Pelicans.",
-      "relevance_score": 0.1835,
-      "captured_at": "2026-11-09"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Grant Nelson F Nov 10 Day-To-Day Nov 8: Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports.",
+      "relevance_score": 0.2004,
+      "captured_at": "2026-11-10T14:07:09Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DEN DeMar DeRozan (SF) Day To Day (Back): Braun is Probable for Monday's (Nov. 9) game against Houston.",
-      "relevance_score": 0.169,
-      "captured_at": "2026-11-09"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Mikel Brown Jr. G Nov 11 Day-To-Day Nov 9: Brown, who finished with 18 points (5-13 FG, 3-8 3Pt, 5-7 FT), one rebound, three assists and one steal over 25 minutes in Saturday's 124-121 loss to Atlanta, won't play in Sund",
+      "relevance_score": 0.1415,
+      "captured_at": "2026-11-10T14:07:09Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

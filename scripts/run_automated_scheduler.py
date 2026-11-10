@@ -105,13 +105,14 @@ class NBADailyScheduler:
         now_pet = get_peru_time()
         logger.info(f"🌅 INICIANDO VENTANA MATUTINA (10:00 AM PET) — Hora actual: {now_pet.strftime('%Y-%m-%d %H:%M:%S PET')}")
 
-        # 0. Dynamic Headless Scraping for Peruvian Sportsbooks (Betano & RETAbet)
-        self.run_peru_playwright_odds_harvest()
-
-        # 1. Run incremental cycle in pregame mode
+        # 1. Run incremental cycle in pregame mode first (ingests slate games into DB)
         res_cycle = run_incremental_cloud_cycle(mode="pregame")
 
-        # 2. Run player props & SGP slate generator
+        # 2. Dynamic Headless Scraping for Peruvian Sportsbooks (Betano & RETAbet)
+        # Now slate_games is populated and ready for fuzzy matching
+        self.run_peru_playwright_odds_harvest()
+
+        # 3. Run player props & SGP slate generator
         props_engine = PlayerPropsEngine(db=self.db, min_ev_threshold=0.03)
         now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         slate_games = self.db.fetch_all(
@@ -311,14 +312,25 @@ class NBADailyScheduler:
         else:
             logger.info(f"ℹ️ [TELEGRAM DRY-RUN]:\n{report_msg}")
 
+        total_settled_count = len(settled_today) + len(settled_props_today) + len(settled_parlays)
+        round_pnl = (
+            sum(float(b.get("net_profit_pen") or 0.0) for b in settled_today)
+            + sum(float(p.get("net_profit_pen") or 0.0) for p in settled_props_today)
+            + sum(float(pl.get("pnl_pen") or 0.0) for pl in settled_parlays)
+        )
+
         return {
             "status": "COMPLETED",
             "window": "SETTLEMENT",
             "matchday_date": today_str,
             "executed_at_pet": now_pet.strftime("%Y-%m-%dT%H:%M:%S"),
+            "settled_count": total_settled_count,
             "settled_bets_count": len(settled_today),
             "settled_props_count": len(settled_props_today),
+            "settled_parlays_count": len(settled_parlays),
+            "daily_pnl_pen": round(round_pnl, 2),
             "settled_bankroll_pen": curr_br,
+            "current_bankroll_pen": curr_br,
             "cppi_multiplier": cppi_mult,
             "cycle_summary": settle_res,
         }

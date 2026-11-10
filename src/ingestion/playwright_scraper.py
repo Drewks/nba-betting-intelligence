@@ -140,8 +140,14 @@ class PeruPlaywrightScraper:
                             m_type = str(mkt.get("name") or mkt.get("marketType") or "").upper()
                             selections = mkt.get("selections") or mkt.get("outcomes") or []
 
-                            # Moneyline (Ganador del partido)
+                            # Moneyline (Ganador del partido - 2-Way con prórroga incluida)
+                            if any(k in m_type for k in ("TIEMPO REGLAMENTARIO", "1X2", "REGULAR TIME", "RESULTADO")):
+                                continue
                             if any(k in m_type for k in ("GANADOR", "MONEYLINE", "1 2", "12")):
+                                if len(selections) != 2:
+                                    continue
+                                if any(any(d == str(s.get("name") or "").strip().upper() for d in ("X", "EMPATE", "DRAW")) for s in selections):
+                                    continue
                                 home_odd: float | None = None
                                 away_odd: float | None = None
                                 for sel in selections:
@@ -297,8 +303,14 @@ class PeruPlaywrightScraper:
                             m_desc = str(mkt.get("name") or mkt.get("description") or "").upper()
                             selections = mkt.get("selections") or []
 
-                            # Moneyline (Ganador del encuentro)
-                            if "GANADOR" in m_desc or "MONEYLINE" in m_desc or "RESULTADO" in m_desc:
+                            # Moneyline (Ganador del encuentro - 2-Way con prórroga incluida)
+                            if any(k in m_desc for k in ("TIEMPO REGLAMENTARIO", "1X2", "REGULAR TIME", "RESULTADO DEL PARTIDO")):
+                                continue
+                            if any(k in m_desc for k in ("GANADOR", "MONEYLINE", "1 2", "12")):
+                                if len(selections) != 2:
+                                    continue
+                                if any(any(d == str(s.get("name") or "").strip().upper() for d in ("X", "EMPATE", "DRAW")) for s in selections):
+                                    continue
                                 home_odd: float | None = None
                                 away_odd: float | None = None
                                 for sel in selections:

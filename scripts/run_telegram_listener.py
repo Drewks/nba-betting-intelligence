@@ -10,6 +10,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
+import time
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -49,11 +50,15 @@ def main() -> None:
         default=None,
         help="Simulate an incoming slash-command locally (e.g., '/banca', '/picks') and print reply.",
     )
+    parser.add_argument(
+        "--supervise",
+        action="store_true",
+        help="Run under an internal supervisor that automatically restarts the listener on unexpected termination.",
+    )
     args = parser.parse_args()
 
-    listener = TelegramInteractiveListener()
-
     if args.test_cmd:
+        listener = TelegramInteractiveListener()
         print(f"\n--- SIMULANDO COMANDO: {args.test_cmd} ---")
         reply = listener.process_message(
             chat_id="5198335170",
@@ -65,11 +70,34 @@ def main() -> None:
         return
 
     if args.once:
+        listener = TelegramInteractiveListener()
         print("[*] Ejecutando una única pasada de sondeo (getUpdates)...")
         count = listener.run_polling_cycle(timeout=min(5, args.poll_timeout))
         print(f"[OK] Ciclo completado. {count} mensajes procesados.")
         return
 
+    if args.supervise:
+        logger.info("🛡️ Modo Supervisor Activado: Auto-recuperación 24/7 en segundo plano.")
+        consecutive_crashes = 0
+        while True:
+            try:
+                listener = TelegramInteractiveListener()
+                listener.start_polling_loop(poll_timeout=args.poll_timeout)
+                break
+            except KeyboardInterrupt:
+                logger.info("Supervisor detenido manualmente por el usuario.")
+                break
+            except Exception as exc:
+                consecutive_crashes += 1
+                backoff = min(60, 5 * consecutive_crashes)
+                logger.critical(
+                    f"🚨 [WATCHDOG] Listener cayó con error: {exc}. Reiniciando en {backoff}s (Fallo #{consecutive_crashes})...",
+                    exc_info=True,
+                )
+                time.sleep(backoff)
+        return
+
+    listener = TelegramInteractiveListener()
     listener.start_polling_loop(poll_timeout=args.poll_timeout)
 
 

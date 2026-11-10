@@ -24,9 +24,15 @@ class DatabaseManager:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
+        if str(self.db_path) != ":memory:" and not str(self.db_path).startswith(":memory:"):
+            try:
+                conn.execute("PRAGMA journal_mode = WAL;")
+            except Exception:
+                pass
         try:
             yield conn
             conn.commit()

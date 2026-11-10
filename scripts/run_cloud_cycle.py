@@ -139,6 +139,18 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         if p_date not in dates_to_ingest:
             dates_to_ingest.append(p_date)
 
+    # US Eastern Time calendar alignment: ESPN organizes scoreboard by US Eastern day.
+    # Games tipping off between 00:00Z and 05:00Z on date D belong to ESPN date (D - 1 day).
+    et_aligned_dates: list[str] = list(dates_to_ingest)
+    for d_str in list(dates_to_ingest):
+        try:
+            prev_d = (datetime.strptime(d_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+            if prev_d not in et_aligned_dates:
+                et_aligned_dates.append(prev_d)
+        except Exception:
+            pass
+    dates_to_ingest = sorted(et_aligned_dates)
+
     router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10)])
     ingested_dates: list[str] = []
     for dt_str in dates_to_ingest:

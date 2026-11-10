@@ -423,21 +423,29 @@ class LivePeruOddsScraper:
             # Look up existing benchmark
             bench = self._latest_observed_sharp_benchmark(gid)
             if bench is None:
-                logger.info("Skipping %s: no observed sharp (Pinnacle) moneyline quote stored.", gid)
-                continue
+                bench_h = None
+                bench_a = None
+                bench_prov = None
+                bench_ts = None
+            else:
+                bench_h = bench["home_odds"]
+                bench_a = bench["away_odds"]
+                bench_prov = bench["provider"]
+                bench_ts = bench["captured_at"]
 
             res = self.collect_slate_odds(
                 game_id=gid,
                 home_team=g["home_team"],
                 away_team=g["away_team"],
                 game_start_time=g["game_start_time"],
-                sharp_home_odds=bench["home_odds"],
-                sharp_away_odds=bench["away_odds"],
+                sharp_home_odds=bench_h,
+                sharp_away_odds=bench_a,
                 as_of_utc=now_utc,
-                sharp_book_name=bench["provider"],
-                sharp_captured_at=bench["captured_at"],
+                sharp_book_name=bench_prov,
+                sharp_captured_at=bench_ts,
             )
-            results.append(res)
+            if res.get("observed_quotes_count", 0) > 0 or bench is not None:
+                results.append(res)
 
             # Telegram Dispatch for Stale Lines
             if notify_telegram and self.bot.is_live:

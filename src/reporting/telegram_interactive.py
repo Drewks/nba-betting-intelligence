@@ -519,52 +519,79 @@ class TelegramInteractiveListener:
             lines.append("✅ *Margen promedio de mercado en Perú:* ~`104.2%` (Líneas balanceadas)")
             # Show best odds for first 2 games
             for g in games[:2]:
-                bh = g.get("best_home", {})
-                ba = g.get("best_away", {})
-                lines.append(
-                    f"📍 *{g.get('matchup', g.get('game_id'))}*\n"
-                    f"   • Local: `{bh.get('odds', 1.90):.2f}` ({bh.get('book', '')})\n"
-                    f"   • Visita: `{ba.get('odds', 1.90):.2f}` ({ba.get('book', '')})"
-                )
+                bh = g.get("best_home") or {}
+                ba = g.get("best_away") or {}
+                if bh.get("odds") and ba.get("odds"):
+                    lines.append(
+                        f"📍 *{g.get('matchup', g.get('game_id'))}*\n"
+                        f"   • Local: `{float(bh.get('odds', 1.90)):.2f}` ({bh.get('book', '')})\n"
+                        f"   • Visita: `{float(ba.get('odds', 1.90)):.2f}` ({ba.get('book', '')})"
+                    )
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
         return "\n".join(lines)
 
     def handle_partidos(self) -> str:
         """Returns today's NBA game slate with Peru Time tipoff hours."""
-        games = self.db.fetch_all(
+        from datetime import datetime, timezone, timedelta
+
+        # Fetch upcoming scheduled games first
+        scheduled_games = self.db.fetch_all(
             """
             SELECT game_id, home_team, away_team, matchday_date, game_start_time, status, home_score, away_score
             FROM games
-            WHERE matchday_date >= date('now', '-1 day')
-            ORDER BY matchday_date ASC, game_start_time ASC, game_id ASC
+            WHERE status = 'SCHEDULED' AND game_id NOT LIKE 'SYN%'
+            ORDER BY game_start_time ASC
             LIMIT 10
             """
         )
 
-        if not games:
+        # Fetch recently completed games
+        recent_final_games = self.db.fetch_all(
+            """
+            SELECT game_id, home_team, away_team, matchday_date, game_start_time, status, home_score, away_score
+            FROM games
+            WHERE status IN ('FINAL', 'COMPLETED', 'STATUS_FINAL') AND game_id NOT LIKE 'SYN%'
+            ORDER BY game_start_time DESC
+            LIMIT 6
+            """
+        )
+
+        if not scheduled_games and not recent_final_games:
             return "ℹ️ No se registraron partidos recientes en la base de datos."
 
         lines = [
             "📅 *CARTELERA NBA (HORA DE PERÚ)*",
             "━━━━━━━━━━━━━━━━━━━━━━",
         ]
-        for g in games:
-            h = g.get("home_team")
-            a = g.get("away_team")
-            st = (g.get("status") or "SCHEDULED").upper()
-            mdate = g.get("matchday_date", "")
 
-            if st in ("FINAL", "COMPLETED", "STATUS_FINAL"):
+        if scheduled_games:
+            lines.append("⏳ *Próximos Partidos:*")
+            for g in scheduled_games:
+                h = g.get("home_team")
+                a = g.get("away_team")
+                start_iso = g.get("game_start_time") or ""
+                time_pet = ""
+                if start_iso:
+                    try:
+                        dt_utc = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+                        dt_pet = dt_utc.astimezone(timezone(timedelta(hours=-5)))
+                        time_pet = dt_pet.strftime("%I:%M %p PET")
+                    except Exception:
+                        time_pet = g.get("matchday_date", "")
+                lines.append(f"🏀 `{a}` @ `{h}` — *{time_pet}*")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+        if recent_final_games:
+            lines.append("🏁 *Últimos Resultados:*")
+            for g in recent_final_games:
+                h = g.get("home_team")
+                a = g.get("away_team")
                 hs = g.get("home_score", 0)
                 as_ = g.get("away_score", 0)
                 lines.append(f"🏁 `{a}` {as_} @ `{h}` {hs} *(Final)*")
-            elif st in ("IN_PROGRESS", "LIVE"):
-                lines.append(f"🔴 `{a}` @ `{h}` *(En Juego)*")
-            else:
-                lines.append(f"🏀 `{a}` @ `{h}` — *{mdate}* *(Programado)*")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("💡 _Tip: Usa /picks para ver las recomendaciones del modelo._")
         return "\n".join(lines)
 
@@ -576,9 +603,9 @@ class TelegramInteractiveListener:
         scheduler = NBADailyScheduler(db_path=self.db.db_path)
         res = scheduler.execute_nightly_settlement_cycle()
 
-        settled_count = res.get("settled_count", 0)
+        settled_count = res.get("settled_count", res.get("settled_bets_count", 0))
         pnl = res.get("daily_pnl_pen", 0.0)
-        bankroll = res.get("current_bankroll_pen", 100.0)
+        bankroll = res.get("settled_bankroll_pen", res.get("current_bankroll_pen", 100.0))
 
         pnl_sign = "+" if pnl >= 0 else ""
         return (

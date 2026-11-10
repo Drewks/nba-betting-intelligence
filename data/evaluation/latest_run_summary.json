@@ -1,12 +1,13 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-09T23:47:46Z",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-10T14:06:01Z",
   "ingested_dates": [
+    "2026-11-08",
     "2026-11-09",
     "2026-11-10"
   ],
-  "closing_lines_promoted": 49,
+  "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
@@ -15,41 +16,41 @@
   },
   "bankroll_state": {
     "initial_bankroll_pen": 100.0,
-    "settled_bankroll_pen": 103.6332,
-    "cumulative_net_profit_pen": 3.6332,
-    "pending_exposure_pen": 6.62,
+    "settled_bankroll_pen": 97.0132,
+    "cumulative_net_profit_pen": -2.9868,
+    "pending_exposure_pen": 0,
     "available_balance_pen": 97.0132,
-    "settled_bets_count": 29,
-    "pending_bets_count": 3
+    "settled_bets_count": 32,
+    "pending_bets_count": 0
   },
   "sub_bankroll_state": {
     "initial_bankroll_pen": 50.0,
     "settled_bankroll_pen": 50.0,
-    "pending_exposure_pen": 9.55,
-    "available_balance_pen": 40.45,
-    "cumulative_net_profit_pen": 0,
+    "pending_exposure_pen": 0,
+    "available_balance_pen": 50.0,
+    "cumulative_net_profit_pen": 0.0,
     "roi_pct": 0.0,
-    "settled_parlays_count": 0.0,
-    "pending_parlays_count": 2.0
+    "settled_parlays_count": 2.0,
+    "pending_parlays_count": 0.0
   },
   "audit_verdict": "REMAIN_IN_PAPER_TRADING",
   "financial_and_statistical_summary": {
     "initial_bankroll_pen": 100.0,
-    "current_settled_bankroll_pen": 100.0892,
-    "net_profit_pen": 0.0892,
-    "roi_pct": 0.2847,
-    "yield_pct": 0.235,
-    "settled_bets_count": 25,
+    "current_settled_bankroll_pen": 93.4692,
+    "net_profit_pen": -6.5308,
+    "roi_pct": -17.209,
+    "yield_pct": -17.209,
+    "settled_bets_count": 28,
     "won_count": 12,
-    "lost_count": 13,
+    "lost_count": 16,
     "push_count": 0,
-    "max_drawdown_pen": 7.8438,
-    "overall_brier_score": 0.216888,
-    "baseline_brier_score": 0.252516,
-    "overall_log_loss": 0.621123,
-    "market_brier_score": 0.213756,
-    "model_brier_on_market_subset": 0.216888,
-    "market_comparison_sample_size": 77,
+    "max_drawdown_pen": 10.2408,
+    "overall_brier_score": 0.216845,
+    "baseline_brier_score": 0.250793,
+    "overall_log_loss": 0.620846,
+    "market_brier_score": 0.213712,
+    "model_brier_on_market_subset": 0.216845,
+    "market_comparison_sample_size": 85,
     "history_integrity": {
       "missing_rows_total": 0,
       "missing_rows_by_table": {
@@ -63,7 +64,7 @@
       },
       "examples": {}
     },
-    "baseline_log_loss": 0.700295,
+    "baseline_log_loss": 0.696626,
     "mean_clv_pct": -2.1706,
     "clv_governor_factor": 1.0
   },
@@ -74,8 +75,8 @@
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
-      "credentials_configured": true,
-      "status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (30 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)"
+      "credentials_configured": false,
+      "status": "READY_IF_KEY_PROVIDED"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -85,9 +86,9 @@
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
       "browserbase_cli_installed": true,
-      "browserbase_api_key_configured": true,
-      "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-09T23:48:04Z",
+      "browserbase_api_key_configured": false,
+      "browserbase_mode": "LOCAL_BROWSE_CLI",
+      "extracted_at": "2026-11-10T14:07:08Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -95,57 +96,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
-    "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-    "indexed_documents_count": 124,
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
+    "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+    "indexed_documents_count": 34,
     "top_retrieved_context": [
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "UTA Keyonte George (PG) Day To Day (Ankle): George will not return to Sunday's (Nov. 8) game against the Timberwolves due to a right ankle injury.",
-        "relevance_score": 0.2704,
-        "captured_at": "2026-11-08"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Zach Collins F Nov 11 Day-To-Day Nov 9: Collins (illness) is out for Sunday's game against Philadelphia.",
+        "relevance_score": 0.2557,
+        "captured_at": "2026-11-10T14:07:09Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CLE Jarrett Allen (C) Day To Day (Knee): Allen is Questionable for Monday's (Nov. 9) game against Charlotte.",
-        "relevance_score": 0.2447,
-        "captured_at": "2026-11-08"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Sam Merrill G Nov 11 Day-To-Day Nov 9: Merrill (elbow) is listed as out for Monday's game against the Hornets.",
+        "relevance_score": 0.2527,
+        "captured_at": "2026-11-10T14:07:09Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND T.J. McConnell (PG) Day To Day (Hamstring): McConnell is Questionable for Monday's (Nov. 9) game against Dallas.",
-        "relevance_score": 0.2421,
-        "captured_at": "2026-11-08"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Brandon Miller F Nov 12 Day-To-Day Nov 9: Miller (groin) is listed as out for Monday's game against Cleveland.",
+        "relevance_score": 0.2518,
+        "captured_at": "2026-11-10T14:07:09Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHX Jordan Goodwin (PG) Day To Day (Calf): Goodwin is Questionable for Monday's (Nov. 9) game against San Antonio.",
-        "relevance_score": 0.2137,
-        "captured_at": "2026-11-08"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Moussa Diabate F Nov 12 Day-To-Day Nov 9: Diabate (quadriceps) has been downgraded to out for Monday's game against Cleveland.",
+        "relevance_score": 0.2476,
+        "captured_at": "2026-11-10T14:07:09Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "NYK Josh Hart (SG) Day To Day (Ankle): Hart is Questionable for Tuesday's (Nov. 10) game against the Bucks.",
-        "relevance_score": 0.212,
-        "captured_at": "2026-11-09"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Morez Johnson Jr. F Nov 12 Day-To-Day Nov 9: Johnson (leg) has been ruled out for Monday's game against the Pacers.",
+        "relevance_score": 0.242,
+        "captured_at": "2026-11-10T14:07:09Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIL Tyler Herro (SG) Day To Day (Contusion): Herro is Questionable for Tuesday's (Nov. 10) game against the Knicks.",
-        "relevance_score": 0.2087,
-        "captured_at": "2026-11-09"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Norman Powell G Nov 11 Day-To-Day Nov 9: Powell (shoulder) has been ruled out for Sunday's game against the 76ers, Adam Aaronson of PhillyVoice.com reports.",
+        "relevance_score": 0.2054,
+        "captured_at": "2026-11-10T14:07:09Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "GSW Gary Payton II (SG) Day To Day (Knee): The Warriors have listed Payton II as Questionable for Monday's (Nov. 9) game against the Pelicans.",
-        "relevance_score": 0.1835,
-        "captured_at": "2026-11-09"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Grant Nelson F Nov 10 Day-To-Day Nov 8: Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports.",
+        "relevance_score": 0.2004,
+        "captured_at": "2026-11-10T14:07:09Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "DEN DeMar DeRozan (SF) Day To Day (Back): Braun is Probable for Monday's (Nov. 9) game against Houston.",
-        "relevance_score": 0.169,
-        "captured_at": "2026-11-09"
+        "source": "playwright_espn_injuries_table",
+        "snippet": "Mikel Brown Jr. G Nov 11 Day-To-Day Nov 9: Brown, who finished with 18 points (5-13 FG, 3-8 3Pt, 5-7 FT), one rebound, three assists and one steal over 25 minutes in Saturday's 124-121 loss to Atlanta, won't play in Sund",
+        "relevance_score": 0.1415,
+        "captured_at": "2026-11-10T14:07:09Z"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -155,10 +156,10 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY (30 teams injuries + 30 teams tactical splits + 30 Synergy NBA teams + 60 Synergy possession events)",
+    "sportradar_status": "READY_IF_KEY_PROVIDED",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
-    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
+    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
   }
 }
