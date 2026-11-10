@@ -302,6 +302,25 @@ TEAM_DEFENSIVE_MULTIPLIERS: dict[str, dict[str, Any]] = {
 }
 
 
+_FALLBACK_ROSTERS_CACHE: dict[str, list[str]] | None = None
+
+
+def get_fallback_rosters() -> dict[str, list[str]]:
+    """Loads fallback rosters from config/fallback_rosters.json with caching."""
+    global _FALLBACK_ROSTERS_CACHE
+    if _FALLBACK_ROSTERS_CACHE is not None:
+        return _FALLBACK_ROSTERS_CACHE
+    p = Path("config/fallback_rosters.json")
+    if p.exists():
+        try:
+            _FALLBACK_ROSTERS_CACHE = json.loads(p.read_text(encoding="utf-8"))
+            return _FALLBACK_ROSTERS_CACHE
+        except Exception:
+            pass
+    _FALLBACK_ROSTERS_CACHE = {}
+    return _FALLBACK_ROSTERS_CACHE
+
+
 class PlayerPropsEngine:
     """
     Quantitative Modeling of NBA Player Props & SGP:
@@ -1471,39 +1490,7 @@ class PlayerPropsEngine:
             except Exception as exc:
                 logging.warning(f"Handled exception in player_props (line 1133): {exc}")
 
-        # Direct team mapping fallback for offline testing without DB
-        fallback_rosters: dict[str, list[str]] = {
-            "DAL": ["Luka Doncic", "Kyrie Irving", "Klay Thompson", "PJ Washington", "Dereck Lively II"],
-            "DEN": ["Nikola Jokic", "Jamal Murray", "Michael Porter Jr.", "Aaron Gordon", "Christian Braun"],
-            "BOS": ["Jayson Tatum", "Jaylen Brown", "Derrick White", "Jrue Holiday", "Kristaps Porzingis", "Payton Pritchard"],
-            "GSW": ["Stephen Curry", "Jonathan Kuminga", "Andrew Wiggins", "Draymond Green", "Buddy Hield"],
-            "PHX": ["Kevin Durant", "Devin Booker", "Bradley Beal", "Jusuf Nurkic", "Tyus Jones"],
-            "LAL": ["LeBron James", "Anthony Davis", "Austin Reaves", "D'Angelo Russell", "Rui Hachimura"],
-            "OKC": ["Shai Gilgeous-Alexander", "Jalen Williams", "Chet Holmgren", "Alex Caruso"],
-            "MIL": ["Giannis Antetokounmpo", "Damian Lillard", "Brook Lopez", "Bobby Portis"],
-            "NYK": ["Jalen Brunson", "Karl-Anthony Towns", "Mikal Bridges", "OG Anunoby", "Josh Hart"],
-            "MIN": ["Anthony Edwards", "Julius Randle", "Rudy Gobert", "Naz Reid", "Mike Conley"],
-            "PHI": ["Joel Embiid", "Tyrese Maxey", "Paul George", "Kelly Oubre Jr.", "Jared McCain"],
-            "CLE": ["Donovan Mitchell", "Darius Garland", "Evan Mobley", "Jarrett Allen"],
-            "IND": ["Tyrese Haliburton", "Pascal Siakam", "Myles Turner", "Bennedict Mathurin"],
-            "SAC": ["De'Aaron Fox", "DeMar DeRozan", "Domantas Sabonis", "Keegan Murray", "Malik Monk"],
-            "MEM": ["Ja Morant", "Desmond Bane", "Jaren Jackson Jr.", "Zach Edey"],
-            "MIA": ["Jimmy Butler", "Bam Adebayo", "Tyler Herro", "Terry Rozier"],
-            "ORL": ["Paolo Banchero", "Franz Wagner", "Jalen Suggs"],
-            "HOU": ["Alperen Sengun", "Jalen Green", "Fred VanVleet", "Jabari Smith Jr."],
-            "SAS": ["Victor Wembanyama", "Chris Paul", "Devin Vassell", "Keldon Johnson"],
-            "ATL": ["Trae Young", "Jalen Johnson", "De'Andre Hunter", "Clint Capela"],
-            "BKN": ["Cam Thomas", "Dennis Schroder", "Cameron Johnson"],
-            "TOR": ["Scottie Barnes", "RJ Barrett", "Immanuel Quickley", "Jakob Poeltl"],
-            "CHI": ["Zach LaVine", "Nikola Vucevic", "Coby White", "Josh Giddey"],
-            "CHA": ["LaMelo Ball", "Brandon Miller", "Miles Bridges"],
-            "DET": ["Cade Cunningham", "Jaden Ivey", "Tobias Harris", "Jalen Duren"],
-            "WAS": ["Jordan Poole", "Kyle Kuzma", "Jonas Valanciunas"],
-            "UTA": ["Lauri Markkanen", "Collin Sexton", "John Collins", "Keyonte George"],
-            "POR": ["Anfernee Simons", "Jerami Grant", "Deandre Ayton"],
-            "LAC": ["James Harden", "Norman Powell", "Ivica Zubac"],
-            "NOP": ["Zion Williamson", "Brandon Ingram", "CJ McCollum"],
-        }
+        fallback_rosters = get_fallback_rosters()
 
         for game in valid_slate_games:
             gid = game.get("game_id", f"G_SLATE_{uuid.uuid4().hex[:6]}")
@@ -1516,7 +1503,19 @@ class PlayerPropsEngine:
             for _is_home, team_code, opp_code in [(True, home_t, away_t), (False, away_t, home_t)]:
                 if not team_code:
                     continue
-                team_players = active_rosters.get(team_code) or fallback_rosters.get(team_code, [])
+                team_players = active_rosters.get(team_code)
+                if not team_players and self.db:
+                    try:
+                        db_p = self.db.fetch_all(
+                            "SELECT player_name FROM game_boxscores WHERE team = ? GROUP BY player_name ORDER BY COUNT(*) DESC LIMIT 10",
+                            (team_code,),
+                        )
+                        if db_p:
+                            team_players = [r["player_name"] for r in db_p]
+                    except Exception:
+                        pass
+                if not team_players:
+                    team_players = fallback_rosters.get(team_code, [])
                 absent_list = team_injuries.get(team_code, [])
 
                 for p_raw in team_players:

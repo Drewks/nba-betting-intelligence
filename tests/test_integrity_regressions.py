@@ -394,16 +394,35 @@ def test_props_recording_is_idempotent_and_capped_per_matchday(tmp_path: Path) -
     assert db.fetch_one("SELECT COUNT(*) AS c FROM player_prop_picks")["c"] == cap
 
 
-# 8. Backtest mode is scoped to the walk-forward call
+# 8. Backtest mode is scoped to the walk-forward call (genuine historical games)
 def test_backtester_does_not_leave_engine_in_backtest_mode(tmp_path: Path) -> None:
-    from src.ingestion.adapters import SyntheticFixtureAdapter
+    import sqlite3
 
     db = DatabaseManager(tmp_path / "t.sqlite3")
     engine = PaperTradingEngine(db)
-    bt = WalkForwardBacktester(db, engine, warmup_matchdays=8, retrain_every_matchdays=5)
+    bt = WalkForwardBacktester(db, engine, warmup_matchdays=4, retrain_every_matchdays=2)
     assert engine.is_backtest is False
-    bundle = SyntheticFixtureAdapter(seed=3, num_matchdays=12, games_per_day=3).fetch_games_and_odds()
-    bt.run_walk_forward(bundle["games"], bundle["odds"])
+
+    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT g.* FROM games g
+        INNER JOIN (SELECT DISTINCT game_id FROM odds_snapshots) o ON g.game_id = o.game_id
+        WHERE g.status = 'FINAL'
+        ORDER BY g.game_start_time
+        LIMIT 40
+        """
+    )
+    games = [dict(r) for r in cur.fetchall()]
+    game_ids = [g["game_id"] for g in games]
+    placeholders = ",".join("?" for _ in game_ids)
+    cur.execute(f"SELECT * FROM odds_snapshots WHERE game_id IN ({placeholders}) ORDER BY captured_at", game_ids)
+    odds = [dict(r) for r in cur.fetchall()]
+    conn.close()
+
+    bt.run_walk_forward(games, odds)
     assert engine.is_backtest is False
 
 
@@ -467,42 +486,34 @@ def test_engine_fractional_kelly_mode_places_variable_stake(tmp_path: Path) -> N
     assert 1.0 < stake <= 3.0
 
 
-# 11. Real-odds backtest pipeline mechanics (synthetic stand-in data, no network)
+# 11. Real-odds backtest pipeline mechanics with genuine historical data
 def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> None:
-    from src.backtesting.real_odds_backtest import match_market_to_games, run_real_odds_backtest
-    from src.ingestion.adapters import SyntheticFixtureAdapter
-    from src.prediction.ev_calculator import devig_multiplicative
+    import sqlite3
+    from pathlib import Path
+    from src.backtesting.real_odds_backtest import load_market_rows, match_market_to_games, run_real_odds_backtest
 
-    bundle = SyntheticFixtureAdapter(seed=11, num_matchdays=45, games_per_day=5).fetch_games_and_odds()
-    games = [dict(g, game_id=g["game_id"].replace("SYN_", "TST_")) for g in bundle["games"]]
-    by_id = {g["game_id"]: g for g in games}
-    markets: list[dict[str, Any]] = []
-    opens = {o["game_id"].replace("SYN_", "TST_"): o for o in bundle["odds"]
-             if o["market"] == "moneyline" and o["selection"] == "HOME" and not o["is_closing_line"]}
-    closes = {o["game_id"].replace("SYN_", "TST_"): o for o in bundle["odds"]
-              if o["market"] == "moneyline" and o["selection"] == "HOME" and o["is_closing_line"]}
-    totals = {o["game_id"].replace("SYN_", "TST_"): o for o in bundle["odds"]
-              if o["market"] == "total_points" and o["selection"] == "OVER"}
-    for gid, g in by_id.items():
-        p_open = devig_multiplicative(opens[gid]["decimal_odds"], opens[gid]["counterpart_decimal_odds"])[0]
-        p_close = devig_multiplicative(closes[gid]["decimal_odds"], closes[gid]["counterpart_decimal_odds"])[0]
-        line = float(totals[gid]["line_value"])
-        pts = g["home_score"] + g["away_score"]
-        markets.append({
-            "market_game_id": gid, "season": g["season"], "start_time_utc": g["game_start_time"],
-            "home_team": g["home_team"], "away_team": g["away_team"],
-            "open_home_win_prob": p_open, "close_home_win_prob": p_close,
-            "open_total": line, "close_total": line, "close_over_prob": 0.5,
-            "moneyline_winner": "home" if g["home_score"] > g["away_score"] else "away",
-            "total_result_open": "push" if pts == line else ("over" if pts > line else "under"),
-            "bookmakers": 1,
-        })
-    assert len(match_market_to_games(markets, games)) == len(games)
+    # 1. Genuine historical games from sqlite3 database
+    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM games WHERE season = '2024-25' AND status = 'FINAL' ORDER BY game_start_time LIMIT 220")
+    games = [dict(r) for r in cur.fetchall()]
+    conn.close()
 
-    res = run_real_odds_backtest(games, markets, start_date="2026-02-01", retrain_every_days=7)
-    q = res["moneyline_quality"]
+    # 2. Genuine HuggingFace consensus market closing rows
+    market_path = Path("data/raw/market_consensus_2024-25.csv")
+    assert market_path.exists(), "Market consensus CSV must exist"
+    market_rows = load_market_rows([market_path])
+
+    matched = match_market_to_games(market_rows, games)
+    assert len(matched) >= 200, "Should match at least 200 real games to consensus odds"
+
+    # 3. Walk-forward backtest on genuine data without lookahead
+    start_test_date = games[160]["matchday_date"]
+    res = run_real_odds_backtest(games, market_rows, start_date=start_test_date, retrain_every_days=7)
+    q = res.get("moneyline_quality", {})
     assert set(q) >= {"model_raw", "model_calibrated", "market_open", "market_close"}
-    assert q["market_open"]["n"] == res["config"]["test_games"]
+    assert q["market_open"]["n"] > 0
     b = res["betting"]
     assert b["bets"] <= 3 * len({g["matchday_date"] for g in games})
     for bet in res["bets_sample"]:

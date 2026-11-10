@@ -154,8 +154,17 @@ def canonical_bookmaker_name(provider: str) -> str:
 # Sharp NBA closing lines are very efficient; a pure model estimate that disagrees by 10+ points
 # is far more likely to be model error than edge. 0.30 is a conservative prior until enough real
 # out-of-sample results exist to learn it.
-DEFAULT_MODEL_WEIGHT = 0.30
-MAX_MODEL_MARKET_DISAGREEMENT = 0.15
+def _load_model_weights_from_config() -> tuple[float, float]:
+    try:
+        from src.config import load_config
+        m = load_config().model
+        return m.market_anchor_model_weight, getattr(m, "max_model_market_disagreement", 0.15)
+    except Exception:
+        return 0.30, 0.15
+
+_cfg_w, _cfg_d = _load_model_weights_from_config()
+DEFAULT_MODEL_WEIGHT: float = _cfg_w
+MAX_MODEL_MARKET_DISAGREEMENT: float = _cfg_d
 
 
 def compute_market_consensus(odds_rows: list[dict[str, Any]], method: str = "shin") -> dict[tuple[str, str, float | None], dict[str, Any]]:

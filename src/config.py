@@ -36,6 +36,7 @@ class ModelConfig:
     tempo_alpha_slow: float
     tempo_alpha_fast: float
     market_anchor_model_weight: float
+    max_model_market_disagreement: float = 0.15
 
 
 @dataclass(frozen=True)
@@ -238,6 +239,31 @@ SCRAPER_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "scrap
 
 
 @dataclass(frozen=True)
+class SituationalFactorsConfig:
+    home_court_advantage_elo: float = 50.0
+    home_court_advantage_pts: float = 1.85
+    b2b_penalty_away: float = -2.10
+    b2b_penalty_home: float = -1.60
+    rest_3plus_bonus_away: float = 0.20
+    rest_3plus_bonus_home: float = 0.30
+    altitude_edge_multiplier: float = 1.35
+    altitude_threshold_feet: float = 4000.0
+    altitude_divisor_feet: float = 4200.0
+    travel_miles_rate: float = 0.22
+    timezone_rate: float = 0.12
+
+
+@dataclass(frozen=True)
+class LineupSynergyConfig:
+    initiator_absence_threshold: float = 1.25
+    initiator_absence_penalty: float = 0.32
+    rim_anchor_absence_threshold: float = 1.40
+    rim_anchor_absence_penalty: float = 0.35
+    two_way_wing_penalty: float = 0.22
+    compound_absence_penalty: float = 0.14
+
+
+@dataclass(frozen=True)
 class AppConfig:
     model: ModelConfig
     risk: RiskConfig
@@ -246,6 +272,8 @@ class AppConfig:
     hybrid_allocation: HybridAllocationConfig = field(default_factory=HybridAllocationConfig)
     clv_meta_labeling: CLVMetaLabelingConfig = field(default_factory=CLVMetaLabelingConfig)
     copula_correlations: CopulaCorrelationsConfig = field(default_factory=CopulaCorrelationsConfig)
+    situational_factors: SituationalFactorsConfig = field(default_factory=SituationalFactorsConfig)
+    lineup_synergy: LineupSynergyConfig = field(default_factory=LineupSynergyConfig)
 
 
 def _require(section: dict[str, Any], key: str, section_name: str) -> Any:
@@ -363,6 +391,12 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         market_anchor_model_weight=_in_range(
             "market_anchor_model_weight", _require(m, "market_anchor_model_weight", "model"), 0.0, 1.0
         ),
+        max_model_market_disagreement=_in_range(
+            "max_model_market_disagreement",
+            m.get("max_model_market_disagreement", 0.15),
+            0.01,
+            0.50,
+        ),
     )
     staking_mode = str(_require(r, "staking_mode", "risk_management"))
     if staking_mode not in ("fractional_kelly", "flat"):
@@ -474,6 +508,39 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     else:
         copula_correlations = CopulaCorrelationsConfig()
 
+    # Optional situational_factors section
+    sit_raw = raw.get("situational_factors")
+    if sit_raw:
+        situational_factors = SituationalFactorsConfig(
+            home_court_advantage_elo=float(sit_raw.get("home_court_advantage_elo", 50.0)),
+            home_court_advantage_pts=float(sit_raw.get("home_court_advantage_pts", 1.85)),
+            b2b_penalty_away=float(sit_raw.get("b2b_penalty_away", -2.10)),
+            b2b_penalty_home=float(sit_raw.get("b2b_penalty_home", -1.60)),
+            rest_3plus_bonus_away=float(sit_raw.get("rest_3plus_bonus_away", 0.20)),
+            rest_3plus_bonus_home=float(sit_raw.get("rest_3plus_bonus_home", 0.30)),
+            altitude_edge_multiplier=float(sit_raw.get("altitude_edge_multiplier", 1.35)),
+            altitude_threshold_feet=float(sit_raw.get("altitude_threshold_feet", 4000.0)),
+            altitude_divisor_feet=float(sit_raw.get("altitude_divisor_feet", 4200.0)),
+            travel_miles_rate=float(sit_raw.get("travel_miles_rate", 0.22)),
+            timezone_rate=float(sit_raw.get("timezone_rate", 0.12)),
+        )
+    else:
+        situational_factors = SituationalFactorsConfig()
+
+    # Optional lineup_synergy section
+    syn_raw = raw.get("lineup_synergy")
+    if syn_raw:
+        lineup_synergy = LineupSynergyConfig(
+            initiator_absence_threshold=float(syn_raw.get("initiator_absence_threshold", 1.25)),
+            initiator_absence_penalty=float(syn_raw.get("initiator_absence_penalty", 0.32)),
+            rim_anchor_absence_threshold=float(syn_raw.get("rim_anchor_absence_threshold", 1.40)),
+            rim_anchor_absence_penalty=float(syn_raw.get("rim_anchor_absence_penalty", 0.35)),
+            two_way_wing_penalty=float(syn_raw.get("two_way_wing_penalty", 0.22)),
+            compound_absence_penalty=float(syn_raw.get("compound_absence_penalty", 0.14)),
+        )
+    else:
+        lineup_synergy = LineupSynergyConfig()
+
     return AppConfig(
         model=model,
         risk=risk,
@@ -482,6 +549,8 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         hybrid_allocation=hybrid_allocation,
         clv_meta_labeling=clv_meta_labeling,
         copula_correlations=copula_correlations,
+        situational_factors=situational_factors,
+        lineup_synergy=lineup_synergy,
     )
 
 

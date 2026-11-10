@@ -16,6 +16,8 @@ finished before each game's tip-off:
 from __future__ import annotations
 
 from datetime import datetime
+import json
+from pathlib import Path
 from typing import Any
 
 from src.config import load_config
@@ -416,6 +418,48 @@ PLAYER_ON_OFF_SYNERGY_PROFILES: dict[str, tuple[float, float, float, float, str]
 }
 
 
+_SYNERGY_PROFILES_CACHE: dict[str, tuple[float, float, float, float, str]] | None = None
+_LINEUP_SYNERGY_CONFIG_CACHE: Any = None
+
+
+def get_player_on_off_synergy_profiles() -> dict[str, tuple[float, float, float, float, str]]:
+    """Loads player on/off RAPM synergy profiles from calibrated weights JSON with fallback to default priors."""
+    global _SYNERGY_PROFILES_CACHE
+    if _SYNERGY_PROFILES_CACHE is not None:
+        return _SYNERGY_PROFILES_CACHE
+
+    profiles: dict[str, tuple[float, float, float, float, str]] = dict(PLAYER_ON_OFF_SYNERGY_PROFILES)
+    w_file = Path("config/calibrated_weights.json")
+    if w_file.exists():
+        try:
+            raw_w = json.loads(w_file.read_text(encoding="utf-8")).get("player_synergy_profiles") or {}
+            for name, val in raw_w.items():
+                if isinstance(val, dict):
+                    profiles[name] = (
+                        float(val.get("net_rapm_pts", 3.0)),
+                        float(val.get("off_share", 0.5)),
+                        float(val.get("def_share", 0.5)),
+                        float(val.get("pace_delta_when_out", 0.0)),
+                        str(val.get("tactical_role", "TWO_WAY_WING")),
+                    )
+        except Exception:
+            pass
+    _SYNERGY_PROFILES_CACHE = profiles
+    return profiles
+
+
+def _get_lineup_synergy_config() -> Any:
+    global _LINEUP_SYNERGY_CONFIG_CACHE
+    if _LINEUP_SYNERGY_CONFIG_CACHE is None:
+        try:
+            from src.config import load_config
+            _LINEUP_SYNERGY_CONFIG_CACHE = load_config().lineup_synergy
+        except Exception:
+            from src.config import LineupSynergyConfig
+            _LINEUP_SYNERGY_CONFIG_CACHE = LineupSynergyConfig()
+    return _LINEUP_SYNERGY_CONFIG_CACHE
+
+
 def compute_lineup_synergy_penalty(absent_players: list[dict[str, Any]]) -> dict[str, float]:
     """
     V7 LineupSynergyEngine (pbpstats On/Off RAPM Role-Cluster Model):
@@ -432,6 +476,8 @@ def compute_lineup_synergy_penalty(absent_players: list[dict[str, Any]]) -> dict
             "synergy_compound_bonus": 0.0,
         }
 
+    syn_cfg = _get_lineup_synergy_config()
+    profiles = get_player_on_off_synergy_profiles()
     off_pen_raw = 0.0
     def_pen_raw = 0.0
     pace_delta_raw = 0.0
@@ -459,8 +505,8 @@ def compute_lineup_synergy_penalty(absent_players: list[dict[str, Any]]) -> dict
         else:
             continue
 
-        if p_name in PLAYER_ON_OFF_SYNERGY_PROFILES:
-            base_val, off_sh, def_sh, p_delta, role = PLAYER_ON_OFF_SYNERGY_PROFILES[p_name]
+        if p_name in profiles:
+            base_val, off_sh, def_sh, p_delta, role = profiles[p_name]
             unit_weight = prob_out * adapt_factor
         else:
             base_val = float(item.get("default_impact", 0.45))
@@ -489,17 +535,17 @@ def compute_lineup_synergy_penalty(absent_players: list[dict[str, Any]]) -> dict
     # 1. Playmaking vacuum: >= 1.25 effective initiators out compounds offensive degradation (+32%)
     compound_off_bonus = 0.0
     compound_def_bonus = 0.0
-    if role_effective_units["PRIMARY_INITIATOR"] >= 1.25:
-        compound_off_bonus += 0.32 * role_off_acc["PRIMARY_INITIATOR"]
+    if role_effective_units["PRIMARY_INITIATOR"] >= syn_cfg.initiator_absence_threshold:
+        compound_off_bonus += syn_cfg.initiator_absence_penalty * role_off_acc["PRIMARY_INITIATOR"]
         pace_delta_raw -= 0.45
-    # 2. Rim protection collapse: >= 1.25 effective interior anchors out compounds defensive degradation (+35%)
-    if role_effective_units["RIM_ANCHOR"] >= 1.25:
-        compound_def_bonus += 0.35 * role_def_acc["RIM_ANCHOR"]
+    # 2. Rim protection collapse: interior anchors out compounds defensive degradation
+    if role_effective_units["RIM_ANCHOR"] >= syn_cfg.rim_anchor_absence_threshold:
+        compound_def_bonus += syn_cfg.rim_anchor_absence_penalty * role_def_acc["RIM_ANCHOR"]
         pace_delta_raw += 0.35
-    # 3. Wing creation depletion: >= 1.40 effective wings out compounds both sides (+22%)
+    # 3. Wing creation depletion: effective wings out compounds both sides
     if role_effective_units["TWO_WAY_WING"] >= 1.40:
-        compound_off_bonus += 0.22 * role_off_acc["TWO_WAY_WING"]
-        compound_def_bonus += 0.22 * role_def_acc["TWO_WAY_WING"]
+        compound_off_bonus += syn_cfg.two_way_wing_penalty * role_off_acc["TWO_WAY_WING"]
+        compound_def_bonus += syn_cfg.two_way_wing_penalty * role_def_acc["TWO_WAY_WING"]
 
     # Multi-star cross-role vacuum (e.g. Jokic + Murray/Gordon or Embiid + Maxey out together)
     total_star_units = (
@@ -508,8 +554,8 @@ def compute_lineup_synergy_penalty(absent_players: list[dict[str, Any]]) -> dict
         + role_effective_units["TWO_WAY_WING"]
     )
     if total_star_units >= 1.75:
-        compound_off_bonus += 0.14 * off_pen_raw
-        compound_def_bonus += 0.14 * def_pen_raw
+        compound_off_bonus += syn_cfg.compound_absence_penalty * off_pen_raw
+        compound_def_bonus += syn_cfg.compound_absence_penalty * def_pen_raw
 
     raw_sum = off_pen_raw + def_pen_raw + compound_off_bonus + compound_def_bonus
     # Subtract normal bench injury baseline (~0.90 pt) unless explicit star compound shock

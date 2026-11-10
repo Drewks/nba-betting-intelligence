@@ -162,6 +162,21 @@ def _schedule_density(snap: dict[str, Any], target_start_dt: Any) -> tuple[int, 
     return days, g4, g7
 
 
+_SITUATIONAL_CONFIG_CACHE: Any = None
+
+
+def _get_situational_factors_config() -> Any:
+    global _SITUATIONAL_CONFIG_CACHE
+    if _SITUATIONAL_CONFIG_CACHE is None:
+        try:
+            from src.config import load_config
+            _SITUATIONAL_CONFIG_CACHE = load_config().situational_factors
+        except Exception:
+            from src.config import SituationalFactorsConfig
+            _SITUATIONAL_CONFIG_CACHE = SituationalFactorsConfig()
+    return _SITUATIONAL_CONFIG_CACHE
+
+
 def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
     if g.get("status") != "FINAL" or g.get("home_score") is None or g.get("away_score") is None:
         return
@@ -182,17 +197,18 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
     dist_h, tz_h, _alt_climb_h = _compute_travel_leg(h_cur["last_venue"], h_code, h_code)
     dist_a, tz_a, alt_climb_a = _compute_travel_leg(a_cur["last_venue"], h_code, a_code)
     first_home_from_road = 1.0 if (dist_h > 700.0 and h_rest <= 2) else 0.0
-    travel_diff_edge = 0.22 * ((dist_a - dist_h) / 1000.0) + 0.12 * (tz_a - tz_h)
+    sit = _get_situational_factors_config()
+    travel_diff_edge = sit.travel_miles_rate * ((dist_a - dist_h) / 1000.0) + sit.timezone_rate * (tz_a - tz_h)
 
     h_fat = (
-        (-1.60 if h_rest == 1 else (0.30 if h_rest >= 3 else 0.0))
+        (sit.b2b_penalty_home if h_rest == 1 else (sit.rest_3plus_bonus_home if h_rest >= 3 else 0.0))
         - 0.50 * max(0, h_g4 - 1)
         - 0.20 * max(0, h_g7 - 3)
         - 0.85 * first_home_from_road
         + 0.50 * travel_diff_edge
     )
     a_fat = (
-        (-2.10 if a_rest == 1 else (0.20 if a_rest >= 3 else 0.0))
+        (sit.b2b_penalty_away if a_rest == 1 else (sit.rest_3plus_bonus_away if a_rest >= 3 else 0.0))
         - 0.60 * max(0, a_g4 - 1)
         - 0.25 * max(0, a_g7 - 3)
         - 0.22 * min(4, a_cur["road_streak"])
@@ -201,10 +217,10 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
     fat_diff = h_fat - a_fat
 
     c_alt = ARENA_GEODESIC_DATA.get(h_code, (39.0, -98.0, -6.0, 500.0))[3]
-    alt_pts = (1.35 * min(1.15, alt_climb_a / 4200.0) if c_alt >= 4000.0 else 0.0) * (1.30 if a_rest == 1 else 1.0)
+    alt_pts = (sit.altitude_edge_multiplier * min(1.15, alt_climb_a / sit.altitude_divisor_feet) if c_alt >= sit.altitude_threshold_feet else 0.0) * (1.30 if a_rest == 1 else 1.0)
 
-    elo_ds = (h_cur["elo_slow"] - a_cur["elo_slow"]) + 50.0 + 15.0 * fat_diff + 14.0 * alt_pts
-    elo_df = (h_cur["elo_fast"] - a_cur["elo_fast"]) + 50.0 + 15.0 * fat_diff + 14.0 * alt_pts
+    elo_ds = (h_cur["elo_slow"] - a_cur["elo_slow"]) + sit.home_court_advantage_elo + 15.0 * fat_diff + 14.0 * alt_pts
+    elo_df = (h_cur["elo_fast"] - a_cur["elo_fast"]) + sit.home_court_advantage_elo + 15.0 * fat_diff + 14.0 * alt_pts
 
     hs = float(g["home_score"])
     as_ = float(g["away_score"])
@@ -621,3 +637,6 @@ def build_pregame_features(
         **{k: float(target_game.get(k) or 0.0) for k in BOXSCORE_FEATURE_NAMES},
         "bx_available": 1.0 if target_game.get("bx_min_games") else 0.0,
     }
+
+
+

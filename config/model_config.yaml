@@ -17,6 +17,7 @@ model:
   tempo_alpha_slow: 0.055
   tempo_alpha_fast: 0.130
   market_anchor_model_weight: 0.30   # p_final = 0.30 * p_model + 0.70 * p_market (de-vigged)
+  max_model_market_disagreement: 0.15 # Maximum allowable spread between model and sharp market consensus
 
 risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
   virtual_bankroll_initial_pen: 100.00
@@ -180,3 +181,24 @@ clv_meta_labeling:                   # V8 Phase 3: Calibración empírica CLV Me
 copula_correlations:                 # V8 Phase 3: Correlaciones empíricas SGP / Cópulas Vine
   enabled: true
   calibrated_weights_path: "config/calibrated_weights.json"
+
+situational_factors:                 # V8 Phase 4: Factores situacionales de descanso, viaje y altitud
+  home_court_advantage_elo: 50.0
+  home_court_advantage_pts: 1.85
+  b2b_penalty_away: -2.10
+  b2b_penalty_home: -1.60
+  rest_3plus_bonus_away: 0.20
+  rest_3plus_bonus_home: 0.30
+  altitude_edge_multiplier: 1.35
+  altitude_threshold_feet: 4000.0
+  altitude_divisor_feet: 4200.0
+  travel_miles_rate: 0.22
+  timezone_rate: 0.12
+
+lineup_synergy:                      # V8 Phase 4: Reglas y umbrales de penalización compuesta de rotación
+  initiator_absence_threshold: 1.25
+  initiator_absence_penalty: 0.32
+  rim_anchor_absence_threshold: 1.40
+  rim_anchor_absence_penalty: 0.35
+  two_way_wing_penalty: 0.22
+  compound_absence_penalty: 0.14
