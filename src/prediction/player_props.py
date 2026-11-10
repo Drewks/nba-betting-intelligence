@@ -321,6 +321,8 @@ class PlayerPropsEngine:
         self.calibrator = VennAbersConformalInterval(window=1200)
         self.minutes_engine = MinutesProjectionEngine()
         self.vine_copula_engine = VineCopulaSGP()
+        self._player_baselines_cache: dict[str, tuple[float, float, float, float, float, float]] = {}
+        self._team_multipliers_cache: dict[str, dict[str, Any]] = {}
 
     def _props_exposure_allows(self, stake_pen: float, bankroll_pen: float) -> bool:
         """Props/SGP ledger exposure cap: pending stakes may not exceed max_portfolio_exposure_pct of bankroll."""
@@ -423,6 +425,247 @@ class PlayerPropsEngine:
             logger.warning(f"Failed to persist SGP opportunity: {exc}")
             return False
 
+    def get_player_baseline(
+        self,
+        player_name: str,
+        team_abbr: str | None = None,
+        lookback_games: int = 15,
+        alpha: float = 0.85,
+    ) -> tuple[float, float, float, float, float, float]:
+        """
+        Dynamically computes rolling baseline stats for a player:
+        (minutes, usg_pct, pts_per_min, reb_per_min, ast_per_min, threed_per_min).
+
+        Resolution Order:
+        1. In-memory session cache.
+        2. Rolling EWMA from SQLite game_boxscores (last lookback_games).
+        3. Static calibrated prior (PLAYER_PROP_BASELINES).
+        4. Generic rotation player fallback (26.0, 17.5, 0.45, 0.16, 0.09, 0.04).
+        """
+        norm_name = player_name.strip()
+        if norm_name in self._player_baselines_cache:
+            return self._player_baselines_cache[norm_name]
+
+        # Check calibrated static prior for reference ratios (reb, ast, usg)
+        prior = PLAYER_PROP_BASELINES.get(norm_name)
+        if prior is None:
+            clean_search = norm_name.lower().replace(".", "").replace("'", "").replace("-", " ")
+            for b_name, b_prof in PLAYER_PROP_BASELINES.items():
+                if b_name.lower().replace(".", "").replace("'", "").replace("-", " ") == clean_search:
+                    prior = b_prof
+                    break
+
+        prior_min, prior_usg, prior_ppm, prior_rpm, prior_apm, prior_tpm = (
+            prior if prior is not None else (26.0, 17.5, 0.45, 0.16, 0.09, 0.04)
+        )
+
+        # Dynamic rolling extraction from SQLite game_boxscores
+        if self.db is not None:
+            try:
+                like_pattern = f"%{norm_name}%"
+                rows = self.db.fetch_all(
+                    """
+                    SELECT g.game_id, g.players_json, m.game_start_time
+                    FROM game_boxscores g
+                    JOIN games m ON g.game_id = m.game_id
+                    WHERE g.players_json LIKE ?
+                    ORDER BY m.game_start_time DESC
+                    LIMIT ?
+                    """,
+                    (like_pattern, lookback_games * 2),
+                )
+                p_lower = norm_name.lower().replace(".", "").replace("'", "")
+                mins_list: list[float] = []
+                pts_list: list[float] = []
+                reb_list: list[tuple[float, float]] = []  # (reb, min)
+                ast_list: list[tuple[float, float]] = []  # (ast, min)
+                th_list: list[tuple[float, float]] = []   # (threed, min)
+
+                for r in rows:
+                    p_data = json.loads(r.get("players_json") or "{}")
+                    found = False
+                    if isinstance(p_data, dict):
+                        for _, plist in p_data.items():
+                            for p in plist:
+                                p_cand = str(p.get("name", "")).strip().lower().replace(".", "").replace("'", "")
+                                if p_cand == p_lower or (len(p_lower) > 5 and (p_lower in p_cand or p_cand in p_lower)):
+                                    m_val = float(p.get("min", 0.0))
+                                    if m_val >= 8.0:
+                                        mins_list.append(m_val)
+                                        pts_list.append(float(p.get("pts", 0.0)))
+                                        if "reb" in p and p["reb"] is not None:
+                                            reb_list.append((float(p["reb"]), m_val))
+                                        if "ast" in p and p["ast"] is not None:
+                                            ast_list.append((float(p["ast"]), m_val))
+                                        if "threed" in p and p["threed"] is not None:
+                                            th_list.append((float(p["threed"]), m_val))
+                                    found = True
+                                    break
+                            if found:
+                                break
+                    if len(mins_list) >= lookback_games:
+                        break
+
+                if len(mins_list) >= 3:
+                    weights = [alpha ** i for i in range(len(mins_list))]
+                    W = sum(weights)
+                    dyn_min = sum(w * m for w, m in zip(weights, mins_list, strict=False)) / W
+                    dyn_ppm = sum(w * (pt / max(1.0, m)) for w, pt, m in zip(weights, pts_list, mins_list, strict=False)) / W
+
+                    if len(reb_list) >= 3:
+                        rw = [alpha ** i for i in range(len(reb_list))]
+                        dyn_rpm = sum(w * (rb / max(1.0, m)) for w, (rb, m) in zip(rw, reb_list, strict=False)) / sum(rw)
+                    else:
+                        dyn_rpm = prior_rpm
+
+                    if len(ast_list) >= 3:
+                        aw = [alpha ** i for i in range(len(ast_list))]
+                        dyn_apm = sum(w * (a / max(1.0, m)) for w, (a, m) in zip(aw, ast_list, strict=False)) / sum(aw)
+                    else:
+                        dyn_apm = prior_apm
+
+                    if len(th_list) >= 3:
+                        tw = [alpha ** i for i in range(len(th_list))]
+                        dyn_tpm = sum(w * (th / max(1.0, m)) for w, (th, m) in zip(tw, th_list, strict=False)) / sum(tw)
+                    else:
+                        dyn_tpm = prior_tpm
+
+                    scoring_ratio = dyn_ppm / max(0.20, prior_ppm)
+                    dyn_usg = float(np.clip(prior_usg * (0.50 + 0.50 * scoring_ratio), 12.0, 40.0))
+
+                    result = (
+                        round(float(dyn_min), 1),
+                        round(float(dyn_usg), 1),
+                        round(float(dyn_ppm), 3),
+                        round(float(dyn_rpm), 3),
+                        round(float(dyn_apm), 3),
+                        round(float(dyn_tpm), 3),
+                    )
+                    self._player_baselines_cache[norm_name] = result
+                    return result
+            except Exception as exc:
+                logger.debug(f"Dynamic baseline query error for {player_name}: {exc}")
+
+        result = (prior_min, prior_usg, prior_ppm, prior_rpm, prior_apm, prior_tpm)
+        self._player_baselines_cache[norm_name] = result
+        return result
+
+    def get_team_defensive_multipliers(
+        self,
+        opponent_team: str | None,
+        lookback_window: int = 30,
+    ) -> dict[str, Any]:
+        """
+        Dynamically computes Defense vs Position (DvP) and Pace multipliers for all 30 NBA teams
+        from real finished games and team stats in SQLite.
+        Falls back to TEAM_DEFENSIVE_MULTIPLIERS if team data is absent or insufficient.
+        """
+        if not opponent_team:
+            return {"PTS": 1.00, "REB": 1.00, "AST": 1.00, "3PM": 1.00, "pace": 99.5, "tier": "AVERAGE"}
+
+        opp = opponent_team.strip().upper()
+        if opp in self._team_multipliers_cache:
+            return self._team_multipliers_cache[opp]
+
+        fallback = TEAM_DEFENSIVE_MULTIPLIERS.get(opp, {"PTS": 1.00, "REB": 1.00, "AST": 1.00, "3PM": 1.00, "pace": 99.5, "tier": "AVERAGE"})
+
+        if self.db is None:
+            self._team_multipliers_cache[opp] = fallback
+            return fallback
+
+        try:
+            rows = self.db.fetch_all(
+                """
+                SELECT home_team, away_team, home_score, away_score, home_pace, away_pace
+                FROM games
+                WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                  AND (home_team = ? OR away_team = ?)
+                ORDER BY game_start_time DESC
+                LIMIT ?
+                """,
+                (opp, opp, lookback_window),
+            )
+            if len(rows) < 5:
+                self._team_multipliers_cache[opp] = fallback
+                return fallback
+
+            league_row = self.db.fetch_one(
+                """
+                SELECT AVG(home_score + away_score) / 2.0 AS avg_pts
+                FROM games
+                WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                """
+            )
+            league_avg_pts = float(league_row["avg_pts"]) if league_row and league_row["avg_pts"] else 114.2
+
+            pts_allowed: list[float] = []
+            paces: list[float] = []
+            for r in rows:
+                if r["home_team"] == opp:
+                    pts_allowed.append(float(r["away_score"]))
+                    if r.get("home_pace"):
+                        paces.append(float(r["home_pace"]))
+                else:
+                    pts_allowed.append(float(r["home_score"]))
+                    if r.get("away_pace"):
+                        paces.append(float(r["away_pace"]))
+
+            mean_pa = float(np.mean(pts_allowed))
+            pts_mult = round(float(np.clip(mean_pa / league_avg_pts, 0.88, 1.15)), 2)
+
+            b_rows = self.db.fetch_all(
+                """
+                SELECT g.team_stats_json
+                FROM game_boxscores g
+                JOIN games m ON g.game_id = m.game_id
+                WHERE (m.home_team = ? OR m.away_team = ?)
+                ORDER BY m.game_start_time DESC
+                LIMIT ?
+                """,
+                (opp, opp, lookback_window),
+            )
+            tpm_allowed: list[float] = []
+            for br in b_rows:
+                tdata = json.loads(br.get("team_stats_json") or "{}")
+                for tcode, stats in tdata.items():
+                    if tcode != opp and "tpm" in stats:
+                        tpm_allowed.append(float(stats["tpm"]))
+
+            if len(tpm_allowed) >= 5:
+                th_mult = round(float(np.clip(np.mean(tpm_allowed) / 13.0, 0.88, 1.15)), 2)
+            else:
+                th_mult = pts_mult
+
+            reb_mult = round(1.0 + (pts_mult - 1.0) * 0.70, 2)
+            ast_mult = round(1.0 + (pts_mult - 1.0) * 0.85, 2)
+            team_pace = round(float(np.mean(paces)), 1) if paces else float(fallback.get("pace", 99.5))
+
+            if pts_mult < 0.96:
+                tier = "ELITE"
+            elif pts_mult < 0.99:
+                tier = "GOOD"
+            elif pts_mult < 1.02:
+                tier = "AVERAGE"
+            elif pts_mult < 1.05:
+                tier = "VULNERABLE"
+            else:
+                tier = "TARGET"
+
+            result = {
+                "PTS": pts_mult,
+                "REB": reb_mult,
+                "AST": ast_mult,
+                "3PM": th_mult,
+                "pace": team_pace,
+                "tier": tier,
+            }
+            self._team_multipliers_cache[opp] = result
+            return result
+        except Exception as exc:
+            logger.debug(f"Dynamic team multipliers error for {opp}: {exc}")
+            self._team_multipliers_cache[opp] = fallback
+            return fallback
+
     def project_player_stats(
         self,
         player_name: str,
@@ -440,12 +683,8 @@ class PlayerPropsEngine:
         When star teammates are absent, redistributes vacated usage rate and minutes.
         Adjusts for opponent defensive efficiency (DvP), projected game pace, and blowout risk.
         """
-        profile = PLAYER_PROP_BASELINES.get(player_name)
-        if profile is None:
-            # Synthetic default baseline for unlisted rotation player
-            base_min, base_usg, pts_pm, reb_pm, ast_pm, th_pm = (26.0, 17.5, 0.45, 0.16, 0.09, 0.04)
-        else:
-            base_min, base_usg, pts_pm, reb_pm, ast_pm, th_pm = profile
+        profile = self.get_player_baseline(player_name, team)
+        base_min, base_usg, pts_pm, reb_pm, ast_pm, th_pm = profile
 
         absent = absent_teammates or []
         usage_bump_pct = 0.0
@@ -453,7 +692,7 @@ class PlayerPropsEngine:
 
         # Vacated usage & minute redistribution logic
         for abs_p in absent:
-            abs_prof = PLAYER_PROP_BASELINES.get(abs_p)
+            abs_prof = self.get_player_baseline(abs_p, team)
             if abs_prof:
                 _abs_min, abs_usg = abs_prof[0], abs_prof[1]
                 # High-usage star out (>26% USG)
@@ -470,9 +709,9 @@ class PlayerPropsEngine:
                     usage_bump_pct += 0.08 * abs_usg
                     minutes_bump += min(1.5, 36.0 - base_min)
 
-        # Matchup defense adjustment
+        # Matchup defense adjustment (dynamic from SQLite with fallback to prior)
         opp = opponent_team.upper() if opponent_team else None
-        matchup_info = TEAM_DEFENSIVE_MULTIPLIERS.get(opp) if opp else None
+        matchup_info = self.get_team_defensive_multipliers(opp) if opp else None
         def_tier = str(matchup_info.get("tier", "AVERAGE")) if matchup_info else "NEUTRAL"
         m_pts = float(matchup_info.get("PTS", 1.0)) if matchup_info else 1.0
         m_reb = float(matchup_info.get("REB", 1.0)) if matchup_info else 1.0
@@ -1281,17 +1520,9 @@ class PlayerPropsEngine:
                 absent_list = team_injuries.get(team_code, [])
 
                 for p_raw in team_players:
-                    # Match canonical baseline profile
-                    prof = PLAYER_PROP_BASELINES.get(p_raw)
+                    # Match canonical baseline profile or compute dynamic rolling baseline
+                    prof = self.get_player_baseline(p_raw, team_code)
                     canonical_name = p_raw
-                    if not prof:
-                        norm_raw = p_raw.replace(".", "").replace("'", "").replace("-", " ").replace(" III", "").replace(" Jr.", "").strip().lower()
-                        for b_name, b_prof in PLAYER_PROP_BASELINES.items():
-                            norm_b = b_name.replace(".", "").replace("'", "").replace("-", " ").replace(" III", "").replace(" Jr.", "").strip().lower()
-                            if norm_raw == norm_b:
-                                prof = b_prof
-                                canonical_name = b_name
-                                break
                     if not prof:
                         continue
 

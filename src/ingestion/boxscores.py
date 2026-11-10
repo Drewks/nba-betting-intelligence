@@ -69,10 +69,22 @@ def parse_boxscore(payload: dict[str, Any]) -> dict[str, Any] | None:
                 try:
                     minutes = float(stats.get("MIN") or 0.0)
                     pts = float(stats.get("PTS") or 0.0)
-                except ValueError:
-                    minutes, pts = 0.0, 0.0
+                    reb = float(stats.get("REB") or 0.0)
+                    ast = float(stats.get("AST") or 0.0)
+                    raw_3pt = stats.get("3PT") or stats.get("3PM") or "0-0"
+                    threed = float(str(raw_3pt).split("-")[0]) if "-" in str(raw_3pt) else float(raw_3pt or 0.0)
+                except (ValueError, TypeError):
+                    minutes, pts, reb, ast, threed = 0.0, 0.0, 0.0, 0.0, 0.0
                 if name:
-                    rows.append({"name": name, "min": minutes, "pts": pts, "starter": bool(ath.get("starter"))})
+                    rows.append({
+                        "name": name,
+                        "min": minutes,
+                        "pts": pts,
+                        "reb": reb,
+                        "ast": ast,
+                        "threed": threed,
+                        "starter": bool(ath.get("starter")),
+                    })
         players[code] = rows
     if len(teams) != 2 or any(v["fga"] <= 0 for v in teams.values()):
         return None
