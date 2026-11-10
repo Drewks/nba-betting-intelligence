@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import logging
+import math
 from typing import Any
 
 from src.storage.db import DatabaseManager
@@ -424,8 +425,11 @@ class ParlayTradingEngine:
             if not legs and "sgp_id" in cand:
                 # Reconstruct legs from SGP candidate if missing, deriving odds dynamically without hardcoded constants
                 gid = cand.get("game_id", "")
-                total_sgp_odd = float(cand.get("offered_sgp_odds") or cand.get("decimal_odds") or 2.0)
-                p_game = float(cand.get("p_game") or 0.55)
+                total_sgp_odd_val = cand.get("offered_sgp_odds") if cand.get("offered_sgp_odds") is not None else cand.get("decimal_odds")
+                if total_sgp_odd_val is None or float(total_sgp_odd_val) <= 1.0:
+                    continue
+                total_sgp_odd = float(total_sgp_odd_val)
+                p_game = float(cand.get("p_game") or math.sqrt(max(0.05, min(0.95, joint_p))))
                 g_odd = round(float(cand.get("game_odds") or (1.0 / max(0.05, p_game))), 2)
                 p_odd = round(float(cand.get("prop_odds") or (total_sgp_odd / max(1.05, g_odd))), 2)
                 legs = [
