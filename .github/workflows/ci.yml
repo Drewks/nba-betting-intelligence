@@ -58,4 +58,8 @@ jobs:
 
       - name: Pytest Suite (isolated in tmp_path)
         run: |
-          uv run pytest
+          if ! uv run pytest -v --tb=short; then
+            FAILED_SUMMARY=$(uv run pytest --tb=short --last-failed 2>&1 | tail -n 30 | tr '\n' ' ')
+            echo "::error title=PytestFailure::$FAILED_SUMMARY"
+            exit 1
+          fi
