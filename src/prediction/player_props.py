@@ -896,10 +896,19 @@ class PlayerPropsEngine:
             rho = 0.35 if cat in ("PTS", "AST", "PRA", "PA", "PR") else 0.18
 
             p_p = float(prop.get("model_prob", 0.55))
-            odds_g = 1.0 / max(0.05, game_prob)
-            odds_p = float(prop.get("decimal_odds") or (1.0 / max(0.05, p_p)))
-            # ESTIMATED SGP price: independent product of the legs minus a 10% combined margin (no floor).
-            sim_offered_odds = round(max(1.01, odds_g * odds_p * 0.90), 2)
+            obs_g_odds = float(game.get("home_odds" if is_home else "away_odds") or 0.0)
+            obs_p_odds = float(prop.get("decimal_odds") or 0.0)
+            if obs_g_odds > 1.0 and obs_p_odds > 1.0:
+                sim_offered_odds = round(obs_g_odds * obs_p_odds * 0.90, 2)
+            elif "offered_sgp_odds" in prop:
+                sim_offered_odds = float(prop["offered_sgp_odds"])
+            elif not persist:
+                odds_g = 1.0 / max(0.05, game_prob)
+                odds_p = float(prop.get("decimal_odds") or (1.0 / max(0.05, p_p)))
+                sim_offered_odds = round(max(1.01, odds_g * odds_p * 0.90), 2)
+            else:
+                # Require genuine observed odds from local/market harvest before persisting
+                continue
 
             sgp_cand = self.simulate_same_game_parlay_copula(
                 game_id=gid or "NBA_GAME",

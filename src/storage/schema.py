@@ -497,6 +497,13 @@ VIEW_DDL: dict[str, str] = {
     "v_observed_simulated_bets": """
     CREATE VIEW v_observed_simulated_bets AS
     SELECT b.* FROM simulated_bets b
-    JOIN v_observed_predictions p ON b.prediction_id = p.prediction_id;
+    JOIN v_observed_predictions p ON b.prediction_id = p.prediction_id
+    WHERE b.game_id NOT LIKE 'SYN%';
+    """,
+    "v_observed_bankroll_ledger": """
+    CREATE VIEW v_observed_bankroll_ledger AS
+    SELECT l.* FROM bankroll_ledger l
+    LEFT JOIN simulated_bets b ON l.reference_bet_id = b.bet_id
+    WHERE l.reference_bet_id IS NULL OR b.game_id NOT LIKE 'SYN%';
     """,
 }

@@ -430,6 +430,52 @@ def m007_invalidate_hardcoded_parlays(conn: sqlite3.Connection, migration_id: st
         "final_available_pen": curr_settled - curr_exposure,
     }
 
+
+def m008_quarantine_legacy_synthetic_bets(conn: sqlite3.Connection, migration_id: str) -> dict[str, Any]:
+    """
+    Separates legacy Monte Carlo synthetic bets from the active real-money/observed paper trading ledger.
+    Creates views `v_observed_simulated_bets` (filtering game_id NOT LIKE 'SYN%') and
+    `v_observed_bankroll_ledger` to guarantee transparent reporting without violating SQLite immutability triggers.
+    """
+    syn_count_row = conn.execute("SELECT COUNT(*) FROM simulated_bets WHERE game_id LIKE 'SYN%'").fetchone()
+    syn_count = int(syn_count_row[0]) if syn_count_row else 0
+
+    conn.execute("DROP VIEW IF EXISTS v_observed_bankroll_ledger")
+    conn.execute(
+        """
+        CREATE VIEW v_observed_bankroll_ledger AS
+        SELECT l.* FROM bankroll_ledger l
+        LEFT JOIN simulated_bets b ON l.reference_bet_id = b.bet_id
+        WHERE l.reference_bet_id IS NULL OR b.game_id NOT LIKE 'SYN%'
+        """
+    )
+
+    conn.execute("DROP VIEW IF EXISTS v_observed_simulated_bets")
+    conn.execute(
+        """
+        CREATE VIEW v_observed_simulated_bets AS
+        SELECT b.* FROM simulated_bets b
+        JOIN v_observed_predictions p ON b.prediction_id = p.prediction_id
+        WHERE b.game_id NOT LIKE 'SYN%'
+        """
+    )
+
+    _log_repair(
+        conn,
+        migration_id,
+        "simulated_bets",
+        "SYNTHETIC_QUARANTINE",
+        "ISOLATE_LEGACY_SYNTHETIC",
+        f"{syn_count} legacy synthetic bets isolated into benchmark views. Active paper trading tracking strictly limited to real observed games.",
+    )
+
+    return {
+        "synthetic_bets_isolated": syn_count,
+        "view_observed_bets": "v_observed_simulated_bets",
+        "view_observed_ledger": "v_observed_bankroll_ledger",
+    }
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -438,6 +484,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_09_005_invalidate_pending_unobserved_props", m005_invalidate_pending_unobserved_props),
     ("2026_11_09_006_add_sub_bankroll_and_parlays", m006_add_sub_bankroll_and_parlays),
     ("2026_11_09_007_invalidate_hardcoded_parlays", m007_invalidate_hardcoded_parlays),
+    ("2026_11_10_008_quarantine_legacy_synthetic_bets", m008_quarantine_legacy_synthetic_bets),
 ]
 
 
