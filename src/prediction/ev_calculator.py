@@ -578,7 +578,7 @@ def optimize_simultaneous_kelly_portfolio(
     state_returns = states * o_arr - 1.0
 
     def objective(f: np.ndarray) -> float:
-        # wealth = 1 + sum_i (f_i * R_i)
+        # Expected log-wealth optimization: W = 1 + dot(state_returns, f)
         rets = np.dot(state_returns, f)
         wealth = 1.0 + rets
         if np.any(wealth <= 1e-5):

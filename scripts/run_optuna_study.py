@@ -17,8 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.backtesting.hyperparameter_optimizer import OptunaWalkForwardOptimizer  # noqa: E402
-from src.storage.db import DatabaseManager  # noqa: E402
+from src.backtesting.hyperparameter_optimizer import OptunaWalkForwardOptimizer
+from src.storage.db import DatabaseManager
 
 
 def main() -> None:

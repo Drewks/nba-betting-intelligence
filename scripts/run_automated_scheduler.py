@@ -249,11 +249,7 @@ class NBADailyScheduler:
         # 1. Run incremental cycle in settle_and_calibrate mode
         settle_res = run_incremental_cloud_cycle(mode="settle_and_calibrate")
 
-        # 2. Extract settled bets and props
-        # now_utc = datetime.now(timezone.utc)
-        # now_str = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        # Fetch settled bets today
+        # 2. Extract settled bets and props today
         settled_today = self.db.fetch_all(
             """
             SELECT bet_id, game_id, market, selection, decimal_odds, stake_pen, status, net_profit_pen, settled_at

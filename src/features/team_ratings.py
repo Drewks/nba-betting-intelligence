@@ -438,8 +438,8 @@ def compute_lineup_synergy_penalty(absent_players: list[dict[str, Any]]) -> dict
         "TWO_WAY_WING": 0.0,
         "ROTATION": 0.0,
     }
-    role_off_acc: dict[str, float] = {k: 0.0 for k in role_effective_units}
-    role_def_acc: dict[str, float] = {k: 0.0 for k in role_effective_units}
+    role_off_acc: dict[str, float] = dict.fromkeys(role_effective_units, 0.0)
+    role_def_acc: dict[str, float] = dict.fromkeys(role_effective_units, 0.0)
 
     for item in absent_players:
         p_name = str(item.get("name", "")).strip()

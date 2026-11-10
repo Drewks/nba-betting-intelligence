@@ -58,6 +58,8 @@ def main() -> None:
 
                 if p.get("type") == "RETABET_SGP" or "sgp_id" in p:
                     msg = bot.format_sgp_parlay_alert(p)
+                elif p.get("type") == "HIGH_PROB_PARLAY" or "parlay_id" in p:
+                    msg = bot.format_high_prob_parlay_alert(p)
                 else:
                     msg = bot.format_single_bet_alert(p)
 

@@ -21,11 +21,10 @@ Institutional statistical modeling of NBA Player Props & Same-Game Parlays (SGP)
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 import logging
-import hashlib
 import math
-logger = logging.getLogger(__name__)
 import os
 from pathlib import Path
 from typing import Any
@@ -33,6 +32,8 @@ import uuid
 
 import numpy as np
 from scipy.stats import norm
+
+logger = logging.getLogger(__name__)
 
 from src.calibration.calibrator import VennAbersConformalInterval
 from src.config import load_config
@@ -1165,7 +1166,6 @@ class PlayerPropsEngine:
         min_ev_pct: float = 3.0,
         injuries_by_team: dict[str, list[str]] | None = None,
         output_file: Path | str | None = None,
-        allow_synthetic_lines: bool = False,
         allow_parlays: bool | None = None,
     ) -> list[dict[str, Any]]:
         """

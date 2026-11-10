@@ -184,7 +184,7 @@ class PeruPlaywrightScraper:
                                         "source_type": "OBSERVED",
                                     })
 
-                            # Totales (Over/Under)
+                            # Market: Totals Over and Under
                             elif any(k in m_type for k in ("TOTAL", "MÁS DE", "MENOS DE", "OVER/UNDER", "PUNTOS")):
                                 over_odd: float | None = None
                                 under_odd: float | None = None

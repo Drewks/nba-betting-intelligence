@@ -132,17 +132,17 @@ def test_32_injury_sniper_pregame_dual_window(tmp_path: Path) -> None:
         )
     assert monitor.calibrator.fit(cal_records, "2026-11-01T00:00:00Z") is True
 
-    common = dict(
-        game_id="G_SNIPER_TEST",
-        matchday_date="2026-11-07",
-        game_start_time="2026-11-08T00:00:00Z",
-        home_team="PHX",
-        away_team="DAL",
-        market_odds=odds_list,
-        window_type="WINDOW_2H",
-        minutes_to_tipoff=120.0,
-        bankroll_pen=100.0,
-    )
+    common = {
+        "game_id": "G_SNIPER_TEST",
+        "matchday_date": "2026-11-07",
+        "game_start_time": "2026-11-08T00:00:00Z",
+        "home_team": "PHX",
+        "away_team": "DAL",
+        "market_odds": odds_list,
+        "window_type": "WINDOW_2H",
+        "minutes_to_tipoff": 120.0,
+        "bankroll_pen": 100.0,
+    }
 
     # 4a. A long-known absence (same status as the previous snapshot) is already priced by the market
     no_alerts = monitor.evaluate_game_sniper_opportunity(

@@ -6,13 +6,13 @@ enforces at most 2 controlled retries on failure, and halts for human interventi
 
 from __future__ import annotations
 
-import logging
-logger = logging.getLogger(__name__)
-
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Any, Callable
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from src.agents.specialized_agents import (
     ModelCalibratorAgent,

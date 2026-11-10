@@ -20,15 +20,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.backtesting.real_odds_backtest import (  # noqa: E402
+from src.backtesting.real_odds_backtest import (
     download_market_csvs,
     load_market_rows,
     render_markdown,
     run_real_odds_backtest,
 )
-from src.config import load_config  # noqa: E402
-from src.ingestion.boxscores import load_boxscores  # noqa: E402
-from src.storage.db import DatabaseManager  # noqa: E402
+from src.config import load_config
+from src.ingestion.boxscores import load_boxscores
+from src.storage.db import DatabaseManager
 
 
 def main() -> None:
@@ -51,21 +51,21 @@ def main() -> None:
     games = db.fetch_all("SELECT * FROM games ORDER BY game_start_time ASC")
     boxscores = None if args.no_boxscores else (load_boxscores(db) or None)
     market_rows = load_market_rows(download_market_csvs(Path(args.data_dir)))
-    common = dict(
-        start_date=args.start,
-        end_date=args.end,
-        retrain_every_days=args.retrain_every,
-        history_lag_days=args.history_lag_days,
-        boxscores=boxscores,
-        model_weight=cfg.model.market_anchor_model_weight,
-        min_ev=cfg.risk.min_ev_threshold,
-        max_bets_per_day=cfg.risk.max_selections_per_matchday,
-        initial_bankroll=cfg.risk.virtual_bankroll_initial_pen,
-        kelly_fraction=cfg.risk.kelly_fraction,
-        kelly_min_stake=cfg.risk.min_stake_pen,
-        kelly_max_stake=cfg.risk.max_stake_pen,
-        kelly_max_fraction=cfg.risk.max_stake_bankroll_fraction,
-    )
+    common = {
+        "start_date": args.start,
+        "end_date": args.end,
+        "retrain_every_days": args.retrain_every,
+        "history_lag_days": args.history_lag_days,
+        "boxscores": boxscores,
+        "model_weight": cfg.model.market_anchor_model_weight,
+        "min_ev": cfg.risk.min_ev_threshold,
+        "max_bets_per_day": cfg.risk.max_selections_per_matchday,
+        "initial_bankroll": cfg.risk.virtual_bankroll_initial_pen,
+        "kelly_fraction": cfg.risk.kelly_fraction,
+        "kelly_min_stake": cfg.risk.min_stake_pen,
+        "kelly_max_stake": cfg.risk.max_stake_pen,
+        "kelly_max_fraction": cfg.risk.max_stake_bankroll_fraction,
+    }
     result = run_real_odds_backtest(games, market_rows, vig=args.vig, **common)
     sensitivity = None
     if args.sensitivity:
