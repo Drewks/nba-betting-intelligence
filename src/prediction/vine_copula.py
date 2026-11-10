@@ -66,6 +66,8 @@ class VineCopulaSGP:
             self.correlations.update(correlations)
         else:
             w_path = Path(weights_path) if weights_path else Path("config/calibrated_weights.json")
+            if not w_path.exists():
+                w_path = Path(__file__).resolve().parent.parent.parent / "config" / "calibrated_weights.json"
             if w_path.exists():
                 try:
                     with open(w_path, "r", encoding="utf-8") as f:

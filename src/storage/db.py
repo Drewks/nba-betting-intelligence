@@ -42,6 +42,13 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def checkpoint(self, truncate: bool = True) -> None:
+        """Forces WAL checkpoint into the main database file and optionally truncates WAL."""
+        if str(self.db_path) != ":memory:" and not str(self.db_path).startswith(":memory:"):
+            with self.connect() as conn:
+                mode = "TRUNCATE" if truncate else "PASSIVE"
+                conn.execute(f"PRAGMA wal_checkpoint({mode});")
+
     def initialize_schema(self) -> None:
         with self.connect() as conn:
             for ddl in DDL_STATEMENTS:

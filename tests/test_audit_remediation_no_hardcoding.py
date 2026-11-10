@@ -10,6 +10,7 @@ Validates:
 
 from pathlib import Path
 import json
+from typing import Any
 
 from src.config import load_config
 from src.features.builder import _get_situational_factors_config
@@ -199,6 +200,61 @@ def test_morning_cycle_execution_order_in_scheduler() -> None:
         res = scheduler.execute_morning_cycle()
         assert call_order == ["cycle", "harvest"], f"Expected ['cycle', 'harvest'], got {call_order}"
         assert res["status"] == "COMPLETED"
+
+
+def test_parlay_missing_boxscore_evaluates_as_pending() -> None:
+    from unittest.mock import MagicMock
+    from src.paper_trading.parlay_engine import ParlayTradingEngine
+
+    engine = ParlayTradingEngine(db=MagicMock())
+    leg = {
+        "player_name": "Luka Doncic",
+        "market": "player_points",
+        "prop_category": "points",
+        "selection": "OVER",
+        "line_value": 28.5,
+    }
+    game = {"home_score": 110, "away_score": 105, "status": "FINAL"}
+    # With empty boxscore, must evaluate as PENDING, NEVER prematurely LOST!
+    res = engine._evaluate_single_leg(leg, game, boxscore={})
+    assert res["status"] == "PENDING"
+    assert "Boxscore not available yet" in res["summary"]
+
+    # When boxscore is provided with stats
+    res_won = engine._evaluate_single_leg(
+        leg, game, boxscore={"Luka Doncic": {"pts": 32.0, "min": 36.0}}
+    )
+    assert res_won["status"] == "WON"
+
+
+def test_database_manager_checkpoint(tmp_path: Path) -> None:
+    from src.storage.db import DatabaseManager
+
+    test_db = tmp_path / "test_cp.sqlite3"
+    db_mgr = DatabaseManager(test_db)
+    with db_mgr.connect() as conn:
+        conn.execute("CREATE TABLE t (id INT);")
+        conn.execute("INSERT INTO t VALUES (1);")
+    # Must checkpoint without error
+    db_mgr.checkpoint(truncate=True)
+    with db_mgr.connect() as conn:
+        val = conn.execute("SELECT COUNT(*) FROM t;").fetchone()[0]
+        assert val == 1
+
+
+def test_config_path_resolution_across_working_dirs(tmp_path: Path, monkeypatch: Any) -> None:
+    # Change working directory to an arbitrary temporary folder
+    monkeypatch.chdir(tmp_path)
+    from src.features.team_ratings import get_player_on_off_synergy_profiles
+    from src.prediction.player_props import get_fallback_rosters
+    from src.prediction.vine_copula import VineCopulaSGP
+
+    profiles = get_player_on_off_synergy_profiles()
+    assert len(profiles) >= 40
+    rosters = get_fallback_rosters()
+    assert len(rosters) == 30
+    copula = VineCopulaSGP()
+    assert len(copula.correlations) >= 10
 
 
 def test_zero_synthetic_fixture_adapters_in_tests() -> None:

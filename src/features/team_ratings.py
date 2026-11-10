@@ -430,6 +430,8 @@ def get_player_on_off_synergy_profiles() -> dict[str, tuple[float, float, float,
 
     profiles: dict[str, tuple[float, float, float, float, str]] = dict(PLAYER_ON_OFF_SYNERGY_PROFILES)
     w_file = Path("config/calibrated_weights.json")
+    if not w_file.exists():
+        w_file = Path(__file__).resolve().parent.parent.parent / "config" / "calibrated_weights.json"
     if w_file.exists():
         try:
             raw_w = json.loads(w_file.read_text(encoding="utf-8")).get("player_synergy_profiles") or {}

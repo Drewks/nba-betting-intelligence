@@ -155,6 +155,11 @@ class NBADailyScheduler:
                     dispatched_count += 1
             logger.info(f"📲 [TELEGRAM] {dispatched_count} alertas matutinas despachadas a tu chat.")
 
+        try:
+            self.db.checkpoint(truncate=True)
+        except Exception as cp_exc:
+            logger.warning(f"Database checkpoint warning: {cp_exc}")
+
         return {
             "status": "COMPLETED",
             "window": "MORNING",
@@ -211,6 +216,11 @@ class NBADailyScheduler:
             logger.info(f"📊 [LIVE ODDS] {live_res['games_scanned']} partidos con benchmark sharp observado escaneados.")
         except Exception as exc:
             logger.warning(f"Error escaneando cuotas en vivo en el scheduler: {exc}")
+
+        try:
+            self.db.checkpoint(truncate=True)
+        except Exception as cp_exc:
+            logger.warning(f"Database checkpoint warning: {cp_exc}")
 
         return {
             "status": "COMPLETED",
@@ -318,6 +328,11 @@ class NBADailyScheduler:
             + sum(float(p.get("net_profit_pen") or 0.0) for p in settled_props_today)
             + sum(float(pl.get("pnl_pen") or 0.0) for pl in settled_parlays)
         )
+
+        try:
+            self.db.checkpoint(truncate=True)
+        except Exception as cp_exc:
+            logger.warning(f"Database checkpoint warning: {cp_exc}")
 
         return {
             "status": "COMPLETED",

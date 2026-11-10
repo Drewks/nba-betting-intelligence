@@ -188,7 +188,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
             logger.warning(f"Failed to settle bet {pb.get('bet_id')}: {exc}")
 
     # 2b. Settle any PENDING player prop & SGP bets whose games are now FINAL, POSTPONED, or CANCELLED
-    pending_props = db.fetch_all(
+    pending_prop_rows = db.fetch_all(
         """
         SELECT DISTINCT p.game_id
         FROM player_prop_picks p
@@ -197,10 +197,23 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
           AND g.status IN ('FINAL', 'POSTPONED', 'CANCELLED')
         """
     )
+    needed_boxscore_gids = {row["game_id"] for row in pending_prop_rows}
+
+    # Also collect game IDs from pending parlays to ensure boxscores are available
+    pending_parlay_rows = db.fetch_all("SELECT legs_json FROM parlay_bets WHERE status = 'PENDING'")
+    for p_row in pending_parlay_rows:
+        try:
+            p_legs = json.loads(p_row["legs_json"])
+            for pl in p_legs:
+                pgid = pl.get("game_id")
+                if pgid and pgid != "CROSS_SLATE":
+                    needed_boxscore_gids.add(pgid)
+        except Exception:
+            pass
+
     game_boxscores: dict[str, dict[str, dict[str, float]]] = {}
     espn_adapter = ESPNPublicAdapter(timeout_seconds=10)
-    for row in pending_props:
-        gid = row["game_id"]
+    for gid in needed_boxscore_gids:
         ev_id = gid.replace("ESPN_", "").split("_")[0]
         try:
             b_stats = espn_adapter.fetch_player_boxscores(ev_id)
@@ -675,6 +688,11 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
     eval_out_path = PROJECT_ROOT / "data" / "evaluation" / "latest_run_summary.json"
     eval_out_path.parent.mkdir(parents=True, exist_ok=True)
     eval_out_path.write_text(json.dumps(summary_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    try:
+        db.checkpoint(truncate=True)
+    except Exception as cp_exc:
+        logger.warning(f"Database checkpoint warning: {cp_exc}")
 
     return summary_payload
 

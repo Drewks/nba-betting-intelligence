@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 import sys
@@ -14,8 +15,23 @@ from src.orchestrator import Orchestrator
 
 
 def main() -> None:
-    db_path = PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"
-    if db_path.exists():
+    parser = argparse.ArgumentParser(description="Execute complete sequential NBA Betting Intelligence pipeline.")
+    parser.add_argument(
+        "--db-path",
+        type=str,
+        default=str(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"),
+        help="Path to SQLite database. (Production DB protected by default)",
+    )
+    parser.add_argument(
+        "--clean-db",
+        action="store_true",
+        help="Explicitly reset and unlink the target DB before running (requires confirmation).",
+    )
+    args = parser.parse_args()
+
+    db_path = Path(args.db_path)
+    if args.clean_db and db_path.exists():
+        # Never silently unlink without explicit flag
         db_path.unlink()
 
     orchestrator = Orchestrator(

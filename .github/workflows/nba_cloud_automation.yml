@@ -106,6 +106,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           cat reports/audit_report.md >> $GITHUB_STEP_SUMMARY
 
+      - name: 6b. Checkpoint WAL y optimización de base de datos SQLite
+        run: |
+          uv run python -c "from src.storage.db import DatabaseManager; db = DatabaseManager('data/nba_intelligence.sqlite3'); db.checkpoint(truncate=True)"
+          uv run python -c "import sqlite3; conn = sqlite3.connect('data/nba_intelligence.sqlite3'); conn.execute('VACUUM;'); conn.close()"
+
       - name: 7. Guardar estado (SQLite, CSV, Alerta de Madurez, Reportes, Evaluación y Vault Obsidian)
         run: |
           git config user.name "nba-intelligence-bot"

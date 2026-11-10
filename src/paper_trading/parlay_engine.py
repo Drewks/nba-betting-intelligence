@@ -525,8 +525,10 @@ class ParlayTradingEngine:
         # Player Prop
         player_name = leg.get("player_name")
         if player_name or market.startswith("player_") or "alt_prop" in leg:
+            if not boxscore:
+                return {"status": "PENDING", "summary": "Boxscore not available yet"}
             p_stats: dict[str, float] = {}
-            if player_name and boxscore:
+            if player_name:
                 p_lower = str(player_name).strip().lower()
                 for b_name, b_val in boxscore.items():
                     b_lower = str(b_name).strip().lower()
@@ -635,7 +637,7 @@ class ParlayTradingEngine:
                 leg_res = self._evaluate_single_leg(leg, game, boxscores.get(gid, {}))
                 leg_evaluations.append(leg_res)
 
-            if can_settle_all and len(leg_evaluations) == len(legs):
+            if can_settle_all and len(leg_evaluations) == len(legs) and not any(r.get("status") == "PENDING" for r in leg_evaluations):
                 try:
                     res = self.settle_parlay_bet(parlay_id, leg_evaluations, settled_at=now_str)
                     settled_results.append(res)

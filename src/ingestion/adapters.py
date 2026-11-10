@@ -417,9 +417,11 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         """
         try:
             import sqlite3
-            db_path = "data/nba_intelligence.sqlite3"
-            if os.path.exists(db_path):
-                with sqlite3.connect(db_path) as conn:
+            db_path = Path("data/nba_intelligence.sqlite3")
+            if not db_path.exists():
+                db_path = Path(__file__).resolve().parent.parent.parent / "data" / "nba_intelligence.sqlite3"
+            if db_path.exists():
+                with sqlite3.connect(str(db_path), timeout=30.0) as conn:
                     cur = conn.cursor()
                     cur.execute(
                         """

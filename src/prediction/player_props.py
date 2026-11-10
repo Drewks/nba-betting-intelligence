@@ -311,6 +311,8 @@ def get_fallback_rosters() -> dict[str, list[str]]:
     if _FALLBACK_ROSTERS_CACHE is not None:
         return _FALLBACK_ROSTERS_CACHE
     p = Path("config/fallback_rosters.json")
+    if not p.exists():
+        p = Path(__file__).resolve().parent.parent.parent / "config" / "fallback_rosters.json"
     if p.exists():
         try:
             _FALLBACK_ROSTERS_CACHE = json.loads(p.read_text(encoding="utf-8"))

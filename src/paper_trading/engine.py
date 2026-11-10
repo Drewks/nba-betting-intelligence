@@ -891,48 +891,56 @@ class PaperTradingEngine:
 
             # Place simulated bet
             bet_id = f"BET_{matchday_date.replace('-', '')}_{uuid.uuid4().hex[:8].upper()}"
-            self.db.execute_insert(
-                """
-                INSERT INTO simulated_bets (
-                    bet_id, prediction_id, game_id, matchday_date, market, selection,
-                    line_value, decimal_odds, estimated_prob, estimated_ev, stake_pen,
-                    emitted_at, model_version_id, status, net_profit_pen,
-                    bankroll_after_pen, actual_result_summary, settled_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', NULL, NULL, NULL, NULL)
-                """,
-                (
-                    bet_id,
-                    prediction_id,
-                    game_id,
-                    matchday_date,
-                    market,
-                    selection,
-                    line_value,
-                    dec_odds,
-                    float(cal_prob),
-                    ev_unit,
-                    bet_stake,
-                    emitted_at,
-                    model_version_id,
-                ),
-            )
+            curr_br = state["settled_bankroll_pen"]
+            curr_exp = round(state["pending_exposure_pen"] + bet_stake, 4)
+            curr_avail = round(curr_br - curr_exp, 4)
 
-            new_state = self.get_bankroll_state()
-            self.db.execute_insert(
-                """
-                INSERT INTO bankroll_ledger (
-                    timestamp, event_type, reference_bet_id, amount_delta_pen,
-                    settled_bankroll_pen, pending_exposure_pen, available_balance_pen
-                ) VALUES (?, 'BET_RESERVED', ?, 0.0, ?, ?, ?)
-                """,
-                (
-                    emitted_at,
-                    bet_id,
-                    new_state["settled_bankroll_pen"],
-                    new_state["pending_exposure_pen"],
-                    new_state["available_balance_pen"],
-                ),
-            )
+            with self.db.connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO simulated_bets (
+                        bet_id, prediction_id, game_id, matchday_date, market, selection,
+                        line_value, decimal_odds, estimated_prob, estimated_ev, stake_pen,
+                        emitted_at, model_version_id, status, net_profit_pen,
+                        bankroll_after_pen, actual_result_summary, settled_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', NULL, NULL, NULL, NULL)
+                    """,
+                    (
+                        bet_id,
+                        prediction_id,
+                        game_id,
+                        matchday_date,
+                        market,
+                        selection,
+                        line_value,
+                        dec_odds,
+                        float(cal_prob),
+                        ev_unit,
+                        bet_stake,
+                        emitted_at,
+                        model_version_id,
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO bankroll_ledger (
+                        timestamp, event_type, reference_bet_id, amount_delta_pen,
+                        settled_bankroll_pen, pending_exposure_pen, available_balance_pen
+                    ) VALUES (?, 'BET_RESERVED', ?, 0.0, ?, ?, ?)
+                    """,
+                    (
+                        emitted_at,
+                        bet_id,
+                        curr_br,
+                        curr_exp,
+                        curr_avail,
+                    ),
+                )
+            state = {
+                "settled_bankroll_pen": curr_br,
+                "pending_exposure_pen": curr_exp,
+                "available_balance_pen": curr_avail,
+            }
 
             self._record_decision(
                 game_id, matchday_date, market, selection, "BET_PLACED",
@@ -1137,6 +1145,9 @@ class PaperTradingEngine:
         if new_settled_bankroll < 0.0:
             raise RiskLimitError(f"Negative bankroll violation detected: S/{new_settled_bankroll:.2f}")
 
+        new_pending_exposure = round(max(0.0, pre_state["pending_exposure_pen"] - float(bet["stake_pen"])), 4)
+        new_available = round(new_settled_bankroll - new_pending_exposure, 4)
+
         try:
             with self.db.connect() as conn:
                 conn.execute(
@@ -1158,26 +1169,24 @@ class PaperTradingEngine:
                         bet_id,
                     ),
                 )
+                conn.execute(
+                    """
+                    INSERT INTO bankroll_ledger (
+                        timestamp, event_type, reference_bet_id, amount_delta_pen,
+                        settled_bankroll_pen, pending_exposure_pen, available_balance_pen
+                    ) VALUES (?, 'BET_SETTLED', ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        settlement_ts,
+                        bet_id,
+                        net_profit,
+                        new_settled_bankroll,
+                        new_pending_exposure,
+                        new_available,
+                    ),
+                )
         except sqlite3.IntegrityError as exc:
             raise DoubleSettlementError(f"Database trigger blocked settlement on {bet_id}: {exc}") from exc
-
-        post_state = self.get_bankroll_state()
-        self.db.execute_insert(
-            """
-            INSERT INTO bankroll_ledger (
-                timestamp, event_type, reference_bet_id, amount_delta_pen,
-                settled_bankroll_pen, pending_exposure_pen, available_balance_pen
-            ) VALUES (?, 'BET_SETTLED', ?, ?, ?, ?, ?)
-            """,
-            (
-                settlement_ts,
-                bet_id,
-                net_profit,
-                post_state["settled_bankroll_pen"],
-                post_state["pending_exposure_pen"],
-                post_state["available_balance_pen"],
-            ),
-        )
 
         return {
             "bet_id": bet_id,
