@@ -20,6 +20,7 @@ from typing import Any
 
 from src.ingestion.normalizer import normalize_team_code
 from src.storage.db import DatabaseManager
+from src.config import ScraperConfig, load_scraper_config
 
 logger = logging.getLogger("PlaywrightScraper")
 
@@ -36,12 +37,14 @@ class PeruPlaywrightScraper:
     def __init__(
         self,
         db: DatabaseManager | None = None,
-        timeout_ms: int = 15000,
-        headless: bool = True,
+        timeout_ms: int | None = None,
+        headless: bool | None = None,
+        config: ScraperConfig | None = None,
     ) -> None:
         self.db = db
-        self.timeout_ms = timeout_ms
-        self.headless = headless
+        self.config = config or load_scraper_config()
+        self.timeout_ms = timeout_ms if timeout_ms is not None else self.config.playwright.timeout_ms
+        self.headless = headless if headless is not None else self.config.playwright.headless
 
     def _match_teams(self, event_name: str) -> tuple[str, str] | None:
         """Attempts to extract home and away team codes from an event title (e.g. 'Boston Celtics - Miami Heat')."""
@@ -79,12 +82,16 @@ class PeruPlaywrightScraper:
                     headless=self.headless,
                     args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
                 )
+                book_cfg = self.config.sportsbooks.get("retabet")
+                url = book_cfg.nba_url if book_cfg and book_cfg.nba_url else RETABET_NBA_URL
+                wait_ms = book_cfg.wait_after_load_ms if book_cfg else self.config.playwright.wait_after_load_ms
+                timeout = book_cfg.timeout_ms if book_cfg else self.timeout_ms
+                ua = self.config.playwright.user_agent
+                vp: Any = {"width": self.config.playwright.viewport.width, "height": self.config.playwright.viewport.height}
+
                 context = browser.new_context(
-                    user_agent=(
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-                    ),
-                    viewport={"width": 1280, "height": 800},
+                    user_agent=ua,
+                    viewport=vp,
                 )
                 page = context.new_page()
 
@@ -92,8 +99,8 @@ class PeruPlaywrightScraper:
 
                 def handle_response(response: Any) -> None:
                     try:
-                        url = str(response.url).lower()
-                        if "api" in url and ("event" in url or "nba" in url or "sport" in url):
+                        r_url = str(response.url).lower()
+                        if "api" in r_url and ("event" in r_url or "nba" in r_url or "sport" in r_url):
                             if response.status == 200:
                                 ct = response.headers.get("content-type", "")
                                 if "application/json" in ct:
@@ -104,8 +111,8 @@ class PeruPlaywrightScraper:
                 page.on("response", handle_response)
 
                 try:
-                    page.goto(RETABET_NBA_URL, timeout=self.timeout_ms, wait_until="domcontentloaded")
-                    page.wait_for_timeout(2000)
+                    page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+                    page.wait_for_timeout(wait_ms)
                 except Exception as nav_exc:
                     logger.debug("RETAbet navigation reached timeout or partial load: %s", nav_exc)
 
@@ -231,12 +238,16 @@ class PeruPlaywrightScraper:
                     headless=self.headless,
                     args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
                 )
+                book_cfg = self.config.sportsbooks.get("betano")
+                url = book_cfg.nba_url if book_cfg and book_cfg.nba_url else BETANO_NBA_URL
+                wait_ms = book_cfg.wait_after_load_ms if book_cfg else self.config.playwright.wait_after_load_ms
+                timeout = book_cfg.timeout_ms if book_cfg else self.timeout_ms
+                ua = self.config.playwright.user_agent
+                vp: Any = {"width": self.config.playwright.viewport.width, "height": self.config.playwright.viewport.height}
+
                 context = browser.new_context(
-                    user_agent=(
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-                    ),
-                    viewport={"width": 1280, "height": 800},
+                    user_agent=ua,
+                    viewport=vp,
                 )
                 page = context.new_page()
 
@@ -244,8 +255,8 @@ class PeruPlaywrightScraper:
 
                 def handle_response(response: Any) -> None:
                     try:
-                        url = str(response.url).lower()
-                        if "api" in url and ("event" in url or "sport" in url or "betano" in url):
+                        r_url = str(response.url).lower()
+                        if "api" in r_url and ("event" in r_url or "sport" in r_url or "betano" in r_url):
                             if response.status == 200:
                                 ct = response.headers.get("content-type", "")
                                 if "application/json" in ct:
@@ -256,8 +267,8 @@ class PeruPlaywrightScraper:
                 page.on("response", handle_response)
 
                 try:
-                    page.goto(BETANO_NBA_URL, timeout=self.timeout_ms, wait_until="domcontentloaded")
-                    page.wait_for_timeout(2000)
+                    page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+                    page.wait_for_timeout(wait_ms)
                 except Exception as nav_exc:
                     logger.debug("Betano navigation reached timeout or partial load: %s", nav_exc)
 

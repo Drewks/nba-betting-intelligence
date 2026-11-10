@@ -194,6 +194,50 @@ class CopulaCorrelationsConfig:
 
 
 @dataclass(frozen=True)
+class ViewportConfig:
+    width: int = 1280
+    height: int = 800
+
+
+@dataclass(frozen=True)
+class PlaywrightBrowserConfig:
+    headless: bool = True
+    timeout_ms: int = 15000
+    wait_after_load_ms: int = 2000
+    user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    )
+    viewport: ViewportConfig = field(default_factory=ViewportConfig)
+
+
+@dataclass(frozen=True)
+class SportsbookEndpointConfig:
+    name: str
+    nba_url: str
+    enabled: bool = True
+    timeout_ms: int = 15000
+    wait_after_load_ms: int = 2000
+
+
+@dataclass(frozen=True)
+class ESPNConfig:
+    summary_api_url: str = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}"
+    roster_api_url: str = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{espn_code}/roster"
+    team_url_map: dict[str, str] = field(default_factory=lambda: {"NOP": "no", "UTA": "utah"})
+
+
+@dataclass(frozen=True)
+class ScraperConfig:
+    playwright: PlaywrightBrowserConfig = field(default_factory=PlaywrightBrowserConfig)
+    sportsbooks: dict[str, SportsbookEndpointConfig] = field(default_factory=dict)
+    espn: ESPNConfig = field(default_factory=ESPNConfig)
+
+
+SCRAPER_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "scraper_config.yaml"
+
+
+@dataclass(frozen=True)
 class AppConfig:
     model: ModelConfig
     risk: RiskConfig
@@ -448,3 +492,68 @@ def load_config(path: str | None = None) -> AppConfig:
         raise ConfigError(f"Configuration file not found: {cfg_path}")
     raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
     return parse_config(raw)
+
+def parse_scraper_config(raw: dict[str, Any]) -> ScraperConfig:
+    pw_raw = raw.get("playwright") or {}
+    vp_raw = pw_raw.get("viewport") or {}
+    viewport = ViewportConfig(
+        width=int(vp_raw.get("width", 1280)),
+        height=int(vp_raw.get("height", 800)),
+    )
+    playwright = PlaywrightBrowserConfig(
+        headless=bool(pw_raw.get("headless", True)),
+        timeout_ms=int(pw_raw.get("timeout_ms", 15000)),
+        wait_after_load_ms=int(pw_raw.get("wait_after_load_ms", 2000)),
+        user_agent=str(pw_raw.get("user_agent", (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        ))),
+        viewport=viewport,
+    )
+
+    books_raw = raw.get("sportsbooks") or {}
+    sportsbooks: dict[str, SportsbookEndpointConfig] = {}
+    for key, b_data in books_raw.items():
+        if isinstance(b_data, dict):
+            sportsbooks[str(key)] = SportsbookEndpointConfig(
+                name=str(b_data.get("name", key)),
+                nba_url=str(b_data.get("nba_url", "")),
+                enabled=bool(b_data.get("enabled", True)),
+                timeout_ms=int(b_data.get("timeout_ms", 15000)),
+                wait_after_load_ms=int(b_data.get("wait_after_load_ms", 2000)),
+            )
+
+    espn_raw = raw.get("espn") or {}
+    espn = ESPNConfig(
+        summary_api_url=str(espn_raw.get("summary_api_url", "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}")),
+        roster_api_url=str(espn_raw.get("roster_api_url", "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{espn_code}/roster")),
+        team_url_map=dict(espn_raw.get("team_url_map") or {"NOP": "no", "UTA": "utah"}),
+    )
+
+    return ScraperConfig(
+        playwright=playwright,
+        sportsbooks=sportsbooks,
+        espn=espn,
+    )
+
+
+@lru_cache(maxsize=1)
+def load_scraper_config(path: str | Path | None = None) -> ScraperConfig:
+    cfg_p = Path(path) if path else SCRAPER_CONFIG_PATH
+    if not cfg_p.exists():
+        return ScraperConfig(
+            playwright=PlaywrightBrowserConfig(),
+            sportsbooks={
+                "retabet": SportsbookEndpointConfig(
+                    name="RETAbet Perú",
+                    nba_url="https://retabet.pe/deportes/baloncesto/usa/nba",
+                ),
+                "betano": SportsbookEndpointConfig(
+                    name="Betano Perú",
+                    nba_url="https://pe.betano.com/sport/basquetbol/estados-unidos/nba/",
+                ),
+            },
+            espn=ESPNConfig(),
+        )
+    raw = yaml.safe_load(cfg_p.read_text(encoding="utf-8")) or {}
+    return parse_scraper_config(raw)

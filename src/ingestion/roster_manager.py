@@ -29,6 +29,18 @@ ESPN_TEAM_URL_MAP = {
 }
 
 
+def get_espn_team_url_map() -> dict[str, str]:
+    """Returns mapping of NBA team code to ESPN roster URL slug from scraper config with fallback."""
+    try:
+        from src.config import load_scraper_config
+        cfg = load_scraper_config()
+        if cfg.espn.team_url_map:
+            return cfg.espn.team_url_map
+    except Exception:
+        pass
+    return dict(ESPN_TEAM_URL_MAP)
+
+
 def ensure_roster_table(db: DatabaseManager) -> None:
     """Ensures the team_rosters cache table exists in SQLite."""
     db.execute_insert(
@@ -46,9 +58,14 @@ def ensure_roster_table(db: DatabaseManager) -> None:
     )
 
 
-def fetch_espn_team_roster(team_code: str, timeout_seconds: int = 8) -> tuple[str, list[dict[str, str]]]:
+def fetch_espn_team_roster(
+    team_code: str,
+    timeout_seconds: int = 8,
+    team_url_map: dict[str, str] | None = None,
+) -> tuple[str, list[dict[str, str]]]:
     """Fetches the official live roster for a single NBA franchise from ESPN API."""
-    espn_code = ESPN_TEAM_URL_MAP.get(team_code, team_code.lower())
+    url_map = team_url_map if team_url_map is not None else get_espn_team_url_map()
+    espn_code = url_map.get(team_code, team_code.lower())
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{espn_code}/roster"
     athletes: list[dict[str, str]] = []
     try:
