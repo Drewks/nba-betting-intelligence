@@ -362,5 +362,15 @@
       "pace_delta_when_out": -0.1,
       "tactical_role": "TWO_WAY_WING"
     }
+  },
+  "prop_dispersion_multipliers": {
+    "PTS": 1.85,
+    "PRA": 2.10,
+    "PR": 1.95,
+    "PA": 1.90,
+    "RA": 1.50,
+    "REB_FLOOR": 0.5,
+    "AST_FLOOR": 0.5,
+    "TH_FLOOR": 0.3
   }
 }

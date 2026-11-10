@@ -116,7 +116,7 @@ class StaleLineHunter:
         High-level batch comparator identifying all retail lines lagging behind a sharp line.
         """
         stale_opportunities: list[dict[str, Any]] = []
-        sharp_odds = float(sharp_line.get("decimal_odds", 1.90))
+        sharp_odds = float(sharp_line.get("decimal_odds") or 0.0)
         if sharp_odds <= 1.0:
             return stale_opportunities
 
@@ -127,7 +127,9 @@ class StaleLineHunter:
 
         for r_line in retail_lines:
             r_book = str(r_line.get("bookmaker", "Retail"))
-            r_odds = float(r_line.get("decimal_odds", 1.0))
+            r_odds = float(r_line.get("decimal_odds") or 0.0)
+            if r_odds <= 1.0:
+                continue
             if r_odds <= sharp_odds:
                 continue
 

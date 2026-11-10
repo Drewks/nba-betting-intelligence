@@ -335,13 +335,16 @@ class TelegramInteractiveListener:
         for b in pending_bets:
             mkt = b.get("market", "").upper()
             sel = b.get("selection", "").upper()
-            odds = float(b.get("decimal_odds") or 1.90)
-            stake = float(b.get("stake_pen") or 1.00)
-            ev = float(b.get("estimated_ev") or 0.0) * 100.0
+            odds_val = b.get("decimal_odds_used") if b.get("decimal_odds_used") is not None else b.get("decimal_odds")
+            odds_str = f"{float(odds_val):.2f}" if odds_val is not None and float(odds_val) > 1.0 else "N/A"
+            stake = float(b.get("stake_pen") or b.get("kelly_stake_pen") or 0.0)
+            ev = float(b.get("estimated_ev") or b.get("ev_pct") or 0.0)
+            if 0.0 < ev < 1.0:
+                ev *= 100.0
             lines.append(
                 f"📍 *{b.get('game_id')}*\n"
                 f"   • Mercado: `{mkt}` | Selección: *{sel}*\n"
-                f"   • Cuota: `{odds:.2f}` (EV: `+{ev:.1f}%`)\n"
+                f"   • Cuota: `{odds_str}` (EV: `+{ev:.1f}%`)\n"
                 f"   • Stake Sugerido: *S/ {stake:.2f} PEN*"
             )
 
@@ -404,12 +407,13 @@ class TelegramInteractiveListener:
                 cat = p.get("prop_category", "PTS")
                 sel = p.get("selection", "OVER")
                 line_val = p.get("line_value", 0.0)
-                odds = float(p.get("decimal_odds", 1.90))
+                odds_val = p.get("decimal_odds")
+                odds_str = f"{float(odds_val):.2f}" if odds_val is not None and float(odds_val) > 1.0 else "N/A"
                 ev = float(p.get("ev_pct", 0.0))
-                stake = float(p.get("kelly_stake_pen", 2.00))
+                stake = float(p.get("kelly_stake_pen") or p.get("stake_pen") or 0.0)
                 lines.append(
                     f"   🏀 *{name}* ({p.get('team', '')})\n"
-                    f"      Línea: *{cat} {sel} {line_val}* @ `{odds:.2f}`\n"
+                    f"      Línea: *{cat} {sel} {line_val}* @ `{odds_str}`\n"
                     f"      EV: `+{ev:.1f}%` | Stake: *S/ {stake:.2f} PEN*"
                 )
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
@@ -492,12 +496,14 @@ class TelegramInteractiveListener:
             for sb in surebets[:2]:
                 bh = sb.get("best_home", {})
                 ba = sb.get("best_away", {})
-                margin = float(sb.get("synthetic_margin_pct", 98.0))
+                margin = float(sb.get("synthetic_margin_pct") or 0.0)
                 profit = abs(margin) if margin < 0 else (100.0 - margin)
+                bh_odds_str = f"{float(bh['odds']):.2f}" if bh.get("odds") else "N/A"
+                ba_odds_str = f"{float(ba['odds']):.2f}" if ba.get("odds") else "N/A"
                 lines.append(
                     f"   📍 *{sb.get('matchup', sb.get('game_id'))}*\n"
-                    f"   • Local: `{bh.get('odds', 1.90):.2f}` ({bh.get('book', 'Local')})\n"
-                    f"   • Visita: `{ba.get('odds', 1.90):.2f}` ({ba.get('book', 'Visita')})\n"
+                    f"   • Local: `{bh_odds_str}` ({bh.get('book', 'Local')})\n"
+                    f"   • Visita: `{ba_odds_str}` ({ba.get('book', 'Visita')})\n"
                     f"   💰 *Ganancia Garantizada:* `+{profit:.2f}%` (Margen: `{margin:.1f}%`)\n"
                 )
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
@@ -505,14 +511,16 @@ class TelegramInteractiveListener:
             lines.append("📈 *Líneas Desfasadas (+CLV vs Pinnacle):*")
             for g, sl in stale_lines[:2]:
                 book = sl.get("retail_bookmaker") or sl.get("sportsbook") or "Casa Local"
-                r_odds = float(sl.get("retail_odds") or sl.get("local_odds") or 1.90)
-                s_odds = float(sl.get("sharp_odds") or sl.get("pinnacle_fair_odds") or 1.85)
-                clv = float(sl.get("expected_clv_pct") or sl.get("clv_pct") or 4.0)
+                r_odds_val = sl.get("retail_odds") or sl.get("local_odds")
+                r_odds_str = f"{float(r_odds_val):.2f}" if r_odds_val else "N/A"
+                s_odds_val = sl.get("sharp_odds") or sl.get("pinnacle_fair_odds")
+                s_odds_str = f"{float(s_odds_val):.2f}" if s_odds_val else "N/A"
+                clv = float(sl.get("expected_clv_pct") or sl.get("clv_pct") or 0.0)
                 sel = sl.get("selection", "Pick")
                 lines.append(
                     f"   📍 *{g.get('matchup', g.get('game_id'))}* — *{sel}*\n"
-                    f"   • Casa: *{book}* @ `{r_odds:.2f}`\n"
-                    f"   • Pinnacle Benchmark: `{s_odds:.2f}` (Edge: `+{clv:.1f}%`)"
+                    f"   • Casa: *{book}* @ `{r_odds_str}`\n"
+                    f"   • Pinnacle Benchmark: `{s_odds_str}` (Edge: `+{clv:.1f}%`)"
                 )
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         else:
@@ -524,8 +532,8 @@ class TelegramInteractiveListener:
                 if bh.get("odds") and ba.get("odds"):
                     lines.append(
                         f"📍 *{g.get('matchup', g.get('game_id'))}*\n"
-                        f"   • Local: `{float(bh.get('odds', 1.90)):.2f}` ({bh.get('book', '')})\n"
-                        f"   • Visita: `{float(ba.get('odds', 1.90)):.2f}` ({ba.get('book', '')})"
+                        f"   • Local: `{float(bh['odds']):.2f}` ({bh.get('book', '')})\n"
+                        f"   • Visita: `{float(ba['odds']):.2f}` ({ba.get('book', '')})"
                     )
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 

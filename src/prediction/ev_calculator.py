@@ -511,14 +511,31 @@ def optimize_simultaneous_kelly_portfolio(
     enriched = [dict(c) for c in candidates]
     k = len(enriched)
 
-    # Extract probabilities and decimal odds
+    # Extract probabilities and decimal odds (strictly require valid observed odds and probabilities)
+    valid_candidates: list[dict[str, Any]] = []
     probs: list[float] = []
     odds: list[float] = []
     for c in enriched:
-        p = float(c.get("estimated_probability") or c.get("calibrated_probability") or 0.50)
-        o = float(c.get("decimal_odds_used") or c.get("decimal_odds") or 1.90)
-        probs.append(float(np.clip(p, 0.02, 0.98)))
-        odds.append(max(1.05, o))
+        p_val = c.get("estimated_probability") if c.get("estimated_probability") is not None else c.get("calibrated_probability")
+        o_val = c.get("decimal_odds_used") if c.get("decimal_odds_used") is not None else c.get("decimal_odds")
+        if p_val is None or o_val is None:
+            continue
+        try:
+            p_float = float(p_val)
+            o_float = float(o_val)
+        except (ValueError, TypeError):
+            continue
+        if o_float <= 1.0 or not (0.0 < p_float < 1.0):
+            continue
+        probs.append(float(np.clip(p_float, 0.02, 0.98)))
+        odds.append(o_float)
+        valid_candidates.append(c)
+
+    if not valid_candidates:
+        return candidates
+
+    enriched = valid_candidates
+    k = len(enriched)
 
     p_arr = np.asarray(probs, dtype=float)
     o_arr = np.asarray(odds, dtype=float)

@@ -516,10 +516,11 @@ def build_pregame_features(
     dist_a, tz_a, alt_climb_a = _compute_travel_leg(a_snap["last_venue"], home_team, away_team)
     first_home_from_road = 1.0 if (dist_h > 700.0 and h_rest <= 2.0) else 0.0
     travel_miles_diff = dist_a - dist_h
-    travel_diff_edge = 0.22 * (travel_miles_diff / 1000.0) + 0.12 * (tz_a - tz_h)
+    sit = _get_situational_factors_config()
+    travel_diff_edge = sit.travel_miles_rate * (travel_miles_diff / 1000.0) + sit.timezone_rate * (tz_a - tz_h)
 
-    h_b2b_pen = -1.60 if h_rest <= 1.0 else (0.30 if h_rest >= 3.0 else 0.0)
-    a_b2b_pen = -2.10 if a_rest <= 1.0 else (0.20 if a_rest >= 3.0 else 0.0)
+    h_b2b_pen = sit.b2b_penalty_home if h_rest <= 1.0 else (sit.rest_3plus_bonus_home if h_rest >= 3.0 else 0.0)
+    a_b2b_pen = sit.b2b_penalty_away if a_rest <= 1.0 else (sit.rest_3plus_bonus_away if a_rest >= 3.0 else 0.0)
     b2b_advantage = h_b2b_pen - a_b2b_pen
 
     h_fatigue = (
@@ -557,14 +558,14 @@ def build_pregame_features(
 
     min_games = min(h_snap["games"], a_snap["games"])
     live_rating_delta = net_rtg_diff - dyn_net_diff if min_games >= 5 else net_rtg_diff
-    elo_ds = (h_snap["elo_slow"] - a_snap["elo_slow"]) + 50.0 + 15.0 * fatigue_diff + 14.0 * altitude_advantage
-    elo_df = (h_snap["elo_fast"] - a_snap["elo_fast"]) + 50.0 + 15.0 * fatigue_diff + 14.0 * altitude_advantage
+    elo_ds = (h_snap["elo_slow"] - a_snap["elo_slow"]) + sit.home_court_advantage_elo + 15.0 * fatigue_diff + 14.0 * altitude_advantage
+    elo_df = (h_snap["elo_fast"] - a_snap["elo_fast"]) + sit.home_court_advantage_elo + 15.0 * fatigue_diff + 14.0 * altitude_advantage
     elo_diff = 0.82 * elo_ds + 0.18 * elo_df + (8.0 * live_rating_delta if min_games < 15 else 2.5 * live_rating_delta)
     p_elo = 1.0 / (1.0 + 10.0 ** (-elo_diff / 400.0))
     elo_spread = elo_diff / 28.0
 
     pace_factor = expected_pace / 100.0
-    eff_spread = net_rtg_diff * pace_factor + 1.85 + fatigue_diff + altitude_advantage
+    eff_spread = net_rtg_diff * pace_factor + sit.home_court_advantage_pts + fatigue_diff + altitude_advantage
     w_elo_mar = min(0.55, max(0.15, min_games / 25.0))
     structural_margin = w_elo_mar * elo_spread + (1.0 - w_elo_mar) * eff_spread
 

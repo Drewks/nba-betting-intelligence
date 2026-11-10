@@ -193,8 +193,9 @@ def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path)
         assert proj_combos["projections"][combo]["mean"] > 0.0
         assert proj_combos["projections"][combo]["std"] > 0.0
 
-    # 6. Automated Slate Generator test
-    DatabaseManager(tmp_path / "test_slate.sqlite3")
+    # 6. Automated Slate Generator test (Strict Observed Odds)
+    db = DatabaseManager(tmp_path / "test_slate.sqlite3")
+    engine = PlayerPropsEngine(db=db, min_ev_threshold=0.03)
     sample_slate = [
         {
             "game_id": "G_TEST_SLATE_1",
@@ -207,24 +208,47 @@ def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path)
             "model_p_away_pct": 35.0,
         }
     ]
-    # With props and parlays disabled explicitly, nothing is generated (no observed prop lines exist)
+    # Without observed quotes in odds_snapshots, nothing is generated (no fake/synthetic fallbacks)
     assert engine.generate_slate_prop_opportunities(
-        slate_games=sample_slate, bankroll_pen=100.0, min_ev_pct=3.0, allow_synthetic_lines=False, allow_parlays=False
+        slate_games=sample_slate, bankroll_pen=100.0, min_ev_pct=3.0, allow_parlays=False
     ) == []
 
-    # Estimated lines: every pick is labelled as estimated, never presented as an observed price
+    # Insert game and real observed market quote for Tyrese Haliburton
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, features_available_at, source_provider, ingested_at
+        ) VALUES (
+            'G_TEST_SLATE_1', '2026-27', '2026-11-08', '2026-11-08T20:00:00Z', 'IND', 'WAS',
+            'SCHEDULED', '2026-11-08T12:00:00Z', 'espn_public', '2026-11-08T12:00:00Z'
+        )
+        """
+    )
+    db.execute_insert(
+        """
+        INSERT INTO odds_snapshots (
+            odds_id, game_id, provider, market,
+            selection, line_value, decimal_odds, counterpart_decimal_odds, captured_at, source_type
+        ) VALUES (
+            'SNAP_PROP_1', 'G_TEST_SLATE_1', 'RETAbet_Tyrese Haliburton', 'player_prop',
+            'OVER', 15.5, 2.15, 1.72, '2026-11-08T12:00:00Z', 'OBSERVED'
+        )
+        """
+    )
+
+    # Observed lines: evaluated strictly against genuine market quote
     gen_results = engine.generate_slate_prop_opportunities(
         slate_games=sample_slate,
         bankroll_pen=100.0,
         min_ev_pct=3.0,
-        allow_synthetic_lines=True,
         allow_parlays=False,
     )
     assert len(gen_results) >= 1
     types = {r.get("type") for r in gen_results}
     assert "INDIVIDUAL_PROP" in types
     assert "RETABET_SGP" not in types
-    assert all(r["line_source"] == "ESTIMATED" and "LÍNEA ESTIMADA" in r["rationale"] for r in gen_results)
+    assert all(r["line_source"] == "OBSERVED" for r in gen_results)
     assert all(0.0 <= r["kelly_stake_pen"] <= 10.0 for r in gen_results)
 
 

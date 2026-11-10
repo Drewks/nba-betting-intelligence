@@ -363,61 +363,7 @@ def apply_pregame_team_ratings(db: Any) -> int:
     return len(rows)
 
 
-# V7 Lineup Synergy & On/Off RAPM Role Profiles:
-# (net_rapm_pts, off_share, def_share, pace_delta_when_out, tactical_role)
-PLAYER_ON_OFF_SYNERGY_PROFILES: dict[str, tuple[float, float, float, float, str]] = {
-    # Primary Playmaking Hubs / Ball-Handlers (Offense-heavy impact + pace/turnover control)
-    "Nikola Jokic": (6.8, 0.72, 0.28, -1.1, "PRIMARY_INITIATOR"),
-    "Luka Doncic": (6.2, 0.78, 0.22, -0.8, "PRIMARY_INITIATOR"),
-    "Shai Gilgeous-Alexander": (6.0, 0.68, 0.32, -0.6, "PRIMARY_INITIATOR"),
-    "Stephen Curry": (5.0, 0.80, 0.20, -1.2, "PRIMARY_INITIATOR"),
-    "Jalen Brunson": (4.5, 0.76, 0.24, -0.5, "PRIMARY_INITIATOR"),
-    "Tyrese Haliburton": (4.2, 0.82, 0.18, -1.6, "PRIMARY_INITIATOR"),
-    "Ja Morant": (4.2, 0.74, 0.26, -1.3, "PRIMARY_INITIATOR"),
-    "Damian Lillard": (4.0, 0.80, 0.20, -0.7, "PRIMARY_INITIATOR"),
-    "Trae Young": (3.8, 0.84, 0.16, -1.4, "PRIMARY_INITIATOR"),
-    "De'Aaron Fox": (3.6, 0.72, 0.28, -1.1, "PRIMARY_INITIATOR"),
-    "Cade Cunningham": (3.5, 0.74, 0.26, -0.6, "PRIMARY_INITIATOR"),
-    "Kyrie Irving": (3.5, 0.76, 0.24, -0.5, "PRIMARY_INITIATOR"),
-    "James Harden": (3.3, 0.78, 0.22, -0.8, "PRIMARY_INITIATOR"),
-    "Darius Garland": (3.1, 0.76, 0.24, -0.6, "PRIMARY_INITIATOR"),
-    "LaMelo Ball": (3.2, 0.78, 0.22, -1.2, "PRIMARY_INITIATOR"),
-    # Rim Protectors & Interior Defensive Anchors (Defense-heavy impact)
-    "Joel Embiid": (5.8, 0.52, 0.48, -0.4, "RIM_ANCHOR"),
-    "Victor Wembanyama": (5.2, 0.34, 0.66, -0.3, "RIM_ANCHOR"),
-    "Anthony Davis": (4.6, 0.38, 0.62, -0.2, "RIM_ANCHOR"),
-    "Domantas Sabonis": (4.0, 0.62, 0.38, -0.7, "RIM_ANCHOR"),
-    "Chet Holmgren": (3.5, 0.36, 0.64, -0.2, "RIM_ANCHOR"),
-    "Bam Adebayo": (3.5, 0.35, 0.65, -0.2, "RIM_ANCHOR"),
-    "Jaren Jackson Jr.": (3.5, 0.32, 0.68, 0.3, "RIM_ANCHOR"),
-    "Karl-Anthony Towns": (3.4, 0.64, 0.36, -0.3, "RIM_ANCHOR"),
-    "Rudy Gobert": (3.3, 0.22, 0.78, 0.4, "RIM_ANCHOR"),
-    "Evan Mobley": (3.2, 0.34, 0.66, 0.2, "RIM_ANCHOR"),
-    "Kristaps Porzingis": (3.0, 0.45, 0.55, -0.2, "RIM_ANCHOR"),
-    "Jarrett Allen": (2.8, 0.35, 0.65, 0.2, "RIM_ANCHOR"),
-    "Jusuf Nurkic": (2.2, 0.40, 0.60, 0.1, "RIM_ANCHOR"),
-    # Elite Two-Way Wings & Scorers
-    "Giannis Antetokounmpo": (6.0, 0.58, 0.42, -0.9, "TWO_WAY_WING"),
-    "Jayson Tatum": (4.8, 0.58, 0.42, -0.4, "TWO_WAY_WING"),
-    "Kevin Durant": (4.5, 0.68, 0.32, -0.4, "TWO_WAY_WING"),
-    "Anthony Edwards": (4.5, 0.62, 0.38, -0.5, "TWO_WAY_WING"),
-    "LeBron James": (4.4, 0.64, 0.36, -0.6, "TWO_WAY_WING"),
-    "Donovan Mitchell": (4.3, 0.66, 0.34, -0.5, "TWO_WAY_WING"),
-    "Devin Booker": (4.2, 0.70, 0.30, -0.5, "TWO_WAY_WING"),
-    "Kawhi Leonard": (4.2, 0.54, 0.46, -0.2, "TWO_WAY_WING"),
-    "Jimmy Butler": (3.8, 0.56, 0.44, -0.3, "TWO_WAY_WING"),
-    "Lauri Markkanen": (3.8, 0.68, 0.32, -0.3, "TWO_WAY_WING"),
-    "Paolo Banchero": (3.6, 0.62, 0.38, -0.4, "TWO_WAY_WING"),
-    "Zion Williamson": (3.6, 0.66, 0.34, -0.6, "TWO_WAY_WING"),
-    "Jaylen Brown": (3.5, 0.60, 0.40, -0.3, "TWO_WAY_WING"),
-    "Paul George": (3.3, 0.56, 0.44, -0.2, "TWO_WAY_WING"),
-    "Franz Wagner": (3.1, 0.58, 0.42, -0.3, "TWO_WAY_WING"),
-    "Scottie Barnes": (3.1, 0.55, 0.45, -0.3, "TWO_WAY_WING"),
-    "Jalen Williams": (3.0, 0.56, 0.44, -0.2, "TWO_WAY_WING"),
-    "Tobias Harris": (2.0, 0.55, 0.45, -0.1, "TWO_WAY_WING"),
-}
-
-
+# V7 Lineup Synergy & On/Off RAPM Role Profiles dynamically loaded from config/calibrated_weights.json
 _SYNERGY_PROFILES_CACHE: dict[str, tuple[float, float, float, float, str]] | None = None
 _LINEUP_SYNERGY_CONFIG_CACHE: Any = None
 
@@ -428,7 +374,7 @@ def get_player_on_off_synergy_profiles() -> dict[str, tuple[float, float, float,
     if _SYNERGY_PROFILES_CACHE is not None:
         return _SYNERGY_PROFILES_CACHE
 
-    profiles: dict[str, tuple[float, float, float, float, str]] = dict(PLAYER_ON_OFF_SYNERGY_PROFILES)
+    profiles: dict[str, tuple[float, float, float, float, str]] = {}
     w_file = Path("config/calibrated_weights.json")
     if not w_file.exists():
         w_file = Path(__file__).resolve().parent.parent.parent / "config" / "calibrated_weights.json"
@@ -448,6 +394,9 @@ def get_player_on_off_synergy_profiles() -> dict[str, tuple[float, float, float,
             pass
     _SYNERGY_PROFILES_CACHE = profiles
     return profiles
+
+
+PLAYER_ON_OFF_SYNERGY_PROFILES: dict[str, tuple[float, float, float, float, str]] = get_player_on_off_synergy_profiles()
 
 
 def _get_lineup_synergy_config() -> Any:

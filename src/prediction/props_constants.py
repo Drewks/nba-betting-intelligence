@@ -57,6 +57,33 @@ TEAM_DEFENSIVE_MULTIPLIERS: dict[str, dict[str, Any]] = load_team_defensive_mult
 _FALLBACK_ROSTERS_CACHE: dict[str, list[str]] | None = None
 
 
+def load_prop_dispersion_multipliers() -> dict[str, float]:
+    """Loads empirical NBA player dispersion multipliers from config/calibrated_weights.json."""
+    defaults = {
+        "PTS": 1.85,
+        "PRA": 2.10,
+        "PR": 1.95,
+        "PA": 1.90,
+        "RA": 1.50,
+        "REB_FLOOR": 0.5,
+        "AST_FLOOR": 0.5,
+        "TH_FLOOR": 0.3,
+    }
+    p = _resolve_config_path("calibrated_weights.json")
+    if p.exists():
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            disp = data.get("prop_dispersion_multipliers")
+            if isinstance(disp, dict):
+                return {k: float(v) for k, v in disp.items()}
+        except Exception as exc:
+            logger.warning("Failed to load prop_dispersion_multipliers from calibrated_weights.json: %s", exc)
+    return defaults
+
+
+PROP_DISPERSION_MULTIPLIERS: dict[str, float] = load_prop_dispersion_multipliers()
+
+
 def get_fallback_rosters() -> dict[str, list[str]]:
     """Loads fallback rosters from config/fallback_rosters.json with caching."""
     global _FALLBACK_ROSTERS_CACHE

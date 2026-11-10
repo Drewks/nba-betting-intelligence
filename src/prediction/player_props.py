@@ -45,6 +45,7 @@ from src.prediction.minutes_model import MinutesProjectionEngine
 from src.prediction.props_constants import (
     PLAYER_BASELINES,
     PLAYER_PROP_BASELINES,
+    PROP_DISPERSION_MULTIPLIERS,
     TEAM_DEFENSIVE_MULTIPLIERS,
     get_fallback_rosters,
 )
@@ -517,15 +518,16 @@ class PlayerPropsEngine:
         proj_pa = round(proj_pts + proj_ast, 1)
         proj_ra = round(proj_reb + proj_ast, 1)
 
-        # Standard deviations (empirical NBA player dispersion models)
-        std_pts = round(math.sqrt(max(1.0, proj_pts * 1.85)), 2)
-        std_pra = round(math.sqrt(max(1.0, proj_pra * 2.10)), 2)
-        std_pr = round(math.sqrt(max(1.0, proj_pr * 1.95)), 2)
-        std_pa = round(math.sqrt(max(1.0, proj_pa * 1.90)), 2)
-        std_ra = round(math.sqrt(max(1.0, proj_ra * 1.50)), 2)
-        std_reb = round(math.sqrt(max(0.5, proj_reb)), 2)
-        std_ast = round(math.sqrt(max(0.5, proj_ast)), 2)
-        std_th = round(math.sqrt(max(0.3, proj_th)), 2)
+        # Standard deviations (empirical NBA player dispersion models dynamically calibrated)
+        disp = PROP_DISPERSION_MULTIPLIERS
+        std_pts = round(math.sqrt(max(1.0, proj_pts * disp.get("PTS", 1.85))), 2)
+        std_pra = round(math.sqrt(max(1.0, proj_pra * disp.get("PRA", 2.10))), 2)
+        std_pr = round(math.sqrt(max(1.0, proj_pr * disp.get("PR", 1.95))), 2)
+        std_pa = round(math.sqrt(max(1.0, proj_pa * disp.get("PA", 1.90))), 2)
+        std_ra = round(math.sqrt(max(1.0, proj_ra * disp.get("RA", 1.50))), 2)
+        std_reb = round(math.sqrt(max(disp.get("REB_FLOOR", 0.5), proj_reb)), 2)
+        std_ast = round(math.sqrt(max(disp.get("AST_FLOOR", 0.5), proj_ast)), 2)
+        std_th = round(math.sqrt(max(disp.get("TH_FLOOR", 0.3), proj_th)), 2)
 
         avg_matchup_adj = round(((m_pts + m_reb + m_ast) / 3.0 - 1.0) * 100.0, 1)
 
@@ -895,19 +897,20 @@ class PlayerPropsEngine:
             cat = prop.get("prop_category", "PTS")
             rho = 0.35 if cat in ("PTS", "AST", "PRA", "PA", "PR") else 0.18
 
-            p_p = float(prop.get("model_prob", 0.55))
+            p_p = float(prop.get("model_prob") or 0.50)
             obs_g_odds = float(game.get("home_odds" if is_home else "away_odds") or 0.0)
             obs_p_odds = float(prop.get("decimal_odds") or 0.0)
             if obs_g_odds > 1.0 and obs_p_odds > 1.0:
                 sim_offered_odds = round(obs_g_odds * obs_p_odds * 0.90, 2)
-            elif "offered_sgp_odds" in prop:
+            elif "offered_sgp_odds" in prop and float(prop["offered_sgp_odds"]) > 1.0:
                 sim_offered_odds = float(prop["offered_sgp_odds"])
             elif not persist:
+                # Research simulation mode: derive synthetic fair estimate with bookmaker margin haircut
                 odds_g = 1.0 / max(0.05, game_prob)
                 odds_p = float(prop.get("decimal_odds") or (1.0 / max(0.05, p_p)))
                 sim_offered_odds = round(max(1.01, odds_g * odds_p * 0.90), 2)
             else:
-                # Require genuine observed odds from local/market harvest before persisting
+                # Production persistence strictly requires genuine observed market quotes
                 continue
 
             sgp_cand = self.simulate_same_game_parlay_copula(
@@ -956,22 +959,26 @@ class PlayerPropsEngine:
             gid = g.get("game_id", "GAME")
             h_team = g.get("home_team", "HOME")
             a_team = g.get("away_team", "AWAY")
+            obs_h_odds = float(g.get("home_odds") or 0.0)
+            obs_a_odds = float(g.get("away_odds") or 0.0)
             if p_home >= 0.70:
+                h_odds = obs_h_odds if obs_h_odds > 1.0 else round(max(1.05, 1.0 / p_home * 0.96), 2)
                 ml_anchors.append({
                     "game_id": gid,
                     "team": h_team,
                     "selection": f"{h_team} ML",
                     "prob": p_home,
-                    "odds": round(max(1.20, min(1.42, 1.0 / p_home * 0.96)), 2),
+                    "odds": h_odds,
                     "type": "ML_ANCHOR",
                 })
             elif p_away >= 0.70:
+                a_odds = obs_a_odds if obs_a_odds > 1.0 else round(max(1.05, 1.0 / p_away * 0.96), 2)
                 ml_anchors.append({
                     "game_id": gid,
                     "team": a_team,
                     "selection": f"{a_team} ML",
                     "prob": p_away,
-                    "odds": round(max(1.20, min(1.42, 1.0 / p_away * 0.96)), 2),
+                    "odds": a_odds,
                     "type": "ML_ANCHOR",
                 })
 
@@ -990,8 +997,9 @@ class PlayerPropsEngine:
             p_over = float(1.0 - norm.cdf(z))
 
             if p_over >= min_leg_prob:
+                obs_prop_odds = float(p.get("decimal_odds") or 0.0)
                 fair_odds = 1.0 / p_over
-                retail_odds = round(max(1.22, min(1.40, fair_odds * 1.04)), 2)
+                retail_odds = obs_prop_odds if obs_prop_odds > 1.0 else round(max(1.05, fair_odds * 1.04), 2)
                 alt_props.append({
                     "game_id": p.get("game_id"),
                     "player_name": p.get("player_name"),
@@ -1292,32 +1300,12 @@ class PlayerPropsEngine:
                         spread_blowout_risk=spread_val,
                     )
 
-                    # Compute unadjusted season baseline stats to represent standard bookmaker lines
-                    base_pts = prof[0] * prof[2]
-                    base_ast = prof[0] * prof[4]
-                    base_reb = prof[0] * prof[3]
-                    base_th = prof[0] * prof[5]
-                    base_pra = base_pts + base_reb + base_ast
-
-                    baseline_map = {
-                        "PTS": base_pts,
-                        "AST": base_ast,
-                        "REB": base_reb,
-                        "3PM": base_th,
-                        "PRA": base_pra,
-                    }
-
                     for cat in categories_to_eval:
                         p_data = proj["projections"].get(cat)
                         if not p_data:
                             continue
 
-                        # Strict Data Integrity: Require observed prop lines unless allow_synthetic_lines=True
-                        # Observed prop lines are preferred. When none exist (no bookmaker prop prices are
-                        # captured), an ESTIMATED line (season baseline, 1.90/1.90) is used if enabled, and the
-                        # pick is labelled "LÍNEA ESTIMADA" so it is never mistaken for an observed price.
-                        use_synthetic = bool(allow_synthetic_lines)
-
+                        # Strict Data Integrity: Require observed prop quotes from bookmaker snapshots
                         observed_quotes: list[dict[str, Any]] = []
                         if self.db and gid:
                             observed_quotes = self.db.fetch_all(
@@ -1329,22 +1317,19 @@ class PlayerPropsEngine:
                                 (gid, f"%{p_name}%"),
                             )
 
-                        if not observed_quotes and not use_synthetic:
+                        if not observed_quotes:
                             continue
 
                         lines_to_test: list[tuple[float, float, float]] = []
-                        if observed_quotes:
-                            for oq in observed_quotes:
-                                lv = float(oq.get("line_value") or 0.0)
-                                oo = float(oq.get("decimal_odds") or 0.0)
-                                uo = float(oq.get("counterpart_decimal_odds") or 0.0)
-                                if lv > 0.5 and oo > 1.0 and uo > 1.0:
-                                    lines_to_test.append((lv, oo, uo))
-                        elif use_synthetic:
-                            base_val = baseline_map.get(cat, p_data["mean"])
-                            std_line = math.floor(base_val) + 0.5
-                            if std_line > 0.5:
-                                lines_to_test.append((std_line, 1.90, 1.90))
+                        for oq in observed_quotes:
+                            lv = float(oq.get("line_value") or 0.0)
+                            oo = float(oq.get("decimal_odds") or 0.0)
+                            uo = float(oq.get("counterpart_decimal_odds") or 0.0)
+                            if lv > 0.5 and oo > 1.0 and uo > 1.0:
+                                lines_to_test.append((lv, oo, uo))
+
+                        if not lines_to_test:
+                            continue
 
                         for lv, oo, uo in lines_to_test:
                             picks = self.evaluate_prop_opportunity(
@@ -1362,7 +1347,7 @@ class PlayerPropsEngine:
                                 expected_game_pace=pace_val,
                                 spread_blowout_risk=spread_val,
                                 persist=False,
-                                line_source="OBSERVED" if observed_quotes else "ESTIMATED",
+                                line_source="OBSERVED",
                             )
                             for pk in picks:
                                 if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:

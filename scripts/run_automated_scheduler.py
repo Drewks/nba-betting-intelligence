@@ -186,15 +186,17 @@ class NBADailyScheduler:
         alerts_sent = 0
         if self.bot.is_live and sniper_res.get("alerts"):
             for alert in sniper_res["alerts"]:
+                odds_val = alert.get("decimal_odds")
+                odds_str = f"{float(odds_val):.2f}" if odds_val is not None and float(odds_val) > 1.0 else "N/A"
                 msg = (
                     f"🚨 *ALERTA INJURY SNIPER (T-2H / T-30M)*\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"📍 *Partido:* `{alert.get('game_id')}`\n"
                     f"⚠️ *Baja Detectada:* {alert.get('absent_star', 'Jugador Estrella')}\n"
                     f"📈 *Impacto en Sinergia:* `{alert.get('net_penalty', 0.0):+.1f} pts`\n"
-                    f"🎯 *Pick Generado:* *{alert.get('selection')}* @ `{alert.get('decimal_odds', 1.90):.2f}`\n"
+                    f"🎯 *Pick Generado:* *{alert.get('selection')}* @ `{odds_str}`\n"
                     f"⚡ *EV Lower-Bound:* `+{alert.get('ev_lower_bound_pct', 0.0):.1f}%`\n"
-                    f"💵 *Stake Sugerido:* *S/ {alert.get('stake_pen', 2.00):.2f} PEN*\n"
+                    f"💵 *Stake Sugerido:* *S/ {alert.get('stake_pen', 0.0):.2f} PEN*\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━"
                 )
                 self.bot.send_raw_message(msg)

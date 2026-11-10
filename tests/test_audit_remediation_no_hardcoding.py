@@ -328,3 +328,35 @@ def test_migration_009_v_observed_games_view(tmp_path: Path) -> None:
     assert len(observed_games) == 1
     assert observed_games[0]["game_id"] == "ESPN_REAL_001"
 
+
+def test_prop_dispersion_multipliers_from_calibrated_weights() -> None:
+    """Verifies that empirical prop dispersion multipliers load dynamically from config."""
+    from src.prediction.props_constants import PROP_DISPERSION_MULTIPLIERS, load_prop_dispersion_multipliers
+    disp = load_prop_dispersion_multipliers()
+    assert disp["PTS"] == 1.85
+    assert disp["PRA"] == 2.10
+    assert disp["PR"] == 1.95
+    assert disp["PA"] == 1.90
+    assert disp["RA"] == 1.50
+    assert PROP_DISPERSION_MULTIPLIERS["PTS"] == disp["PTS"]
+
+
+def test_telegram_reporting_zero_fake_odds_fallbacks() -> None:
+    """Verifies that reporting does not invent 1.90 or 0.55 when market quotes are absent."""
+    from src.reporting.telegram_bot import TelegramAlertBot
+    bot = TelegramAlertBot(bot_token="", chat_id="")
+
+    # Bet with missing odds and prob
+    alert = bot.format_single_bet_alert({"game_id": "TEST_G", "market": "TOTAL_POINTS", "selection": "OVER"})
+    assert "Cuota:* `N/A`" in alert
+    assert "(Prob. Modelo: `N/A`)" in alert
+    assert "1.90" not in alert
+    assert "0.55" not in alert
+    assert "55.0%" not in alert
+
+    # Stale line with missing retail odds
+    stale = bot.format_stale_line_alert({"selection": "HOME ML"})
+    assert "Cuota en RETAbet Perú:* `N/A`" in alert or "`N/A`" in stale
+    assert "1.90" not in stale
+
+

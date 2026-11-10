@@ -104,10 +104,12 @@ class TelegramAlertBot:
         game_id = bet.get("game_id", "NBA Game")
         mkt = bet.get("market", "").upper()
         sel = bet.get("selection", "").upper()
-        odds = float(bet.get("decimal_odds_used") or bet.get("decimal_odds") or 1.90)
-        prob = float(bet.get("calibrated_probability") or bet.get("model_prob") or 0.55) * 100.0
+        odds_raw = bet.get("decimal_odds_used") if bet.get("decimal_odds_used") is not None else bet.get("decimal_odds")
+        odds_str = f"{float(odds_raw):.2f}" if odds_raw is not None and float(odds_raw) > 1.0 else "N/A"
+        prob_raw = bet.get("calibrated_probability") if bet.get("calibrated_probability") is not None else bet.get("model_prob")
+        prob_str = f"{float(prob_raw) * 100.0:.1f}%" if prob_raw is not None else "N/A"
         ev = float(bet.get("ev_pct") or 0.0)
-        stake = float(bet.get("stake_pen") or bet.get("kelly_stake_pen") or 1.00)
+        stake = float(bet.get("stake_pen") or bet.get("kelly_stake_pen") or 0.0)
         book = bet.get("odds_provider") or bet.get("bookmaker") or "RETAbet Perú"
 
         msg = (
@@ -116,7 +118,7 @@ class TelegramAlertBot:
             f"📍 *Partido:* `{game_id}`\n"
             f"🎯 *Mercado:* `{mkt}` | *Selección:* *{sel}*\n"
             f"💰 *Casa Sugerida:* *{book}*\n"
-            f"📈 *Cuota:* `{odds:.2f}` (Prob. Modelo: `{prob:.1f}%`)\n"
+            f"📈 *Cuota:* `{odds_str}` (Prob. Modelo: `{prob_str}`)\n"
             f"⚡ *Valor Esperado (EV):* `+{ev:.1f}%`\n"
             f"💵 *Stake Sugerido:* *S/ {stake:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -127,12 +129,15 @@ class TelegramAlertBot:
     def format_sgp_parlay_alert(self, sgp: dict[str, Any]) -> str:
         """Formats a multi-leg Correlated Same-Game Parlay into actionable Telegram markdown."""
         num_legs = sgp.get("num_legs", len(sgp.get("legs", []))) or 2
-        odds = float(sgp.get("offered_sgp_odds", 3.50))
-        p_joint = float(sgp.get("p_joint", 0.25)) * 100.0
-        p_indep = float(sgp.get("p_independent", 0.18)) * 100.0
-        boost = float(sgp.get("correlation_boost_pct", 25.0))
-        ev = float(sgp.get("ev_pct", 15.0))
-        stake = float(sgp.get("kelly_stake_pen", 2.00))
+        odds_raw = sgp.get("offered_sgp_odds") or sgp.get("decimal_odds")
+        odds_str = f"{float(odds_raw):.2f}" if odds_raw is not None and float(odds_raw) > 1.0 else "N/A"
+        p_joint_raw = sgp.get("p_joint")
+        p_joint_str = f"{float(p_joint_raw) * 100.0:.1f}%" if p_joint_raw is not None else "N/A"
+        p_indep_raw = sgp.get("p_independent")
+        p_indep_str = f"{float(p_indep_raw) * 100.0:.1f}%" if p_indep_raw is not None else "N/A"
+        boost = float(sgp.get("correlation_boost_pct") or 0.0)
+        ev = float(sgp.get("ev_pct") or 0.0)
+        stake = float(sgp.get("kelly_stake_pen") or sgp.get("stake_pen") or 0.0)
 
         legs_text = ""
         for i, leg in enumerate(sgp.get("legs", []), 1):
@@ -150,9 +155,9 @@ class TelegramAlertBot:
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🏆 *Crea tu Apuesta (RETAbet / Betsson Perú)*\n"
             f"📋 *Selecciones:*\n{legs_text}"
-            f"📊 *Prob. Cópula:* `{p_joint:.1f}%` (vs `{p_indep:.1f}%` indep.)\n"
+            f"📊 *Prob. Cópula:* `{p_joint_str}` (vs `{p_indep_str}` indep.)\n"
             f"🚀 *Impulso de Correlación:* `+{boost:.1f}%`\n"
-            f"📈 *Cuota Ofrecida:* `{odds:.2f}` (Justa: `{sgp.get('fair_sgp_odds', 0.0):.2f}`)\n"
+            f"📈 *Cuota Ofrecida:* `{odds_str}` (Justa: `{sgp.get('fair_sgp_odds', 0.0):.2f}`)\n"
             f"⚡ *Valor Esperado (EV):* `+{ev:.1f}%`\n"
             f"💵 *Stake Sugerido:* *S/ {stake:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -166,17 +171,21 @@ class TelegramAlertBot:
         strat = parlay.get("strategy", "SAME_GAME_ANCHOR")
         strat_label = "Mismo Partido (SGP)" if strat == "SAME_GAME_ANCHOR" else "Cruzada Multi-Partido"
         book = parlay.get("bookmaker", "RETAbet / Betsson Perú")
-        odds = float(parlay.get("decimal_odds") or parlay.get("offered_sgp_odds") or 2.30)
-        win_p = float(parlay.get("win_probability_pct") or (float(parlay.get("p_joint", 0.65)) * 100.0))
-        ev = float(parlay.get("ev_pct", 25.0))
-        stake = float(parlay.get("stake_pen") or parlay.get("kelly_stake_pen") or 8.50)
+        odds_raw = parlay.get("decimal_odds") or parlay.get("offered_sgp_odds")
+        odds_str = f"{float(odds_raw):.2f}" if odds_raw is not None and float(odds_raw) > 1.0 else "N/A"
+        win_p_raw = parlay.get("win_probability_pct") if parlay.get("win_probability_pct") is not None else (float(parlay.get("p_joint", 0.0)) * 100.0 if parlay.get("p_joint") is not None else None)
+        win_p_str = f"{float(win_p_raw):.1f}%" if win_p_raw is not None else "N/A"
+        ev = float(parlay.get("ev_pct") or 0.0)
+        stake = float(parlay.get("stake_pen") or parlay.get("kelly_stake_pen") or 0.0)
 
         legs_text = ""
         for i, leg in enumerate(parlay.get("legs", []), 1):
             desc = leg.get("desc") or leg.get("selection") or f"Leg {i}"
-            leg_p = float(leg.get("prob", 0.80)) * 100.0
-            leg_odds = float(leg.get("odds", 1.28))
-            legs_text += f"  {i}. {desc} @ `{leg_odds:.2f}` (Prob: `{leg_p:.1f}%`)\n"
+            leg_p_raw = leg.get("prob")
+            leg_p_str = f"{float(leg_p_raw) * 100.0:.1f}%" if leg_p_raw is not None else "N/A"
+            leg_odds_raw = leg.get("odds")
+            leg_odds_str = f"{float(leg_odds_raw):.2f}" if leg_odds_raw is not None and float(leg_odds_raw) > 1.0 else "N/A"
+            legs_text += f"  {i}. {desc} @ `{leg_odds_str}` (Prob: `{leg_p_str}`)\n"
 
         msg = (
             f"🔥 *[COMBO ALPHA S/50] (Parlay de Alta Consistencia)*\n"
@@ -185,8 +194,8 @@ class TelegramAlertBot:
             f"🏦 *Casa Sugerida:* *{book}*\n"
             f"📋 *Selecciones de Alta Consistencia:*\n{legs_text}"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 *Probabilidad de Acierto:* *{win_p:.1f}%*\n"
-            f"💰 *Cuota Combinada:* `{odds:.2f}`\n"
+            f"📊 *Probabilidad de Acierto:* *{win_p_str}*\n"
+            f"💰 *Cuota Combinada:* `{odds_str}`\n"
             f"⚡ *Valor Esperado (EV):* `+{ev:.1f}%`\n"
             f"💵 *Stake Alfa Sugerido:* *S/ {stake:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -199,18 +208,20 @@ class TelegramAlertBot:
         retail_book = stale.get("retail_provider", "RETAbet Perú")
         sharp_book = stale.get("sharp_provider", "Pinnacle")
         sel = stale.get("selection", "")
-        r_odds = float(stale.get("retail_offered_odds", 1.90))
-        sharp_odds = float(stale.get("sharp_fair_odds", 1.70))
-        clv = float(stale.get("expected_clv_pct", 8.0))
-        stake = float(stale.get("kelly_stake_pen", 3.00))
+        r_odds_raw = stale.get("retail_offered_odds") or stale.get("retail_odds")
+        r_odds_str = f"{float(r_odds_raw):.2f}" if r_odds_raw is not None and float(r_odds_raw) > 1.0 else "N/A"
+        sharp_odds_raw = stale.get("sharp_fair_odds") or stale.get("sharp_odds")
+        sharp_odds_str = f"{float(sharp_odds_raw):.2f}" if sharp_odds_raw is not None and float(sharp_odds_raw) > 1.0 else "N/A"
+        clv = float(stale.get("expected_clv_pct") or stale.get("clv_pct") or 0.0)
+        stake = float(stale.get("kelly_stake_pen") or stale.get("stake_pen") or 0.0)
 
         msg = (
             f"⚡ *[ARBITRAJE / STALE LINE PERÚ]*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⚡ *{retail_book} mantiene cuota desactualizada!*\n"
             f"🎯 *Selección:* *{sel}*\n"
-            f"🏦 *Cuota en {retail_book}:* `{r_odds:.2f}`\n"
-            f"📉 *Cuota Sharp ({sharp_book}):* `{sharp_odds:.2f}`\n"
+            f"🏦 *Cuota en {retail_book}:* `{r_odds_str}`\n"
+            f"📉 *Cuota Sharp ({sharp_book}):* `{sharp_odds_str}`\n"
             f"💎 *Ventaja CLV Esperada:* `+{clv:.1f}%`\n"
             f"💵 *Stake Sugerido:* *S/ {stake:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -222,27 +233,29 @@ class TelegramAlertBot:
         """Formats a risk-free cross-bookmaker surebet arbitrage opportunity in Soles."""
         b_a = surebet.get("book_a", "Casa A")
         sel_a = surebet.get("selection_a", "HOME")
-        odds_a = float(surebet.get("odds_a", 2.10))
-        stake_a = float(surebet.get("stake_a_pen", 50.0))
+        odds_a_raw = surebet.get("odds_a")
+        odds_a_str = f"{float(odds_a_raw):.2f}" if odds_a_raw is not None and float(odds_a_raw) > 1.0 else "N/A"
+        stake_a = float(surebet.get("stake_a_pen") or 0.0)
 
         b_b = surebet.get("book_b", "Casa B")
         sel_b = surebet.get("selection_b", "AWAY")
-        odds_b = float(surebet.get("odds_b", 2.05))
-        stake_b = float(surebet.get("stake_b_pen", 50.0))
+        odds_b_raw = surebet.get("odds_b")
+        odds_b_str = f"{float(odds_b_raw):.2f}" if odds_b_raw is not None and float(odds_b_raw) > 1.0 else "N/A"
+        stake_b = float(surebet.get("stake_b_pen") or 0.0)
 
-        tot_invest = float(surebet.get("total_staked_pen", 100.0))
-        guaranteed_pnl = float(surebet.get("guaranteed_net_profit_pen", surebet.get("guaranteed_pnl_pen", 4.50)))
-        margin = float(surebet.get("arb_margin_pct", surebet.get("arbitrage_margin_pct", 4.5)))
+        tot_invest = float(surebet.get("total_staked_pen") or (stake_a + stake_b))
+        guaranteed_pnl = float(surebet.get("guaranteed_net_profit_pen") or surebet.get("guaranteed_pnl_pen") or 0.0)
+        margin = float(surebet.get("arb_margin_pct") or surebet.get("arbitrage_margin_pct") or 0.0)
 
         msg = (
             f"💰 *ARBITRAJE LIBRE DE RIESGO (SUREBET PERÚ)*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⚡ *Retorno Matemático Garantizado!*\n"
             f"🏦 *Apuesta 1:* {b_a}\n"
-            f"  • Selección: *{sel_a}* @ `{odds_a:.2f}`\n"
+            f"  • Selección: *{sel_a}* @ `{odds_a_str}`\n"
             f"  • Inversión: *S/ {stake_a:.2f} PEN*\n"
             f"🏦 *Apuesta 2:* {b_b}\n"
-            f"  • Selección: *{sel_b}* @ `{odds_b:.2f}`\n"
+            f"  • Selección: *{sel_b}* @ `{odds_b_str}`\n"
             f"  • Inversión: *S/ {stake_b:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💵 *Inversión Total:* `S/ {tot_invest:.2f} PEN`\n"
