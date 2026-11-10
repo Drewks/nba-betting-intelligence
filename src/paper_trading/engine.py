@@ -34,37 +34,12 @@ from src.validation.validator import (
 )
 
 
-class RiskLimitError(ValueError):
-    """Raised when a proposed bet violates conservative risk or staking rules."""
-
-
-class DoubleSettlementError(RuntimeError):
-    """Raised when attempting to settle a bet that has already been settled."""
-
-
-def compute_cppi_multiplier(
-    current_bankroll: float,
-    peak_bankroll: float,
-    floor_fraction: float = 0.85,
-) -> float:
-    """
-    V9 Phase 5: Constant Proportion Portfolio Insurance (CPPI) Capital Preservation Shield.
-    Calculates dynamic risk multiplier based on cushion above an 85% high-water mark floor:
-    - When bankroll is at or above peak: multiplier = 1.0 (full capacity).
-    - When bankroll approaches the floor: exposure scales down towards 0.15.
-    """
-    peak = max(1.0, float(peak_bankroll))
-    floor_val = peak * floor_fraction
-    cushion = max(0.0, float(current_bankroll) - floor_val)
-    target_cushion = max(1.0, peak * (1.0 - floor_fraction))
-
-    cushion_ratio = cushion / target_cushion
-    if cushion_ratio >= 1.0:
-        return 1.0
-    elif cushion_ratio <= 0.0:
-        return 0.15
-    else:
-        return round(max(0.15, min(1.0, float(cushion_ratio))), 4)
+from src.paper_trading.cppi import compute_cppi_multiplier
+from src.paper_trading.exceptions import DoubleSettlementError, RiskLimitError
+from src.paper_trading.settlement import (
+    calculate_prop_settlement_outcome,
+    calculate_settlement_outcome,
+)
 
 
 class PaperTradingEngine:
@@ -1052,52 +1027,18 @@ class PaperTradingEngine:
         - WON:  net_profit = S * (O - 1)
         - LOST: net_profit = -S
         - PUSH / VOID: net_profit = 0.0
-        Returns (status, net_profit_pen, result_summary).
+        Delegates to src.paper_trading.settlement.calculate_settlement_outcome.
         """
-        if game_status in ("POSTPONED", "CANCELLED"):
-            return "VOID", 0.0, f"Game {game_status}"
-
-        if game_status != "FINAL" or home_score is None or away_score is None:
-            raise DataValidationError(
-                f"Cannot settle bet before game is FINAL with verified scores (status={game_status})"
-            )
-
-        summary = f"HOME {home_score} - AWAY {away_score} (Total: {home_score + away_score})"
-
-        if market == "moneyline":
-            if home_score == away_score:
-                return "PUSH", 0.0, summary
-            home_won = home_score > away_score
-            if (selection == "HOME" and home_won) or (selection == "AWAY" and not home_won):
-                net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
-                return "WON", net_profit, summary
-            return "LOST", round(-stake_pen, 4), summary
-
-        if market == "total_points":
-            if line_value is None:
-                raise DataValidationError("total_points settlement requires line_value")
-            total_pts = float(home_score + away_score)
-            if abs(total_pts - float(line_value)) < 1e-6:
-                return "PUSH", 0.0, summary
-            over_hit = total_pts > float(line_value)
-            if (selection == "OVER" and over_hit) or (selection == "UNDER" and not over_hit):
-                net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
-                return "WON", net_profit, summary
-            return "LOST", round(-stake_pen, 4), summary
-
-        if market == "spread":
-            if line_value is None:
-                raise DataValidationError("spread settlement requires line_value")
-            side_margin = float(home_score - away_score) if selection == "HOME" else float(away_score - home_score)
-            adjusted_margin = side_margin + float(line_value)
-            if abs(adjusted_margin) < 1e-6:
-                return "PUSH", 0.0, summary
-            if adjusted_margin > 0.0:
-                net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
-                return "WON", net_profit, summary
-            return "LOST", round(-stake_pen, 4), summary
-
-        raise DataValidationError(f"Unsupported market for settlement: {market!r}")
+        return calculate_settlement_outcome(
+            market=market,
+            selection=selection,
+            line_value=line_value,
+            decimal_odds=decimal_odds,
+            stake_pen=stake_pen,
+            game_status=game_status,
+            home_score=home_score,
+            away_score=away_score,
+        )
 
     def settle_bet(
         self,
@@ -1330,71 +1271,13 @@ class PaperTradingEngine:
                 f"Cannot settle prop {prop_id} at {settlement_ts} before or at game_start_time ({game['game_start_time']})"
             )
 
-        stake_pen = float(prop.get("stake_pen") or prop.get("kelly_stake_pen") or 1.0)
-        decimal_odds = float(prop["decimal_odds"])
-        line_val = float(prop["line_value"])
-        cat = str(prop["prop_category"]).upper()
-        sel = str(prop["selection"]).upper()
-
-        if game_status in ("POSTPONED", "CANCELLED", "VOID"):
-            outcome_status = "VOID"
-            net_profit = 0.0
-            stat_recorded = 0.0
-            summary = f"Prop {game_status}"
-        else:
-            if game_status != "FINAL":
-                raise DataValidationError(f"Cannot settle prop before game is FINAL (status={game_status})")
-
-            if cat == "SGP":
-                if actual_stat is not None:
-                    is_won = float(actual_stat) >= 1.0
-                    stat_recorded = float(actual_stat)
-                else:
-                    if home_score is None or away_score is None:
-                        raise DataValidationError("SGP settlement requires game scores or explicit actual_stat")
-                    raise DataValidationError("SGP settlement requires actual_stat indicator (1.0 = hit, 0.0 = miss)")
-
-                if is_won:
-                    outcome_status = "WON"
-                    net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
-                    summary = f"SGP Acertada: Combinada correlacionada ganadora (+S/{net_profit:.2f} PEN)"
-                else:
-                    outcome_status = "LOST"
-                    net_profit = round(-stake_pen, 4)
-                    summary = f"SGP Fallada: Al menos una pierna no se cumplió (-S/{stake_pen:.2f} PEN)"
-            else:
-                if actual_stat is None:
-                    raise DataValidationError(f"Prop {cat} settlement requires actual_stat value")
-                stat_recorded = float(actual_stat)
-
-                if sel == "OVER":
-                    if stat_recorded > line_val:
-                        outcome_status = "WON"
-                        net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
-                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} > {line_val:.1f} (GANADA +S/{net_profit:.2f} PEN)"
-                    elif stat_recorded < line_val:
-                        outcome_status = "LOST"
-                        net_profit = round(-stake_pen, 4)
-                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} < {line_val:.1f} (PERDIDA -S/{stake_pen:.2f} PEN)"
-                    else:
-                        outcome_status = "PUSH"
-                        net_profit = 0.0
-                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} == {line_val:.1f} (EMPATE / DEVUELTA)"
-                elif sel == "UNDER":
-                    if stat_recorded < line_val:
-                        outcome_status = "WON"
-                        net_profit = round(stake_pen * (decimal_odds - 1.0), 4)
-                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} < {line_val:.1f} (GANADA +S/{net_profit:.2f} PEN)"
-                    elif stat_recorded > line_val:
-                        outcome_status = "LOST"
-                        net_profit = round(-stake_pen, 4)
-                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} > {line_val:.1f} (PERDIDA -S/{stake_pen:.2f} PEN)"
-                    else:
-                        outcome_status = "PUSH"
-                        net_profit = 0.0
-                        summary = f"{prop['player_name']} {cat} {stat_recorded:.1f} == {line_val:.1f} (EMPATE / DEVUELTA)"
-                else:
-                    raise DataValidationError(f"Unsupported prop selection: {sel}")
+        outcome_status, net_profit, stat_recorded, summary = calculate_prop_settlement_outcome(
+            prop=prop,
+            actual_stat=actual_stat,
+            game_status=game_status,
+            home_score=home_score,
+            away_score=away_score,
+        )
 
         # Compute updated props bankroll from initial bankroll + prior cumulative P&L + current net profit
         prior_pnl_row = self.db.fetch_one(
@@ -1615,3 +1498,14 @@ def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
         max_totals_per_matchday=hyb.max_totals_per_matchday,
         max_moneyline_per_matchday=hyb.max_moneyline_per_matchday,
     )
+
+
+__all__ = [
+    "DoubleSettlementError",
+    "PaperTradingEngine",
+    "RiskLimitError",
+    "build_production_engine",
+    "calculate_settlement_outcome",
+    "compute_cppi_multiplier",
+]
+
