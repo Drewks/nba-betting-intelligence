@@ -22,8 +22,9 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
 | Métricas y gates | ✅ | Fail-closed; el modelo se compara contra el **mercado sin margen** (gate 10), no solo contra el baseline ingenuo. |
 | CLV | ✅ | `100·(cuota × p_cierre_sin_margen − 1)`, cierre Pinnacle preferido; valores > 15% se excluyen como error de datos. |
 | Injury Sniper | 🟡 | Ancla en el mercado; solo cambios de estado NUEVOS (vs. snapshot previo) mueven la probabilidad. Tabla de impacto aún sin calibrar. |
-| Casas peruanas (RETAbet, Betsson, ...) | ⚪ | No se capturan cuotas reales. El comparador solo produce **estimaciones**, que nunca se guardan ni se usan para apostar. |
-| Player props / SGP / combinadas | 🟡 | Activos en paper trading en su propio ledger, con **líneas y cuotas estimadas y etiquetadas** (no se capturan precios reales de casas). No cuentan en las métricas de cuotas observadas. |
+| Casas peruanas (Betano & RETAbet) | ✅ | Scraper Headless con Playwright (`src/ingestion/playwright_scraper.py`) intercepta respuestas dinámicas JSON de red, capturando cuotas observadas reales (`source_type='OBSERVED'`) sin alterar provenencias. |
+| Sub-Bankroll Combinadas (S/ 50 PEN) | ✅ | Sub-banca aislada e inmutable (`parlay_bets` y `parlay_bankroll_ledger`) para SGP (Cópulas) y combinadas de alta probabilidad con Kelly dinámico (40%, máx S/ 5.00), sin contaminar la banca de Fase 0. |
+| Asignación Híbrida 70/30 | ✅ | Política de asignación diaria (máx 2 Totales Over/Under y máx 1 Moneyline por jornada) capitalizando el Alpha probado en Totales (+14.38% ROI en backtest real). |
 | Backtest con cuotas históricas reales | ✅ | `scripts/run_real_odds_backtest.py`: walk-forward del modelo de producción contra el consenso real de apertura/cierre (datos gratuitos CC BY 4.0). Resultados en `reports/real_odds_backtest.md`. |
 | Hiperparámetros optimizados | ⚪ | El estudio Optuna anterior tenía fuga del resultado (inválido). Se usan priors sin ajustar hasta re-optimizar con holdout. |
 
@@ -56,7 +57,7 @@ uv run python scripts/run_real_odds_backtest.py --sensitivity
 # Sincronizar dependencias en entorno virtual con uv
 uv sync --extra dev --python 3.12
 
-# Correr la suite completa de 50 pruebas automatizadas
+# Correr la suite completa de 82 pruebas automatizadas
 uv run pytest -q
 
 # Ejecutar análisis de calidad y formateo con ruff

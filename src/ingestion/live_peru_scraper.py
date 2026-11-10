@@ -219,6 +219,45 @@ class LivePeruOddsScraper:
         if live_bet:
             quotes_by_book["betsson_pe"] = live_bet
 
+        # 2b. Include quotes genuinely observed and stored in DB (e.g. via Playwright scraper)
+        if self.db is not None:
+            observed_rows = self.db.fetch_all(
+                """
+                SELECT provider, selection, decimal_odds, captured_at
+                FROM v_observed_odds_snapshots
+                WHERE game_id = ? AND market = 'moneyline'
+                  AND provider IN ('RETAbet Perú', 'Betano Perú', 'Betsson Perú', 'Inkabet', 'Te Apuesto')
+                ORDER BY captured_at DESC
+                """,
+                (game_id,),
+            )
+            by_prov: dict[str, dict[str, Any]] = {}
+            for r in observed_rows:
+                prov = str(r["provider"])
+                sel = str(r["selection"]).upper()
+                if prov not in by_prov:
+                    by_prov[prov] = {}
+                if sel not in by_prov[prov]:
+                    by_prov[prov][sel] = r
+
+            for prov, sels in by_prov.items():
+                slug = (
+                    "retabet_pe" if "RETAbet" in prov
+                    else ("betano_pe" if "Betano" in prov
+                    else ("betsson_pe" if "Betsson" in prov else prov.lower().replace(" ", "_")))
+                )
+                if slug not in quotes_by_book and "HOME" in sels and "AWAY" in sels:
+                    quotes_by_book[slug] = LiveGameOddsQuote(
+                        book_id=slug,
+                        book_name=prov,
+                        home_odds=float(sels["HOME"]["decimal_odds"]),
+                        away_odds=float(sels["AWAY"]["decimal_odds"]),
+                        captured_at=str(sels["HOME"]["captured_at"]),
+                        source=f"{prov} (Observed via Playwright / Ingestion)",
+                        is_observed=True,
+                        source_type="OBSERVED",
+                    )
+
         # 3. Stale lines: observed retail quotes vs observed sharp benchmark only.
         stale_opportunities: list[dict[str, Any]] = []
         if sharp_quote and quotes_by_book:
