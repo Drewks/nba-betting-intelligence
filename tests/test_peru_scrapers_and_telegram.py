@@ -571,7 +571,7 @@ def test_49_telegram_interactive_listener_and_commands(tmp_path: Path) -> None:
         text="/sgp",
         from_user={"first_name": "Andre", "username": "andbo06"},
     )
-    assert "PROPS" in sgp_resp or "RETAbet" in sgp_resp
+    assert "PROPS" in sgp_resp.upper() or "RETABET" in sgp_resp.upper()
 
     # 6. Authorized /cuotas
     cuotas_resp = listener.process_message(

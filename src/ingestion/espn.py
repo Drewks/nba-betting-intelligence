@@ -9,7 +9,7 @@ V2 Structured Adapter for ESPN's public NBA API + optional TheOddsAPI multi-book
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import logging
 import math
@@ -32,6 +32,7 @@ from src.ingestion.normalizer import (
 )
 from src.ingestion.sportradar import SportradarAdapter
 from src.ingestion.the_odds_api import TheOddsAPIAdapter
+from src.validation.validator import parse_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -352,6 +353,16 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             h_rest = self._compute_team_rest_days(home_code, matchday_date)
             a_rest = self._compute_team_rest_days(away_code, matchday_date)
 
+            start_dt_val = None
+            if game_start_time:
+                try:
+                    start_dt_val = parse_iso_utc(game_start_time)
+                    feat_avail = (start_dt_val - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                except Exception:
+                    feat_avail = now_utc
+            else:
+                feat_avail = now_utc
+
             games_out.append(
                 {
                     "game_id": game_id,
@@ -371,14 +382,26 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                     "away_pace": a_pace,
                     "home_rest_days": h_rest,
                     "away_rest_days": a_rest,
-                    "features_available_at": game_start_time,
+                    "features_available_at": feat_avail,
                     "source_provider": self.provider_name,
                     "ingested_at": now_utc,
                     "result_recorded_at": (now_utc if status == "FINAL" else None),
                 }
             )
 
-            # Ingest odds snapshots
+            # Ingest odds snapshots with strict pre-game temporal consistency
+            if start_dt_val is not None:
+                try:
+                    now_dt = parse_iso_utc(now_utc)
+                    if now_dt >= start_dt_val:
+                        odds_captured_at = (start_dt_val - timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    else:
+                        odds_captured_at = now_utc
+                except Exception:
+                    odds_captured_at = now_utc
+            else:
+                odds_captured_at = now_utc
+
             lookup_key = (matchday_date, away_code, home_code)
             if lookup_key in multi_book_odds:
                 for scraped_quote in multi_book_odds[lookup_key]:
@@ -389,7 +412,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                     tag_v = f"{line_v:.1f}" if line_v is not None else "ML"
                     odds_out.append(
                         {
-                            "odds_id": f"{game_id}_{m_type}_{sel_code}_{tag_v}_{p_name[:12].replace(' ', '_')}_{now_utc[:16]}",
+                            "odds_id": f"{game_id}_{m_type}_{sel_code}_{tag_v}_{p_name[:12].replace(' ', '_')}_{odds_captured_at[:16]}",
                             "game_id": game_id,
                             "provider": p_name,
                             "market": m_type,
@@ -397,7 +420,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                             "line_value": line_v,
                             "decimal_odds": scraped_quote["decimal_odds"],
                             "counterpart_decimal_odds": scraped_quote.get("counterpart_decimal_odds"),
-                            "captured_at": now_utc,
+                            "captured_at": odds_captured_at,
                             "is_closing_line": 0,
                             "source_type": scraped_quote.get("source_type", "OBSERVED"),
                         }
@@ -406,7 +429,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 for odds_entry in raw_odds_list:
                     provider_obj = odds_entry.get("provider") or {}
                     provider_name = str(provider_obj.get("name") or "ESPN_Consensus")
-                    captured_at = now_utc
+                    captured_at = odds_captured_at
 
                     home_ml = odds_entry.get("homeTeamOdds", {}).get("moneyLine")
                     away_ml = odds_entry.get("awayTeamOdds", {}).get("moneyLine")

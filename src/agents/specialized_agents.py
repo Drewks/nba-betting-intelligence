@@ -134,6 +134,8 @@ class NBADataScoutAgent:
                             f"Status regression blocked for {g.get('game_id')}: stored {existing['status']} "
                             f"cannot revert to {status}"
                         )
+                    if existing and existing.get("features_available_at"):
+                        g["features_available_at"] = existing["features_available_at"]
                     validate_game_record(g)
                     validate_essential_features(g, "moneyline")
                     validate_essential_features(g, "total_points")
@@ -147,6 +149,14 @@ class NBADataScoutAgent:
         rejected_odds: list[dict[str, str]] = []
         for o in raw_odds:
             g_start = valid_game_start_map.get(o.get("game_id", ""))
+            if not g_start:
+                existing_game = self.db.fetch_one(
+                    "SELECT game_start_time FROM games WHERE game_id = ?",
+                    (o.get("game_id"),),
+                )
+                if existing_game and existing_game.get("game_start_time"):
+                    g_start = str(existing_game["game_start_time"])
+                    valid_game_start_map[o.get("game_id", "")] = g_start
             if not g_start:
                 rejected_odds.append({"odds_id": str(o.get("odds_id")), "reason": "Parent game missing or invalid"})
                 continue

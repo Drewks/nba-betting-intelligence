@@ -77,13 +77,13 @@ MIN_REAL_GAMES_FOR_TRAINING = 120
 BOXSCORE_BACKFILL_PER_CYCLE = 600
 
 
-def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
-    db_path = PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"
+def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None = None) -> dict[str, Any]:
+    target_db_path = Path(db_path) if db_path is not None else (PROJECT_ROOT / "data" / "nba_intelligence.sqlite3")
 
     # Bootstrap database on very first run if it does not exist yet
-    if not db_path.exists():
+    if not target_db_path.exists():
         orch = Orchestrator(
-            db_path=db_path,
+            db_path=target_db_path,
             reports_dir=PROJECT_ROOT / "reports",
             obsidian_vault_dir=PROJECT_ROOT / "NBA",
             max_retries=2,
@@ -91,7 +91,7 @@ def run_incremental_cloud_cycle(mode: str = "auto") -> dict[str, Any]:
         init_res = orch.run_full_pipeline(include_live_espn=True)
         return {"cycle_type": "INITIAL_BOOTSTRAP_AND_LIVE_SYNC", "run_id": init_res["run_id"]}
 
-    db = DatabaseManager(db_path)
+    db = DatabaseManager(target_db_path)
     # Stake sizing, caps and EV threshold come from config/model_config.yaml (see AGENTS.md).
     paper_engine = build_production_engine(db)
     parlay_engine = ParlayTradingEngine(db)
