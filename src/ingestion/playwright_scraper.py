@@ -6,7 +6,7 @@ Uses Playwright with stealth Chromium to dynamically scrape live odds and player
   2. Betano Perú (pe.betano.com)
 
 Features:
-  - Network-level JSON payload interception (bypasses Cloudflare / Akamai / client-side render).
+  - Network-level JSON payload inspection from standard browser responses.
   - Extracts Moneyline, Totals (Over/Under), Spreads, and Player Props (Points, Rebounds, Assists).
   - Enforces provenance: all inserted odds snapshots carry source_type='OBSERVED' and exact UTC timestamps.
   - Fail-safe design: times out cleanly if a site is unreachable or blocked, without failing the pipeline.
@@ -80,7 +80,7 @@ class PeruPlaywrightScraper:
             with sync_playwright() as p:
                 browser = p.chromium.launch(
                     headless=self.headless,
-                    args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+                    args=["--no-sandbox"],
                 )
                 book_cfg = self.config.sportsbooks.get("retabet")
                 url = book_cfg.nba_url if book_cfg and book_cfg.nba_url else RETABET_NBA_URL
@@ -242,7 +242,7 @@ class PeruPlaywrightScraper:
             with sync_playwright() as p:
                 browser = p.chromium.launch(
                     headless=self.headless,
-                    args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+                    args=["--no-sandbox"],
                 )
                 book_cfg = self.config.sportsbooks.get("betano")
                 url = book_cfg.nba_url if book_cfg and book_cfg.nba_url else BETANO_NBA_URL

@@ -610,7 +610,7 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         f"- **Stake fijo S/1**: neto `S/{fs['net_profit_pen']:+.2f}` | ROI `{fs['roi_pct']}%` | "
         f"IC95 bootstrap `[{boot.get('roi_ci_lower_95_pct')}%, {boot.get('roi_ci_upper_95_pct')}%]` | "
         f"MaxDD `{fs['drawdown']['max_drawdown_pct']:.2f}%`",
-        f"- **Stake Kelly 25%** (S/{cfg['kelly']['min_stake']:.2f}–S/{cfg['kelly']['max_stake']:.2f}): banca final "
+        f"- **Stake Kelly {cfg['kelly']['fraction'] * 100:.0f}%** (S/{cfg['kelly']['min_stake']:.2f}–S/{cfg['kelly']['max_stake']:.2f}): banca final "
         f"`S/{ks['final_bankroll_pen']:.2f}` | ROI `{ks['roi_pct']}%` | stake medio `S/{ks['mean_stake_pen']}` | "
         f"MaxDD `{ks['drawdown']['max_drawdown_pct']:.2f}%`",
         f"- **CLV vs cierre sin margen**: media `{clv['mean_clv_ev_pct']}%` | gana al cierre `{clv['beat_close_rate']}` | "

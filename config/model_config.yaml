@@ -35,8 +35,8 @@ risk_management:                     # AGENTS.md section 2 (paper_trading_manage
   # Combined bets and player props are paper-traded in their own ledger (player_prop_picks).
   # No bookmaker prop/SGP prices are captured, so their lines and prices are ESTIMATES and every pick is
   # labelled as such; they are never mixed into the observed-odds metrics.
-  allow_parlays: true
-  allow_player_props_betting: true
+  allow_parlays: false
+  allow_player_props_betting: false
 
   # V8 Phase 1: Contextual Staking Conviction Tiers (Single source of truth)
   conviction_tiers:
@@ -166,7 +166,7 @@ hybrid_allocation:                   # Política de asignación 70% Totales / 30
   max_moneyline_per_matchday: 1
 
 clv_meta_labeling:                   # V8 Phase 3: Calibración empírica CLV Meta-Labeling
-  enabled: true
+  enabled: false
   calibrated_weights_path: "config/calibrated_weights.json"
   intercept: -0.2085
   coef_steam_delta: 57.7103

@@ -52,8 +52,8 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
 
         ml_odds_rows = db.fetch_all(
             """
-            SELECT bookmaker, home_odds, away_odds, captured_at
-            FROM odds
+            SELECT provider, selection, decimal_odds, counterpart_decimal_odds, captured_at
+            FROM v_observed_odds_snapshots
             WHERE game_id = ? AND market = 'moneyline' AND captured_at < ?
             ORDER BY captured_at DESC
             """,
@@ -61,18 +61,53 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
         )
         tot_odds_rows = db.fetch_all(
             """
-            SELECT bookmaker, over_odds, under_odds, line_value, captured_at
-            FROM odds
+            SELECT provider, selection, line_value, decimal_odds, counterpart_decimal_odds, captured_at
+            FROM v_observed_odds_snapshots
             WHERE game_id = ? AND market = 'total_points' AND captured_at < ?
             ORDER BY captured_at DESC
             """,
             (gid, g["game_start_time"]),
         )
 
-        best_h_odds = max([float(r["home_odds"]) for r in ml_odds_rows if r.get("home_odds")], default=None)
-        best_a_odds = max([float(r["away_odds"]) for r in ml_odds_rows if r.get("away_odds")], default=None)
-        best_over_odds = max([float(r["over_odds"]) for r in tot_odds_rows if r.get("over_odds")], default=None)
-        best_under_odds = max([float(r["under_odds"]) for r in tot_odds_rows if r.get("under_odds")], default=None)
+        h_odds_list: list[float] = []
+        a_odds_list: list[float] = []
+        for r in ml_odds_rows:
+            sel = str(r.get("selection") or "").upper()
+            d_odd = float(r["decimal_odds"]) if r.get("decimal_odds") else None
+            c_odd = float(r["counterpart_decimal_odds"]) if r.get("counterpart_decimal_odds") else None
+            if sel == "HOME":
+                if d_odd and d_odd > 1.0:
+                    h_odds_list.append(d_odd)
+                if c_odd and c_odd > 1.0:
+                    a_odds_list.append(c_odd)
+            elif sel == "AWAY":
+                if d_odd and d_odd > 1.0:
+                    a_odds_list.append(d_odd)
+                if c_odd and c_odd > 1.0:
+                    h_odds_list.append(c_odd)
+
+        best_h_odds = max(h_odds_list, default=None)
+        best_a_odds = max(a_odds_list, default=None)
+
+        over_odds_list: list[float] = []
+        under_odds_list: list[float] = []
+        for r in tot_odds_rows:
+            sel = str(r.get("selection") or "").upper()
+            d_odd = float(r["decimal_odds"]) if r.get("decimal_odds") else None
+            c_odd = float(r["counterpart_decimal_odds"]) if r.get("counterpart_decimal_odds") else None
+            if sel == "OVER":
+                if d_odd and d_odd > 1.0:
+                    over_odds_list.append(d_odd)
+                if c_odd and c_odd > 1.0:
+                    under_odds_list.append(c_odd)
+            elif sel == "UNDER":
+                if d_odd and d_odd > 1.0:
+                    under_odds_list.append(d_odd)
+                if c_odd and c_odd > 1.0:
+                    over_odds_list.append(c_odd)
+
+        best_over_odds = max(over_odds_list, default=None)
+        best_under_odds = max(under_odds_list, default=None)
 
         active_bet = db.fetch_one(
             """

@@ -267,7 +267,7 @@ def calibrate_all_and_save(
     payload = {
         "metadata": {
             "calibrated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "db_path": str(db_path),
+            "db_path": Path(db_path).resolve().relative_to(PROJECT_ROOT).as_posix() if Path(db_path).is_absolute() and PROJECT_ROOT in Path(db_path).resolve().parents else Path(db_path).as_posix(),
             "version": "v8_phase3",
         },
         "clv_meta_labeling": clv_meta,

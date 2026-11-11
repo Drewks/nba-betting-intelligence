@@ -23,7 +23,7 @@ def test_phase3_config_loading_and_dataclasses() -> None:
     cfg = load_config()
     assert isinstance(cfg.clv_meta_labeling, CLVMetaLabelingConfig)
     assert isinstance(cfg.copula_correlations, CopulaCorrelationsConfig)
-    assert cfg.clv_meta_labeling.enabled is True
+    assert cfg.clv_meta_labeling.enabled is False
     assert cfg.clv_meta_labeling.time_decay_rate == 0.04
     assert cfg.clv_meta_labeling.adverse_steam_threshold == -0.040
     assert cfg.copula_correlations.enabled is True

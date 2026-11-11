@@ -437,14 +437,29 @@ def evaluate_market_opportunity(
     ev_lb_unit = lb_metrics["ev_lower_bound"] if lb_metrics else ev_metrics["ev_unit"]
     ev_lb_pct = round(ev_lb_unit * 100.0, 4)
 
-    clv_meta = predict_clv_meta_label(
-        odds_record=odds_record,
-        game_start_time=game_start_time,
-        steam_delta=s_delta,
-        conformal_width=float(conformal_interval["width"]) if (conformal_interval and "width" in conformal_interval) else None,
-        model_market_disagreement=disagreement,
-        overround=overround,
-    )
+    try:
+        from src.config import load_config
+        cfg = load_config()
+        meta_enabled = cfg.clv_meta_labeling.enabled
+    except Exception:
+        meta_enabled = True
+
+    if meta_enabled:
+        clv_meta = predict_clv_meta_label(
+            odds_record=odds_record,
+            game_start_time=game_start_time,
+            steam_delta=s_delta,
+            conformal_width=float(conformal_interval["width"]) if (conformal_interval and "width" in conformal_interval) else None,
+            model_market_disagreement=disagreement,
+            overround=overround,
+        )
+    else:
+        clv_meta = {
+            "p_positive_clv": 0.50,
+            "expected_clv_pct": 0.0,
+            "meta_label_pass": True,
+            "reason_code": "DISABLED",
+        }
 
     return {
         "p_positive_clv": clv_meta["p_positive_clv"],

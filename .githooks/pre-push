@@ -1,0 +1,19 @@
+#!/bin/sh
+# Guard: Block pushing commits that touch data/nba_intelligence.sqlite3
+while read local_ref local_oid remote_ref remote_oid; do
+    if [ "$remote_oid" = "0000000000000000000000000000000000000000" ] || [ -z "$remote_oid" ]; then
+        RANGE="$local_oid"
+    else
+        RANGE="$remote_oid..$local_oid"
+    fi
+
+    if git diff --name-only "$RANGE" 2>/dev/null | grep -qx "data/nba_intelligence.sqlite3"; then
+        echo "======================================================================"
+        echo "❌ ERROR: Push REJECTED by local branch guard!"
+        echo "Your commits modify 'data/nba_intelligence.sqlite3'."
+        echo "Direct binary database pushes corrupt historical audit records."
+        echo "======================================================================"
+        exit 1
+    fi
+done
+exit 0

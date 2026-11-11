@@ -10,14 +10,12 @@ Capacidades:
 3. Emparejamiento automático con los partidos programados en `data/nba_intelligence.sqlite3`.
 4. Registro de cuotas con procedencia estricta: `source_type='OBSERVED'`.
 5. Escaneo instantáneo de valor (+EV) y arbitraje en Soles.
-6. Opción `--push` para sincronizar automáticamente la base de datos con GitHub.
 
 Uso:
   uv run python scripts/harvest_local_peru_odds.py                     # Modo automático silencioso
   uv run python scripts/harvest_local_peru_odds.py --headed           # Abre el navegador visible
   uv run python scripts/harvest_local_peru_odds.py --site retabet     # Solo RETAbet
   uv run python scripts/harvest_local_peru_odds.py --site betano      # Solo Betano
-  uv run python scripts/harvest_local_peru_odds.py --push             # Cosecha y sube a GitHub
 """
 
 from __future__ import annotations
@@ -26,7 +24,6 @@ import argparse
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any
 
@@ -59,11 +56,6 @@ def parse_args() -> argparse.Namespace:
         choices=["all", "retabet", "betano"],
         default="all",
         help="Casas a escanear: all, retabet, betano (default: all)",
-    )
-    parser.add_argument(
-        "--push",
-        action="store_true",
-        help="Realiza git commit y push automático de la base de datos tras la cosecha",
     )
     return parser.parse_args()
 
@@ -151,24 +143,6 @@ def main() -> None:
         print("💡 Sugerencia: Si tu conexión requiere verificación humana, ejecuta:")
         print("   uv run python scripts/harvest_local_peru_odds.py --headed")
 
-    # 5. Sincronización Git automática si se solicitó
-    if args.push and all_harvested_quotes:
-        print("\n🚀 Sincronizando base de datos local con GitHub...")
-        try:
-            subprocess.run(["git", "add", "data/nba_intelligence.sqlite3"], check=True)
-            subprocess.run(
-                [
-                    "git",
-                    "commit",
-                    "-m",
-                    f"chore(odds): cosecha local asistida de cuotas peruanas ({now_str})",
-                ],
-                check=True,
-            )
-            subprocess.run(["git", "push", "origin", "main"], check=True)
-            print("  ✅ Base de datos subida a GitHub con éxito. El ciclo cloud usará estas cuotas.")
-        except Exception as push_exc:
-            logger.error("Error al sincronizar con Git: %s", push_exc)
 
     print("\n" + "=" * 78)
     print("✅ Proceso de Cosecha Asistida Finalizado.")

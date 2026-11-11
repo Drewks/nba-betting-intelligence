@@ -1,6 +1,6 @@
 # Backtest con cuotas reales (consenso de apertura/cierre, sin margen)
 
-- Generado: `2026-11-10T02:18:46Z`
+- Generado: `2026-11-11T22:54:07Z`
 - Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).
 - Periodo de prueba desde `2025-01-01` | partidos con mercado emparejado: `2301`
 - Reentrenamiento cada `7` días | margen supuesto `4.5%` | peso del modelo `0.3` | EV mínimo `5%`
@@ -9,9 +9,9 @@
 
 | Serie | Mercado | N | Brier | LogLoss |
 | :--- | :--- | ---: | ---: | ---: |
-| `model_raw` | moneyline | 2301 | 0.20761 | 0.60277 |
-| `model_calibrated` | moneyline | 2301 | 0.20724 | 0.60140 |
-| `model_anchored_30_70` | moneyline | 2301 | 0.20122 | 0.58669 |
+| `model_raw` | moneyline | 2301 | 0.20673 | 0.60083 |
+| `model_calibrated` | moneyline | 2301 | 0.20646 | 0.59967 |
+| `model_anchored_30_70` | moneyline | 2301 | 0.20096 | 0.58596 |
 | `market_open` | moneyline | 2301 | 0.20108 | 0.58598 |
 | `market_close` | moneyline | 2301 | 0.19684 | 0.57566 |
 | `model_raw` | totals (línea de apertura) | 2301 | 0.25525 | 0.70482 |
@@ -21,17 +21,17 @@
 
 ## 2. Apuestas simuladas (reglas de producción, precio de apertura)
 
-- Apuestas: `91` (ganadas `22` / liquidadas `91`, push `0`)
-- **Stake fijo S/1**: neto `S/-13.39` | ROI `-14.71%` | IC95 bootstrap `[-46.0377%, 19.1132%]` | MaxDD `23.22%`
-- **Stake Kelly 25%** (S/1.00–S/10.00): banca final `S/66.52` | ROI `-21.72%` | stake medio `S/1.69` | MaxDD `39.69%`
-- **CLV vs cierre sin margen**: media `-6.65%` | gana al cierre `0.2308` | IC95 `[-9.5346%, -3.6412%]`
+- Apuestas: `92` (ganadas `35` / liquidadas `92`, push `0`)
+- **Stake fijo S/1**: neto `S/+9.49` | ROI `10.32%` | IC95 bootstrap `[-20.6842%, 41.5812%]` | MaxDD `11.46%`
+- **Stake Kelly 50%** (S/1.00–S/10.00): banca final `S/116.05` | ROI `9.32%` | stake medio `S/1.87` | MaxDD `20.16%`
+- **CLV vs cierre sin margen**: media `-1.1%` | gana al cierre `0.3913` | IC95 `[-4.3802%, 2.2763%]`
 
 | Grupo | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |
 | :--- | ---: | ---: | ---: | ---: |
-| mercado: `moneyline` | 91 | 22 | -14.71% [-46.0, 19.1] | -6.65% [-9.5, -3.6] |
-| temporada: `2024-25` | 37 | 13 | 22.37% [-30.9, 80.6] | -8.955% [-13.6, -4.3] |
-| temporada: `2025-26` | 51 | 9 | -36.59% [-75.3, 6.2] | -5.153% [-8.5, -0.8] |
-| temporada: `2026-27` | 3 | 0 | -100.0% [-100.0, -100.0] | -3.679% [-10.6, 4.9] |
+| mercado: `moneyline` | 92 | 35 | 10.32% [-20.7, 41.6] | -1.1% [-4.4, 2.3] |
+| temporada: `2024-25` | 32 | 12 | 5.15% [-40.1, 51.5] | -4.193% [-9.5, 1.1] |
+| temporada: `2025-26` | 54 | 19 | 7.62% [-32.7, 50.5] | -0.517% [-4.9, 4.0] |
+| temporada: `2026-27` | 6 | 4 | 62.12% [-52.3, 144.1] | 10.146% [-1.5, 21.2] |
 
 ## 4. ¿El modelo anticipa el movimiento de línea? (todos los partidos, sin reglas de apuesta)
 
@@ -39,13 +39,13 @@ Correlación entre la discrepancia del modelo con la apertura y el movimiento ap
 
 | Temporada | Mercado | N | Correlación [IC95] | Acierto de dirección |
 | :--- | :--- | ---: | ---: | ---: |
-| 2024-25 | moneyline | 830 | +0.011 [-0.065, +0.102] | 49.3% |
+| 2024-25 | moneyline | 830 | +0.036 [-0.054, +0.129] | 50.8% |
 | 2024-25 | totals | 758 | +0.293 [+0.226, +0.356] | 58.4% |
-| 2025-26 | moneyline | 1301 | +0.081 [+0.008, +0.161] | 51.8% |
+| 2025-26 | moneyline | 1301 | +0.124 [+0.060, +0.208] | 53.5% |
 | 2025-26 | totals | 1166 | +0.225 [+0.166, +0.284] | 56.7% |
-| 2026-27 | moneyline | 143 | +0.398 [+0.265, +0.526] | 59.4% |
+| 2026-27 | moneyline | 143 | +0.415 [+0.277, +0.536] | 61.5% |
 | 2026-27 | totals | 129 | +0.327 [+0.196, +0.464] | 64.3% |
-| ALL | moneyline | 2274 | +0.074 [+0.018, +0.127] | 51.4% |
+| ALL | moneyline | 2274 | +0.110 [+0.054, +0.160] | 53.0% |
 | ALL | totals | 2053 | +0.266 [+0.224, +0.304] | 57.8% |
 
 ## Supuestos

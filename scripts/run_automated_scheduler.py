@@ -34,7 +34,6 @@ from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.prediction.injury_sniper import InjurySniperMonitor
 from src.prediction.player_props import PlayerPropsEngine
 from src.reporting.telegram_bot import TelegramAlertBot
-from src.ingestion.playwright_scraper import PeruPlaywrightScraper
 from src.paper_trading.engine import build_production_engine
 from src.paper_trading.parlay_engine import ParlayTradingEngine
 from src.storage.db import DatabaseManager
@@ -73,25 +72,8 @@ class NBADailyScheduler:
         Executes dynamic Playwright scraping for RETAbet and Betano Perú.
         Persists newly discovered observed quotes into odds_snapshots with source_type='OBSERVED'.
         """
-        try:
-            now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            slate_games = self.db.fetch_all(
-                "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_start_time > ? ORDER BY game_start_time ASC",
-                (now_utc_str,),
-            )
-            if not slate_games:
-                return 0
-
-            scraper = PeruPlaywrightScraper(db=self.db, timeout_ms=12000, headless=True)
-            r_quotes = scraper.scrape_retabet_odds()
-            b_quotes = scraper.scrape_betano_odds()
-            all_quotes = r_quotes + b_quotes
-            persisted = scraper.persist_scraped_quotes(all_quotes, slate_games)
-            logger.info(f"🕷️ [PLAYWRIGHT] {persisted} cuotas observadas cosechadas de Betano y RETAbet.")
-            return persisted
-        except Exception as exc:
-            logger.warning(f"Peru Playwright odds harvest warning: {exc}")
-            return 0
+        logger.info("ℹ️ Scraping directo en scheduler desacoplado por cumplimiento de normativas. Coseche localmente con scripts/harvest_local_peru_odds.py")
+        return 0
 
     def execute_morning_cycle(self) -> dict[str, Any]:
         """

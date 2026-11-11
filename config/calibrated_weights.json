@@ -1,7 +1,7 @@
 {
   "metadata": {
     "calibrated_at": "2026-11-10T04:45:25Z",
-    "db_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\data\\nba_intelligence.sqlite3",
+    "db_path": "data/nba_intelligence.sqlite3",
     "version": "v8_phase3"
   },
   "clv_meta_labeling": {
@@ -365,10 +365,10 @@
   },
   "prop_dispersion_multipliers": {
     "PTS": 1.85,
-    "PRA": 2.10,
+    "PRA": 2.1,
     "PR": 1.95,
-    "PA": 1.90,
-    "RA": 1.50,
+    "PA": 1.9,
+    "RA": 1.5,
     "REB_FLOOR": 0.5,
     "AST_FLOOR": 0.5,
     "TH_FLOOR": 0.3
