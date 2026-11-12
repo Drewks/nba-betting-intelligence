@@ -1,13 +1,13 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "settle_and_calibrate",
-  "timestamp_utc": "2026-11-12T15:38:00Z",
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-12T21:50:08Z",
   "ingested_dates": [
-    "2026-11-10",
     "2026-11-11",
-    "2026-11-12"
+    "2026-11-12",
+    "2026-11-13"
   ],
-  "closing_lines_promoted": 22,
+  "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
@@ -71,7 +71,7 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 10,
+      "events_found_today": 4,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
@@ -88,7 +88,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-12T15:38:13Z",
+      "extracted_at": "2026-11-12T21:50:19Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -102,51 +102,51 @@
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHI LeBron James (SF) Day To Day (Back): James is Questionable for Thursday's (Nov. 12) game against Raptors.",
-        "relevance_score": 0.2332,
-        "captured_at": "2026-11-11"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHI Joel Embiid (C) Day To Day (Foot): Embiid is Questionable for Thursday's (Nov. 12) game against Raptors.",
-        "relevance_score": 0.2321,
+        "relevance_score": 0.2682,
         "captured_at": "2026-11-11"
-      },
-      {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Caleb Wilson F Nov 13 Day-To-Day Nov 11: Wilson won't return to Wednesday's game against the Spurs due to a right hand injury. He'll finish with 15 points (5-7 FG, 2-2 3Pt, 3-3 FT), five rebounds and one steal in 15 minu",
-        "relevance_score": 0.1744,
-        "captured_at": "2026-11-12T15:38:13Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Caleb Wilson (PF) Day To Day (Hand): Wilson did not return on Wednesday's (Nov. 11) game against the Spurs.",
-        "relevance_score": 0.1685,
+        "relevance_score": 0.2004,
         "captured_at": "2026-11-12"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Aaron Nesmith (SF) Day To Day (Knee): Nesmith did not return on Wednesday's (Nov. 11) game against the Wizards.",
-        "relevance_score": 0.1666,
+        "relevance_score": 0.1955,
         "captured_at": "2026-11-12"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return on Wednesday's (Nov. 11) game against the Bucks.",
-        "relevance_score": 0.1616,
-        "captured_at": "2026-11-12"
+        "snippet": "LAL Luka Dončić (PG) Day To Day (Ankle): Doncic did not return to Wednesday's (Nov. 11) game versus the Bucks.",
+        "relevance_score": 0.1937,
+        "captured_at": "2026-11-11"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "GSW Stephen Curry (PG) Day To Day (Abdomen): Curry did not return on Wednesday's (Nov. 11) game against the Rockets.",
-        "relevance_score": 0.1602,
+        "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return to Wednesday's (Nov. 11) game against the Bucks.",
+        "relevance_score": 0.1915,
         "captured_at": "2026-11-12"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa did not return to Tuesday's (Nov. 10) game against the Magic.",
-        "relevance_score": 0.155,
+        "relevance_score": 0.183,
         "captured_at": "2026-11-10"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play on Wednesday's (Nov. 11) game against Spurs.",
+        "relevance_score": 0.153,
+        "captured_at": "2026-11-12"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Wednesday's (Nov. 11) game against the Trail Blazers.",
+        "relevance_score": 0.1489,
+        "captured_at": "2026-11-12"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
