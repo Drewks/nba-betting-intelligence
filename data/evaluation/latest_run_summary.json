@@ -1,13 +1,13 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "settle_and_calibrate",
-  "timestamp_utc": "2026-11-10T14:06:01Z",
+  "timestamp_utc": "2026-11-12T15:38:00Z",
   "ingested_dates": [
-    "2026-11-08",
-    "2026-11-09",
-    "2026-11-10"
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12"
   ],
-  "closing_lines_promoted": 0,
+  "closing_lines_promoted": 22,
   "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
   "active_calibration_methods": {
@@ -44,13 +44,13 @@
     "won_count": 12,
     "lost_count": 16,
     "push_count": 0,
-    "max_drawdown_pen": 10.2408,
-    "overall_brier_score": 0.216845,
-    "baseline_brier_score": 0.250793,
-    "overall_log_loss": 0.620846,
-    "market_brier_score": 0.213712,
-    "model_brier_on_market_subset": 0.216845,
-    "market_comparison_sample_size": 85,
+    "max_drawdown_pen": 9.2408,
+    "overall_brier_score": 0.216116,
+    "baseline_brier_score": 0.25043,
+    "overall_log_loss": 0.618878,
+    "market_brier_score": 0.213172,
+    "model_brier_on_market_subset": 0.216116,
+    "market_comparison_sample_size": 87,
     "history_integrity": {
       "missing_rows_total": 0,
       "missing_rows_by_table": {
@@ -64,19 +64,19 @@
       },
       "examples": {}
     },
-    "baseline_log_loss": 0.696626,
+    "baseline_log_loss": 0.695707,
     "mean_clv_pct": -2.1706,
     "clv_governor_factor": 1.0
   },
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 8,
+      "events_found_today": 10,
       "includes_draftkings_pregame_odds": true
     },
     "sportradar_api": {
-      "credentials_configured": false,
-      "status": "READY_IF_KEY_PROVIDED"
+      "credentials_configured": true,
+      "status": "CONFIGURED_RATE_LIMITED"
     },
     "nba_com_stats": {
       "direct_http_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
@@ -86,9 +86,9 @@
       "playwright_python_installed": true,
       "browser_binaries_installed": true,
       "browserbase_cli_installed": true,
-      "browserbase_api_key_configured": false,
-      "browserbase_mode": "LOCAL_BROWSE_CLI",
-      "extracted_at": "2026-11-10T14:07:08Z",
+      "browserbase_api_key_configured": true,
+      "browserbase_mode": "REMOTE_CLOUD_CDP",
+      "extracted_at": "2026-11-12T15:38:13Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -96,57 +96,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
-    "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
-    "indexed_documents_count": 34,
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)",
+    "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+    "indexed_documents_count": 123,
     "top_retrieved_context": [
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Zach Collins F Nov 11 Day-To-Day Nov 9: Collins (illness) is out for Sunday's game against Philadelphia.",
-        "relevance_score": 0.2557,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "PHI LeBron James (SF) Day To Day (Back): James is Questionable for Thursday's (Nov. 12) game against Raptors.",
+        "relevance_score": 0.2332,
+        "captured_at": "2026-11-11"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Sam Merrill G Nov 11 Day-To-Day Nov 9: Merrill (elbow) is listed as out for Monday's game against the Hornets.",
-        "relevance_score": 0.2527,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "PHI Joel Embiid (C) Day To Day (Foot): Embiid is Questionable for Thursday's (Nov. 12) game against Raptors.",
+        "relevance_score": 0.2321,
+        "captured_at": "2026-11-11"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Brandon Miller F Nov 12 Day-To-Day Nov 9: Miller (groin) is listed as out for Monday's game against Cleveland.",
-        "relevance_score": 0.2518,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Caleb Wilson F Nov 13 Day-To-Day Nov 11: Wilson won't return to Wednesday's game against the Spurs due to a right hand injury. He'll finish with 15 points (5-7 FG, 2-2 3Pt, 3-3 FT), five rebounds and one steal in 15 minu",
+        "relevance_score": 0.1744,
+        "captured_at": "2026-11-12T15:38:13Z"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Moussa Diabate F Nov 12 Day-To-Day Nov 9: Diabate (quadriceps) has been downgraded to out for Monday's game against Cleveland.",
-        "relevance_score": 0.2476,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Caleb Wilson (PF) Day To Day (Hand): Wilson did not return on Wednesday's (Nov. 11) game against the Spurs.",
+        "relevance_score": 0.1685,
+        "captured_at": "2026-11-12"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Morez Johnson Jr. F Nov 12 Day-To-Day Nov 9: Johnson (leg) has been ruled out for Monday's game against the Pacers.",
-        "relevance_score": 0.242,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "IND Aaron Nesmith (SF) Day To Day (Knee): Nesmith did not return on Wednesday's (Nov. 11) game against the Wizards.",
+        "relevance_score": 0.1666,
+        "captured_at": "2026-11-12"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Norman Powell G Nov 11 Day-To-Day Nov 9: Powell (shoulder) has been ruled out for Sunday's game against the 76ers, Adam Aaronson of PhillyVoice.com reports.",
-        "relevance_score": 0.2054,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return on Wednesday's (Nov. 11) game against the Bucks.",
+        "relevance_score": 0.1616,
+        "captured_at": "2026-11-12"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Grant Nelson F Nov 10 Day-To-Day Nov 8: Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports.",
-        "relevance_score": 0.2004,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "GSW Stephen Curry (PG) Day To Day (Abdomen): Curry did not return on Wednesday's (Nov. 11) game against the Rockets.",
+        "relevance_score": 0.1602,
+        "captured_at": "2026-11-12"
       },
       {
-        "source": "playwright_espn_injuries_table",
-        "snippet": "Mikel Brown Jr. G Nov 11 Day-To-Day Nov 9: Brown, who finished with 18 points (5-13 FG, 3-8 3Pt, 5-7 FT), one rebound, three assists and one steal over 25 minutes in Saturday's 124-121 loss to Atlanta, won't play in Sund",
-        "relevance_score": 0.1415,
-        "captured_at": "2026-11-10T14:07:09Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa did not return to Tuesday's (Nov. 10) game against the Magic.",
+        "relevance_score": 0.155,
+        "captured_at": "2026-11-10"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -156,10 +156,10 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
-    "sportradar_status": "READY_IF_KEY_PROVIDED",
+    "sportradar_status": "CONFIGURED_RATE_LIMITED",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
-    "obsidian_vault_path": "C:\\Users\\faboa\\.gemini\\antigravity\\scratch\\nba-betting-intelligence\\NBA"
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)",
+    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }
