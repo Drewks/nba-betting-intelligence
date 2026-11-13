@@ -1,6 +1,6 @@
 # Backtest con cuotas reales (consenso de apertura/cierre, sin margen)
 
-- Generado: `2026-11-11T22:54:07Z`
+- Generado: `2026-11-13T01:11:13Z`
 - Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).
 - Periodo de prueba desde `2025-01-01` | partidos con mercado emparejado: `2301`
 - Reentrenamiento cada `7` días | margen supuesto `4.5%` | peso del modelo `0.3` | EV mínimo `5%`
@@ -9,9 +9,9 @@
 
 | Serie | Mercado | N | Brier | LogLoss |
 | :--- | :--- | ---: | ---: | ---: |
-| `model_raw` | moneyline | 2301 | 0.20673 | 0.60083 |
-| `model_calibrated` | moneyline | 2301 | 0.20646 | 0.59967 |
-| `model_anchored_30_70` | moneyline | 2301 | 0.20096 | 0.58596 |
+| `model_raw` | moneyline | 2301 | 0.20583 | 0.59806 |
+| `model_calibrated` | moneyline | 2301 | 0.20536 | 0.59626 |
+| `model_anchored_30_70` | moneyline | 2301 | 0.20071 | 0.58519 |
 | `market_open` | moneyline | 2301 | 0.20108 | 0.58598 |
 | `market_close` | moneyline | 2301 | 0.19684 | 0.57566 |
 | `model_raw` | totals (línea de apertura) | 2301 | 0.25525 | 0.70482 |
@@ -21,17 +21,26 @@
 
 ## 2. Apuestas simuladas (reglas de producción, precio de apertura)
 
-- Apuestas: `92` (ganadas `35` / liquidadas `92`, push `0`)
-- **Stake fijo S/1**: neto `S/+9.49` | ROI `10.32%` | IC95 bootstrap `[-20.6842%, 41.5812%]` | MaxDD `11.46%`
-- **Stake Kelly 50%** (S/1.00–S/10.00): banca final `S/116.05` | ROI `9.32%` | stake medio `S/1.87` | MaxDD `20.16%`
-- **CLV vs cierre sin margen**: media `-1.1%` | gana al cierre `0.3913` | IC95 `[-4.3802%, 2.2763%]`
+- Apuestas: `81` (ganadas `28` / liquidadas `81`, push `0`)
+- **Stake fijo S/1**: neto `S/-1.96` | ROI `-2.42%` | IC95 bootstrap `[-32.4807%, 27.2807%]` | MaxDD `12.22%`
+- **Stake Kelly 50%** (S/1.00–S/10.00): banca final `S/93.09` | ROI `-4.63%` | stake medio `S/1.84` | MaxDD `22.56%`
+- **CLV vs cierre sin margen**: media `-2.412%` | gana al cierre `0.3333` | IC95 `[-6.1119%, 1.3624%]`
 
 | Grupo | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |
 | :--- | ---: | ---: | ---: | ---: |
-| mercado: `moneyline` | 92 | 35 | 10.32% [-20.7, 41.6] | -1.1% [-4.4, 2.3] |
+| mercado: `moneyline` | 81 | 28 | -2.42% [-32.5, 27.3] | -2.412% [-6.1, 1.4] |
 | temporada: `2024-25` | 32 | 12 | 5.15% [-40.1, 51.5] | -4.193% [-9.5, 1.1] |
-| temporada: `2025-26` | 54 | 19 | 7.62% [-32.7, 50.5] | -0.517% [-4.9, 4.0] |
-| temporada: `2026-27` | 6 | 4 | 62.12% [-52.3, 144.1] | 10.146% [-1.5, 21.2] |
+| temporada: `2025-26` | 46 | 15 | -6.67% [-46.6, 36.2] | -2.231% [-6.9, 2.4] |
+| temporada: `2026-27` | 3 | 1 | -18.04% [-100.0, 145.9] | 13.798% [2.3, 34.1] |
+
+## 3. Sensibilidad al margen supuesto
+
+| Margen | Mercado | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |
+| ---: | :--- | ---: | ---: | ---: | ---: |
+| 4.5% | `moneyline` | 81 | 28 | -2.42% [-32.5, 27.3] | -2.412% [-6.1, 1.4] |
+| 2.5% | `moneyline` | 182 | 72 | 1.9% [-16.9, 20.0] | -0.554% [-2.7, 1.6] |
+| 2.5% | `total_points` | 81 | 48 | 15.63% [-3.7, 35.8] | 4.939% [1.8, 8.1] |
+| 6.0% | `moneyline` | 39 | 10 | -24.6% [-64.3, 17.8] | -4.114% [-9.7, 1.0] |
 
 ## 4. ¿El modelo anticipa el movimiento de línea? (todos los partidos, sin reglas de apuesta)
 
@@ -41,11 +50,11 @@ Correlación entre la discrepancia del modelo con la apertura y el movimiento ap
 | :--- | :--- | ---: | ---: | ---: |
 | 2024-25 | moneyline | 830 | +0.036 [-0.054, +0.129] | 50.8% |
 | 2024-25 | totals | 758 | +0.293 [+0.226, +0.356] | 58.4% |
-| 2025-26 | moneyline | 1301 | +0.124 [+0.060, +0.208] | 53.5% |
+| 2025-26 | moneyline | 1301 | +0.166 [+0.081, +0.262] | 56.5% |
 | 2025-26 | totals | 1166 | +0.225 [+0.166, +0.284] | 56.7% |
-| 2026-27 | moneyline | 143 | +0.415 [+0.277, +0.536] | 61.5% |
+| 2026-27 | moneyline | 143 | +0.418 [+0.273, +0.545] | 65.0% |
 | 2026-27 | totals | 129 | +0.327 [+0.196, +0.464] | 64.3% |
-| ALL | moneyline | 2274 | +0.110 [+0.054, +0.160] | 53.0% |
+| ALL | moneyline | 2274 | +0.133 [+0.070, +0.193] | 55.0% |
 | ALL | totals | 2053 | +0.266 [+0.224, +0.304] | 57.8% |
 
 ## Supuestos

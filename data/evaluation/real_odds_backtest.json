@@ -22,22 +22,22 @@
       "boxscore_features": true
     },
     "data_attribution": "Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).",
-    "generated_at_utc": "2026-11-11T22:54:07Z",
+    "generated_at_utc": "2026-11-13T01:11:13Z",
     "moneyline_quality": {
       "model_raw": {
         "n": 2301,
-        "brier": 0.206734,
-        "log_loss": 0.60083
+        "brier": 0.205827,
+        "log_loss": 0.598059
       },
       "model_calibrated": {
         "n": 2301,
-        "brier": 0.206459,
-        "log_loss": 0.599666
+        "brier": 0.205361,
+        "log_loss": 0.596256
       },
       "model_anchored_30_70": {
         "n": 2301,
-        "brier": 0.200964,
-        "log_loss": 0.585956
+        "brier": 0.20071,
+        "log_loss": 0.58519
       },
       "market_open": {
         "n": 2301,
@@ -96,12 +96,12 @@
       "2025-26": {
         "moneyline": {
           "n": 1301,
-          "correlation": 0.1244,
+          "correlation": 0.1658,
           "correlation_ci95": [
-            0.0604,
-            0.2076
+            0.0806,
+            0.2621
           ],
-          "directional_hit_rate": 0.535
+          "directional_hit_rate": 0.565
         },
         "totals": {
           "n": 1166,
@@ -116,12 +116,12 @@
       "2026-27": {
         "moneyline": {
           "n": 143,
-          "correlation": 0.415,
+          "correlation": 0.4182,
           "correlation_ci95": [
-            0.2772,
-            0.536
+            0.2727,
+            0.5455
           ],
-          "directional_hit_rate": 0.6154
+          "directional_hit_rate": 0.6503
         },
         "totals": {
           "n": 129,
@@ -136,12 +136,12 @@
       "ALL": {
         "moneyline": {
           "n": 2274,
-          "correlation": 0.1095,
+          "correlation": 0.1329,
           "correlation_ci95": [
-            0.0538,
-            0.1604
+            0.0704,
+            0.1934
           ],
-          "directional_hit_rate": 0.5303
+          "directional_hit_rate": 0.5497
         },
         "totals": {
           "n": 2053,
@@ -155,64 +155,64 @@
       }
     },
     "betting": {
-      "bets": 92,
-      "settled": 92,
-      "won": 35,
+      "bets": 81,
+      "settled": 81,
+      "won": 28,
       "push_or_void": 0,
       "flat_stake": {
-        "net_profit_pen": 9.49,
-        "roi_pct": 10.32,
+        "net_profit_pen": -1.96,
+        "roi_pct": -2.42,
         "bootstrap_95": {
-          "n_settled": 92,
-          "n_matchday_blocks": 82,
-          "roi_ci_lower_95_pct": -20.6842,
-          "roi_ci_upper_95_pct": 41.5812,
-          "roi_ci_lower_90_pct": -16.6205,
-          "roi_ci_upper_90_pct": 36.7603,
+          "n_settled": 81,
+          "n_matchday_blocks": 72,
+          "roi_ci_lower_95_pct": -32.4807,
+          "roi_ci_upper_95_pct": 27.2807,
+          "roi_ci_lower_90_pct": -28.4139,
+          "roi_ci_upper_90_pct": 24.1995,
           "compatible_with_zero_edge": true,
           "method": "temporal_matchday_block_bootstrap"
         },
         "drawdown": {
-          "max_drawdown_pen": 12.7537,
-          "max_drawdown_pct": 11.4649,
-          "peak_bankroll_pen": 111.241,
-          "ending_bankroll_pen": 109.4904
+          "max_drawdown_pen": 13.5827,
+          "max_drawdown_pct": 12.2186,
+          "peak_bankroll_pen": 111.1637,
+          "ending_bankroll_pen": 98.0397
         }
       },
       "kelly_stake": {
-        "final_bankroll_pen": 116.05,
-        "net_profit_pen": 16.05,
-        "total_staked_pen": 172.22,
-        "roi_pct": 9.32,
-        "mean_stake_pen": 1.87,
+        "final_bankroll_pen": 93.09,
+        "net_profit_pen": -6.91,
+        "total_staked_pen": 149.18,
+        "roi_pct": -4.63,
+        "mean_stake_pen": 1.84,
         "drawdown": {
-          "max_drawdown_pen": 23.8834,
-          "max_drawdown_pct": 20.1628,
+          "max_drawdown_pen": 26.7209,
+          "max_drawdown_pct": 22.5583,
           "peak_bankroll_pen": 118.4526,
-          "ending_bankroll_pen": 116.0472
+          "ending_bankroll_pen": 93.0886
         }
       },
       "clv": {
-        "mean_clv_ev_pct": -1.1,
-        "beat_close_rate": 0.3913,
+        "mean_clv_ev_pct": -2.412,
+        "beat_close_rate": 0.3333,
         "bootstrap_95_pct": {
-          "lower": -4.3802,
-          "upper": 2.2763
+          "lower": -6.1119,
+          "upper": 1.3624
         }
       },
       "by_market": {
         "moneyline": {
-          "bets": 92,
-          "won": 35,
-          "roi_flat_pct": 10.32,
+          "bets": 81,
+          "won": 28,
+          "roi_flat_pct": -2.42,
           "roi_ci95": [
-            -20.6842,
-            41.5812
+            -32.4807,
+            27.2807
           ],
-          "mean_clv_pct": -1.1,
+          "mean_clv_pct": -2.412,
           "clv_ci95": [
-            -4.3802,
-            2.2763
+            -6.1119,
+            1.3624
           ]
         }
       },
@@ -232,31 +232,31 @@
           ]
         },
         "2025-26": {
-          "bets": 54,
-          "won": 19,
-          "roi_flat_pct": 7.62,
+          "bets": 46,
+          "won": 15,
+          "roi_flat_pct": -6.67,
           "roi_ci95": [
-            -32.7492,
-            50.4963
+            -46.5859,
+            36.1605
           ],
-          "mean_clv_pct": -0.517,
+          "mean_clv_pct": -2.231,
           "clv_ci95": [
-            -4.8836,
-            3.9589
+            -6.8639,
+            2.4316
           ]
         },
         "2026-27": {
-          "bets": 6,
-          "won": 4,
-          "roi_flat_pct": 62.12,
+          "bets": 3,
+          "won": 1,
+          "roi_flat_pct": -18.04,
           "roi_ci95": [
-            -52.32,
-            144.0787
+            -100.0,
+            145.87
           ],
-          "mean_clv_pct": 10.146,
+          "mean_clv_pct": 13.798,
           "clv_ci95": [
-            -1.461,
-            21.2269
+            2.3311,
+            34.1426
           ]
         }
       }
@@ -1693,15 +1693,15 @@
       "selection": "HOME",
       "line_value": null,
       "decimal_odds": 2.9408,
-      "anchored_prob": 0.358676,
-      "ev_unit": 0.054794,
+      "anchored_prob": 0.359554,
+      "ev_unit": 0.057376,
       "p_open": 0.3254,
       "p_close": 0.3249,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.55,
-      "kelly_net_profit_pen": -1.55,
+      "kelly_stake_pen": 1.62,
+      "kelly_net_profit_pen": -1.62,
       "status": "LOST",
       "clv_ev_pct": -4.4534
     },
@@ -1713,117 +1713,37 @@
       "selection": "HOME",
       "line_value": null,
       "decimal_odds": 2.682,
-      "anchored_prob": 0.392512,
-      "ev_unit": 0.052717,
+      "anchored_prob": 0.392067,
+      "ev_unit": 0.051524,
       "p_open": 0.3568,
       "p_close": 0.3614,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.69,
-      "kelly_net_profit_pen": -1.69,
+      "kelly_stake_pen": 1.65,
+      "kelly_net_profit_pen": -1.65,
       "status": "LOST",
       "clv_ev_pct": -3.0725
     },
     {
-      "game_id": "ESPN_401810386_2026-01-09_DAL_AT_UTA",
-      "matchday_date": "2026-01-09",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 2.7794,
-      "anchored_prob": 0.384998,
-      "ev_unit": 0.070063,
-      "p_open": 0.3443,
-      "p_close": 0.3704,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 1.7794,
-      "kelly_stake_pen": 2.1,
-      "kelly_net_profit_pen": 3.7367,
-      "status": "WON",
-      "clv_ev_pct": 2.949
-    },
-    {
-      "game_id": "ESPN_401810415_2026-01-13_PHI_AT_TOR",
-      "matchday_date": "2026-01-13",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 2.2369,
-      "anchored_prob": 0.47053,
-      "ev_unit": 0.052529,
-      "p_open": 0.4278,
-      "p_close": 0.4177,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 2.34,
-      "kelly_net_profit_pen": -2.34,
-      "status": "LOST",
-      "clv_ev_pct": -6.5647
-    },
-    {
-      "game_id": "ESPN_401810453_2026-01-18_MIN_AT_SAS",
-      "matchday_date": "2026-01-18",
+      "game_id": "ESPN_401810408_2026-01-12_MIA_AT_OKC",
+      "matchday_date": "2026-01-12",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "AWAY",
       "line_value": null,
-      "decimal_odds": 3.0369,
-      "anchored_prob": 0.356568,
-      "ev_unit": 0.082861,
-      "p_open": 0.31510000000000005,
-      "p_close": 0.37039999999999995,
+      "decimal_odds": 6.5098,
+      "anchored_prob": 0.176784,
+      "ev_unit": 0.150828,
+      "p_open": 0.14700000000000002,
+      "p_close": 0.1481,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 2.19,
-      "kelly_net_profit_pen": -2.19,
+      "kelly_stake_pen": 1.46,
+      "kelly_net_profit_pen": -1.46,
       "status": "LOST",
-      "clv_ev_pct": 12.4868
-    },
-    {
-      "game_id": "ESPN_401810457_2026-01-18_ORL_AT_MEM",
-      "matchday_date": "2026-01-18",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 2.6493,
-      "anchored_prob": 0.402846,
-      "ev_unit": 0.06726,
-      "p_open": 0.3612,
-      "p_close": 0.4239,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 1.6493,
-      "kelly_stake_pen": 2.2,
-      "kelly_net_profit_pen": 3.6285,
-      "status": "WON",
-      "clv_ev_pct": 12.3038
-    },
-    {
-      "game_id": "ESPN_401810487_2026-01-23_SAS_AT_UTA",
-      "matchday_date": "2026-01-23",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 6.0835,
-      "anchored_prob": 0.190468,
-      "ev_unit": 0.158712,
-      "p_open": 0.1573,
-      "p_close": 0.1822,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.71,
-      "kelly_net_profit_pen": -1.71,
-      "status": "LOST",
-      "clv_ev_pct": 10.8414
+      "clv_ev_pct": -3.5899
     },
     {
       "game_id": "ESPN_401810518_2026-01-27_GSW_AT_MIN",
@@ -1833,37 +1753,17 @@
       "selection": "AWAY",
       "line_value": null,
       "decimal_odds": 3.3308,
-      "anchored_prob": 0.322449,
-      "ev_unit": 0.074013,
+      "anchored_prob": 0.320752,
+      "ev_unit": 0.068361,
       "p_open": 0.2873,
       "p_close": 0.28569999999999995,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.71,
-      "kelly_net_profit_pen": -1.71,
+      "kelly_stake_pen": 1.54,
+      "kelly_net_profit_pen": -1.54,
       "status": "LOST",
       "clv_ev_pct": -4.839
-    },
-    {
-      "game_id": "ESPN_401810523_2026-01-28_DET_AT_DEN",
-      "matchday_date": "2026-01-28",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 2.8506,
-      "anchored_prob": 0.373345,
-      "ev_unit": 0.064257,
-      "p_open": 0.3357,
-      "p_close": 0.3,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.84,
-      "kelly_net_profit_pen": -1.84,
-      "status": "LOST",
-      "clv_ev_pct": -14.482
     },
     {
       "game_id": "ESPN_401850920_2026-01-30_MIA_AT_CHI",
@@ -1873,237 +1773,177 @@
       "selection": "HOME",
       "line_value": null,
       "decimal_odds": 2.8046,
-      "anchored_prob": 0.384793,
-      "ev_unit": 0.07919,
+      "anchored_prob": 0.38173,
+      "ev_unit": 0.0706,
       "p_open": 0.3412,
       "p_close": 0.4545,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 2.28,
-      "kelly_net_profit_pen": -2.28,
+      "kelly_stake_pen": 2.02,
+      "kelly_net_profit_pen": -2.02,
       "status": "LOST",
       "clv_ev_pct": 27.4691
     },
     {
-      "game_id": "ESPN_401810583_2026-02-05_BOS_AT_HOU",
+      "game_id": "ESPN_401810550_2026-01-31_LAC_AT_DEN",
+      "matchday_date": "2026-01-31",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "HOME",
+      "line_value": null,
+      "decimal_odds": 2.7025,
+      "anchored_prob": 0.395691,
+      "ev_unit": 0.069355,
+      "p_open": 0.3541,
+      "p_close": 0.4444,
+      "result": "WON",
+      "stake_pen": 1.0,
+      "net_profit_pen": 1.7025,
+      "kelly_stake_pen": 2.06,
+      "kelly_net_profit_pen": 3.5072,
+      "status": "WON",
+      "clv_ev_pct": 20.0991
+    },
+    {
+      "game_id": "ESPN_401810548_2026-01-31_CLE_AT_PHX",
+      "matchday_date": "2026-01-31",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "HOME",
+      "line_value": null,
+      "decimal_odds": 2.46,
+      "anchored_prob": 0.429712,
+      "ev_unit": 0.057092,
+      "p_open": 0.389,
+      "p_close": 0.4667,
+      "result": "WON",
+      "stake_pen": 1.0,
+      "net_profit_pen": 1.46,
+      "kelly_stake_pen": 1.98,
+      "kelly_net_profit_pen": 2.8908,
+      "status": "WON",
+      "clv_ev_pct": 14.8082
+    },
+    {
+      "game_id": "ESPN_401810584_2026-02-05_NOP_AT_MIL",
       "matchday_date": "2026-02-05",
       "season": "2025-26",
       "market": "moneyline",
-      "selection": "AWAY",
-      "line_value": null,
-      "decimal_odds": 2.8506,
-      "anchored_prob": 0.36894,
-      "ev_unit": 0.0517,
-      "p_open": 0.3357,
-      "p_close": 0.28879999999999995,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 1.8506,
-      "kelly_stake_pen": 1.42,
-      "kelly_net_profit_pen": 2.6279,
-      "status": "WON",
-      "clv_ev_pct": -17.6747
-    },
-    {
-      "game_id": "ESPN_401810594_2026-02-06_GSW_AT_PHX",
-      "matchday_date": "2026-02-06",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "AWAY",
-      "line_value": null,
-      "decimal_odds": 3.0073,
-      "anchored_prob": 0.356425,
-      "ev_unit": 0.071877,
-      "p_open": 0.31820000000000004,
-      "p_close": 0.34930000000000005,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 2.0073,
-      "kelly_stake_pen": 1.87,
-      "kelly_net_profit_pen": 3.7537,
-      "status": "WON",
-      "clv_ev_pct": 5.045
-    },
-    {
-      "game_id": "ESPN_401810645_2026-02-13_POR_AT_UTA",
-      "matchday_date": "2026-02-13",
-      "season": "2025-26",
-      "market": "moneyline",
       "selection": "HOME",
       "line_value": null,
-      "decimal_odds": 3.3135,
-      "anchored_prob": 0.329013,
-      "ev_unit": 0.090185,
-      "p_open": 0.2888,
-      "p_close": 0.3287,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 2.11,
-      "kelly_net_profit_pen": -2.11,
-      "status": "LOST",
-      "clv_ev_pct": 8.9147
-    },
-    {
-      "game_id": "ESPN_401810655_2026-02-20_ORL_AT_SAC",
-      "matchday_date": "2026-02-20",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 5.0128,
-      "anchored_prob": 0.23529,
-      "ev_unit": 0.179462,
-      "p_open": 0.1909,
-      "p_close": 0.2545,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 2.37,
-      "kelly_net_profit_pen": -2.37,
-      "status": "LOST",
-      "clv_ev_pct": 27.5758
-    },
-    {
-      "game_id": "ESPN_401810710_2026-02-27_LAL_AT_PHX",
-      "matchday_date": "2026-02-27",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 2.5518,
-      "anchored_prob": 0.418365,
-      "ev_unit": 0.067584,
-      "p_open": 0.375,
-      "p_close": 0.3412,
+      "decimal_odds": 2.5005,
+      "anchored_prob": 0.422999,
+      "ev_unit": 0.057709,
+      "p_open": 0.3827,
+      "p_close": 0.381,
       "result": "WON",
       "stake_pen": 1.0,
-      "net_profit_pen": 1.5518,
-      "kelly_stake_pen": 2.26,
-      "kelly_net_profit_pen": 3.5071,
+      "net_profit_pen": 1.5005,
+      "kelly_stake_pen": 2.07,
+      "kelly_net_profit_pen": 3.106,
       "status": "WON",
-      "clv_ev_pct": -12.9326
+      "clv_ev_pct": -4.7309
     },
     {
-      "game_id": "ESPN_401810716_2026-02-28_MEM_AT_DAL",
-      "matchday_date": "2026-02-28",
+      "game_id": "ESPN_401810641_2026-02-12_SAC_AT_UTA",
+      "matchday_date": "2026-02-12",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "AWAY",
       "line_value": null,
-      "decimal_odds": 2.7475,
-      "anchored_prob": 0.388101,
-      "ev_unit": 0.066307,
-      "p_open": 0.34830000000000005,
-      "p_close": 0.372,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 1.7475,
-      "kelly_stake_pen": 2.03,
-      "kelly_net_profit_pen": 3.5474,
-      "status": "WON",
-      "clv_ev_pct": 2.207
-    },
-    {
-      "game_id": "ESPN_401810725_2026-03-01_MIL_AT_CHI",
-      "matchday_date": "2026-03-01",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 2.4914,
-      "anchored_prob": 0.425714,
-      "ev_unit": 0.060624,
-      "p_open": 0.3841,
-      "p_close": 0.4427,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 1.4914,
-      "kelly_stake_pen": 2.25,
-      "kelly_net_profit_pen": 3.3557,
-      "status": "WON",
-      "clv_ev_pct": 10.2943
-    },
-    {
-      "game_id": "ESPN_401810751_2026-03-05_POR_AT_MEM",
-      "matchday_date": "2026-03-05",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 3.0909,
-      "anchored_prob": 0.345289,
-      "ev_unit": 0.067254,
-      "p_open": 0.3096,
-      "p_close": 0.2381,
+      "decimal_odds": 2.9499,
+      "anchored_prob": 0.359391,
+      "ev_unit": 0.060168,
+      "p_open": 0.3244,
+      "p_close": 0.35,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.83,
-      "kelly_net_profit_pen": -1.83,
+      "kelly_stake_pen": 1.71,
+      "kelly_net_profit_pen": -1.71,
       "status": "LOST",
-      "clv_ev_pct": -26.4057
+      "clv_ev_pct": 3.2465
     },
     {
-      "game_id": "ESPN_401810857_2026-03-19_TOR_AT_CHI",
-      "matchday_date": "2026-03-19",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 3.1919,
-      "anchored_prob": 0.331208,
-      "ev_unit": 0.057183,
-      "p_open": 0.2998,
-      "p_close": 0.2812,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.46,
-      "kelly_net_profit_pen": -1.46,
-      "status": "LOST",
-      "clv_ev_pct": -10.2438
-    },
-    {
-      "game_id": "ESPN_401810892_2026-03-23_MEM_AT_ATL",
-      "matchday_date": "2026-03-23",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "AWAY",
-      "line_value": null,
-      "decimal_odds": 6.3039,
-      "anchored_prob": 0.184441,
-      "ev_unit": 0.162698,
-      "p_open": 0.15180000000000005,
-      "p_close": 0.14029999999999998,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.7,
-      "kelly_net_profit_pen": -1.7,
-      "status": "LOST",
-      "clv_ev_pct": -11.5563
-    },
-    {
-      "game_id": "ESPN_401810905_2026-03-25_DEN_AT_PHX",
-      "matchday_date": "2026-03-25",
+      "game_id": "ESPN_401810675_2026-02-22_DEN_AT_GSW",
+      "matchday_date": "2026-02-22",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "HOME",
       "line_value": null,
       "decimal_odds": 2.8046,
-      "anchored_prob": 0.379983,
-      "ev_unit": 0.0657,
+      "anchored_prob": 0.380928,
+      "ev_unit": 0.068351,
       "p_open": 0.3412,
-      "p_close": 0.3228,
+      "p_close": 0.3211,
+      "result": "WON",
+      "stake_pen": 1.0,
+      "net_profit_pen": 1.8046,
+      "kelly_stake_pen": 2.07,
+      "kelly_net_profit_pen": 3.7355,
+      "status": "WON",
+      "clv_ev_pct": -9.9443
+    },
+    {
+      "game_id": "ESPN_401810966_2026-03-13_DAL_AT_MEM",
+      "matchday_date": "2026-03-13",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "HOME",
+      "line_value": null,
+      "decimal_odds": 2.4455,
+      "anchored_prob": 0.432321,
+      "ev_unit": 0.057241,
+      "p_open": 0.3913,
+      "p_close": 0.3412,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.98,
-      "kelly_net_profit_pen": -1.98,
+      "kelly_stake_pen": 2.24,
+      "kelly_net_profit_pen": -2.24,
       "status": "LOST",
-      "clv_ev_pct": -9.4675
+      "clv_ev_pct": -16.5595
+    },
+    {
+      "game_id": "ESPN_401810884_2026-03-22_LAC_AT_DAL",
+      "matchday_date": "2026-03-22",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "HOME",
+      "line_value": null,
+      "decimal_odds": 3.3494,
+      "anchored_prob": 0.324116,
+      "ev_unit": 0.085594,
+      "p_open": 0.2857,
+      "p_close": 0.2965,
+      "result": "LOST",
+      "stake_pen": 1.0,
+      "net_profit_pen": -1.0,
+      "kelly_stake_pen": 2.02,
+      "kelly_net_profit_pen": -2.02,
+      "status": "LOST",
+      "clv_ev_pct": -0.6903
+    },
+    {
+      "game_id": "ESPN_401810898_2026-03-24_TOR_AT_UTA",
+      "matchday_date": "2026-03-24",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "HOME",
+      "line_value": null,
+      "decimal_odds": 6.2504,
+      "anchored_prob": 0.185577,
+      "ev_unit": 0.15993,
+      "p_open": 0.1531,
+      "p_close": 0.2017,
+      "result": "LOST",
+      "stake_pen": 1.0,
+      "net_profit_pen": -1.0,
+      "kelly_stake_pen": 1.65,
+      "kelly_net_profit_pen": -1.65,
+      "status": "LOST",
+      "clv_ev_pct": 26.0706
     },
     {
       "game_id": "ESPN_401810920_2026-03-26_SAC_AT_ORL",
@@ -2113,197 +1953,157 @@
       "selection": "AWAY",
       "line_value": null,
       "decimal_odds": 8.491,
-      "anchored_prob": 0.147806,
-      "ev_unit": 0.255021,
+      "anchored_prob": 0.139105,
+      "ev_unit": 0.181141,
       "p_open": 0.11270000000000002,
       "p_close": 0.11160000000000003,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.82,
-      "kelly_net_profit_pen": -1.82,
+      "kelly_stake_pen": 1.29,
+      "kelly_net_profit_pen": -1.29,
       "status": "LOST",
       "clv_ev_pct": -5.2404
     },
     {
-      "game_id": "ESPN_401810924_2026-03-28_HOU_AT_MEM",
-      "matchday_date": "2026-03-28",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 6.2545,
-      "anchored_prob": 0.189951,
-      "ev_unit": 0.188049,
-      "p_open": 0.153,
-      "p_close": 0.1317,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.88,
-      "kelly_net_profit_pen": -1.88,
-      "status": "LOST",
-      "clv_ev_pct": -17.6282
-    },
-    {
-      "game_id": "ESPN_401810933_2026-03-28_SAC_AT_ATL",
+      "game_id": "ESPN_401810926_2026-03-28_NOP_AT_TOR",
       "matchday_date": "2026-03-28",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "AWAY",
       "line_value": null,
-      "decimal_odds": 7.0779,
-      "anchored_prob": 0.165291,
-      "ev_unit": 0.169913,
-      "p_open": 0.1352,
-      "p_close": 0.15300000000000002,
+      "decimal_odds": 3.4963,
+      "anchored_prob": 0.30191,
+      "ev_unit": 0.055568,
+      "p_open": 0.27370000000000005,
+      "p_close": 0.25960000000000005,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.47,
-      "kelly_net_profit_pen": -1.47,
+      "kelly_stake_pen": 1.18,
+      "kelly_net_profit_pen": -1.18,
       "status": "LOST",
-      "clv_ev_pct": 8.2919
+      "clv_ev_pct": -9.2361
     },
     {
-      "game_id": "ESPN_401810943_2026-03-29_HOU_AT_NOP",
-      "matchday_date": "2026-03-29",
+      "game_id": "ESPN_401810952_2026-03-31_DET_AT_OKC",
+      "matchday_date": "2026-03-31",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "AWAY",
+      "line_value": null,
+      "decimal_odds": 6.2504,
+      "anchored_prob": 0.197703,
+      "ev_unit": 0.235723,
+      "p_open": 0.1531,
+      "p_close": 0.17279999999999995,
+      "result": "LOST",
+      "stake_pen": 1.0,
+      "net_profit_pen": -1.0,
+      "kelly_stake_pen": 2.35,
+      "kelly_net_profit_pen": -2.35,
+      "status": "LOST",
+      "clv_ev_pct": 8.0069
+    },
+    {
+      "game_id": "ESPN_401810980_2026-04-04_TOR_AT_MEM",
+      "matchday_date": "2026-04-04",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "HOME",
       "line_value": null,
-      "decimal_odds": 2.9876,
-      "anchored_prob": 0.352837,
-      "ev_unit": 0.054136,
-      "p_open": 0.3203,
-      "p_close": 0.3227,
+      "decimal_odds": 7.0363,
+      "anchored_prob": 0.175014,
+      "ev_unit": 0.231451,
+      "p_open": 0.136,
+      "p_close": 0.1269,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.39,
-      "kelly_net_profit_pen": -1.39,
+      "kelly_stake_pen": 1.96,
+      "kelly_net_profit_pen": -1.96,
       "status": "LOST",
-      "clv_ev_pct": -3.5901
+      "clv_ev_pct": -10.7094
     },
     {
-      "game_id": "ESPN_401810858_2026-04-02_NYK_AT_MEM",
-      "matchday_date": "2026-04-02",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 7.266,
-      "anchored_prob": 0.168057,
-      "ev_unit": 0.221102,
-      "p_open": 0.1317,
-      "p_close": 0.1416,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.77,
-      "kelly_net_profit_pen": -1.77,
-      "status": "LOST",
-      "clv_ev_pct": 2.8866
-    },
-    {
-      "game_id": "ESPN_401810977_2026-04-03_ATL_AT_BKN",
-      "matchday_date": "2026-04-03",
-      "season": "2025-26",
-      "market": "moneyline",
-      "selection": "HOME",
-      "line_value": null,
-      "decimal_odds": 8.6679,
-      "anchored_prob": 0.142654,
-      "ev_unit": 0.236511,
-      "p_open": 0.1104,
-      "p_close": 0.0894,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.52,
-      "kelly_net_profit_pen": -1.52,
-      "status": "LOST",
-      "clv_ev_pct": -22.509
-    },
-    {
-      "game_id": "ESPN_401811009_2026-04-08_SAC_AT_GSW",
+      "game_id": "ESPN_401811010_2026-04-08_OKC_AT_LAL",
       "matchday_date": "2026-04-08",
       "season": "2025-26",
       "market": "moneyline",
-      "selection": "AWAY",
+      "selection": "HOME",
       "line_value": null,
-      "decimal_odds": 7.3385,
-      "anchored_prob": 0.164527,
-      "ev_unit": 0.207381,
-      "p_open": 0.13039999999999996,
-      "p_close": 0.12360000000000004,
+      "decimal_odds": 6.99,
+      "anchored_prob": 0.178351,
+      "ev_unit": 0.246673,
+      "p_open": 0.1369,
+      "p_close": 0.0829,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.59,
-      "kelly_net_profit_pen": -1.59,
+      "kelly_stake_pen": 2.06,
+      "kelly_net_profit_pen": -2.06,
       "status": "LOST",
-      "clv_ev_pct": -9.2961
+      "clv_ev_pct": -42.0529
     },
     {
-      "game_id": "ESPN_401811029_2026-04-10_NOP_AT_BOS",
+      "game_id": "ESPN_401811030_2026-04-10_PHI_AT_IND",
       "matchday_date": "2026-04-10",
       "season": "2025-26",
       "market": "moneyline",
-      "selection": "AWAY",
+      "selection": "HOME",
       "line_value": null,
-      "decimal_odds": 9.4559,
-      "anchored_prob": 0.125303,
-      "ev_unit": 0.184853,
-      "p_open": 0.10119999999999996,
-      "p_close": 0.08709999999999996,
+      "decimal_odds": 8.0483,
+      "anchored_prob": 0.149726,
+      "ev_unit": 0.20504,
+      "p_open": 0.1189,
+      "p_close": 0.1199,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.05,
-      "kelly_net_profit_pen": -1.05,
+      "kelly_stake_pen": 1.43,
+      "kelly_net_profit_pen": -1.43,
       "status": "LOST",
-      "clv_ev_pct": -17.6391
+      "clv_ev_pct": -3.5009
     },
     {
-      "game_id": "ESPN_401811026_2026-04-10_DET_AT_CHA",
-      "matchday_date": "2026-04-10",
+      "game_id": "ESPN_401869191_2026-04-19_PHI_AT_BOS",
+      "matchday_date": "2026-04-19",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "AWAY",
       "line_value": null,
-      "decimal_odds": 2.2463,
-      "anchored_prob": 0.470532,
-      "ev_unit": 0.056956,
-      "p_open": 0.42600000000000005,
-      "p_close": 0.34930000000000005,
-      "result": "WON",
+      "decimal_odds": 5.1531,
+      "anchored_prob": 0.229535,
+      "ev_unit": 0.182817,
+      "p_open": 0.18569999999999998,
+      "p_close": 0.14229999999999998,
+      "result": "LOST",
       "stake_pen": 1.0,
-      "net_profit_pen": 1.2463,
-      "kelly_stake_pen": 2.18,
-      "kelly_net_profit_pen": 2.7169,
-      "status": "WON",
-      "clv_ev_pct": -21.5367
+      "net_profit_pen": -1.0,
+      "kelly_stake_pen": 2.13,
+      "kelly_net_profit_pen": -2.13,
+      "status": "LOST",
+      "clv_ev_pct": -26.6714
     },
     {
-      "game_id": "ESPN_401811055_2026-04-13_SAC_AT_POR",
-      "matchday_date": "2026-04-13",
+      "game_id": "ESPN_401869192_2026-04-19_PHX_AT_OKC",
+      "matchday_date": "2026-04-19",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "AWAY",
       "line_value": null,
-      "decimal_odds": 9.0022,
-      "anchored_prob": 0.130641,
-      "ev_unit": 0.176056,
-      "p_open": 0.10629999999999995,
-      "p_close": 0.07899999999999996,
+      "decimal_odds": 6.4745,
+      "anchored_prob": 0.182663,
+      "ev_unit": 0.182652,
+      "p_open": 0.14780000000000004,
+      "p_close": 0.10450000000000004,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.07,
-      "kelly_net_profit_pen": -1.07,
+      "kelly_stake_pen": 1.61,
+      "kelly_net_profit_pen": -1.61,
       "status": "LOST",
-      "clv_ev_pct": -28.8826
+      "clv_ev_pct": -32.3415
     },
     {
       "game_id": "ESPN_401869368_2026-04-23_PHX_AT_OKC",
@@ -2313,37 +2113,77 @@
       "selection": "AWAY",
       "line_value": null,
       "decimal_odds": 10.1586,
-      "anchored_prob": 0.1179,
-      "ev_unit": 0.197699,
+      "anchored_prob": 0.122648,
+      "ev_unit": 0.245932,
       "p_open": 0.09419999999999995,
       "p_close": 0.09419999999999995,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.04,
-      "kelly_net_profit_pen": -1.04,
+      "kelly_stake_pen": 1.25,
+      "kelly_net_profit_pen": -1.25,
       "status": "LOST",
       "clv_ev_pct": -4.306
     },
     {
-      "game_id": "ESPN_401871152_2026-05-05_MIN_AT_SAS",
-      "matchday_date": "2026-05-05",
+      "game_id": "ESPN_401869402_2026-05-01_DEN_AT_MIN",
+      "matchday_date": "2026-05-01",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "HOME",
+      "line_value": null,
+      "decimal_odds": 3.0007,
+      "anchored_prob": 0.359932,
+      "ev_unit": 0.080048,
+      "p_open": 0.3189,
+      "p_close": 0.2865,
+      "result": "WON",
+      "stake_pen": 1.0,
+      "net_profit_pen": 2.0007,
+      "kelly_stake_pen": 1.84,
+      "kelly_net_profit_pen": 3.6813,
+      "status": "WON",
+      "clv_ev_pct": -14.0299
+    },
+    {
+      "game_id": "ESPN_401869384_2026-05-03_TOR_AT_CLE",
+      "matchday_date": "2026-05-03",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "AWAY",
       "line_value": null,
-      "decimal_odds": 7.3272,
-      "anchored_prob": 0.164303,
-      "ev_unit": 0.203881,
-      "p_open": 0.13060000000000005,
-      "p_close": 0.2259,
-      "result": "WON",
+      "decimal_odds": 3.3494,
+      "anchored_prob": 0.319399,
+      "ev_unit": 0.069795,
+      "p_open": 0.28569999999999995,
+      "p_close": 0.2653,
+      "result": "LOST",
       "stake_pen": 1.0,
-      "net_profit_pen": 6.3272,
-      "kelly_stake_pen": 1.53,
-      "kelly_net_profit_pen": 9.6806,
-      "status": "WON",
-      "clv_ev_pct": 65.5214
+      "net_profit_pen": -1.0,
+      "kelly_stake_pen": 1.42,
+      "kelly_net_profit_pen": -1.42,
+      "status": "LOST",
+      "clv_ev_pct": -11.1404
+    },
+    {
+      "game_id": "ESPN_401871327_2026-05-08_LAL_AT_OKC",
+      "matchday_date": "2026-05-08",
+      "season": "2025-26",
+      "market": "moneyline",
+      "selection": "AWAY",
+      "line_value": null,
+      "decimal_odds": 7.6616,
+      "anchored_prob": 0.168769,
+      "ev_unit": 0.293041,
+      "p_open": 0.12490000000000001,
+      "p_close": 0.1279,
+      "result": "LOST",
+      "stake_pen": 1.0,
+      "net_profit_pen": -1.0,
+      "kelly_stake_pen": 2.07,
+      "kelly_net_profit_pen": -2.07,
+      "status": "LOST",
+      "clv_ev_pct": -2.0081
     },
     {
       "game_id": "ESPN_401873197_2026-05-19_SAS_AT_OKC",
@@ -2353,77 +2193,57 @@
       "selection": "AWAY",
       "line_value": null,
       "decimal_odds": 2.949,
-      "anchored_prob": 0.363922,
-      "ev_unit": 0.073206,
+      "anchored_prob": 0.368212,
+      "ev_unit": 0.085857,
       "p_open": 0.3245,
       "p_close": 0.31410000000000005,
       "result": "WON",
       "stake_pen": 1.0,
       "net_profit_pen": 1.949,
-      "kelly_stake_pen": 1.97,
-      "kelly_net_profit_pen": 3.8395,
+      "kelly_stake_pen": 2.02,
+      "kelly_net_profit_pen": 3.937,
       "status": "WON",
       "clv_ev_pct": -7.3719
     },
     {
-      "game_id": "ESPN_401873201_2026-05-27_SAS_AT_OKC",
-      "matchday_date": "2026-05-27",
+      "game_id": "ESPN_401873198_2026-05-21_SAS_AT_OKC",
+      "matchday_date": "2026-05-21",
       "season": "2025-26",
       "market": "moneyline",
       "selection": "AWAY",
       "line_value": null,
-      "decimal_odds": 2.7443,
-      "anchored_prob": 0.383608,
-      "ev_unit": 0.052735,
-      "p_open": 0.3487,
-      "p_close": 0.4081,
+      "decimal_odds": 3.0073,
+      "anchored_prob": 0.363146,
+      "ev_unit": 0.092089,
+      "p_open": 0.31820000000000004,
+      "p_close": 0.30310000000000004,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 1.64,
-      "kelly_net_profit_pen": -1.64,
+      "kelly_stake_pen": 2.2,
+      "kelly_net_profit_pen": -2.2,
       "status": "LOST",
-      "clv_ev_pct": 11.9949
+      "clv_ev_pct": -8.8487
     },
     {
-      "game_id": "ESPN_401909838_2026-10-22_UTA_AT_MEM",
-      "matchday_date": "2026-10-22",
+      "game_id": "ESPN_401909862_2026-10-25_IND_AT_BKN",
+      "matchday_date": "2026-10-25",
       "season": "2026-27",
       "market": "moneyline",
       "selection": "HOME",
       "line_value": null,
-      "decimal_odds": 2.1953,
-      "anchored_prob": 0.479932,
-      "ev_unit": 0.053595,
-      "p_open": 0.4359,
-      "p_close": 0.5362,
-      "result": "WON",
+      "decimal_odds": 3.075,
+      "anchored_prob": 0.342938,
+      "ev_unit": 0.054534,
+      "p_open": 0.3112,
+      "p_close": 0.3412,
+      "result": "LOST",
       "stake_pen": 1.0,
-      "net_profit_pen": 1.1953,
-      "kelly_stake_pen": 2.4,
-      "kelly_net_profit_pen": 2.8687,
-      "status": "WON",
-      "clv_ev_pct": 17.712
-    },
-    {
-      "game_id": "ESPN_401909866_2026-10-25_DET_AT_PHI",
-      "matchday_date": "2026-10-25",
-      "season": "2026-27",
-      "market": "moneyline",
-      "selection": "AWAY",
-      "line_value": null,
-      "decimal_odds": 2.2121,
-      "anchored_prob": 0.475683,
-      "ev_unit": 0.052258,
-      "p_open": 0.4326,
-      "p_close": 0.5326,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 1.2121,
-      "kelly_stake_pen": 2.37,
-      "kelly_net_profit_pen": 2.8727,
-      "status": "WON",
-      "clv_ev_pct": 17.8164
+      "net_profit_pen": -1.0,
+      "kelly_stake_pen": 1.23,
+      "kelly_net_profit_pen": -1.23,
+      "status": "LOST",
+      "clv_ev_pct": 4.919
     },
     {
       "game_id": "ESPN_401909872_2026-10-27_IND_AT_MIL",
@@ -2433,15 +2253,15 @@
       "selection": "HOME",
       "line_value": null,
       "decimal_odds": 2.4587,
-      "anchored_prob": 0.431486,
-      "ev_unit": 0.060895,
+      "anchored_prob": 0.430447,
+      "ev_unit": 0.05834,
       "p_open": 0.3892,
       "p_close": 0.4162,
       "result": "WON",
       "stake_pen": 1.0,
       "net_profit_pen": 1.4587,
-      "kelly_stake_pen": 2.35,
-      "kelly_net_profit_pen": 3.4279,
+      "kelly_stake_pen": 1.85,
+      "kelly_net_profit_pen": 2.6986,
       "status": "WON",
       "clv_ev_pct": 2.3311
     },
@@ -2453,58 +2273,354 @@
       "selection": "HOME",
       "line_value": null,
       "decimal_odds": 2.6479,
-      "anchored_prob": 0.402638,
-      "ev_unit": 0.066145,
+      "anchored_prob": 0.404393,
+      "ev_unit": 0.070792,
       "p_open": 0.3614,
       "p_close": 0.5066,
       "result": "LOST",
       "stake_pen": 1.0,
       "net_profit_pen": -1.0,
-      "kelly_stake_pen": 2.33,
-      "kelly_net_profit_pen": -2.33,
+      "kelly_stake_pen": 2.04,
+      "kelly_net_profit_pen": -2.04,
       "status": "LOST",
       "clv_ev_pct": 34.1426
-    },
-    {
-      "game_id": "ESPN_401909901_2026-11-01_MIN_AT_SAS",
-      "matchday_date": "2026-11-01",
-      "season": "2026-27",
-      "market": "moneyline",
-      "selection": "AWAY",
-      "line_value": null,
-      "decimal_odds": 5.1118,
-      "anchored_prob": 0.229125,
-      "ev_unit": 0.171241,
-      "p_open": 0.18720000000000003,
-      "p_close": 0.17490000000000006,
-      "result": "LOST",
-      "stake_pen": 1.0,
-      "net_profit_pen": -1.0,
-      "kelly_stake_pen": 2.37,
-      "kelly_net_profit_pen": -2.37,
-      "status": "LOST",
-      "clv_ev_pct": -10.5946
-    },
-    {
-      "game_id": "ESPN_401909914_2026-11-03_NOP_AT_MEM",
-      "matchday_date": "2026-11-03",
-      "season": "2026-27",
-      "market": "moneyline",
-      "selection": "AWAY",
-      "line_value": null,
-      "decimal_odds": 2.8608,
-      "anchored_prob": 0.377951,
-      "ev_unit": 0.081242,
-      "p_open": 0.3345,
-      "p_close": 0.3477,
-      "result": "WON",
-      "stake_pen": 1.0,
-      "net_profit_pen": 1.8608,
-      "kelly_stake_pen": 2.43,
-      "kelly_net_profit_pen": 4.5217,
-      "status": "WON",
-      "clv_ev_pct": -0.53
     }
   ],
-  "sensitivity": {}
+  "sensitivity": {
+    "4.5%": {
+      "bets": 81,
+      "settled": 81,
+      "won": 28,
+      "push_or_void": 0,
+      "flat_stake": {
+        "net_profit_pen": -1.96,
+        "roi_pct": -2.42,
+        "bootstrap_95": {
+          "n_settled": 81,
+          "n_matchday_blocks": 72,
+          "roi_ci_lower_95_pct": -32.4807,
+          "roi_ci_upper_95_pct": 27.2807,
+          "roi_ci_lower_90_pct": -28.4139,
+          "roi_ci_upper_90_pct": 24.1995,
+          "compatible_with_zero_edge": true,
+          "method": "temporal_matchday_block_bootstrap"
+        },
+        "drawdown": {
+          "max_drawdown_pen": 13.5827,
+          "max_drawdown_pct": 12.2186,
+          "peak_bankroll_pen": 111.1637,
+          "ending_bankroll_pen": 98.0397
+        }
+      },
+      "kelly_stake": {
+        "final_bankroll_pen": 93.09,
+        "net_profit_pen": -6.91,
+        "total_staked_pen": 149.18,
+        "roi_pct": -4.63,
+        "mean_stake_pen": 1.84,
+        "drawdown": {
+          "max_drawdown_pen": 26.7209,
+          "max_drawdown_pct": 22.5583,
+          "peak_bankroll_pen": 118.4526,
+          "ending_bankroll_pen": 93.0886
+        }
+      },
+      "clv": {
+        "mean_clv_ev_pct": -2.412,
+        "beat_close_rate": 0.3333,
+        "bootstrap_95_pct": {
+          "lower": -6.1119,
+          "upper": 1.3624
+        }
+      },
+      "by_market": {
+        "moneyline": {
+          "bets": 81,
+          "won": 28,
+          "roi_flat_pct": -2.42,
+          "roi_ci95": [
+            -32.4807,
+            27.2807
+          ],
+          "mean_clv_pct": -2.412,
+          "clv_ci95": [
+            -6.1119,
+            1.3624
+          ]
+        }
+      },
+      "by_season": {
+        "2024-25": {
+          "bets": 32,
+          "won": 12,
+          "roi_flat_pct": 5.15,
+          "roi_ci95": [
+            -40.0537,
+            51.5144
+          ],
+          "mean_clv_pct": -4.193,
+          "clv_ci95": [
+            -9.5478,
+            1.0999
+          ]
+        },
+        "2025-26": {
+          "bets": 46,
+          "won": 15,
+          "roi_flat_pct": -6.67,
+          "roi_ci95": [
+            -46.5859,
+            36.1605
+          ],
+          "mean_clv_pct": -2.231,
+          "clv_ci95": [
+            -6.8639,
+            2.4316
+          ]
+        },
+        "2026-27": {
+          "bets": 3,
+          "won": 1,
+          "roi_flat_pct": -18.04,
+          "roi_ci95": [
+            -100.0,
+            145.87
+          ],
+          "mean_clv_pct": 13.798,
+          "clv_ci95": [
+            2.3311,
+            34.1426
+          ]
+        }
+      }
+    },
+    "2.5%": {
+      "bets": 263,
+      "settled": 263,
+      "won": 120,
+      "push_or_void": 0,
+      "flat_stake": {
+        "net_profit_pen": 16.11,
+        "roi_pct": 6.13,
+        "bootstrap_95": {
+          "n_settled": 263,
+          "n_matchday_blocks": 188,
+          "roi_ci_lower_95_pct": -8.0747,
+          "roi_ci_upper_95_pct": 20.8572,
+          "roi_ci_lower_90_pct": -5.932,
+          "roi_ci_upper_90_pct": 18.7783,
+          "compatible_with_zero_edge": true,
+          "method": "temporal_matchday_block_bootstrap"
+        },
+        "drawdown": {
+          "max_drawdown_pen": 17.1583,
+          "max_drawdown_pct": 13.2216,
+          "peak_bankroll_pen": 132.8611,
+          "ending_bankroll_pen": 116.1119
+        }
+      },
+      "kelly_stake": {
+        "final_bankroll_pen": 161.26,
+        "net_profit_pen": 61.26,
+        "total_staked_pen": 945.09,
+        "roi_pct": 6.48,
+        "mean_stake_pen": 3.59,
+        "drawdown": {
+          "max_drawdown_pen": 57.7,
+          "max_drawdown_pct": 33.5101,
+          "peak_bankroll_pen": 216.0154,
+          "ending_bankroll_pen": 161.2619
+        }
+      },
+      "clv": {
+        "mean_clv_ev_pct": 1.138,
+        "beat_close_rate": 0.4905,
+        "bootstrap_95_pct": {
+          "lower": -0.733,
+          "upper": 2.9443
+        }
+      },
+      "by_market": {
+        "moneyline": {
+          "bets": 182,
+          "won": 72,
+          "roi_flat_pct": 1.9,
+          "roi_ci95": [
+            -16.9261,
+            19.9784
+          ],
+          "mean_clv_pct": -0.554,
+          "clv_ci95": [
+            -2.7303,
+            1.6178
+          ]
+        },
+        "total_points": {
+          "bets": 81,
+          "won": 48,
+          "roi_flat_pct": 15.63,
+          "roi_ci95": [
+            -3.6711,
+            35.843
+          ],
+          "mean_clv_pct": 4.939,
+          "clv_ci95": [
+            1.7669,
+            8.1214
+          ]
+        }
+      },
+      "by_season": {
+        "2024-25": {
+          "bets": 108,
+          "won": 50,
+          "roi_flat_pct": 9.85,
+          "roi_ci95": [
+            -14.9489,
+            32.3674
+          ],
+          "mean_clv_pct": 2.434,
+          "clv_ci95": [
+            -0.8554,
+            5.5034
+          ]
+        },
+        "2025-26": {
+          "bets": 146,
+          "won": 67,
+          "roi_flat_pct": 5.52,
+          "roi_ci95": [
+            -14.1667,
+            24.4108
+          ],
+          "mean_clv_pct": -0.118,
+          "clv_ci95": [
+            -2.6389,
+            2.2014
+          ]
+        },
+        "2026-27": {
+          "bets": 9,
+          "won": 3,
+          "roi_flat_pct": -28.79,
+          "roi_ci95": [
+            -82.2618,
+            35.8375
+          ],
+          "mean_clv_pct": 5.972,
+          "clv_ci95": [
+            -3.4054,
+            15.9307
+          ]
+        }
+      }
+    },
+    "6.0%": {
+      "bets": 39,
+      "settled": 39,
+      "won": 10,
+      "push_or_void": 0,
+      "flat_stake": {
+        "net_profit_pen": -9.59,
+        "roi_pct": -24.6,
+        "bootstrap_95": {
+          "n_settled": 39,
+          "n_matchday_blocks": 37,
+          "roi_ci_lower_95_pct": -64.2813,
+          "roi_ci_upper_95_pct": 17.8122,
+          "roi_ci_lower_90_pct": -56.046,
+          "roi_ci_upper_90_pct": 9.5123,
+          "compatible_with_zero_edge": true,
+          "method": "temporal_matchday_block_bootstrap"
+        },
+        "drawdown": {
+          "max_drawdown_pen": 11.2318,
+          "max_drawdown_pct": 11.0508,
+          "peak_bankroll_pen": 101.6381,
+          "ending_bankroll_pen": 90.4063
+        }
+      },
+      "kelly_stake": {
+        "final_bankroll_pen": 82.08,
+        "net_profit_pen": -17.92,
+        "total_staked_pen": 59.16,
+        "roi_pct": -30.3,
+        "mean_stake_pen": 1.52,
+        "drawdown": {
+          "max_drawdown_pen": 19.2544,
+          "max_drawdown_pct": 19.0013,
+          "peak_bankroll_pen": 101.3318,
+          "ending_bankroll_pen": 82.0774
+        }
+      },
+      "clv": {
+        "mean_clv_ev_pct": -4.114,
+        "beat_close_rate": 0.3333,
+        "bootstrap_95_pct": {
+          "lower": -9.7018,
+          "upper": 0.9677
+        }
+      },
+      "by_market": {
+        "moneyline": {
+          "bets": 39,
+          "won": 10,
+          "roi_flat_pct": -24.6,
+          "roi_ci95": [
+            -64.2813,
+            17.8122
+          ],
+          "mean_clv_pct": -4.114,
+          "clv_ci95": [
+            -9.7018,
+            0.9677
+          ]
+        }
+      },
+      "by_season": {
+        "2024-25": {
+          "bets": 12,
+          "won": 4,
+          "roi_flat_pct": -3.02,
+          "roi_ci95": [
+            -73.7809,
+            76.1585
+          ],
+          "mean_clv_pct": -2.11,
+          "clv_ci95": [
+            -11.8545,
+            6.7157
+          ]
+        },
+        "2025-26": {
+          "bets": 26,
+          "won": 6,
+          "roi_flat_pct": -31.66,
+          "roi_ci95": [
+            -76.8501,
+            21.607
+          ],
+          "mean_clv_pct": -6.438,
+          "clv_ci95": [
+            -12.7924,
+            -0.6629
+          ]
+        },
+        "2026-27": {
+          "bets": 1,
+          "won": 0,
+          "roi_flat_pct": -100.0,
+          "roi_ci95": [
+            -125.0,
+            -75.0
+          ],
+          "mean_clv_pct": 32.243,
+          "clv_ci95": [
+            7.2429,
+            57.2429
+          ]
+        }
+      }
+    }
+  }
 }

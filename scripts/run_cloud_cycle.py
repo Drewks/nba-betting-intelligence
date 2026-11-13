@@ -47,6 +47,7 @@ from src.features.builder import build_pregame_features
 from src.features.team_ratings import apply_pregame_team_ratings
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
 from src.ingestion.boxscores import backfill_boxscores, load_boxscores
+from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.models.statistical_models import (
     BaselineModel,
     EnsembleStackingModel,
@@ -162,6 +163,14 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
 
     # 1b. Automatically promote latest pre-tipoff odds to closing lines for started / final games
     new_closing_lines = paper_engine.persist_closing_lines_for_games(now_str)
+
+    # 1c. Sync live Peruvian (Te Apuesto) & Sharp (Pinnacle) pre-game observed quotes into odds_snapshots
+    if mode != "settle_and_calibrate":
+        try:
+            peru_scraper = LivePeruOddsScraper(db=db)
+            peru_scraper.scan_and_alert_entire_slate(notify_telegram=False)
+        except Exception as exc:
+            logger.warning(f"Live Peruvian/Pinnacle odds sync failed cleanly: {exc}")
 
     # 2. Settle any PENDING simulated bets whose games are now FINAL, POSTPONED, or CANCELLED
     pending_bets = db.fetch_all(
@@ -654,6 +663,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
         "closing_lines_promoted": new_closing_lines,
         "bets_settled_in_cycle": len(settled_now),
         "new_bets_placed_in_cycle": new_bets_placed,
+        "predictions_generated": sum(len(v) for v in candidates_by_matchday.values()),
         "active_calibration_methods": {"moneyline": ml_method, "total_points": tot_method},
         "bankroll_state": paper_engine.get_bankroll_state(),
         "sub_bankroll_state": parlay_engine.get_bankroll_state(),

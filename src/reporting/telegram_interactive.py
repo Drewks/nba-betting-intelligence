@@ -61,7 +61,11 @@ class TelegramInteractiveListener:
         self.bot_token = bot_token or os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 
         # Configure authorized chat IDs
-        raw_allowed = allowed_chat_ids or os.environ.get("TELEGRAM_CHAT_ID", "").strip().split(",")
+        env_chats = (
+            os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS", "").strip()
+            or os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        )
+        raw_allowed = allowed_chat_ids or [c for c in env_chats.split(",") if c.strip()]
         self.allowed_chat_ids: set[str] = {str(c).strip() for c in raw_allowed if str(c).strip()}
 
         self.db = db or DatabaseManager(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3")
@@ -460,7 +464,7 @@ class TelegramInteractiveListener:
 
         if not scan_data:
             scraper = LivePeruOddsScraper(db=self.db)
-            scan_data = scraper.scan_and_alert_entire_slate()
+            scan_data = scraper.scan_and_alert_entire_slate(notify_telegram=False)
 
         games: list[dict[str, Any]] = []
         if isinstance(scan_data, list):
@@ -479,7 +483,8 @@ class TelegramInteractiveListener:
         surebets = []
         stale_lines = []
         for g in games:
-            if g.get("is_arbitrage"):
+            sb_obj = g.get("surebet")
+            if g.get("is_arbitrage") or (isinstance(sb_obj, dict) and sb_obj.get("is_arbitrage")):
                 surebets.append(g)
             for sl in g.get("stale_lines", []):
                 stale_lines.append((g, sl))
@@ -487,7 +492,7 @@ class TelegramInteractiveListener:
         lines = [
             "⚡ *COMPARADOR DE CUOTAS PERÚ*",
             "━━━━━━━━━━━━━━━━━━━━━━",
-            "📊 *Casas Analizadas:* RETAbet, Betsson, Doradobet, Coolbet, Apuesta Total vs Pinnacle",
+            "📊 *Casas Analizadas:* Te Apuesto Perú vs Pinnacle (Sharp) + Casas Observadas",
             "━━━━━━━━━━━━━━━━━━━━━━",
         ]
 

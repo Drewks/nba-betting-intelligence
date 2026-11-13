@@ -63,12 +63,25 @@ class NBADataScoutAgent:
         except Exception:
             espn_reachable = False
 
+        try:
+            from src.ingestion.nba_injury_report import NBAOfficialInjuryFeed
+
+            nba_inj_res = NBAOfficialInjuryFeed(timeout_seconds=6.0, max_probe_slots=6).fetch_latest_report()
+            nba_inj_info = {
+                "reachable": bool(nba_inj_res.get("fetch_ok")),
+                "report_url": nba_inj_res.get("report_url"),
+                "players_listed": int(nba_inj_res.get("player_count", 0)),
+            }
+        except Exception as exc:
+            nba_inj_info = {"reachable": False, "error": str(exc)}
+
         return {
             "espn_public_api": {
                 "reachable": espn_reachable,
                 "events_found_today": espn_events_today,
                 "includes_draftkings_pregame_odds": True,
             },
+            "nba_official_injury_report": nba_inj_info,
             "sportradar_api": {
                 "credentials_configured": sr_key_present,
                 "status": (

@@ -33,7 +33,15 @@ from scripts.run_cloud_cycle import run_incremental_cloud_cycle
 from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.prediction.injury_sniper import InjurySniperMonitor
 from src.prediction.player_props import PlayerPropsEngine
-from src.reporting.telegram_bot import TelegramAlertBot
+from src.reporting.telegram_bot import (
+    DEFAULT_ALERT_STATE_PATH,
+    TelegramAlertBot,
+    dispatch_pending_bet_alerts,
+    format_injury_sniper_alert,
+    format_slate_status_summary,
+    load_dispatched_alert_keys,
+    save_dispatched_alert_keys,
+)
 from src.paper_trading.engine import build_production_engine
 from src.paper_trading.parlay_engine import ParlayTradingEngine
 from src.storage.db import DatabaseManager
@@ -60,10 +68,15 @@ class NBADailyScheduler:
     Executes and coordinates the 3 daily syndicate workflows in Peru Time.
     """
 
-    def __init__(self, db_path: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path | str | None = None,
+        alert_state_path: Path | str | None = None,
+    ) -> None:
         self.db_path = Path(db_path or (PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"))
         self.db = DatabaseManager(self.db_path)
         self.bot = TelegramAlertBot()
+        self.alert_state_path = Path(alert_state_path or DEFAULT_ALERT_STATE_PATH)
         self.paper_engine = build_production_engine(self.db)
         self.parlay_engine = ParlayTradingEngine(self.db)
 
@@ -123,18 +136,54 @@ class NBADailyScheduler:
         if placed_parlays:
             logger.info(f"🔥 [SUB-BANKROLL] {len(placed_parlays)} combinadas reservadas automáticamente en la banca S/50.")
 
-        # 3. Dispatch fresh alerts to Telegram
+        # 3. Dispatch fresh alerts to Telegram (deduplicated)
         dispatched_count = 0
-        if self.bot.is_live and props_list:
-            for p in props_list:
+        if self.bot.is_live:
+            dispatched_count += dispatch_pending_bet_alerts(
+                self.bot,
+                self.db,
+                min_ev=5.0,
+                max_alerts=10,
+                state_path=self.alert_state_path,
+            )
+            sent_keys = load_dispatched_alert_keys(self.alert_state_path)
+            keys_changed = False
+            for p in props_list or []:
                 ev_val = float(p.get("ev_pct") or 0.0)
-                if ev_val >= 3.5:
-                    if p.get("type") == "RETABET_SGP" or "sgp_id" in p:
-                        msg = self.bot.format_sgp_parlay_alert(p)
-                    else:
-                        msg = self.bot.format_single_bet_alert(p)
-                    self.bot.send_raw_message(msg)
+                if ev_val < 3.5:
+                    continue
+                prop_id = (
+                    p.get("sgp_id")
+                    or p.get("parlay_id")
+                    or p.get("prop_id")
+                    or f"{p.get('game_id', '')}:{p.get('player_name', '')}:{p.get('stat_type', p.get('prop_category', ''))}:{p.get('selection', '')}"
+                )
+                prop_key = f"PROP:{prop_id}"
+                if prop_key in sent_keys:
+                    continue
+                if p.get("type") == "RETABET_SGP" or "sgp_id" in p:
+                    msg = self.bot.format_sgp_parlay_alert(p)
+                else:
+                    msg = self.bot.format_single_bet_alert(p)
+                if self.bot.send_raw_message(msg):
+                    sent_keys.add(prop_key)
+                    keys_changed = True
                     dispatched_count += 1
+
+            if dispatched_count == 0:
+                summary_key = f"SLATE_SUMMARY:{today_matchday_str}"
+                if summary_key not in sent_keys:
+                    pending_row = self.db.fetch_one(
+                        "SELECT COUNT(*) AS cnt FROM simulated_bets WHERE status = 'PENDING'"
+                    )
+                    pending_cnt = int((pending_row or {}).get("cnt") or 0)
+                    summary_msg = format_slate_status_summary(res_cycle, pending_count=pending_cnt)
+                    if self.bot.send_raw_message(summary_msg):
+                        sent_keys.add(summary_key)
+                        keys_changed = True
+
+            if keys_changed:
+                save_dispatched_alert_keys(sent_keys, self.alert_state_path)
             logger.info(f"📲 [TELEGRAM] {dispatched_count} alertas matutinas despachadas a tu chat.")
 
         try:
@@ -167,22 +216,20 @@ class NBADailyScheduler:
 
         alerts_sent = 0
         if self.bot.is_live and sniper_res.get("alerts"):
+            sent_keys = load_dispatched_alert_keys(self.alert_state_path)
+            keys_changed = False
             for alert in sniper_res["alerts"]:
-                odds_val = alert.get("decimal_odds")
-                odds_str = f"{float(odds_val):.2f}" if odds_val is not None and float(odds_val) > 1.0 else "N/A"
-                msg = (
-                    f"🚨 *ALERTA INJURY SNIPER (T-2H / T-30M)*\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📍 *Partido:* `{alert.get('game_id')}`\n"
-                    f"⚠️ *Baja Detectada:* {alert.get('absent_star', 'Jugador Estrella')}\n"
-                    f"📈 *Impacto en Sinergia:* `{alert.get('net_penalty', 0.0):+.1f} pts`\n"
-                    f"🎯 *Pick Generado:* *{alert.get('selection')}* @ `{odds_str}`\n"
-                    f"⚡ *EV Lower-Bound:* `+{alert.get('ev_lower_bound_pct', 0.0):.1f}%`\n"
-                    f"💵 *Stake Sugerido:* *S/ {alert.get('stake_pen', 0.0):.2f} PEN*\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━"
-                )
-                self.bot.send_raw_message(msg)
-                alerts_sent += 1
+                alert_id = alert.get("alert_id") or f"{alert.get('game_id', '')}:{alert.get('selection', '')}"
+                sniper_key = f"SNIPER:{alert_id}"
+                if sniper_key in sent_keys:
+                    continue
+                msg = format_injury_sniper_alert(alert)
+                if self.bot.send_raw_message(msg):
+                    sent_keys.add(sniper_key)
+                    keys_changed = True
+                    alerts_sent += 1
+            if keys_changed:
+                save_dispatched_alert_keys(sent_keys, self.alert_state_path)
             logger.info(f"📲 [TELEGRAM] {alerts_sent} alertas de Injury Sniper enviadas a tu chat.")
 
         # Escaneo en tiempo real de cuotas peruanas (Stale Lines & Arbitraje Surebet)

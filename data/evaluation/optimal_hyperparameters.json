@@ -1,24 +1,60 @@
 {
-  "status": "INVALIDATED",
-  "invalidated_at_utc": "2026-11-09T16:00:00Z",
-  "reason": "The study used a 'market proxy' computed from each game's FINAL score (target leakage in hyperparameter_optimizer.py). Its Brier of 0.072 is impossible for pre-game NBA moneylines. Do not use these parameters. Re-run scripts/run_optuna_study.py (validation + holdout).",
-  "invalidated_result": {
-    "optimized_at_utc": "2026-11-06T05:23:22Z",
-    "optimized": {
-      "score": 0.21887,
-      "brier_score": 0.071823,
-      "log_loss": 0.294104,
-      "improvement_pct": 26.53
+  "objective": "raw model Brier + 0.5 * LogLoss (no market anchoring tuned)",
+  "n_trials": 300,
+  "eval_sample_size": 300,
+  "holdout_sample_size": 300,
+  "baseline_score": 0.86543,
+  "baseline_brier": 0.366279,
+  "baseline_log_loss": 0.99831,
+  "best_score": 0.73756,
+  "improvement_pct": 14.78,
+  "best_hyperparameters": {
+    "alpha_slow": 0.016,
+    "alpha_fast": 0.16499999999999998,
+    "tempo_alpha_slow": 0.048,
+    "tempo_alpha_fast": 0.14500000000000002,
+    "blowout_cap": 23.0,
+    "spread_sigma": 13.0,
+    "momentum_blend_weight": 0.95
+  },
+  "default_hyperparameters": {
+    "alpha_slow": 0.045,
+    "alpha_fast": 0.11,
+    "tempo_alpha_slow": 0.055,
+    "tempo_alpha_fast": 0.13,
+    "blowout_cap": 28.0,
+    "spread_sigma": 11.6,
+    "momentum_blend_weight": 0.88
+  },
+  "holdout": {
+    "baseline_score": 0.7761,
+    "baseline_brier": 0.329113,
+    "baseline_log_loss": 0.893968,
+    "best_score": 0.68937,
+    "best_brier": 0.29395,
+    "best_log_loss": 0.790845
+  },
+  "adoption_decision": "REJECT_KEEP_CURRENT_DEFAULTS",
+  "production_ab_validation": {
+    "backtest_start_date": "2025-01-01",
+    "assumed_margin": 0.045,
+    "min_ev": 0.05,
+    "current_defaults": {
+      "bets": 81,
+      "wins": 28,
+      "flat_roi_pct": -2.42,
+      "kelly_50_roi_pct": -4.63,
+      "final_bankroll_pen": 93.09,
+      "mean_clv_pct": -2.412
     },
-    "best_hyperparameters": {
-      "alpha_slow": 0.015,
-      "alpha_fast": 0.145,
-      "tempo_alpha_slow": 0.036000000000000004,
-      "tempo_alpha_fast": 0.1,
-      "blowout_cap": 22.0,
-      "market_model_weight": 0.1,
-      "spread_sigma": 13.0,
-      "momentum_blend_weight": 0.75
-    }
+    "optuna_candidate": {
+      "bets": 64,
+      "wins": 21,
+      "flat_roi_pct": -9.10,
+      "kelly_50_roi_pct": -12.42,
+      "final_bankroll_pen": 86.58,
+      "mean_clv_pct": -3.052
+    },
+    "notes": "Surrogate heuristic Brier improved, but real LightGBM+Logistic walk-forward backtest degraded under Optuna candidate alphas; config/model_config.yaml kept at baseline defaults."
   }
 }

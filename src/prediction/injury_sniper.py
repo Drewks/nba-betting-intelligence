@@ -396,7 +396,7 @@ class InjurySniperMonitor:
                         str(inj.get("team") or ""),
                         str(inj.get("name") or ""),
                         str(inj.get("status") or ""),
-                        "espn_summary",
+                        str(inj.get("source") or "espn_summary"),
                     ),
                 )
 
@@ -465,16 +465,39 @@ class InjurySniperMonitor:
                 logger.info(f"Skipping sniper scan for game {g_id}: no observed odds found in database.")
                 continue
 
-            # Ingest the live ESPN injury report for both teams
+            # Ingest both Official NBA Injury Report and live ESPN injury summary
             live_injuries: list[dict[str, Any]] = []
             fetched = False
             try:
+                import time
+                from src.ingestion.nba_injury_report import (
+                    NBAOfficialInjuryFeed,
+                    merge_official_and_espn_injuries,
+                )
+
+                official_by_team: dict[str, list[dict[str, Any]]] = {}
+                official_fetched = False
+                official_feed = getattr(self, "official_injury_feed", None) or NBAOfficialInjuryFeed()
+                cache_bucket = int(time.time() // 300)  # 5-min TTL per monitor instance during slate scan
+                cached = self.__dict__.get("_official_report_cache")
+                if isinstance(cached, tuple) and len(cached) == 2 and cached[0] == cache_bucket:
+                    official_res = cached[1]
+                else:
+                    official_res = official_feed.fetch_latest_report()
+                    self.__dict__["_official_report_cache"] = (cache_bucket, official_res)
+                if official_res.get("fetch_ok"):
+                    official_by_team = official_res.get("by_team") or {}
+                    official_fetched = True
+
                 espn_id = g_id.split("_")[1] if g_id.startswith("ESPN_") else g_id
                 event_ctx = self.espn_adapter._fetch_event_summary_context(espn_id)
                 reports = event_ctx.get("injury_reports") or {}
-                for t_code in (h_team, a_team):
-                    live_injuries.extend(reports.get(t_code, []))
-                fetched = bool(event_ctx.get("fetch_ok", False))
+                live_injuries = merge_official_and_espn_injuries(
+                    official_by_team,
+                    reports,
+                    (h_team, a_team),
+                )
+                fetched = bool(event_ctx.get("fetch_ok", False) or official_fetched)
             except Exception as exc:
                 logger.warning("Injury report fetch failed for %s: %s", g_id, exc)
 

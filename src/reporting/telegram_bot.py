@@ -84,7 +84,9 @@ class TelegramAlertBot:
             return False
 
     def _persist_alert_log(self, record: dict[str, Any]) -> None:
-        """Appends alert to local inspection ledger."""
+        """Appends alert to local inspection ledger (skipped for repo default path during pytest)."""
+        if os.environ.get("PYTEST_CURRENT_TEST") and self.alerts_log_path == Path("data/evaluation/latest_telegram_alerts.json"):
+            return
         try:
             self.alerts_log_path.parent.mkdir(parents=True, exist_ok=True)
             existing = []
@@ -102,15 +104,41 @@ class TelegramAlertBot:
     def format_single_bet_alert(self, bet: dict[str, Any]) -> str:
         """Formats a standard +EV moneyline or totals pick into actionable Telegram markdown."""
         game_id = bet.get("game_id", "NBA Game")
-        mkt = bet.get("market", "").upper()
-        sel = bet.get("selection", "").upper()
-        odds_raw = bet.get("decimal_odds_used") if bet.get("decimal_odds_used") is not None else bet.get("decimal_odds")
+        mkt = str(
+            bet.get("market") or bet.get("market_type") or bet.get("stat_type") or "PICK"
+        ).upper()
+        raw_sel = str(
+            bet.get("selection") or bet.get("side") or bet.get("player_name") or ""
+        ).upper()
+        line_val = bet.get("line_value")
+        if line_val is not None and str(line_val) not in raw_sel:
+            sel = f"{raw_sel} {line_val}".strip()
+        else:
+            sel = raw_sel
+        odds_raw = (
+            bet.get("decimal_odds_used")
+            if bet.get("decimal_odds_used") is not None
+            else bet.get("decimal_odds")
+        )
         odds_str = f"{float(odds_raw):.2f}" if odds_raw is not None and float(odds_raw) > 1.0 else "N/A"
-        prob_raw = bet.get("calibrated_probability") if bet.get("calibrated_probability") is not None else bet.get("model_prob")
+        prob_raw = (
+            bet.get("calibrated_probability")
+            if bet.get("calibrated_probability") is not None
+            else (
+                bet.get("model_prob")
+                if bet.get("model_prob") is not None
+                else bet.get("estimated_prob")
+            )
+        )
         prob_str = f"{float(prob_raw) * 100.0:.1f}%" if prob_raw is not None else "N/A"
-        ev = float(bet.get("ev_pct") or 0.0)
+        if bet.get("ev_pct") is not None:
+            ev = float(bet["ev_pct"])
+        elif bet.get("estimated_ev") is not None:
+            ev = float(bet["estimated_ev"]) * 100.0
+        else:
+            ev = 0.0
         stake = float(bet.get("stake_pen") or bet.get("kelly_stake_pen") or 0.0)
-        book = bet.get("odds_provider") or bet.get("bookmaker") or "RETAbet Perú"
+        book = bet.get("odds_provider") or bet.get("bookmaker") or "Casa Peruana / Market"
 
         msg = (
             f"🎯 *[PICK PRINCIPAL] (70% Totales / 30% Moneyline)*\n"
@@ -122,7 +150,7 @@ class TelegramAlertBot:
             f"⚡ *Valor Esperado (EV):* `+{ev:.1f}%`\n"
             f"💵 *Stake Sugerido:* *S/ {stake:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔗 _Copia el pick directamente en tu app de {book}_"
+            f"🔗 _Registra este pick revisando la cuota vigente en {book}_"
         )
         return msg
 
@@ -365,3 +393,146 @@ class TelegramAlertBot:
             f"🔒 _Historial y balance auditado e inmutable en SQLite (Dual Bankroll: S/100 + S/50)._"
         )
         return msg
+
+
+DEFAULT_ALERT_STATE_PATH = Path("data/evaluation/dispatched_telegram_alerts.json")
+
+
+def load_dispatched_alert_keys(state_path: Path = DEFAULT_ALERT_STATE_PATH) -> set[str]:
+    """Loads previously sent Telegram alert keys to prevent duplicate notifications."""
+    if not state_path.exists():
+        return set()
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return {str(x) for x in data if x}
+        if isinstance(data, dict) and isinstance(data.get("keys"), list):
+            return {str(x) for x in data["keys"] if x}
+    except Exception:
+        return set()
+    return set()
+
+
+def save_dispatched_alert_keys(
+    keys: set[str],
+    state_path: Path = DEFAULT_ALERT_STATE_PATH,
+    *,
+    max_entries: int = 500,
+) -> None:
+    """Persists bounded set of dispatched Telegram alert keys."""
+    if os.environ.get("PYTEST_CURRENT_TEST") and state_path == DEFAULT_ALERT_STATE_PATH:
+        return
+    try:
+        ordered = sorted(keys)[-max_entries:]
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(
+            json.dumps({"keys": ordered}, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning(f"No se pudo guardar ledger de alertas Telegram: {exc}")
+
+
+def format_slate_status_summary(cycle_res: dict[str, Any], *, pending_count: int = 0) -> str:
+    """Formats a concise daily slate status summary when no new +EV picks meet thresholds."""
+    mode = str(cycle_res.get("mode", "pregame")).upper()
+    preds = int(cycle_res.get("predictions_generated") or cycle_res.get("candidates_evaluated") or 0)
+    raw_bets = cycle_res.get("bets_placed")
+    if raw_bets is None:
+        raw_bets = cycle_res.get("new_bets_placed_in_cycle")
+    bets_new = int(raw_bets or 0)
+    bankroll_info = cycle_res.get("bankroll_state") or {}
+    equity = float(bankroll_info.get("settled_bankroll_pen", 0.0) or 0.0)
+    return (
+        f"📋 *REPORTE DE JORNADA NBA ({mode})*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔎 *Mercados evaluados:* `{preds}`\n"
+        f"✅ *Apuestas +EV nuevas (>=5%):* `{bets_new}` (Pendientes: `{pending_count}`)\n"
+        f"💼 *Banca Liquidada:* *S/ {equity:.2f} PEN*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🛡️ _Disciplina activa: sin picks forzado cuando el mercado no ofrece ventaja estadística._"
+    )
+
+
+def format_injury_sniper_alert(alert: dict[str, Any]) -> str:
+    """Formats an InjurySniperMonitor alert into actionable Telegram markdown."""
+    odds_val = alert.get("decimal_odds")
+    odds_str = f"{float(odds_val):.2f}" if odds_val is not None and float(odds_val) > 1.0 else "N/A"
+    transitions = alert.get("transitions") or []
+    if transitions and isinstance(transitions, list):
+        parts = [
+            f"{t.get('player_name', 'Jugador')} ({t.get('team', '?')} → {t.get('new_status', 'OUT')})"
+            for t in transitions[:3]
+            if isinstance(t, dict)
+        ]
+        injury_summary = ", ".join(parts) if parts else str(alert.get("absent_star") or "Baja reportada")
+    else:
+        injury_summary = str(alert.get("absent_star") or "Baja reportada")
+
+    shift_raw: Any = alert.get("synergy_shift")
+    if shift_raw is None:
+        shift_raw = alert.get("net_penalty")
+    synergy_shift = float(shift_raw) if isinstance(shift_raw, (int, float, str)) else 0.0
+
+    ev_raw: Any = alert.get("ev_lower_bound_pct")
+    ev_lb = float(ev_raw) if isinstance(ev_raw, (int, float, str)) else 0.0
+
+    stake_raw: Any = alert.get("kelly_stake_pen")
+    if stake_raw is None:
+        stake_raw = alert.get("stake_pen")
+    stake_pen = float(stake_raw) if isinstance(stake_raw, (int, float, str)) else 0.0
+
+    rational = str(alert.get("rational") or "").strip()
+    rational_line = f"\n📝 *Detalle:* {rational}" if rational else ""
+
+    return (
+        f"🚨 *ALERTA INJURY SNIPER (T-2H / T-30M)*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📍 *Partido:* `{alert.get('game_id', 'NBA')}`\n"
+        f"⚠️ *Baja Detectada:* {injury_summary}\n"
+        f"📈 *Impacto en Sinergia:* `{synergy_shift:+.1f} pts`\n"
+        f"🎯 *Pick Generado:* *{alert.get('selection', 'N/A')}* @ `{odds_str}`\n"
+        f"⚡ *EV Lower-Bound:* `+{ev_lb:.1f}%`\n"
+        f"💵 *Stake Sugerido:* *S/ {stake_pen:.2f} PEN*{rational_line}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+def dispatch_pending_bet_alerts(
+    bot: TelegramAlertBot,
+    db: Any,
+    *,
+    min_ev: float = 5.0,
+    max_alerts: int = 5,
+    state_path: Path = DEFAULT_ALERT_STATE_PATH,
+    dry_run: bool = False,
+) -> int:
+    """Dispatches newly created PENDING +EV simulated bets without duplicating sent bet_ids."""
+    pending_bets = db.fetch_all(
+        """
+        SELECT b.bet_id, b.game_id, b.matchday_date, b.market, b.selection, b.line_value,
+               b.decimal_odds, b.estimated_prob, b.estimated_ev, b.stake_pen,
+               p.calibrated_probability, p.ev_pct, p.odds_provider
+        FROM simulated_bets b
+        LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
+        WHERE b.status = 'PENDING'
+          AND COALESCE(p.ev_pct, COALESCE(b.estimated_ev, 0.0) * 100.0) >= ?
+        ORDER BY b.emitted_at DESC
+        LIMIT ?
+        """,
+        (float(min_ev), int(max_alerts)),
+    )
+    sent_keys = load_dispatched_alert_keys(state_path)
+    dispatched = 0
+    for b in pending_bets:
+        bet_key = f"BET:{b['bet_id']}"
+        if bet_key in sent_keys:
+            continue
+        msg = bot.format_single_bet_alert(b)
+        if bot.send_raw_message(msg):
+            sent_keys.add(bet_key)
+            dispatched += 1
+    should_persist = (not dry_run) and (bot.is_live or state_path != DEFAULT_ALERT_STATE_PATH)
+    if dispatched > 0 and should_persist:
+        save_dispatched_alert_keys(sent_keys, state_path)
+    return dispatched

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import pytest
-
 from src.agents.specialized_agents import NBADataScoutAgent
 from src.ingestion.base import BaseNBADataAdapter
 from src.ingestion.espn import ESPNPublicAdapter
@@ -72,18 +69,63 @@ class MockESPNPregameAdapter(BaseNBADataAdapter):
         }
 
 
-def test_espn_adapter_features_available_at_strictly_precedes_game_start(tmp_path):
-    adapter = ESPNPublicAdapter(timeout_seconds=5)
-    # Test on synthetic event dictionary directly through internal mapper or simulated date
-    now_utc = "2026-11-11T23:00:00Z"
-    game_start_time = "2026-11-12T01:00:00Z"
-    start_dt = parse_iso_utc(game_start_time)
-    feat_avail = (start_dt).strftime("%Y-%m-%dT%H:%M:%SZ")
+def test_espn_adapter_features_available_at_strictly_precedes_game_start(monkeypatch):
+    import json
+    import urllib.request
 
-    # Ingestion adapter must guarantee features_available_at < game_start_time
-    from datetime import timedelta
-    safe_feat_avail = (start_dt - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    assert parse_iso_utc(safe_feat_avail) < start_dt
+    sample_scoreboard = {
+        "season": {"year": 2027},
+        "events": [
+            {
+                "id": "401800001",
+                "date": "2026-11-12T01:00:00Z",
+                "competitions": [
+                    {
+                        "status": {"type": {"name": "STATUS_SCHEDULED"}},
+                        "competitors": [
+                            {"homeAway": "home", "team": {"abbreviation": "NYK"}},
+                            {"homeAway": "away", "team": {"abbreviation": "BOS"}},
+                        ],
+                        "odds": [],
+                    }
+                ],
+            }
+        ],
+    }
+
+    class _FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(sample_scoreboard).encode("utf-8")
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: _FakeResp())
+    monkeypatch.setattr(
+        "src.ingestion.espn.SportradarAdapter.fetch_league_intelligence_context",
+        lambda _self: {},
+    )
+    adapter = ESPNPublicAdapter(timeout_seconds=5, enrich_with_the_odds_api=False)
+    monkeypatch.setattr(
+        adapter,
+        "_fetch_event_summary_context",
+        lambda _ev_id: {
+            "injury_penalties": {},
+            "referee_total_adj": 0.0,
+            "referee_hca_adj": 0.0,
+            "team_box_stats": {},
+            "lineup_synergy_details": {},
+        },
+    )
+    monkeypatch.setattr(adapter, "_compute_team_rest_days", lambda _code, _date: 2)
+
+    res = adapter.fetch_games_and_odds(date_str="2026-11-12", as_of_utc="2026-11-11T23:00:00Z")
+    assert len(res["games"]) == 1
+    game = res["games"][0]
+    assert parse_iso_utc(game["features_available_at"]) < parse_iso_utc(game["game_start_time"])
 
 
 def test_scout_ingests_upcoming_games_and_odds_without_rejection(tmp_path):

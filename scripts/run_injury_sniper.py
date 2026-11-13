@@ -42,21 +42,33 @@ def main() -> None:
     args = parser.parse_args()
 
     db_path = PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"
-    db = DatabaseManager(db_path)
-    sniper = InjurySniperMonitor(db=db)
-
     ref_dt = None
     if args.ref_time:
         ref_dt = datetime.fromisoformat(args.ref_time.replace("Z", "+00:00"))
-
     force_all = args.mode == "force"
-    res = sniper.scan_pregame_slate(reference_time_utc=ref_dt, force_scan_all=force_all)
 
-    # Save output summary
-    out_dir = PROJECT_ROOT / "data" / "evaluation"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "latest_sniper_scan.json"
-    out_file.write_text(json.dumps(res, indent=2, ensure_ascii=False), encoding="utf-8")
+    if args.dry_run:
+        import shutil
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_db = Path(tmp_dir) / "nba_sniper_dry_run.sqlite3"
+            if db_path.exists():
+                shutil.copy2(db_path, tmp_db)
+            db = DatabaseManager(tmp_db)
+            sniper = InjurySniperMonitor(db=db)
+            res = sniper.scan_pregame_slate(reference_time_utc=ref_dt, force_scan_all=force_all)
+        print("[DRY-RUN] Executed against isolated DB copy; production SQLite and latest_sniper_scan.json unchanged.")
+    else:
+        db = DatabaseManager(db_path)
+        sniper = InjurySniperMonitor(db=db)
+        res = sniper.scan_pregame_slate(reference_time_utc=ref_dt, force_scan_all=force_all)
+
+        # Save output summary
+        out_dir = PROJECT_ROOT / "data" / "evaluation"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_file = out_dir / "latest_sniper_scan.json"
+        out_file.write_text(json.dumps(res, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print("=" * 80)
     print("[NBA] BETTING INTELLIGENCE V7.1 - INJURY SNIPER DUAL-WINDOW MONITOR")

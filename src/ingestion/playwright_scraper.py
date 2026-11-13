@@ -1,21 +1,21 @@
 """
-Automated Headless Browser Scraper for Peruvian Sportsbooks (`src/ingestion/playwright_scraper.py`).
+Automated Peruvian Sportsbook Odds Harvester (`src/ingestion/playwright_scraper.py`).
 
-Uses Playwright with stealth Chromium to dynamically scrape live odds and player props from:
-  1. RETAbet Perú (retabet.pe)
-  2. Betano Perú (pe.betano.com)
+Supports two clean, zero-evasion acquisition channels:
+  1. Direct Public JSON APIs: Te Apuesto Perú (`api-latam.core-ix.com`) & Pinnacle Arcadia benchmark.
+  2. Standard Playwright Browser Session (optional `--site retabet` / `--site betano` or `--headed` local use).
 
 Features:
-  - Network-level JSON payload inspection from standard browser responses.
-  - Extracts Moneyline, Totals (Over/Under), Spreads, and Player Props (Points, Rebounds, Assists).
+  - Extracts Moneyline, Totals (Over/Under), and Spreads cleanly.
   - Enforces provenance: all inserted odds snapshots carry source_type='OBSERVED' and exact UTC timestamps.
-  - Fail-safe design: times out cleanly if a site is unreachable or blocked, without failing the pipeline.
+  - Fail-safe design: respects HTTP 403 / WAF blocks honestly without evasion or synthetic fallbacks.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 import logging
+import re
 from typing import Any
 
 from src.ingestion.normalizer import normalize_team_code
@@ -65,6 +65,125 @@ class PeruPlaywrightScraper:
                 except ValueError:
                     continue
         return None
+
+    def scrape_teapuesto_odds(self) -> list[dict[str, Any]]:
+        """Fetches live pre-game NBA odds from Te Apuesto Perú public API cleanly."""
+        from src.ingestion.live_peru_scraper import LivePeruOddsScraper
+
+        scraper = LivePeruOddsScraper(
+            db=self.db,
+            request_timeout=max(5.0, float(self.timeout_ms) / 1000.0),
+            enable_live_network=True,
+        )
+        slate_rows = scraper._fetch_teapuesto_slate(force_refresh=True)
+        return self._slate_rows_to_quote_dicts(slate_rows)
+
+    def scrape_pinnacle_odds(self) -> list[dict[str, Any]]:
+        """Fetches live pre-game NBA sharp odds from Pinnacle Arcadia guest API cleanly."""
+        from src.ingestion.live_peru_scraper import LivePeruOddsScraper
+
+        scraper = LivePeruOddsScraper(
+            db=self.db,
+            request_timeout=max(5.0, float(self.timeout_ms) / 1000.0),
+            enable_live_network=True,
+        )
+        slate_rows = scraper._fetch_pinnacle_slate(force_refresh=True)
+        return self._slate_rows_to_quote_dicts(slate_rows)
+
+    @staticmethod
+    def _slate_rows_to_quote_dicts(slate_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Converts parsed slate rows into standardized quote dicts compatible with persist_scraped_quotes."""
+        quotes: list[dict[str, Any]] = []
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for row in slate_rows:
+            prov = str(row.get("book_name") or "Unknown")
+            h_code = str(row.get("home_team") or "")
+            a_code = str(row.get("away_team") or "")
+            cap = str(row.get("captured_at") or now_utc)
+            h_odds = float(row.get("home_odds") or 0.0)
+            a_odds = float(row.get("away_odds") or 0.0)
+            if h_odds > 1.0 and a_odds > 1.0:
+                quotes.append({
+                    "provider": prov,
+                    "home_team": h_code,
+                    "away_team": a_code,
+                    "market": "moneyline",
+                    "selection": "HOME",
+                    "decimal_odds": h_odds,
+                    "counterpart_decimal_odds": a_odds,
+                    "line_value": None,
+                    "captured_at": cap,
+                    "source_type": "OBSERVED",
+                })
+                quotes.append({
+                    "provider": prov,
+                    "home_team": h_code,
+                    "away_team": a_code,
+                    "market": "moneyline",
+                    "selection": "AWAY",
+                    "decimal_odds": a_odds,
+                    "counterpart_decimal_odds": h_odds,
+                    "line_value": None,
+                    "captured_at": cap,
+                    "source_type": "OBSERVED",
+                })
+            tot_line = row.get("total_points_line")
+            over_o = row.get("total_over_odds")
+            under_o = row.get("total_under_odds")
+            if tot_line is not None and over_o and under_o and float(over_o) > 1.0 and float(under_o) > 1.0:
+                quotes.append({
+                    "provider": prov,
+                    "home_team": h_code,
+                    "away_team": a_code,
+                    "market": "total_points",
+                    "selection": "OVER",
+                    "decimal_odds": float(over_o),
+                    "counterpart_decimal_odds": float(under_o),
+                    "line_value": float(tot_line),
+                    "captured_at": cap,
+                    "source_type": "OBSERVED",
+                })
+                quotes.append({
+                    "provider": prov,
+                    "home_team": h_code,
+                    "away_team": a_code,
+                    "market": "total_points",
+                    "selection": "UNDER",
+                    "decimal_odds": float(under_o),
+                    "counterpart_decimal_odds": float(over_o),
+                    "line_value": float(tot_line),
+                    "captured_at": cap,
+                    "source_type": "OBSERVED",
+                })
+            spr_line = row.get("spread_home_line")
+            spr_h = row.get("spread_home_odds")
+            spr_a = row.get("spread_away_odds")
+            if spr_line is not None and spr_h and spr_a and float(spr_h) > 1.0 and float(spr_a) > 1.0:
+                quotes.append({
+                    "provider": prov,
+                    "home_team": h_code,
+                    "away_team": a_code,
+                    "market": "spread",
+                    "selection": "HOME",
+                    "decimal_odds": float(spr_h),
+                    "counterpart_decimal_odds": float(spr_a),
+                    "line_value": float(spr_line),
+                    "captured_at": cap,
+                    "source_type": "OBSERVED",
+                })
+                quotes.append({
+                    "provider": prov,
+                    "home_team": h_code,
+                    "away_team": a_code,
+                    "market": "spread",
+                    "selection": "AWAY",
+                    "decimal_odds": float(spr_a),
+                    "counterpart_decimal_odds": float(spr_h),
+                    "line_value": -float(spr_line),
+                    "captured_at": cap,
+                    "source_type": "OBSERVED",
+                })
+        return quotes
 
     def scrape_retabet_odds(self) -> list[dict[str, Any]]:
         """
@@ -406,29 +525,50 @@ class PeruPlaywrightScraper:
         if not self.db or not quotes:
             return 0
 
-        # Map (home_team, away_team) -> game_id
+        # Map team pair -> game_id (exact home/away or swapped lookup if event order differs)
         game_map: dict[tuple[str, str], str] = {}
+        pair_map: dict[frozenset[str], tuple[str, str, str]] = {}
         for g in slate_games:
-            game_map[(g["home_team"], g["away_team"])] = g["game_id"]
+            h, a, gid = g["home_team"], g["away_team"], g["game_id"]
+            game_map[(h, a)] = gid
+            pair_map[frozenset({h, a})] = (gid, h, a)
 
         inserted_count = 0
         for q in quotes:
+            sel = str(q["selection"]).upper()
+            mkt = str(q["market"])
+            if mkt not in ("moneyline", "total_points", "player_prop"):
+                continue
+            lv = q.get("line_value")
             gid = game_map.get((q["home_team"], q["away_team"]))
             if not gid:
-                continue
+                pair_match = pair_map.get(frozenset({q["home_team"], q["away_team"]}))
+                if not pair_match:
+                    continue
+                gid, true_home, true_away = pair_match
+                if mkt == "moneyline":
+                    if sel == "HOME" and q["home_team"] == true_away:
+                        sel = "AWAY"
+                    elif sel == "AWAY" and q["away_team"] == true_home:
+                        sel = "HOME"
+                elif mkt == "spread":
+                    if sel == "HOME" and q["home_team"] == true_away:
+                        sel = "AWAY"
+                    elif sel == "AWAY" and q["away_team"] == true_home:
+                        sel = "HOME"
 
-            book_slug = "retabet" if "retabet" in str(q["provider"]).lower() else "betano"
-            mkt_slug = "ML" if q["market"] == "moneyline" else "TOT"
-            line_str = f"_{q['line_value']}" if q["line_value"] is not None else ""
-            odds_id = f"ODDS_{book_slug.upper()}_{gid}_{mkt_slug}_{q['selection']}{line_str}_{q['captured_at']}"
+            prov_clean = re.sub(r"[^a-z0-9]+", "_", str(q["provider"]).lower()).strip("_") or "book"
+            mkt_slug = "ML" if mkt == "moneyline" else ("SPR" if mkt == "spread" else "TOT")
+            line_str = f"_{lv}" if lv is not None else ""
+            odds_id = f"ODDS_{prov_clean.upper()}_{gid}_{mkt_slug}_{sel}{line_str}_{q['captured_at']}"
 
             inserted = self.db.insert_odds_snapshot({
                 "odds_id": odds_id,
                 "game_id": gid,
                 "provider": q["provider"],
-                "market": q["market"],
-                "selection": q["selection"],
-                "line_value": q["line_value"],
+                "market": mkt,
+                "selection": sel,
+                "line_value": lv,
                 "decimal_odds": q["decimal_odds"],
                 "counterpart_decimal_odds": q.get("counterpart_decimal_odds"),
                 "captured_at": q["captured_at"],

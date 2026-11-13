@@ -43,7 +43,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--headed",
         action="store_true",
-        help="Ejecuta Chromium de forma visible (útil si hay desafíos interactivos)",
+        help="Ejecuta Chromium de forma visible para casas con Playwright",
+    )
+    parser.add_argument(
+        "--include-playwright",
+        action="store_true",
+        help="Incluye RETAbet/Betano vía Playwright además de Te Apuesto/Pinnacle",
     )
     parser.add_argument(
         "--timeout",
@@ -53,16 +58,26 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--site",
-        choices=["all", "retabet", "betano"],
+        choices=["all", "teapuesto", "pinnacle", "retabet", "betano"],
         default="all",
-        help="Casas a escanear: all, retabet, betano (default: all)",
+        help="Casas a escanear: all, teapuesto, pinnacle, retabet, betano (default: all)",
+    )
+    parser.add_argument(
+        "--db",
+        default=str(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"),
+        help="Ruta a la base de datos SQLite",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Extrae y muestra cuotas reales sin modificar la base de datos",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    db_path = PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"
+    db_path = Path(args.db)
     if not db_path.exists():
         logger.error("Base de datos no encontrada en %s", db_path)
         sys.exit(1)
@@ -72,8 +87,8 @@ def main() -> None:
     now_str = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     print("\n" + "=" * 78)
-    print("🇵🇪 MODO HÍBRIDO ASISTIDO: COSECHA LOCAL DE CUOTAS PERÚ (NBA)")
-    print(f"⏰ Hora UTC: {now_str} | Modo Navegador: {'VISIBLE (Headed)' if args.headed else 'HEADLESS'}")
+    print("🇵🇪 COSECHA DE CUOTAS PERUANAS & BENCHMARK SHARP (NBA)")
+    print(f"⏰ Hora UTC: {now_str} | Dry-Run: {'SÍ' if args.dry_run else 'NO'}")
     print("=" * 78)
 
     # 1. Obtener partidos programados para hoy / próximas jornadas
@@ -89,7 +104,7 @@ def main() -> None:
 
     if not scheduled_games:
         print("ℹ️ No hay partidos en estado 'SCHEDULED' en la base de datos.")
-        print("💡 Ejecuta primero: uv run python scripts/run_cloud_cycle.py --mode morning")
+        print("💡 Ejecuta primero: uv run python scripts/run_cloud_cycle.py --mode pregame")
         return
 
     print(f"\n📋 Cartelera Activa: {len(scheduled_games)} partidos programados:")
@@ -98,50 +113,73 @@ def main() -> None:
     if len(scheduled_games) > 6:
         print(f"  ... y {len(scheduled_games) - 6} partidos más.")
 
-    # 2. Inicializar scraper Playwright con configuración asistida
+    # 2. Inicializar scraper
     headless_mode = not args.headed
     scraper = PeruPlaywrightScraper(db=db, timeout_ms=args.timeout, headless=headless_mode)
 
     all_harvested_quotes: list[dict[str, Any]] = []
 
-    # Escanear RETAbet Perú
-    if args.site in ("all", "retabet"):
-        print("\n🌐 Conectando con RETAbet Perú (retabet.pe)...")
+    # Te Apuesto Perú (API pública directa — ML, Totales, Hándicap)
+    if args.site in ("all", "teapuesto"):
+        print("\n🌐 Consultando Te Apuesto Perú (NBA feed público)...")
         try:
-            retabet_quotes = scraper.scrape_retabet()
+            teapuesto_quotes = scraper.scrape_teapuesto_odds()
+            print(f"  ✅ Te Apuesto Perú: {len(teapuesto_quotes)} cotizaciones reales extraídas.")
+            all_harvested_quotes.extend(teapuesto_quotes)
+        except Exception as exc:
+            logger.warning("Fallo en Te Apuesto Perú: %s", exc)
+
+    # Pinnacle Arcadia (Benchmark sharp público)
+    if args.site in ("all", "pinnacle"):
+        print("\n🌐 Consultando Pinnacle (Benchmark Sharp)...")
+        try:
+            pinnacle_quotes = scraper.scrape_pinnacle_odds()
+            print(f"  ✅ Pinnacle: {len(pinnacle_quotes)} cotizaciones reales extraídas.")
+            all_harvested_quotes.extend(pinnacle_quotes)
+        except Exception as exc:
+            logger.warning("Fallo en Pinnacle: %s", exc)
+
+    # RETAbet / Betano (Playwright estándar; pueden devolver HTTP 403 WAF según IP)
+    run_pw_books = args.include_playwright or args.headed or args.site in ("retabet", "betano")
+    if run_pw_books and args.site in ("all", "retabet"):
+        print("\n🌐 Conectando con RETAbet Perú vía Playwright...")
+        try:
+            retabet_quotes = scraper.scrape_retabet_odds()
             print(f"  ✅ RETAbet: {len(retabet_quotes)} cotizaciones extraídas.")
             all_harvested_quotes.extend(retabet_quotes)
         except Exception as exc:
             logger.warning("Fallo en RETAbet: %s", exc)
 
-    # Escanear Betano Perú
-    if args.site in ("all", "betano"):
-        print("\n🌐 Conectando con Betano Perú (pe.betano.com)...")
+    if run_pw_books and args.site in ("all", "betano"):
+        print("\n🌐 Conectando con Betano Perú vía Playwright...")
         try:
-            betano_quotes = scraper.scrape_betano()
+            betano_quotes = scraper.scrape_betano_odds()
             print(f"  ✅ Betano: {len(betano_quotes)} cotizaciones extraídas.")
             all_harvested_quotes.extend(betano_quotes)
         except Exception as exc:
             logger.warning("Fallo en Betano: %s", exc)
 
-    # 3. Persistir en SQLite si hay cotizaciones reales
+    # 3. Persistir en SQLite si hay cotizaciones reales (y no es --dry-run)
     if all_harvested_quotes:
-        print(f"\n💾 Persistiendo {len(all_harvested_quotes)} cotizaciones en SQLite con procedencia OBSERVED...")
-        saved_count = scraper.persist_quotes_to_db(all_harvested_quotes, scheduled_games)
-        print(f"  ✨ {saved_count} cuotas emparejadas e insertadas con éxito en 'odds_snapshots'.")
+        if args.dry_run:
+            print(f"\n🧪 [DRY-RUN] {len(all_harvested_quotes)} cotizaciones listas (no insertadas en SQLite).")
+        else:
+            print(f"\n💾 Persistiendo {len(all_harvested_quotes)} cotizaciones en SQLite con procedencia OBSERVED...")
+            saved_count = scraper.persist_scraped_quotes(all_harvested_quotes, scheduled_games)
+            print(f"  ✨ {saved_count} cuotas emparejadas e insertadas con éxito en 'odds_snapshots'.")
 
-        # 4. Análisis instantáneo de cuotas capturadas contra el modelo
-        print("\n📊 Resumen de Cuotas Locales Registradas:")
-        for q in all_harvested_quotes[:8]:
-            mkt = "Moneyline" if q.get("market") == "moneyline" else f"Total {q.get('line_value')}"
+        print("\n📊 Muestra de Cuotas Observadas:")
+        for q in all_harvested_quotes[:12]:
+            mkt_raw = q.get("market")
+            mkt = "Moneyline" if mkt_raw == "moneyline" else (f"Spread {q.get('line_value')}" if mkt_raw == "spread" else f"Total {q.get('line_value')}")
             print(
                 f"  • [{q.get('provider')}] {q.get('away_team')} @ {q.get('home_team')} | "
-                f"{mkt} {q.get('selection')}: @{q.get('decimal_odds'):.2f}"
+                f"{mkt} {q.get('selection')}: @{float(q.get('decimal_odds') or 0.0):.2f}"
             )
     else:
-        print("\n⚠️ No se pudieron extraer cotizaciones automáticas en esta pasada.")
-        print("💡 Sugerencia: Si tu conexión requiere verificación humana, ejecuta:")
-        print("   uv run python scripts/harvest_local_peru_odds.py --headed")
+        print("\n⚠️ No se pudieron extraer cotizaciones en esta pasada.")
+        print("💡 Si necesitas inspección local asistida con navegador, ejecuta:")
+        print("   uv run python scripts/harvest_local_peru_odds.py --site retabet --headed")
 
 
     print("\n" + "=" * 78)

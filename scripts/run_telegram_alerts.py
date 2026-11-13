@@ -20,17 +20,34 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-from src.reporting.telegram_bot import TelegramAlertBot
+from src.reporting.telegram_bot import (
+    DEFAULT_ALERT_STATE_PATH,
+    TelegramAlertBot,
+    dispatch_pending_bet_alerts,
+    load_dispatched_alert_keys,
+    save_dispatched_alert_keys,
+)
 from src.storage.db import DatabaseManager
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Dispatch Telegram alerts for +EV bets and SGPs.")
     parser.add_argument("--dry-run", action="store_true", help="Force dry-run simulation mode")
-    parser.add_argument("--min-ev", type=float, default=3.5, help="Minimum EV percentage (default: 3.5)")
+    parser.add_argument("--min-ev", type=float, default=5.0, help="Minimum EV percentage (default: 5.0)")
+    parser.add_argument(
+        "--db",
+        default=str(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"),
+        help="Path to SQLite database",
+    )
+    parser.add_argument(
+        "--state-path",
+        default=str(DEFAULT_ALERT_STATE_PATH),
+        help="Path to deduplicated Telegram alert ledger JSON",
+    )
     args = parser.parse_args()
 
-    db_path = PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"
+    db_path = Path(args.db)
+    state_path = Path(args.state_path)
     db = DatabaseManager(db_path)
     bot = TelegramAlertBot()
 
@@ -45,8 +62,10 @@ def main() -> None:
     print("-" * 80)
 
     dispatched_count = 0
+    sent_keys = load_dispatched_alert_keys(state_path)
+    keys_updated = False
 
-    # 1. Check latest player props and SGPs
+    # 1. Check latest player props and SGPs (deduplicated)
     props_file = PROJECT_ROOT / "data" / "evaluation" / "latest_player_props.json"
     if props_file.exists():
         try:
@@ -56,6 +75,16 @@ def main() -> None:
                 if ev < args.min_ev:
                     continue
 
+                prop_id = (
+                    p.get("sgp_id")
+                    or p.get("parlay_id")
+                    or p.get("prop_id")
+                    or f"{p.get('game_id', '')}:{p.get('player_name', '')}:{p.get('stat_type', p.get('prop_category', ''))}:{p.get('selection', '')}"
+                )
+                prop_key = f"PROP:{prop_id}"
+                if prop_key in sent_keys:
+                    continue
+
                 if p.get("type") == "RETABET_SGP" or "sgp_id" in p:
                     msg = bot.format_sgp_parlay_alert(p)
                 elif p.get("type") == "HIGH_PROB_PARLAY" or "parlay_id" in p:
@@ -63,27 +92,26 @@ def main() -> None:
                 else:
                     msg = bot.format_single_bet_alert(p)
 
-                bot.send_raw_message(msg)
-                dispatched_count += 1
+                if bot.send_raw_message(msg):
+                    sent_keys.add(prop_key)
+                    keys_updated = True
+                    dispatched_count += 1
         except Exception as exc:
             print(f"Error procesando props: {exc}")
 
-    # 2. Check pending bets in simulated_bets table with EV >= min_ev
-    pending_bets = db.fetch_all(
-        """
-        SELECT b.bet_id, b.game_id, b.market, b.selection, b.decimal_odds, b.stake_pen,
-               p.calibrated_probability, p.ev_pct, p.odds_provider
-        FROM simulated_bets b
-        LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
-        WHERE b.status = 'PENDING' AND COALESCE(p.ev_pct, 0.0) >= ?
-        LIMIT 5
-        """,
-        (args.min_ev,),
+    should_persist = (not args.dry_run) and (bot.is_live or state_path != DEFAULT_ALERT_STATE_PATH)
+    if keys_updated and should_persist:
+        save_dispatched_alert_keys(sent_keys, state_path)
+
+    # 2. Check pending bets in simulated_bets table with EV >= min_ev (deduplicated)
+    dispatched_count += dispatch_pending_bet_alerts(
+        bot,
+        db,
+        min_ev=args.min_ev,
+        max_alerts=10,
+        state_path=state_path,
+        dry_run=args.dry_run,
     )
-    for b in pending_bets:
-        msg = bot.format_single_bet_alert(b)
-        bot.send_raw_message(msg)
-        dispatched_count += 1
 
     print(f"\n[OK] Alertas despachadas exitosamente: {dispatched_count}")
     print(f"Registro persistido en: {bot.alerts_log_path}")
