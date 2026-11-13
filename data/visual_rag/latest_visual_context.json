@@ -8,8 +8,8 @@
     {
       "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Kingston Flemings G Nov 13 Day-To-Day Nov 12: Flemings (back) is questionable for Friday's game against the Bulls.",
-      "relevance_score": 0.2015,
-      "captured_at": "2026-11-13T14:56:12Z"
+      "relevance_score": 0.2011,
+      "captured_at": "2026-11-13T21:24:58Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
@@ -20,8 +20,8 @@
     {
       "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Norman Powell G Nov 13 Day-To-Day Nov 12: Powell (shoulder) is questionable for Friday's game against the Hawks.",
-      "relevance_score": 0.1924,
-      "captured_at": "2026-11-13T14:56:12Z"
+      "relevance_score": 0.1925,
+      "captured_at": "2026-11-13T21:24:58Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
@@ -32,13 +32,13 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "LAL Luka Dončić (PG) Day To Day (Ankle): Doncic did not return to Wednesday's (Nov. 11) game versus the Bucks.",
-      "relevance_score": 0.1899,
+      "relevance_score": 0.1907,
       "captured_at": "2026-11-11"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return to Wednesday's (Nov. 11) game against the Bucks.",
-      "relevance_score": 0.1895,
+      "relevance_score": 0.1893,
       "captured_at": "2026-11-12"
     },
     {
