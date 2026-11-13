@@ -1,15 +1,16 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-12T21:50:08Z",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-13T14:56:04Z",
   "ingested_dates": [
     "2026-11-11",
     "2026-11-12",
     "2026-11-13"
   ],
-  "closing_lines_promoted": 0,
+  "closing_lines_promoted": 8,
   "bets_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
+  "predictions_generated": 0,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic"
@@ -74,6 +75,11 @@
       "events_found_today": 4,
       "includes_draftkings_pregame_odds": true
     },
+    "nba_official_injury_report": {
+      "reachable": true,
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-13_09_30AM.pdf",
+      "players_listed": 89
+    },
     "sportradar_api": {
       "credentials_configured": true,
       "status": "CONFIGURED_RATE_LIMITED"
@@ -88,7 +94,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-12T21:50:19Z",
+      "extracted_at": "2026-11-13T14:56:10Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -101,51 +107,51 @@
     "indexed_documents_count": 123,
     "top_retrieved_context": [
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHI Joel Embiid (C) Day To Day (Foot): Embiid is Questionable for Thursday's (Nov. 12) game against Raptors.",
-        "relevance_score": 0.2682,
-        "captured_at": "2026-11-11"
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Kingston Flemings G Nov 13 Day-To-Day Nov 12: Flemings (back) is questionable for Friday's game against the Bulls.",
+        "relevance_score": 0.2015,
+        "captured_at": "2026-11-13T14:56:12Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHI Caleb Wilson (PF) Day To Day (Hand): Wilson did not return on Wednesday's (Nov. 11) game against the Spurs.",
-        "relevance_score": 0.2004,
+        "snippet": "CHI Dailyn Swain (SG) Day To Day (Back): Swain is Questionable for Friday's (Nov. 13) game against the Hawks.",
+        "relevance_score": 0.2001,
         "captured_at": "2026-11-12"
       },
       {
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Norman Powell G Nov 13 Day-To-Day Nov 12: Powell (shoulder) is questionable for Friday's game against the Hawks.",
+        "relevance_score": 0.1924,
+        "captured_at": "2026-11-13T14:56:12Z"
+      },
+      {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Aaron Nesmith (SF) Day To Day (Knee): Nesmith did not return on Wednesday's (Nov. 11) game against the Wizards.",
-        "relevance_score": 0.1955,
+        "snippet": "CHI Norman Powell (SG) Day To Day (Shoulder): Powell is Questionable for Friday's (Nov. 13) game against the Hawks.",
+        "relevance_score": 0.1911,
         "captured_at": "2026-11-12"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "LAL Luka Dončić (PG) Day To Day (Ankle): Doncic did not return to Wednesday's (Nov. 11) game versus the Bucks.",
-        "relevance_score": 0.1937,
+        "relevance_score": 0.1899,
         "captured_at": "2026-11-11"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return to Wednesday's (Nov. 11) game against the Bucks.",
-        "relevance_score": 0.1915,
+        "relevance_score": 0.1895,
         "captured_at": "2026-11-12"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa did not return to Tuesday's (Nov. 10) game against the Magic.",
-        "relevance_score": 0.183,
-        "captured_at": "2026-11-10"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play on Wednesday's (Nov. 11) game against Spurs.",
-        "relevance_score": 0.153,
+        "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable for Friday's (Nov. 13) game against the Clippers.",
+        "relevance_score": 0.1891,
         "captured_at": "2026-11-12"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play on Wednesday's (Nov. 11) game against the Trail Blazers.",
-        "relevance_score": 0.1489,
+        "snippet": "ORL Jalen Suggs (PG) Day To Day (Knee): Suggs is Questionable for Friday's (Nov. 13) game against the Bucks.",
+        "relevance_score": 0.1888,
         "captured_at": "2026-11-12"
       }
     ],

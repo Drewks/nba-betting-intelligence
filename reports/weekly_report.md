@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-12T21:50:29Z
+date_generated: 2026-11-13T14:56:22Z
 report_type: weekly_report
 model_versions: [model_a_baseline_v1, model_b_elo_v1, model_c_point_margin_v1, model_d_total_points_v1, model_e_lightgbm_v1]
 settled_predictions: 28
@@ -8,7 +8,7 @@ simulation_only: true
 # Informe Semanal de Rendimiento y Validación Fuera de Muestra
 
 ## 1. Métricas Clave de Desempeño (Paper Trading)
-- **Fecha generada (UTC)**: `2026-11-12T21:50:29Z`
+- **Fecha generada (UTC)**: `2026-11-13T14:56:22Z`
 - **Bankroll virtual inicial**: `S/ 100.00 PEN`
 - **Bankroll virtual actual liquidado**: `S/ 93.47 PEN`
 - **Beneficio neto acumulado**: `S/ -6.53 PEN`
