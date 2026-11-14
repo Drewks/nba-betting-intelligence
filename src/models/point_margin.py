@@ -15,7 +15,13 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from src.features.builder import build_pregame_features
-from src.models.common import MARGIN_FEATURE_COLUMNS, _filter_strictly_prior_final_games
+from src.models.common import (
+    MARGIN_FEATURE_COLUMNS,
+    _filter_strictly_prior_final_games,
+    build_oof_sigma_metadata,
+    iter_expanding_temporal_oof_folds,
+    make_fold_record,
+)
 
 
 class PointMarginModel:
@@ -37,17 +43,27 @@ class PointMarginModel:
     ) -> None:
         self.version_id = version_id
         self.alpha = alpha
+        self.default_residual_std = default_residual_std
         self.residual_std = default_residual_std
         self.win_prob_std = 11.5
         self.home_court_points = home_court_points
         self.regressor: Any = None
         self.ml_weight: float = 0.22
+        self.sigma_metadata: dict[str, Any] = {}
         self.is_fitted = False
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
         prior = _filter_strictly_prior_final_games(historical_games, cutoff_time_str)
         if len(prior) < 20:
             self.is_fitted = False
+            self.sigma_metadata = build_oof_sigma_metadata(
+                method="unfitted_insufficient_games",
+                oof_residuals=[],
+                insample_residuals=None,
+                effective_sigma=self.residual_std,
+                fold_records=[],
+                train_sample=prior,
+            )
             return
 
         train_sample = prior[-1000:] if len(prior) > 1000 else prior
@@ -66,16 +82,47 @@ class PointMarginModel:
         s = np.asarray(s_vals, dtype=float)
         y_res = y - s
 
+        # Strictly temporal walk-forward out-of-fold residual estimation for sigma (F-001).
+        min_warmup = min(40, max(10, len(train_sample) // 3))
+        folds = iter_expanding_temporal_oof_folds(train_sample, min_warmup=min_warmup, n_folds=5)
+        oof_residuals: list[float] = []
+        fold_records: list[dict[str, Any]] = []
+        alphas = [40.0, 120.0, 300.0, 600.0, 1200.0]
+
+        for train_idx, val_idx, fold_cutoff in folds:
+            w_fold = np.exp(np.linspace(-0.75, 0.0, len(train_idx)))
+            fold_model = make_pipeline(StandardScaler(), RidgeCV(alphas=alphas))
+            fold_model.fit(X[train_idx], y_res[train_idx], ridgecv__sample_weight=w_fold)
+            fold_weight = min(0.28, 0.12 + len(train_idx) / 5000.0)
+            fold_preds = s[val_idx] + fold_weight * np.asarray(fold_model.predict(X[val_idx]), dtype=float)
+            oof_residuals.extend((y[val_idx] - fold_preds).tolist())
+            fold_records.append(make_fold_record(train_sample, train_idx, val_idx, fold_cutoff))
+
+        if len(oof_residuals) >= 10:
+            oof_std = float(np.std(np.asarray(oof_residuals, dtype=float), ddof=1))
+            self.residual_std = float(np.clip(oof_std, 11.5, 15.0))
+            sigma_method = "temporal_expanding_oof"
+        else:
+            self.residual_std = float(self.default_residual_std)
+            sigma_method = "insufficient_oof_default_prior"
+        # Near margin=0 (clutch win/loss threshold), effective NBA normal scale is ~0.84 * full-game OOS RMS
+        self.win_prob_std = float(np.clip(0.84 * self.residual_std, 11.2, 12.2))
+
         sample_weights = np.exp(np.linspace(-0.75, 0.0, len(X)))
-        model = make_pipeline(StandardScaler(), RidgeCV(alphas=[40.0, 120.0, 300.0, 600.0, 1200.0]))
+        model = make_pipeline(StandardScaler(), RidgeCV(alphas=alphas))
         model.fit(X, y_res, ridgecv__sample_weight=sample_weights)
 
         self.ml_weight = min(0.28, 0.12 + len(train_sample) / 5000.0)
-        preds = s + self.ml_weight * model.predict(X)
-        residuals = y - preds
-        self.residual_std = float(np.clip(np.std(residuals, ddof=1), 11.5, 15.0))
-        # Near margin=0 (clutch win/loss threshold), effective NBA normal scale is ~0.84 * full-game RMS
-        self.win_prob_std = float(np.clip(0.84 * self.residual_std, 11.2, 12.2))
+        # In-sample residuals computed solely for OOS-vs-in-sample diagnostic reporting, never for sigma.
+        insample_preds = s + self.ml_weight * np.asarray(model.predict(X), dtype=float)
+        self.sigma_metadata = build_oof_sigma_metadata(
+            method=sigma_method,
+            oof_residuals=oof_residuals,
+            insample_residuals=(y - insample_preds),
+            effective_sigma=self.residual_std,
+            fold_records=fold_records,
+            train_sample=train_sample,
+        )
         self.regressor = model
         self.is_fitted = True
 
@@ -123,23 +170,27 @@ class PointMarginModel:
 
         is_int_spread = abs(target_diff - round(target_diff)) < 1e-6
         if is_int_spread:
-            p_cover_raw = 1.0 - norm.cdf(target_diff + 0.5, loc=expected_margin, scale=scale)
-            p_loss_raw = norm.cdf(target_diff - 0.5, loc=expected_margin, scale=scale)
+            p_cover_raw = float(1.0 - norm.cdf(target_diff + 0.5, loc=expected_margin, scale=scale))
+            p_loss_raw = float(norm.cdf(target_diff - 0.5, loc=expected_margin, scale=scale))
             p_push = max(0.0, 1.0 - p_cover_raw - p_loss_raw)
-            non_push = max(1e-6, p_cover_raw + p_loss_raw)
-            p_cover_home = float(np.clip(p_cover_raw / non_push, 0.05, 0.95))
-            p_cover_away = float(np.clip(p_loss_raw / non_push, 0.05, 0.95))
+            non_push = max(1e-9, p_cover_raw + p_loss_raw)
+            p_cond = float(np.clip(p_cover_raw / non_push, 1e-4, 1.0 - 1e-4))
+            p_cover_home = (1.0 - p_push) * p_cond
         else:
             p_push = 0.0
-            p_cover_home = float(np.clip(1.0 - norm.cdf(target_diff, loc=expected_margin, scale=scale), 0.05, 0.95))
-            p_cover_away = round(1.0 - p_cover_home, 6)
+            p_cover_home = float(np.clip(1.0 - norm.cdf(target_diff, loc=expected_margin, scale=scale), 1e-4, 1.0 - 1e-4))
+
+        p_cover_r = round(float(p_cover_home), 6)
+        p_push_r = round(float(p_push), 6)
+        p_away_r = round(max(0.0, 1.0 - p_cover_r - p_push_r), 6)
 
         return {
             "spread_line_home": float(spread_line_home),
             "expected_margin": round(expected_margin, 3),
             "margin_std": round(scale, 3),
-            "p_cover_home": round(p_cover_home, 6),
-            "p_cover_away": round(p_cover_away, 6),
-            "p_push_estimate": round(float(p_push), 6),
+            "p_cover_home": p_cover_r,
+            "p_cover_away": p_away_r,
+            "p_push": p_push_r,
+            "p_push_estimate": p_push_r,
             "uncertainty_std": 0.052,
         }

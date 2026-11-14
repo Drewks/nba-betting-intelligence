@@ -98,21 +98,45 @@ def devig_power(odds_a: float, odds_b: float) -> tuple[float, float, float]:
     return round(p_a / s_p, 6), round(p_b / s_p, 6), overround
 
 
-def calculate_ev(estimated_prob: float, decimal_odds: float) -> dict[str, float]:
+def calculate_ev(
+    estimated_prob: float,
+    decimal_odds: float,
+    p_push: float = 0.0,
+    p_loss: float | None = None,
+) -> dict[str, float]:
     """
-    Calculates Expected Value per unit staked and percentage EV:
-        EV = p * O - 1
-        EV_pct = 100 * (p * O - 1)
+    Calculates Expected Value per unit staked under explicit win/loss/push rules (F-004):
+        p_win + p_loss + p_push = 1
+        EV = p_win * (decimal_odds - 1.0) - p_loss
+    Push refunds the original unit staked (0 net profit, 0 net loss).
+    When p_push == 0 and p_loss is None, reduces identically to p * O - 1.
     """
     if estimated_prob is None or not isinstance(estimated_prob, (int, float)) or math.isnan(estimated_prob):
         raise DataValidationError(f"Invalid estimated probability: {estimated_prob!r}")
-    if estimated_prob < 0.0 or estimated_prob > 1.0:
+    if p_push is None or not isinstance(p_push, (int, float)) or math.isnan(p_push):
+        raise DataValidationError(f"Invalid p_push probability: {p_push!r}")
+    p_win = float(estimated_prob)
+    p_p = float(p_push)
+    if p_win < 0.0 or p_win > 1.0:
         raise DataValidationError(f"Probability must be in [0, 1]; got {estimated_prob!r}")
-    p_gross = calculate_implied_prob_gross(decimal_odds)
+    if p_p < 0.0 or p_p > 1.0:
+        raise DataValidationError(f"p_push must be in [0, 1]; got {p_push!r}")
 
-    ev_unit = float(estimated_prob) * float(decimal_odds) - 1.0
+    p_l = max(0.0, 1.0 - p_win - p_p) if p_loss is None else float(p_loss)
+    if p_l < 0.0 or p_l > 1.0:
+        raise DataValidationError(f"p_loss must be in [0, 1]; got {p_l!r}")
+    if abs((p_win + p_l + p_p) - 1.0) > 1e-3:
+        raise DataValidationError(
+            f"Probability triple (p_win={p_win}, p_loss={p_l}, p_push={p_p}) must sum to 1.0"
+        )
+
+    p_gross = calculate_implied_prob_gross(decimal_odds)
+    ev_unit = p_win * (float(decimal_odds) - 1.0) - p_l
     ev_pct = 100.0 * ev_unit
     return {
+        "p_win": round(p_win, 6),
+        "p_loss": round(p_l, 6),
+        "p_push": round(p_p, 6),
         "implied_prob_gross": p_gross,
         "ev_unit": round(ev_unit, 6),
         "ev_pct": round(ev_pct, 4),
@@ -398,12 +422,14 @@ def evaluate_market_opportunity(
     max_disagreement: float = MAX_MODEL_MARKET_DISAGREEMENT,
     steam_delta: float = 0.0,
     conformal_interval: dict[str, float] | None = None,
+    p_push: float = 0.0,
+    raw_model_prob: float | None = None,
 ) -> dict[str, Any]:
     """
     Validates odds + timestamp, estimates fair de-vigged probability (Shin's method) when counterpart odds exist,
     modulates model_weight when sharp steam moves are detected, anchors the estimated probability
-    to market consensus (if available), computes Venn-Abers conformal lower-bound EV (if conformal interval provided),
-    and returns a structured EV evaluation record.
+    to market consensus (preserving unconditional push probability p_push), computes Venn-Abers conformal
+    lower-bound EV, and returns separated model/calibrated/fair/anchored probability fields (F-004, F-008).
     """
     validate_odds_record(odds_record, game_start_time, simulated_prediction_time)
     dec_odds = float(odds_record["decimal_odds"])
@@ -415,8 +441,12 @@ def evaluate_market_opportunity(
         p_fair = None
         overround = None
 
+    p_p = max(0.0, min(0.5, float(p_push or 0.0)))
+    non_push = max(1e-9, 1.0 - p_p)
+    p_cond_model = min(1.0, max(0.0, float(estimated_prob) / non_push)) if p_p > 0.0 else float(estimated_prob)
+
     market_prob = market_consensus_prob if market_consensus_prob is not None else p_fair
-    disagreement = (float(estimated_prob) - float(market_prob)) if market_prob is not None else None
+    disagreement = (p_cond_model - float(market_prob)) if market_prob is not None else None
 
     eff_weight = float(model_weight)
     s_delta = float(steam_delta or 0.0)
@@ -425,12 +455,18 @@ def evaluate_market_opportunity(
         if s_delta <= -0.025:
             eff_weight = max(0.15, eff_weight - 0.08)
         # Confirming steam (>= 2.0% move toward our selection when model also favors this side)
-        elif s_delta >= 0.020 and float(estimated_prob) > float(market_prob):
+        elif s_delta >= 0.020 and p_cond_model > float(market_prob):
             eff_weight = min(0.42, eff_weight + 0.04)
 
-    anchored_prob = market_anchored_probability(estimated_prob, market_prob, model_weight=eff_weight)
+    anchored_cond = market_anchored_probability(p_cond_model, market_prob, model_weight=eff_weight)
+    if p_p > 0.0:
+        anchored_prob = non_push * anchored_cond
+        anchored_loss = non_push * (1.0 - anchored_cond)
+    else:
+        anchored_prob = anchored_cond
+        anchored_loss = 1.0 - anchored_prob
 
-    ev_metrics = calculate_ev(anchored_prob, dec_odds)
+    ev_metrics = calculate_ev(anchored_prob, dec_odds, p_push=p_p, p_loss=anchored_loss)
 
     lb_metrics = None
     if conformal_interval is not None and "p0" in conformal_interval:
@@ -441,6 +477,7 @@ def evaluate_market_opportunity(
             market_prob=market_prob,
             model_weight=eff_weight,
             decimal_odds=dec_odds,
+            p_push=p_p,
         )
 
     ev_lb_unit = lb_metrics["ev_lower_bound"] if lb_metrics else ev_metrics["ev_unit"]
@@ -470,6 +507,10 @@ def evaluate_market_opportunity(
             "reason_code": "DISABLED",
         }
 
+    cal_model_p = round(float(estimated_prob), 6)
+    raw_model_p = round(float(raw_model_prob), 6) if raw_model_prob is not None else cal_model_p
+    mkt_anchored_p = round(float(anchored_prob), 6)
+
     return {
         "p_positive_clv": clv_meta["p_positive_clv"],
         "expected_clv_pct": clv_meta["expected_clv_pct"],
@@ -482,8 +523,14 @@ def evaluate_market_opportunity(
         "decimal_odds_used": dec_odds,
         "odds_provider": odds_record["provider"],
         "odds_captured_at": odds_record["captured_at"],
-        "estimated_probability": round(float(anchored_prob), 6),
-        "raw_model_probability": round(float(estimated_prob), 6),
+        "estimated_probability": mkt_anchored_p,
+        "raw_model_probability": raw_model_p,
+        "calibrated_model_probability": cal_model_p,
+        "market_fair_probability": p_fair,
+        "market_anchored_probability": mkt_anchored_p,
+        "p_win": ev_metrics["p_win"],
+        "p_loss": ev_metrics["p_loss"],
+        "p_push": ev_metrics["p_push"],
         "uncertainty_std": round(float(uncertainty_std), 6),
         "implied_prob_gross": ev_metrics["implied_prob_gross"],
         "implied_prob_fair": p_fair,
