@@ -71,7 +71,7 @@ def test_phase2_dynamic_player_baseline_from_boxscores(tmp_path: Path) -> None:
     _seed_dynamic_test_environment(db)
 
     engine = PlayerPropsEngine(db=db)
-    baseline = engine.get_player_baseline("Dynamic Star")
+    baseline = engine.get_player_baseline("Dynamic Star", as_of_utc="2026-11-20T00:00:00Z")
 
     dyn_min, dyn_usg, dyn_ppm, dyn_rpm, dyn_apm, dyn_tpm = baseline
     assert dyn_min == 36.0
@@ -91,7 +91,7 @@ def test_phase2_dynamic_team_defensive_multipliers(tmp_path: Path) -> None:
     _seed_dynamic_test_environment(db)
 
     engine = PlayerPropsEngine(db=db)
-    dvp = engine.get_team_defensive_multipliers("TEST_OPP")
+    dvp = engine.get_team_defensive_multipliers("TEST_OPP", as_of_utc="2026-11-20T00:00:00Z")
 
     # TEST_OPP allowed 130 PPG (league benchmark ~114.2) -> multiplier >= 1.08 -> TARGET tier
     assert dvp["PTS"] >= 1.08
@@ -104,7 +104,7 @@ def test_phase2_graceful_fallback_for_unlisted_player(tmp_path: Path) -> None:
     db = DatabaseManager(tmp_path / "test_p2_fallback.sqlite3")
     engine = PlayerPropsEngine(db=db)
 
-    baseline = engine.get_player_baseline("Unknown Rookie")
+    baseline = engine.get_player_baseline("Unknown Rookie", as_of_utc="2026-11-20T00:00:00Z")
     dyn_min, dyn_usg, dyn_ppm, dyn_rpm, dyn_apm, dyn_tpm = baseline
 
     # Generic rotation defaults

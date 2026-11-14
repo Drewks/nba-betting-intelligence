@@ -385,7 +385,7 @@ def test_42_data_integrity_and_dynamic_roster_audit(tmp_path: Path) -> None:
             "selection": "OVER",
             "decimal_odds": 1.90,
             "model_prob": 0.58,
-        })
+        }, allow_player_props=True)
 
     # Recording on correct team (LAL) succeeds
     p_valid_id = engine.record_player_prop_pick({
@@ -399,7 +399,7 @@ def test_42_data_integrity_and_dynamic_roster_audit(tmp_path: Path) -> None:
         "decimal_odds": 1.90,
         "model_prob": 0.58,
         "emitted_at": "2026-11-09T23:30:00Z",
-    })
+    }, allow_player_props=True)
     assert p_valid_id.startswith("PROP_")
 
     # 5. Temporal Leakage on Props (enforce_scheduled_status=True)
@@ -418,4 +418,5 @@ def test_42_data_integrity_and_dynamic_roster_audit(tmp_path: Path) -> None:
                 "emitted_at": "2026-11-10T00:10:00Z",  # 10 mins post-tipoff!
             },
             enforce_scheduled_status=True,
+            allow_player_props=True,
         )

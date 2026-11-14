@@ -93,6 +93,7 @@ def test_parlay_engine_record_and_settlement(tmp_path: Path) -> None:
         max_stake_pen=5.00,
         min_stake_pen=0.50,
         kelly_fraction=0.40,
+        allow_parlays=True,
     )
 
     parlay_payload = {
@@ -137,7 +138,7 @@ def test_parlay_engine_record_and_settlement(tmp_path: Path) -> None:
 
 def test_parlay_engine_loss_settlement(tmp_path: Path) -> None:
     db = DatabaseManager(tmp_path / "parlay_loss.sqlite3")
-    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00)
+    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00, allow_parlays=True)
 
     parlay_payload = {
         "parlay_id": "PARLAY_TEST_LOSS",
@@ -171,7 +172,7 @@ def test_parlay_engine_loss_settlement(tmp_path: Path) -> None:
 
 def test_parlay_bets_immutability_triggers(tmp_path: Path) -> None:
     db = DatabaseManager(tmp_path / "immutability.sqlite3")
-    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00)
+    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00, allow_parlays=True)
 
     parlay_payload = {
         "parlay_id": "PARLAY_IMMUTABLE",
@@ -350,7 +351,7 @@ def test_telegram_listener_dual_banca(tmp_path: Path) -> None:
 
 def test_parlay_engine_record_candidate_parlays(tmp_path: Path) -> None:
     db = DatabaseManager(tmp_path / "cand_parlays.sqlite3")
-    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00, max_parlays_per_matchday=2)
+    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00, max_parlays_per_matchday=2, allow_parlays=True)
 
     candidates = [
         {
@@ -413,7 +414,7 @@ def test_parlay_engine_record_candidate_parlays(tmp_path: Path) -> None:
 
 def test_parlay_engine_settle_pending_parlays_end_to_end(tmp_path: Path) -> None:
     db = DatabaseManager(tmp_path / "settle_parlays.sqlite3")
-    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00)
+    engine = ParlayTradingEngine(db, initial_bankroll_pen=50.00, allow_parlays=True)
 
     # 1. Seed two games
     db.execute_insert(

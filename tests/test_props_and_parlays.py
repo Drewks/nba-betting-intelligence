@@ -40,22 +40,38 @@ def test_33_player_props_engine(tmp_path: Path) -> None:
     engine = PlayerPropsEngine(db=db, min_ev_threshold=0.00)
 
     # 1. Test baseline vs usage bump projection
-    base_proj = engine.project_player_stats("Kyrie Irving", "DAL", absent_teammates=[])
-    bump_proj = engine.project_player_stats("Kyrie Irving", "DAL", absent_teammates=["Luka Doncic"])
+    base_proj = engine.project_player_stats("Kyrie Irving", "DAL", absent_teammates=[], as_of_utc="2026-11-06T20:00:00Z")
+    bump_proj = engine.project_player_stats("Kyrie Irving", "DAL", absent_teammates=["Luka Doncic"], as_of_utc="2026-11-06T20:00:00Z")
 
     assert bump_proj["usage_bump_pct"] > 5.0
     assert bump_proj["effective_minutes"] > base_proj["effective_minutes"]
     assert bump_proj["projections"]["PTS"]["mean"] > base_proj["projections"]["PTS"]["mean"]
 
     # 2. Test exceedance probabilities (Normal for PTS, Poisson for AST)
-    p_over_pts, p_under_pts = engine.compute_exceedance_probabilities("PTS", 26.5, 30.1, 7.46, "normal")
+    p_over_pts, p_under_pts, p_push_pts = engine.compute_exceedance_probabilities("PTS", 26.5, 30.1, 7.46, "normal")
     assert 0.60 <= p_over_pts <= 0.85
-    assert abs((p_over_pts + p_under_pts) - 1.0) < 0.01
+    assert abs((p_over_pts + p_under_pts + p_push_pts) - 1.0) < 0.01
 
-    p_over_ast, p_under_ast = engine.compute_exceedance_probabilities("AST", 5.5, 7.0, 2.65, "poisson")
+    p_over_ast, p_under_ast, p_push_ast = engine.compute_exceedance_probabilities("AST", 5.5, 7.0, 2.65, "poisson")
     assert 0.60 <= p_over_ast <= 0.85
+    assert p_push_ast == 0.0
 
-    # 3. Test prop opportunity evaluation & Kelly stake
+    # Fit conformal Venn-Abers calibrator on historical resolved trials before live-style Kelly staking
+    import numpy as np
+    rng = np.random.default_rng(11)
+    cal_records = []
+    for i in range(400):
+        p_i = float(rng.uniform(0.25, 0.85))
+        cal_records.append(
+            {
+                "game_start_time": f"2026-10-{1 + i % 28:02d}T00:00:00Z",
+                "raw_probability": p_i,
+                "outcome": int(rng.random() < p_i),
+            }
+        )
+    assert engine.calibrator.fit(cal_records, "2026-11-06T20:00:00Z") is True
+
+    # 3. Test prop opportunity evaluation & Kelly stake (explicit research opt-in)
     picks = engine.evaluate_prop_opportunity(
         player_name="Kyrie Irving",
         team="DAL",
@@ -67,6 +83,8 @@ def test_33_player_props_engine(tmp_path: Path) -> None:
         under_odds=1.90,
         absent_teammates=["Luka Doncic"],
         bankroll_pen=100.0,
+        as_of_utc="2026-11-06T20:00:00Z",
+        allow_player_props=True,
     )
     assert len(picks) >= 1
     top_pick = picks[0]
@@ -168,26 +186,26 @@ def test_40_v8_expanded_player_props_and_tactical_matchup_engine(tmp_path: Path)
     engine = PlayerPropsEngine(min_ev_threshold=0.03)
 
     # 2. Matchup defense impact test: Tatum vs WAS (TARGET) vs Tatum vs MIN (ELITE)
-    proj_tatum_vs_was = engine.project_player_stats("Jayson Tatum", "BOS", opponent_team="WAS")
-    proj_tatum_vs_min = engine.project_player_stats("Jayson Tatum", "BOS", opponent_team="MIN")
+    proj_tatum_vs_was = engine.project_player_stats("Jayson Tatum", "BOS", opponent_team="WAS", as_of_utc="2026-11-08T19:00:00Z")
+    proj_tatum_vs_min = engine.project_player_stats("Jayson Tatum", "BOS", opponent_team="MIN", as_of_utc="2026-11-08T19:00:00Z")
 
     assert proj_tatum_vs_was["projections"]["PTS"]["mean"] > proj_tatum_vs_min["projections"]["PTS"]["mean"]
     assert proj_tatum_vs_was["matchup_tier"] == "TARGET"
     assert proj_tatum_vs_min["matchup_tier"] == "ELITE"
 
     # 3. Pace factor impact test
-    proj_fast_pace = engine.project_player_stats("Stephen Curry", "GSW", expected_game_pace=104.0)
-    proj_slow_pace = engine.project_player_stats("Stephen Curry", "GSW", expected_game_pace=96.0)
+    proj_fast_pace = engine.project_player_stats("Stephen Curry", "GSW", expected_game_pace=104.0, as_of_utc="2026-11-08T19:00:00Z")
+    proj_slow_pace = engine.project_player_stats("Stephen Curry", "GSW", expected_game_pace=96.0, as_of_utc="2026-11-08T19:00:00Z")
     assert proj_fast_pace["projections"]["PTS"]["mean"] > proj_slow_pace["projections"]["PTS"]["mean"]
 
     # 4. Blowout spread dampening test
-    proj_tight = engine.project_player_stats("Luka Doncic", "DAL", spread_blowout_risk=2.5)
-    proj_blowout = engine.project_player_stats("Luka Doncic", "DAL", spread_blowout_risk=14.5)
+    proj_tight = engine.project_player_stats("Luka Doncic", "DAL", spread_blowout_risk=2.5, as_of_utc="2026-11-08T19:00:00Z")
+    proj_blowout = engine.project_player_stats("Luka Doncic", "DAL", spread_blowout_risk=14.5, as_of_utc="2026-11-08T19:00:00Z")
     assert proj_tight["effective_minutes"] > proj_blowout["effective_minutes"]
     assert proj_blowout["blowout_min_discount"] > 0.0
 
     # 5. Combo markets test
-    proj_combos = engine.project_player_stats("Nikola Jokic", "DEN")
+    proj_combos = engine.project_player_stats("Nikola Jokic", "DEN", as_of_utc="2026-11-08T19:00:00Z")
     for combo in ["PRA", "PR", "PA", "RA"]:
         assert combo in proj_combos["projections"]
         assert proj_combos["projections"][combo]["mean"] > 0.0
@@ -300,7 +318,7 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
         "ev_pct": 17.8,
         "stake_pen": 2.00,
         "kelly_stake_pen": 2.00,
-    })
+    }, allow_player_props=True)
 
     # Prop 2: Nikola Jokic AST UNDER 9.5 @ 1.85, stake S/ 2.00
     prop2_id = engine.record_player_prop_pick({
@@ -321,7 +339,7 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
         "ev_pct": 11.0,
         "stake_pen": 2.00,
         "kelly_stake_pen": 2.00,
-    })
+    }, allow_player_props=True)
 
     # Prop 3: Anthony Davis REB OVER 12.0 @ 1.90 (PUSH scenario), stake S/ 1.00
     prop3_id = engine.record_player_prop_pick({
@@ -342,7 +360,7 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
         "ev_pct": 10.2,
         "stake_pen": 1.00,
         "kelly_stake_pen": 1.00,
-    })
+    }, allow_player_props=True)
 
     # Prop 4: SGP Parlay: prohibited by AGENTS.md -> rejected by default
     sgp_payload = {
@@ -360,10 +378,10 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
     }
     from src.paper_trading.engine import RiskLimitError
     with pytest.raises(RiskLimitError):
-        engine.record_player_prop_pick(sgp_payload, allow_parlay=False)
+        engine.record_player_prop_pick(sgp_payload, allow_player_props=True, allow_parlay=False)
 
     # Research-only explicit opt-in still exercises the SGP settlement math
-    sgp_id = engine.record_player_prop_pick(allow_parlay=True, prop_dict={
+    sgp_id = engine.record_player_prop_pick(allow_player_props=True, allow_parlay=True, prop_dict={
         "prop_id": "SGP_LAL_LEBRON",
         "game_id": "G_TEST_PROPS_1",
         "matchday_date": "2026-11-08",
@@ -468,7 +486,7 @@ def test_41_player_props_paper_trading_and_settlement(tmp_path: Path) -> None:
         "decimal_odds": 1.95,
         "model_prob": 0.55,
         "stake_pen": 1.00,
-    })
+    }, allow_player_props=True)
     batch_boxscores = {
         "G_TEST_PROPS_2": {
             "Stephen Curry": {"PTS": 32.0, "3PM": 6.0, "AST": 7.0, "REB": 5.0}
