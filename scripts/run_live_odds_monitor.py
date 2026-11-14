@@ -47,15 +47,35 @@ def print_comparison_table(results: list[dict]) -> None:
     for res in results:
         print(f"\n🏀 PARTIDO: {res['matchup']} (ID: {res['game_id']})")
         print(f"   Tipoff: {res['game_start_time']} | Captura: {res['hora_captura_peru']}")
-        print(f"   🏆 MEJOR CUOTA PERÚ: Local: {res['best_home']['odds']:.2f} ({res['best_home']['book']}) | Visita: {res['best_away']['odds']:.2f} ({res['best_away']['book']})")
-        print(f"   📊 Margen Sintético Combinado: {res['synthetic_margin_pct']:+.2f}%")
-        print("   " + "-" * 85)
-        print("   {:<22} | {:<12} | {:<12} | {:<20}".format("Casa de Apuestas", "Cuota Local", "Cuota Visita", "Fuente"))
-        print("   " + "-" * 85)
+        best_h = res.get("best_home")
+        best_a = res.get("best_away")
+        if best_h and best_a:
+            print(
+                f"   🏆 MEJOR CUOTA OBSERVADA: Local: {best_h['odds']:.2f} ({best_h['book']}) | "
+                f"Visita: {best_a['odds']:.2f} ({best_a['book']})"
+            )
+            print(f"   📊 Margen Sintético Combinado: {res['synthetic_margin_pct']:+.2f}% | Props Jugadores: {res.get('player_props_count', 0)}")
+        else:
+            print(f"   ℹ️ Cotización parcial (se requieren >=2 casas observadas para mejor cuota cruzada) | Props Jugadores: {res.get('player_props_count', 0)}")
+        print("   " + "-" * 94)
+        print("   {:<22} | {:<11} | {:<11} | {:<16} | {:<24}".format("Casa de Apuestas", "Cuota Local", "Cuota Visita", "Total O/U", "Fuente"))
+        print("   " + "-" * 94)
 
         for _bid, q in res.get("quotes", {}).items():
-            print("   {:<22} | {:<12.2f} | {:<12.2f} | {:<20}".format(q["book_name"], q["home_odds"], q["away_odds"], q["source"]))
-        print("   " + "-" * 85)
+            t_line = q.get("total_points_line")
+            t_str = f"{t_line:.1f}" if isinstance(t_line, (int, float)) else "—"
+            h_val = float(q.get("home_odds") or 0.0)
+            a_val = float(q.get("away_odds") or 0.0)
+            print(
+                "   {:<22} | {:<11} | {:<11} | {:<16} | {:<24}".format(
+                    str(q.get("book_name") or _bid)[:22],
+                    f"{h_val:.2f}" if h_val > 1.0 else "—",
+                    f"{a_val:.2f}" if a_val > 1.0 else "—",
+                    t_str,
+                    str(q.get("source") or "")[:24],
+                )
+            )
+        print("   " + "-" * 94)
 
         # Print stale lines if detected
         stale = res.get("stale_lines", [])
@@ -74,6 +94,15 @@ def print_comparison_table(results: list[dict]) -> None:
     print("\n" + "=" * 100)
 
 
+def _print_source_diagnostics(scraper: LivePeruOddsScraper) -> None:
+    diag = scraper.get_source_diagnostics()
+    if not diag:
+        return
+    print("📡 ESTADO DE FUENTES PERUANAS & SHARP:")
+    for key, info in diag.items():
+        print(f"   • {key:<14}: {info['status']} ({info.get('events_count', 0)} eventos) {info.get('detail', '')}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Live Peruvian Sportsbook Scraper and Arbitrage Monitor.")
     parser.add_argument("--once", action="store_true", help="Execute a single scan and exit")
@@ -82,9 +111,10 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Force scan across all upcoming scheduled games")
     parser.add_argument("--bankroll", type=float, default=100.0, help="Bankroll in PEN for sizing (default: 100.0)")
     parser.add_argument("--no-telegram", action="store_true", help="Disable Telegram alerts during scan")
+    parser.add_argument("--db", default=str(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"), help="Path to SQLite database")
     args = parser.parse_args()
 
-    db_path = PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"
+    db_path = Path(args.db)
     db = DatabaseManager(db_path) if db_path.exists() else None
 
     scraper = LivePeruOddsScraper(
@@ -99,6 +129,7 @@ def main() -> None:
         print("[*] Iniciando escaneo en vivo de casas de apuestas peruanas...")
         results = scraper.scan_and_alert_entire_slate(notify_telegram=notify, force_all=args.force)
         print_comparison_table(results)
+        _print_source_diagnostics(scraper)
     else:
         print("=" * 80)
         print(f"🔄 INICIANDO MONITOR CONTINUO DE CUOTAS PERUANAS (Intervalo: {args.poll_seconds}s)")

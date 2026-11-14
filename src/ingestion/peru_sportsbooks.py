@@ -43,6 +43,16 @@ PERU_SPORTSBOOKS: dict[str, PeruSportsbook] = {
         badge_color="#FF6600",
         description="Líder regulado por MINCETUR en Perú. Depósitos instantáneos con Yape y Plin.",
     ),
+    "betano_pe": PeruSportsbook(
+        id="betano_pe",
+        name="Betano Perú",
+        is_mincetur_licensed=True,
+        payment_methods=["Yape", "Plin", "PagoEfectivo", "BCP", "BBVA", "Interbank", "Tarjetas"],
+        typical_vig_pct=4.5,
+        website="https://www.betano.pe",
+        badge_color="#FF3C00",
+        description="Regulada por MINCETUR en Perú (Kaizen Gaming). Mercado amplio NBA pre-partido con feed JSON público.",
+    ),
     "coolbet_pe": PeruSportsbook(
         id="coolbet_pe",
         name="Coolbet Perú",

@@ -42,7 +42,13 @@ def test_phase4_load_scraper_config_from_yaml() -> None:
 
     betano = cfg.sportsbooks["betano"]
     assert betano.name == "Betano Perú"
-    assert "betano.com" in betano.nba_url
+    assert "betano." in betano.nba_url
+    assert "/api/sport/basquetbol/norteamerica/nba/441g/" in betano.api_url
+
+    assert "te_apuesto" in cfg.sportsbooks
+    assert "core-ix.com" in cfg.sportsbooks["te_apuesto"].api_url
+    assert "pinnacle" in cfg.sportsbooks
+    assert "arcadia.pinnacle.com" in cfg.sportsbooks["pinnacle"].api_url
 
     # ESPN team map
     assert cfg.espn.team_url_map.get("NOP") == "no"

@@ -227,6 +227,7 @@ class SportsbookEndpointConfig:
     enabled: bool = True
     timeout_ms: int = 15000
     wait_after_load_ms: int = 2000
+    api_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -609,6 +610,7 @@ def parse_scraper_config(raw: dict[str, Any]) -> ScraperConfig:
                 enabled=bool(b_data.get("enabled", True)),
                 timeout_ms=int(b_data.get("timeout_ms", 15000)),
                 wait_after_load_ms=int(b_data.get("wait_after_load_ms", 2000)),
+                api_url=str(b_data.get("api_url", "")),
             )
 
     espn_raw = raw.get("espn") or {}
@@ -638,7 +640,8 @@ def load_scraper_config(path: str | Path | None = None) -> ScraperConfig:
                 ),
                 "betano": SportsbookEndpointConfig(
                     name="Betano Perú",
-                    nba_url="https://pe.betano.com/sport/basquetbol/estados-unidos/nba/",
+                    nba_url="https://www.betano.pe/sport/basquetbol/norteamerica/nba/441g/",
+                    api_url="https://www.betano.pe/api/sport/basquetbol/norteamerica/nba/441g/",
                 ),
             },
             espn=ESPNConfig(),

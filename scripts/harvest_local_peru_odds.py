@@ -139,9 +139,22 @@ def main() -> None:
         except Exception as exc:
             logger.warning("Fallo en Pinnacle: %s", exc)
 
-    # RETAbet / Betano (Playwright estándar; pueden devolver HTTP 403 WAF según IP)
-    run_pw_books = args.include_playwright or args.headed or args.site in ("retabet", "betano")
-    if run_pw_books and args.site in ("all", "retabet"):
+    # Betano Perú (API pública JSON directa — ML, Totales, Hándicap)
+    if args.site in ("all", "betano"):
+        print("\n🌐 Consultando Betano Perú (NBA feed JSON público)...")
+        try:
+            betano_quotes = scraper.scrape_betano_api_odds()
+            if not betano_quotes and (args.headed or args.include_playwright or args.site == "betano"):
+                print("  ⚠️ API directa Betano vacía o bloqueada; intentando vía Playwright...")
+                betano_quotes = scraper.scrape_betano_odds()
+            print(f"  ✅ Betano Perú: {len(betano_quotes)} cotizaciones reales extraídas.")
+            all_harvested_quotes.extend(betano_quotes)
+        except Exception as exc:
+            logger.warning("Fallo en Betano Perú: %s", exc)
+
+    # RETAbet (Playwright estándar; protegido por F5 Shape según IP)
+    run_pw_retabet = args.include_playwright or args.headed or args.site == "retabet"
+    if run_pw_retabet and args.site in ("all", "retabet"):
         print("\n🌐 Conectando con RETAbet Perú vía Playwright...")
         try:
             retabet_quotes = scraper.scrape_retabet_odds()
@@ -149,15 +162,6 @@ def main() -> None:
             all_harvested_quotes.extend(retabet_quotes)
         except Exception as exc:
             logger.warning("Fallo en RETAbet: %s", exc)
-
-    if run_pw_books and args.site in ("all", "betano"):
-        print("\n🌐 Conectando con Betano Perú vía Playwright...")
-        try:
-            betano_quotes = scraper.scrape_betano_odds()
-            print(f"  ✅ Betano: {len(betano_quotes)} cotizaciones extraídas.")
-            all_harvested_quotes.extend(betano_quotes)
-        except Exception as exc:
-            logger.warning("Fallo en Betano: %s", exc)
 
     # 3. Persistir en SQLite si hay cotizaciones reales (y no es --dry-run)
     if all_harvested_quotes:
@@ -171,7 +175,19 @@ def main() -> None:
         print("\n📊 Muestra de Cuotas Observadas:")
         for q in all_harvested_quotes[:12]:
             mkt_raw = q.get("market")
-            mkt = "Moneyline" if mkt_raw == "moneyline" else (f"Spread {q.get('line_value')}" if mkt_raw == "spread" else f"Total {q.get('line_value')}")
+            mkt = (
+                "Moneyline"
+                if mkt_raw == "moneyline"
+                else (
+                    f"Spread {q.get('line_value')}"
+                    if mkt_raw == "spread"
+                    else (
+                        f"Prop {q.get('line_value')}"
+                        if mkt_raw == "player_prop"
+                        else f"Total {q.get('line_value')}"
+                    )
+                )
+            )
             print(
                 f"  • [{q.get('provider')}] {q.get('away_team')} @ {q.get('home_team')} | "
                 f"{mkt} {q.get('selection')}: @{float(q.get('decimal_odds') or 0.0):.2f}"

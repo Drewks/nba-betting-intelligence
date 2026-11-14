@@ -15,6 +15,7 @@ import pytest
 
 from src.ingestion.live_peru_scraper import (
     LivePeruOddsScraper,
+    parse_betano_nba_events,
     parse_pinnacle_nba_events,
     parse_teapuesto_nba_events,
 )
@@ -99,6 +100,19 @@ def _sample_teapuesto_payload() -> dict[str, Any]:
                                             "odds": [
                                                 {"provider_odd_id": "12", "name": "más de 4.5", "value": 1.53},
                                                 {"provider_odd_id": "13", "name": "menos de 4.5", "value": 1.68},
+                                            ],
+                                        }
+                                    ],
+                                },
+                                {
+                                    "provider_market_id": "924",
+                                    "name": " total 3-puntos goles de campo",
+                                    "market_odds": [
+                                        {
+                                            "name": "Ball, LaMelo total 3-puntos goles de campo",
+                                            "odds": [
+                                                {"provider_odd_id": "12", "name": "más de 0.5", "value": 1.25},
+                                                {"provider_odd_id": "13", "name": "menos de 0.5", "value": 2.95},
                                             ],
                                         }
                                     ],
@@ -323,8 +337,13 @@ def test_parse_teapuesto_and_pinnacle_live_json_and_persist(tmp_path: Path) -> N
     assert ta["spread_home_line"] == pytest.approx(-7.5)
     assert ta["spread_home_odds"] == pytest.approx(1.86)
     assert ta["spread_away_odds"] == pytest.approx(1.78)
-    assert ta["player_props"][0]["player_name"] == "Ryan Kalkbrenner"
-    assert ta["player_props"][0]["line_value"] == pytest.approx(4.5)
+    assert len(ta["player_props"]) == 2
+    pts_prop = next(p for p in ta["player_props"] if p["prop_category"] == "PTS")
+    tpm_prop = next(p for p in ta["player_props"] if p["prop_category"] == "3PM")
+    assert pts_prop["player_name"] == "Ryan Kalkbrenner"
+    assert pts_prop["line_value"] == pytest.approx(4.5)
+    assert tpm_prop["player_name"] == "LaMelo Ball"
+    assert tpm_prop["line_value"] == pytest.approx(0.5)
 
     matchups, markets = _sample_pinnacle_payload()
     pin_rows = parse_pinnacle_nba_events(matchups, markets, captured_at="2026-11-13T01:00:00Z")
@@ -370,6 +389,8 @@ def test_parse_teapuesto_and_pinnacle_live_json_and_persist(tmp_path: Path) -> N
     markets_seen = {(r["provider"], r["market"], r["selection"]) for r in persisted}
     assert ("Te Apuesto Perú [LIVE_API]", "moneyline", "HOME") in markets_seen
     assert ("Te Apuesto Perú [LIVE_API]", "total_points", "OVER") in markets_seen
+    assert ("Te Apuesto Perú [LIVE_API]|Ryan Kalkbrenner|PTS", "player_prop", "OVER") in markets_seen
+    assert ("Te Apuesto Perú [LIVE_API]|LaMelo Ball|3PM", "player_prop", "OVER") in markets_seen
     assert ("Pinnacle [LIVE_API]", "moneyline", "HOME") in markets_seen
     assert ("Pinnacle [LIVE_API]", "total_points", "UNDER") in markets_seen
     assert all(r["source_type"] == "OBSERVED" for r in persisted)
@@ -495,6 +516,10 @@ def test_harvest_local_peru_odds_method_wiring(monkeypatch: pytest.MonkeyPatch, 
             called.append("retabet")
             return []
 
+        def scrape_betano_api_odds(self) -> list[dict[str, Any]]:
+            called.append("betano_api")
+            return []
+
         def scrape_betano_odds(self) -> list[dict[str, Any]]:
             called.append("betano")
             return []
@@ -506,7 +531,7 @@ def test_harvest_local_peru_odds_method_wiring(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setattr(harvest_mod, "PeruPlaywrightScraper", DummyScraper)
     monkeypatch.setattr(sys, "argv", ["harvest_local_peru_odds.py", "--db", str(db_file)])
     harvest_mod.main()
-    assert called == ["teapuesto", "pinnacle", "persist:1:1"]
+    assert called == ["teapuesto", "pinnacle", "betano_api", "persist:1:1"]
 
     called.clear()
     monkeypatch.setattr(sys, "argv", ["harvest_local_peru_odds.py", "--db", str(db_file), "--site", "retabet", "--dry-run"])
@@ -514,3 +539,236 @@ def test_harvest_local_peru_odds_method_wiring(monkeypatch: pytest.MonkeyPatch, 
     assert called == ["retabet"]
     assert isinstance(PeruPlaywrightScraper()._slate_rows_to_quote_dicts([]), list)
     assert json.loads(json.dumps({"ok": True})) == {"ok": True}
+
+
+def test_parse_betano_and_crossbook_collect_and_monitor(tmp_path: Path) -> None:
+    import scripts.run_live_odds_monitor as monitor_mod
+
+    betano_payload: dict[str, Any] = {
+        "data": {
+            "blocks": [
+                {
+                    "events": [
+                        {
+                            "id": "5501",
+                            "name": "Miami Heat - Detroit Pistons",
+                            "startTime": 1794704400000,
+                            "live": None,
+                            "url": "/odds/miami-heat-detroit-pistons/5501/",
+                            "participants": [
+                                {"id": "p1", "name": "Miami Heat"},
+                                {"id": "p2", "name": "Detroit Pistons"},
+                            ],
+                            "markets": [
+                                {
+                                    "type": "H2H1",
+                                    "name": "Ganador",
+                                    "selections": [
+                                        {"name": "Miami Heat", "price": 2.42},
+                                        {"name": "Detroit Pistons", "price": 1.62},
+                                    ],
+                                },
+                                {
+                                    "type": "FTPO",
+                                    "name": "Total de Puntos",
+                                    "selections": [
+                                        {"name": "Más de 228.5", "price": 1.90, "handicap": 228.5},
+                                        {"name": "Menos de 228.5", "price": 1.85, "handicap": 228.5},
+                                    ],
+                                },
+                                {
+                                    "type": "FHOT",
+                                    "name": "Hándicap",
+                                    "selections": [
+                                        {"name": "Miami Heat +4.5", "price": 1.87, "handicap": 4.5},
+                                        {"name": "Detroit Pistons -4.5", "price": 1.88, "handicap": -4.5},
+                                    ],
+                                },
+                            ],
+                        },
+                        # Duplicate event ID should be deduplicated
+                        {
+                            "id": "5501",
+                            "name": "Miami Heat - Detroit Pistons",
+                            "participants": [
+                                {"name": "Miami Heat"},
+                                {"name": "Detroit Pistons"},
+                            ],
+                            "markets": [
+                                {
+                                    "type": "H2H1",
+                                    "selections": [
+                                        {"name": "Miami Heat", "price": 2.42},
+                                        {"name": "Detroit Pistons", "price": 1.62},
+                                    ],
+                                }
+                            ],
+                        },
+                        # Live event must be excluded pre-game
+                        {
+                            "id": "5502",
+                            "name": "Boston Celtics - Atlanta Hawks",
+                            "live": True,
+                            "participants": [
+                                {"name": "Boston Celtics"},
+                                {"name": "Atlanta Hawks"},
+                            ],
+                            "markets": [
+                                {
+                                    "type": "H2H1",
+                                    "selections": [
+                                        {"name": "Boston Celtics", "price": 1.50},
+                                        {"name": "Atlanta Hawks", "price": 2.60},
+                                    ],
+                                }
+                            ],
+                        },
+                        # Outright futures with >2 participants must be excluded
+                        {
+                            "id": "5503",
+                            "name": "Campeón NBA",
+                            "participants": [
+                                {"name": "Boston Celtics"},
+                                {"name": "Denver Nuggets"},
+                                {"name": "Oklahoma City Thunder"},
+                            ],
+                            "markets": [],
+                        },
+                    ]
+                }
+            ]
+        }
+    }
+
+    rows = parse_betano_nba_events(betano_payload, captured_at="2026-11-14T15:00:00Z")
+    assert len(rows) == 1
+    b_row = rows[0]
+    assert b_row["home_team"] == "MIA"
+    assert b_row["away_team"] == "DET"
+    assert b_row["home_odds"] == pytest.approx(2.42)
+    assert b_row["away_odds"] == pytest.approx(1.62)
+    assert b_row["total_points_line"] == pytest.approx(228.5)
+    assert b_row["spread_home_line"] == pytest.approx(4.5)
+    assert b_row["spread_home_odds"] == pytest.approx(1.87)
+
+    db = DatabaseManager(tmp_path / "test_betano_persist.sqlite3")
+    db.execute_insert(
+        """
+        INSERT INTO games (
+            game_id, season, matchday_date, game_start_time, home_team, away_team,
+            status, features_available_at, source_provider, ingested_at
+        ) VALUES (
+            'G_DET_MIA', '2026-27', '2026-11-15', '2099-11-15T22:00:00Z', 'MIA', 'DET',
+            'SCHEDULED', '2026-11-14T15:00:00Z', 'espn', '2026-11-14T15:00:00Z'
+        )
+        """
+    )
+
+    scraper = LivePeruOddsScraper(db=db, enable_live_network=False)
+    scraper._fetch_betano_slate = lambda force_refresh=False: rows  # type: ignore[method-assign]
+    scraper._fetch_teapuesto_slate = lambda force_refresh=False: [  # type: ignore[method-assign]
+        {
+            **b_row,
+            "book_id": "teapuesto_pe",
+            "book_name": "Te Apuesto Perú",
+            "source": "Te Apuesto API Direct",
+            "team_odds": {"MIA": 2.25, "DET": 1.68},
+            "home_odds": 2.25,
+            "away_odds": 1.68,
+            "player_props": [
+                {
+                    "player_name": "Bam Adebayo",
+                    "prop_category": "3PM",
+                    "line_value": 0.5,
+                    "over_odds": 1.32,
+                    "under_odds": 2.02,
+                }
+            ],
+        }
+    ]
+    res = scraper.collect_slate_odds(
+        game_id="G_DET_MIA",
+        home_team="MIA",
+        away_team="DET",
+        game_start_time="2099-11-15T22:00:00Z",
+    )
+    assert res["observed_quotes_count"] == 2
+    assert res["player_props_count"] == 1
+    assert res["best_home"] == {"book": "Betano Perú", "odds": pytest.approx(2.42)}
+    assert res["best_away"] == {"book": "Te Apuesto Perú", "odds": pytest.approx(1.68)}
+
+    persisted = db.fetch_all("SELECT provider, market, line_value FROM v_observed_odds_snapshots WHERE game_id = 'G_DET_MIA'")
+    assert any(r["provider"] == "Betano Perú [LIVE_API]" and r["market"] == "total_points" for r in persisted)
+    assert any(r["provider"] == "Te Apuesto Perú [LIVE_API]|Bam Adebayo|3PM" and float(r["line_value"]) == pytest.approx(0.5) for r in persisted)
+
+    # Regression: monitor table must not crash when best_home / best_away is None (single-book partial slate)
+    partial_row = {**res, "best_home": None, "best_away": None}
+    monitor_mod.print_comparison_table([partial_row, res])
+
+
+def test_migration_010_upgrades_legacy_odds_snapshots_for_player_props(tmp_path: Path) -> None:
+    import sqlite3
+
+    legacy_db = tmp_path / "legacy_m010.sqlite3"
+    conn = sqlite3.connect(str(legacy_db))
+    conn.executescript(
+        """
+        CREATE TABLE games (
+            game_id TEXT PRIMARY KEY,
+            season TEXT NOT NULL,
+            matchday_date TEXT NOT NULL,
+            game_start_time TEXT NOT NULL,
+            home_team TEXT NOT NULL,
+            away_team TEXT NOT NULL,
+            status TEXT NOT NULL,
+            features_available_at TEXT NOT NULL,
+            source_provider TEXT NOT NULL,
+            ingested_at TEXT NOT NULL
+        );
+        CREATE TABLE odds_snapshots (
+            odds_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points')),
+            selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+            line_value REAL,
+            decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+            counterpart_decimal_odds REAL,
+            captured_at TEXT NOT NULL,
+            is_closing_line INTEGER NOT NULL DEFAULT 0,
+            source_type TEXT NOT NULL DEFAULT 'OBSERVED'
+        );
+        INSERT INTO games VALUES (
+            'G_LEG_1', '2026-27', '2026-11-15', '2099-11-15T22:00:00Z', 'MIA', 'DET',
+            'SCHEDULED', '2026-11-14T15:00:00Z', 'espn', '2026-11-14T15:00:00Z'
+        );
+        INSERT INTO odds_snapshots VALUES (
+            'ODDS_LEG_ML', 'G_LEG_1', 'Pinnacle', 'moneyline', 'HOME', NULL,
+            1.91, 1.95, '2026-11-14T15:00:00Z', 0, 'OBSERVED'
+        );
+        """
+    )
+    conn.close()
+
+    db = DatabaseManager(legacy_db)
+    ok = db.insert_odds_snapshot(
+        {
+            "odds_id": "ODDS_NEW_3PM",
+            "game_id": "G_LEG_1",
+            "provider": "Te Apuesto Perú [LIVE_API]|Bam Adebayo|3PM",
+            "market": "player_prop",
+            "selection": "OVER",
+            "line_value": 0.5,
+            "decimal_odds": 1.32,
+            "counterpart_decimal_odds": 2.02,
+            "captured_at": "2026-11-14T15:05:00Z",
+            "source_type": "OBSERVED",
+        }
+    )
+    assert ok is True
+    rows = db.fetch_all("SELECT odds_id, market, line_value FROM v_observed_odds_snapshots WHERE game_id = 'G_LEG_1'")
+    assert {r["odds_id"] for r in rows} == {"ODDS_LEG_ML", "ODDS_NEW_3PM"}
+
+    # Immutability triggers remain active after table upgrade
+    with pytest.raises(Exception, match="IMMUTABLE_VIOLATION"):
+        db.execute_insert("DELETE FROM odds_snapshots WHERE odds_id = 'ODDS_LEG_ML'")

@@ -1,7 +1,8 @@
 """
 Real-Time Peruvian Sportsbook Scraping & Latency Arbitrage Engine (`src/ingestion/live_peru_scraper.py`).
 Actively monitors live decimal odds across accessible Peruvian & sharp sportsbook feeds:
-  - Te Apuesto Perú (api-latam.core-ix.com public NBA market feed — Moneyline, Totals, Spread, Player Props)
+  - Te Apuesto Perú (api-latam.core-ix.com public NBA market feed — Moneyline, Totals, Spread, PTS/3PM Player Props)
+  - Betano Perú (www.betano.pe public NBA JSON feed — Moneyline, Totals, Spread)
   - Pinnacle / Sharp Market Maker (guest.api.arcadia.pinnacle.com — Benchmark Moneyline, Totals, Spread)
   - Optional observed DB snapshots imported via Playwright/Ingestion (RETAbet, Betano, Betsson, Inkabet)
 
@@ -24,6 +25,7 @@ from typing import Any
 
 import httpx
 
+from src.config import load_scraper_config
 from src.ingestion.normalizer import american_to_decimal_odds
 from src.ingestion.stale_line_hunter import StaleLineHunter
 from src.reporting.telegram_bot import TelegramAlertBot
@@ -36,6 +38,7 @@ PERU_OFFSET = timezone(timedelta(hours=-5))
 
 TEAPUESTO_TOURNAMENT_EVENTS_URL = "https://api-latam.core-ix.com/api/v1/tournament-events"
 TEAPUESTO_NBA_TOURNAMENT_ID = "46"
+BETANO_NBA_API_URL = "https://www.betano.pe/api/sport/basquetbol/norteamerica/nba/441g/"
 PINNACLE_NBA_MATCHUPS_URL = "https://guest.api.arcadia.pinnacle.com/0.1/leagues/487/matchups"
 PINNACLE_NBA_MARKETS_URL = "https://guest.api.arcadia.pinnacle.com/0.1/leagues/487/markets/straight"
 
@@ -189,12 +192,18 @@ def parse_teapuesto_nba_events(
                         spread_line_by_team = parsed_sides
                         break
 
-            elif pmid == "921" and buckets:
+            elif pmid in ("921", "924") and buckets:
+                prop_cat = "PTS" if pmid == "921" else "3PM"
+                strip_pattern = (
+                    r"\s+total\s+puntos.*$"
+                    if pmid == "921"
+                    else r"\s+total\s+(?:3-puntos(?:\s+goles\s+de\s+campo)?|triples).*$"
+                )
                 for bucket in buckets:
                     bname = str(bucket.get("name") or "")
-                    raw_player = re.sub(r"\s+total\s+puntos.*$", "", bname, flags=re.IGNORECASE).strip()
+                    raw_player = re.sub(strip_pattern, "", bname, flags=re.IGNORECASE).strip()
                     player_name = _normalize_teapuesto_player_name(raw_player)
-                    if not player_name:
+                    if not player_name or raw_player == bname:
                         continue
                     p_over: float | None = None
                     p_under: float | None = None
@@ -223,7 +232,7 @@ def parse_teapuesto_nba_events(
                         player_props.append(
                             {
                                 "player_name": player_name,
-                                "prop_category": "PTS",
+                                "prop_category": prop_cat,
                                 "line_value": p_line,
                                 "over_odds": p_over,
                                 "under_odds": p_under,
@@ -266,6 +275,176 @@ def parse_teapuesto_nba_events(
                 "source_type": "OBSERVED",
             }
         )
+    return parsed_rows
+
+
+def _epoch_ms_to_utc_iso(ms_val: Any) -> str:
+    """Converts millisecond epoch timestamps from Betano JSON payloads to UTC ISO strings."""
+    try:
+        ms = int(ms_val)
+    except (TypeError, ValueError):
+        return ""
+    return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_betano_nba_events(
+    payload: dict[str, Any],
+    *,
+    captured_at: str | None = None,
+    include_live: bool = False,
+) -> list[dict[str, Any]]:
+    """
+    Parses Betano Perú public JSON API (`www.betano.pe/api/sport/basquetbol/norteamerica/nba/441g/`)
+    into standardized pre-game NBA odds rows (Moneyline H2H1, Total de Puntos FTPO, Hándicap FHOT).
+    """
+    now_str = captured_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    root = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    blocks = (root or {}).get("blocks") or []
+
+    parsed_rows: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        for ev in (block.get("events") or []):
+            if not isinstance(ev, dict):
+                continue
+            ev_id = str(ev.get("id") or "")
+            if ev_id and ev_id in seen_ids:
+                continue
+            if not include_live and ev.get("live"):
+                continue
+
+            parts = ev.get("participants") or []
+            if len(parts) != 2:
+                continue
+            t0 = _resolve_team_code(str(parts[0].get("name") or ""))
+            t1 = _resolve_team_code(str(parts[1].get("name") or ""))
+            if not t0 or not t1 or t0 == t1:
+                continue
+
+            # Betano formats matchup names as "Home - Away" (unless '@' appears explicitly).
+            ev_name = str(ev.get("name") or "")
+            if "@" in ev_name:
+                away_code, home_code = t0, t1
+            else:
+                home_code, away_code = t0, t1
+
+            ml_odds_by_team: dict[str, float] = {}
+            total_line: float | None = None
+            over_odds: float | None = None
+            under_odds: float | None = None
+            spread_line_by_team: dict[str, tuple[float, float]] = {}
+
+            for mk in (ev.get("markets") or []):
+                if not isinstance(mk, dict):
+                    continue
+                mtype = str(mk.get("type") or "").upper()
+                sels = mk.get("selections") or []
+
+                if mtype == "H2H1" and len(sels) >= 2 and len(ml_odds_by_team) < 2:
+                    for s in sels:
+                        tcode = _resolve_team_code(str(s.get("name") or ""))
+                        try:
+                            price = float(s.get("price") or 0.0)
+                        except (TypeError, ValueError):
+                            price = 0.0
+                        if tcode in (home_code, away_code) and price > 1.0:
+                            ml_odds_by_team[tcode] = price
+
+                elif mtype == "FTPO" and len(sels) >= 2 and total_line is None:
+                    cand_line: float | None = None
+                    cand_over: float | None = None
+                    cand_under: float | None = None
+                    for s in sels:
+                        sname = str(s.get("name") or "").lower()
+                        try:
+                            price = float(s.get("price") or 0.0)
+                        except (TypeError, ValueError):
+                            price = 0.0
+                        if price <= 1.0:
+                            continue
+                        hcap = s.get("handicap")
+                        if hcap is not None:
+                            try:
+                                cand_line = float(hcap)
+                            except (TypeError, ValueError):
+                                pass
+                        if cand_line is None:
+                            m_num = _NUM_RE.search(sname)
+                            if m_num:
+                                cand_line = float(m_num.group(0))
+                        if "más" in sname or "mas" in sname or "over" in sname:
+                            cand_over = price
+                        elif "menos" in sname or "under" in sname:
+                            cand_under = price
+                    if cand_line is not None and cand_over and cand_under:
+                        total_line, over_odds, under_odds = cand_line, cand_over, cand_under
+
+                elif mtype == "FHOT" and len(sels) >= 2 and len(spread_line_by_team) < 2:
+                    for s in sels:
+                        raw_sel = str(s.get("name") or "").strip()
+                        team_part = re.sub(r"\s*[-+]?\d+(?:\.\d+)?\s*$", "", raw_sel).strip()
+                        tcode = _resolve_team_code(team_part)
+                        try:
+                            price = float(s.get("price") or 0.0)
+                        except (TypeError, ValueError):
+                            price = 0.0
+                        hcap = s.get("handicap")
+                        line_val: float | None = None
+                        if hcap is not None:
+                            try:
+                                line_val = float(hcap)
+                            except (TypeError, ValueError):
+                                line_val = None
+                        if line_val is None:
+                            m_num = _NUM_RE.search(raw_sel)
+                            if m_num:
+                                line_val = float(m_num.group(0))
+                        if tcode in (home_code, away_code) and line_val is not None and price > 1.0:
+                            spread_line_by_team[tcode] = (line_val, price)
+
+            home_odds = ml_odds_by_team.get(home_code)
+            away_odds = ml_odds_by_team.get(away_code)
+            if not (home_odds and away_odds) and not (total_line and over_odds and under_odds):
+                continue
+
+            if ev_id:
+                seen_ids.add(ev_id)
+
+            spread_home_line = spread_line_by_team.get(home_code, (None, None))[0]
+            spread_home_odds = spread_line_by_team.get(home_code, (None, None))[1]
+            spread_away_odds = spread_line_by_team.get(away_code, (None, None))[1]
+
+            parsed_rows.append(
+                {
+                    "event_id": ev.get("id"),
+                    "event_url": ev.get("url"),
+                    "start_time": _epoch_ms_to_utc_iso(ev.get("startTime")),
+                    "home_team": home_code,
+                    "away_team": away_code,
+                    "team_pair": frozenset({home_code, away_code}),
+                    "team_odds": ml_odds_by_team,
+                    "home_odds": float(home_odds or 0.0),
+                    "away_odds": float(away_odds or 0.0),
+                    "total_points_line": total_line,
+                    "total_over_odds": over_odds,
+                    "total_under_odds": under_odds,
+                    "spread_line_by_team": spread_line_by_team,
+                    "spread_home_line": spread_home_line,
+                    "spread_home_odds": spread_home_odds,
+                    "spread_away_odds": spread_away_odds,
+                    "player_props": [],
+                    "captured_at": now_str,
+                    "book_id": "betano_pe",
+                    "book_name": "Betano Perú",
+                    "source": "Betano Perú API Direct",
+                    "is_observed": True,
+                    "source_type": "OBSERVED",
+                }
+            )
+
     return parsed_rows
 
 
@@ -425,12 +604,44 @@ class LivePeruOddsScraper:
         )
         self.hunter = StaleLineHunter(min_clv_pct=min_clv_pct, min_arb_margin_pct=min_arb_margin_pct)
         self.bot = TelegramAlertBot()
+        self._scraper_cfg = load_scraper_config()
         self._teapuesto_cache: tuple[datetime, list[dict[str, Any]]] | None = None
+        self._betano_cache: tuple[datetime, list[dict[str, Any]]] | None = None
         self._pinnacle_cache: tuple[datetime, list[dict[str, Any]]] | None = None
+        self._retabet_probe_at: datetime | None = None
+        self._betsson_probe_at: datetime | None = None
+        self._source_status: dict[str, dict[str, Any]] = {}
+
+    def _resolve_api_url(self, key: str, default: str) -> str:
+        """Resolves a sportsbook API URL from scraper_config.yaml with a safe default."""
+        sb = self._scraper_cfg.sportsbooks.get(key)
+        if sb and sb.api_url:
+            return sb.api_url
+        return default
+
+    def _is_source_enabled(self, key: str) -> bool:
+        """Checks whether a configured source is enabled in scraper_config.yaml."""
+        sb = self._scraper_cfg.sportsbooks.get(key)
+        return True if sb is None else bool(sb.enabled)
+
+    def _set_source_status(self, key: str, status: str, detail: str = "", events_count: int = 0) -> None:
+        self._source_status[key] = {
+            "status": status,
+            "detail": detail,
+            "events_count": events_count,
+            "checked_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+    def get_source_diagnostics(self) -> dict[str, dict[str, Any]]:
+        """Returns latest real status for every sportsbook feed checked by this instance."""
+        return dict(self._source_status)
 
     def _fetch_teapuesto_slate(self, *, force_refresh: bool = False) -> list[dict[str, Any]]:
         """Fetches pre-game NBA slate odds from Te Apuesto Perú public API with 60s instance cache."""
         if not self.enable_live_network:
+            return []
+        if not self._is_source_enabled("te_apuesto"):
+            self._set_source_status("teapuesto_pe", "DISABLED_IN_CONFIG")
             return []
         now = datetime.now(timezone.utc)
         if not force_refresh and self._teapuesto_cache is not None:
@@ -450,24 +661,72 @@ class LivePeruOddsScraper:
             "event_card_type": 1,
         }
         headers = {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
+        url = self._resolve_api_url("te_apuesto", TEAPUESTO_TOURNAMENT_EVENTS_URL)
         try:
             with httpx.Client(timeout=self.request_timeout, headers=headers) as client:
-                resp = client.post(TEAPUESTO_TOURNAMENT_EVENTS_URL, json=payload)
+                resp = client.post(url, json=payload)
                 if resp.status_code == 200:
                     rows = parse_teapuesto_nba_events(
                         resp.json(),
                         captured_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     )
                     self._teapuesto_cache = (now, rows)
+                    self._set_source_status("teapuesto_pe", "ACTIVE_JSON_API", "HTTP 200", len(rows))
                     return rows
+                self._set_source_status("teapuesto_pe", f"HTTP_{resp.status_code}", url)
                 logger.warning("Te Apuesto API returned status %s", resp.status_code)
         except Exception as exc:
+            self._set_source_status("teapuesto_pe", "NETWORK_ERROR", str(exc))
             logger.debug("Te Apuesto live fetch failed: %s", exc)
+        self._teapuesto_cache = (now, [])
+        return []
+
+    def _fetch_betano_slate(self, *, force_refresh: bool = False) -> list[dict[str, Any]]:
+        """Fetches pre-game NBA slate odds from Betano Perú public JSON API with 60s instance cache."""
+        if not self.enable_live_network:
+            return []
+        if not self._is_source_enabled("betano"):
+            self._set_source_status("betano_pe", "DISABLED_IN_CONFIG")
+            return []
+        now = datetime.now(timezone.utc)
+        if not force_refresh and self._betano_cache is not None:
+            cached_at, rows = self._betano_cache
+            if (now - cached_at).total_seconds() < 60.0:
+                return rows
+        headers = {
+            "User-Agent": self.USER_AGENT,
+            "Accept": "application/json",
+            "Referer": "https://www.betano.pe/",
+        }
+        url = self._resolve_api_url("betano", BETANO_NBA_API_URL)
+        try:
+            with httpx.Client(timeout=self.request_timeout, headers=headers, follow_redirects=True) as client:
+                resp = client.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if isinstance(data, dict):
+                        rows = parse_betano_nba_events(
+                            data,
+                            captured_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        )
+                        self._betano_cache = (now, rows)
+                        self._set_source_status("betano_pe", "ACTIVE_JSON_API", "HTTP 200", len(rows))
+                        return rows
+                status_tag = "BOT_PROTECTED_HTTP_403" if resp.status_code == 403 else f"HTTP_{resp.status_code}"
+                self._set_source_status("betano_pe", status_tag, url)
+                logger.warning("Betano Perú API returned status %s", resp.status_code)
+        except Exception as exc:
+            self._set_source_status("betano_pe", "NETWORK_ERROR", str(exc))
+            logger.debug("Betano Perú live fetch failed: %s", exc)
+        self._betano_cache = (now, [])
         return []
 
     def _fetch_pinnacle_slate(self, *, force_refresh: bool = False) -> list[dict[str, Any]]:
         """Fetches pre-game NBA sharp odds from Pinnacle Arcadia guest API with 60s cache."""
         if not self.enable_live_network:
+            return []
+        if not self._is_source_enabled("pinnacle"):
+            self._set_source_status("pinnacle", "DISABLED_IN_CONFIG")
             return []
         now = datetime.now(timezone.utc)
         if not force_refresh and self._pinnacle_cache is not None:
@@ -475,10 +734,13 @@ class LivePeruOddsScraper:
             if (now - cached_at).total_seconds() < 60.0:
                 return rows
         headers = {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
+        base_url = self._resolve_api_url("pinnacle", "https://guest.api.arcadia.pinnacle.com/0.1/leagues/487").rstrip("/")
+        matchups_url = f"{base_url}/matchups"
+        markets_url = f"{base_url}/markets/straight"
         try:
             with httpx.Client(timeout=self.request_timeout, headers=headers) as client:
-                rm = client.get(PINNACLE_NBA_MATCHUPS_URL)
-                rk = client.get(PINNACLE_NBA_MARKETS_URL)
+                rm = client.get(matchups_url)
+                rk = client.get(markets_url)
                 if rm.status_code == 200 and rk.status_code == 200:
                     rows = parse_pinnacle_nba_events(
                         rm.json(),
@@ -486,10 +748,14 @@ class LivePeruOddsScraper:
                         captured_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     )
                     self._pinnacle_cache = (now, rows)
+                    self._set_source_status("pinnacle", "ACTIVE_JSON_API", "HTTP 200", len(rows))
                     return rows
+                self._set_source_status("pinnacle", f"HTTP_{rm.status_code}_{rk.status_code}", matchups_url)
                 logger.warning("Pinnacle Arcadia API returned %s / %s", rm.status_code, rk.status_code)
         except Exception as exc:
+            self._set_source_status("pinnacle", "NETWORK_ERROR", str(exc))
             logger.debug("Pinnacle Arcadia live fetch failed: %s", exc)
+        self._pinnacle_cache = (now, [])
         return []
 
     def _match_slate_row(
@@ -540,6 +806,10 @@ class LivePeruOddsScraper:
         """Extracts live pre-game NBA odds from Te Apuesto Perú (public API)."""
         return self._match_slate_row(self._fetch_teapuesto_slate(), home_team, away_team)
 
+    def fetch_live_betano_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
+        """Extracts live pre-game NBA odds from Betano Perú (public JSON API)."""
+        return self._match_slate_row(self._fetch_betano_slate(), home_team, away_team)
+
     def fetch_live_pinnacle_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
         """Extracts live pre-game NBA sharp odds from Pinnacle Arcadia guest API."""
         return self._match_slate_row(self._fetch_pinnacle_slate(), home_team, away_team)
@@ -547,11 +817,15 @@ class LivePeruOddsScraper:
     def fetch_live_retabet_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
         """
         Queries RETAbet Perú only when explicitly accessible without WAF evasion.
-        Returns None cleanly on network errors or WAF blocks (zero synthetic fallback).
+        Caches unreachable/WAF blocks for 60s so per-game scans avoid redundant retries.
         """
         if not self.enable_live_network:
             return None
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now = datetime.now(timezone.utc)
+        if self._retabet_probe_at is not None and (now - self._retabet_probe_at).total_seconds() < 60.0:
+            return None
+        self._retabet_probe_at = now
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         url = "https://api.retabet.pe/sports/v2/events/nba"
         headers = {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
 
@@ -560,7 +834,9 @@ class LivePeruOddsScraper:
                 resp = client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
-                    for ev in data.get("events", []):
+                    events = data.get("events", [])
+                    self._set_source_status("retabet_pe", "ACTIVE_JSON_API", "HTTP 200", len(events))
+                    for ev in events:
                         ev_name = ev.get("name", "").upper()
                         if home_team in ev_name or away_team in ev_name:
                             h_raw = ev.get("home_odds")
@@ -576,15 +852,25 @@ class LivePeruOddsScraper:
                                     is_observed=True,
                                     source_type="OBSERVED",
                                 )
+                else:
+                    self._set_source_status("retabet_pe", f"HTTP_{resp.status_code}", url)
         except Exception as exc:
+            self._set_source_status("retabet_pe", "UNREACHABLE_F5_PROTECTED", str(exc))
             logger.debug(f"RETAbet live fetch failed: {exc}")
         return None
 
     def fetch_live_betsson_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
-        """Queries Betsson/Altenar feed when accessible without WAF challenge."""
+        """
+        Queries Betsson/Altenar feed when accessible without Kasada/WAF challenge.
+        Caches blocked responses for 60s so slate scans stay fast and honest.
+        """
         if not self.enable_live_network:
             return None
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now = datetime.now(timezone.utc)
+        if self._betsson_probe_at is not None and (now - self._betsson_probe_at).total_seconds() < 60.0:
+            return None
+        self._betsson_probe_at = now
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         url = "https://sb2frontend-altenar2.biahosted.com/api/Sportsbook/GetEvents"
         params = {"sportId": "66", "timezoneOffset": "-300"}  # Basketball / PET
         headers = {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
@@ -594,7 +880,9 @@ class LivePeruOddsScraper:
                 resp = client.get(url, params=params)
                 if resp.status_code == 200:
                     data = resp.json()
-                    for ev in data.get("events", []):
+                    events = data.get("events", [])
+                    self._set_source_status("betsson_pe", "ACTIVE_JSON_API", "HTTP 200", len(events))
+                    for ev in events:
                         ev_name = ev.get("name", "").upper()
                         if home_team in ev_name or away_team in ev_name:
                             prices = ev.get("prices")
@@ -609,7 +897,10 @@ class LivePeruOddsScraper:
                                     is_observed=True,
                                     source_type="OBSERVED",
                                 )
+                else:
+                    self._set_source_status("betsson_pe", f"BOT_PROTECTED_HTTP_{resp.status_code}", url)
         except Exception as exc:
+            self._set_source_status("betsson_pe", "NETWORK_ERROR", str(exc))
             logger.debug(f"Betsson live fetch failed: {exc}")
         return None
 
@@ -682,6 +973,10 @@ class LivePeruOddsScraper:
         live_ta = self.fetch_live_teapuesto_odds(home_team, away_team)
         if live_ta:
             quotes_by_book["teapuesto_pe"] = live_ta
+
+        live_betano = self.fetch_live_betano_odds(home_team, away_team)
+        if live_betano:
+            quotes_by_book["betano_pe"] = live_betano
 
         live_pin = self.fetch_live_pinnacle_odds(home_team, away_team)
         if live_pin and sharp_quote is None and live_pin.home_odds > 1.0 and live_pin.away_odds > 1.0:
@@ -829,6 +1124,7 @@ class LivePeruOddsScraper:
             "synthetic_margin_pct": round((inv_sum - 1.0) * 100.0, 2) if (best_h and best_a) else 0.0,
             "quotes": all_quotes,
             "observed_quotes_count": len(quotes_by_book),
+            "player_props_count": sum(len(q.player_props or []) for q in quotes_by_book.values()),
             "stale_lines": stale_opportunities,
             "surebet": surebet_info,
         }
@@ -905,7 +1201,7 @@ class LivePeruOddsScraper:
                     p_name
                     and cat_code
                     and p_line is not None
-                    and float(p_line) > 0.5
+                    and float(p_line) > 0.0
                     and p_over is not None
                     and p_under is not None
                     and float(p_over) > 1.0
@@ -1011,7 +1307,7 @@ class LivePeruOddsScraper:
                 sharp_book_name=bench_prov,
                 sharp_captured_at=bench_ts,
             )
-            if res.get("observed_quotes_count", 0) > 0 or bench is not None:
+            if res.get("observed_quotes_count", 0) > 0 or "sharp_benchmark" in res.get("quotes", {}):
                 results.append(res)
 
             # Telegram Dispatch for Stale Lines

@@ -25,7 +25,7 @@ from src.config import ScraperConfig, load_scraper_config
 logger = logging.getLogger("PlaywrightScraper")
 
 RETABET_NBA_URL = "https://retabet.pe/deportes/baloncesto/usa/nba"
-BETANO_NBA_URL = "https://pe.betano.com/sport/basquetbol/estados-unidos/nba/"
+BETANO_NBA_URL = "https://www.betano.pe/sport/basquetbol/norteamerica/nba/441g/"
 
 
 class PeruPlaywrightScraper:
@@ -88,6 +88,18 @@ class PeruPlaywrightScraper:
             enable_live_network=True,
         )
         slate_rows = scraper._fetch_pinnacle_slate(force_refresh=True)
+        return self._slate_rows_to_quote_dicts(slate_rows)
+
+    def scrape_betano_api_odds(self) -> list[dict[str, Any]]:
+        """Fetches live pre-game NBA odds from Betano Perú public JSON API cleanly."""
+        from src.ingestion.live_peru_scraper import LivePeruOddsScraper
+
+        scraper = LivePeruOddsScraper(
+            db=self.db,
+            request_timeout=max(5.0, float(self.timeout_ms) / 1000.0),
+            enable_live_network=True,
+        )
+        slate_rows = scraper._fetch_betano_slate(force_refresh=True)
         return self._slate_rows_to_quote_dicts(slate_rows)
 
     @staticmethod
@@ -194,7 +206,7 @@ class PeruPlaywrightScraper:
                     p_name
                     and cat_code
                     and p_line is not None
-                    and float(p_line) > 0.5
+                    and float(p_line) > 0.0
                     and p_over
                     and p_under
                     and float(p_over) > 1.0
@@ -391,9 +403,16 @@ class PeruPlaywrightScraper:
 
     def scrape_betano_odds(self) -> list[dict[str, Any]]:
         """
-        Navigates to Betano Perú NBA section and intercepts event and market payloads.
-        Returns a list of standardized observed quote dictionaries.
+        Extracts Betano Perú NBA odds via direct public JSON API first, falling back to
+        standard Playwright network interception (using parse_betano_nba_events) if empty.
         """
+        if self.headless:
+            api_quotes = self.scrape_betano_api_odds()
+            if api_quotes:
+                return api_quotes
+
+        from src.ingestion.live_peru_scraper import parse_betano_nba_events
+
         quotes: list[dict[str, Any]] = []
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -441,8 +460,14 @@ class PeruPlaywrightScraper:
 
                 browser.close()
 
-                # Parse intercepted payloads
+                # Parse intercepted payloads via canonical Betano parser first (blocks[*].events)
                 for payload in intercepted_data:
+                    if isinstance(payload, dict):
+                        parsed_rows = parse_betano_nba_events(payload, captured_at=now_utc)
+                        if parsed_rows:
+                            quotes.extend(self._slate_rows_to_quote_dicts(parsed_rows))
+                            continue
+
                     data_obj = payload.get("data") if isinstance(payload, dict) else payload
                     events = data_obj if isinstance(data_obj, list) else []
                     if isinstance(data_obj, dict):

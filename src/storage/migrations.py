@@ -511,6 +511,109 @@ def m009_enforce_observed_games_view(conn: sqlite3.Connection, migration_id: str
     }
 
 
+def m010_allow_player_prop_in_odds_snapshots(conn: sqlite3.Connection, migration_id: str) -> dict[str, Any]:
+    """
+    Upgrades legacy `odds_snapshots` tables whose CHECK constraint only permitted
+    ('moneyline', 'total_points') so real observed 'player_prop' lines from Peruvian
+    sportsbooks persist cleanly without changing any historical rows.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'odds_snapshots'"
+    ).fetchone()
+    if not row or "player_prop" in str(row[0]):
+        return {"action": "noop", "reason": "player_prop already permitted"}
+
+    before_cnt = int(conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0])
+
+    # SQLite validates every view in the schema during ALTER TABLE ... RENAME TO; drop views
+    # before renaming and recreate canonical VIEW_DDL right after (safe both with m008 & standalone).
+    existing_views = [
+        (str(r[0]), str(r[1]))
+        for r in conn.execute("SELECT name, sql FROM sqlite_master WHERE type = 'view'").fetchall()
+        if r[0] and r[1]
+    ]
+    for v_name, _ in existing_views:
+        conn.execute(f'DROP VIEW IF EXISTS "{v_name}"')
+
+    conn.execute("DROP TRIGGER IF EXISTS prevent_odds_update")
+    conn.execute("DROP TRIGGER IF EXISTS prevent_odds_delete")
+    conn.execute("DROP TABLE IF EXISTS odds_snapshots_v10")
+
+    conn.execute(
+        """
+        CREATE TABLE odds_snapshots_v10 (
+            odds_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'player_prop')),
+            selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+            line_value REAL,
+            decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+            counterpart_decimal_odds REAL CHECK (counterpart_decimal_odds IS NULL OR counterpart_decimal_odds > 1.0),
+            captured_at TEXT NOT NULL,
+            is_closing_line INTEGER NOT NULL DEFAULT 0,
+            source_type TEXT NOT NULL CHECK (source_type IN ('OBSERVED', 'DERIVED', 'SYNTHETIC')),
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO odds_snapshots_v10 (
+            odds_id, game_id, provider, market, selection, line_value,
+            decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line, source_type
+        )
+        SELECT
+            odds_id, game_id, provider, market, selection, line_value,
+            decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line,
+            COALESCE(source_type, 'OBSERVED')
+        FROM odds_snapshots
+        """
+    )
+    after_cnt = int(conn.execute("SELECT COUNT(*) FROM odds_snapshots_v10").fetchone()[0])
+    if after_cnt != before_cnt:
+        raise RuntimeError(f"m010 row count mismatch: before={before_cnt}, after={after_cnt}")
+
+    conn.execute("DROP TABLE odds_snapshots")
+    conn.execute("ALTER TABLE odds_snapshots_v10 RENAME TO odds_snapshots")
+
+    from src.storage.schema import VIEW_DDL
+
+    for ddl in VIEW_DDL.values():
+        conn.execute(ddl)
+    for v_name, v_sql in existing_views:
+        if v_name not in VIEW_DDL:
+            conn.execute(v_sql)
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_odds_update
+        BEFORE UPDATE ON odds_snapshots
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Captured odds snapshots cannot be modified.');
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_odds_delete
+        BEFORE DELETE ON odds_snapshots
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Captured odds snapshots cannot be deleted.');
+        END
+        """
+    )
+
+    _log_repair(
+        conn,
+        migration_id,
+        "odds_snapshots",
+        "SCHEMA_CHECK_UPGRADE",
+        "ALLOW_PLAYER_PROP_MARKET",
+        f"Upgraded odds_snapshots CHECK constraint to allow player_prop while preserving all {after_cnt} rows.",
+    )
+    return {"action": "upgraded", "rows_preserved": after_cnt}
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -521,6 +624,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_09_007_invalidate_hardcoded_parlays", m007_invalidate_hardcoded_parlays),
     ("2026_11_10_008_quarantine_legacy_synthetic_bets", m008_quarantine_legacy_synthetic_bets),
     ("2026_11_10_009_enforce_observed_games_view", m009_enforce_observed_games_view),
+    ("2026_11_14_010_allow_player_prop_in_odds_snapshots", m010_allow_player_prop_in_odds_snapshots),
 ]
 
 
