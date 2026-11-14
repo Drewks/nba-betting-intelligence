@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-13T21:25:07Z
+date_generated: 2026-11-14T13:49:32Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -7,7 +7,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-13T21:25:07Z`
+- **Fecha de auditoría (UTC)**: `2026-11-14T13:49:32Z`
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA`
@@ -23,14 +23,14 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 | :--- | :--- | :--- | :--- |
 | `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `28` | `>= 500` |
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
-| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.216116, 'baseline_brier': 0.25043, 'model_log_loss': 0.618878, 'baseline_log_loss': 0.695707}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
+| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.218255, 'baseline_brier': 0.250648, 'model_log_loss': 0.623184, 'baseline_log_loss': 0.695917}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
 | `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -17.209, 'yield_pct': -17.209}` | `ROI > 0% and Yield > 0%` |
 | `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -55.1016, 'ci_95_upper_pct': 25.2771, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **FAIL (Permanece en Simulación)** | `False` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
 | `gate_9_independent_audit_approved` | **FAIL (Permanece en Simulación)** | `False` | `True` |
-| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.216116, 'market_brier': 0.213172, 'model_log_loss': 0.618878, 'market_log_loss': 0.611473, 'sample_size': 87}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
+| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.218255, 'market_brier': 0.215265, 'model_log_loss': 0.623184, 'market_log_loss': 0.615709, 'sample_size': 96}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
 
 ## 3. Estado Real de Herramientas y Fuentes Inspeccionadas
 - **Coordinador**: `Gemini Argon` en Google Antigravity (Ejecución secuencial verificada)
