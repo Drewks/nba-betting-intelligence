@@ -801,7 +801,7 @@ def generate_interactive_html_dashboard(
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">3. Ritmo y Total Proy.</div>
                   <div class="font-bold mt-0.5">${{st.expected_pace}} pos · ${{g.expected_total}} pts</div>
-                  <div class="text-[var(--muted-foreground)]">Rango 80%: ${{g.conformal_q10}}–${{g.conformal_q90}}</div>
+                  <div class="text-[var(--muted-foreground)]">Simulación 80% (Q10–Q90): ${{g.simulation_q10 ?? g.projections?.simulation_q10_total ?? '—'}}–${{g.simulation_q90 ?? g.projections?.simulation_q90_total ?? '—'}}</div>
                 </div>
                 <div class="p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
                   <div class="text-[var(--muted-foreground)]">4. Descanso / Gira</div>
@@ -928,7 +928,7 @@ def generate_interactive_html_dashboard(
           ? `<div class="font-semibold">Línea: <span>${{g.tot_line}} pts</span> (Over ${{g.tot_over_odds.toFixed(2)}} / Under ${{g.tot_under_odds.toFixed(2)}})</div>
              <div class="text-[var(--muted-foreground)]">Modelo Total: <strong>${{g.expected_total}} pts</strong> (Over ${{g.model_p_over_pct}}%)</div>`
           : `<div class="font-semibold">Total Proyectado Modelo: <strong>${{g.expected_total}} pts</strong></div>
-             <div class="text-[var(--muted-foreground)]">Rango 80% Conformal: [${{g.conformal_q10}} – ${{g.conformal_q90}} pts]</div>`;
+             <div class="text-[var(--muted-foreground)]">Intervalo Simulación MC 80% (sin garantía conformal): [${{g.simulation_q10 ?? g.projections?.simulation_q10_total ?? '—'}} – ${{g.simulation_q90 ?? g.projections?.simulation_q90_total ?? '—'}} pts]</div>`;
 
         return `
           <div class="bg-[var(--card)] border ${{isBet ? 'border-blue-500/50' : 'border-[var(--border)]'}} rounded-xl p-4 shadow-sm space-y-3">
@@ -1340,11 +1340,11 @@ def generate_interactive_html_dashboard(
               </div>
             </div>
 
-            <!-- Conformal Interval Bar -->
+            <!-- Calibration / Uncertainty Interval Bar -->
             <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-3 space-y-1.5 text-xs">
               <div class="flex justify-between">
-                <span>Intervalo Conformal Venn-Abers: <strong>[${{(Number(p.conformal_p_low) * 100).toFixed(1)}}%, ${{(Number(p.conformal_p_high) * 100).toFixed(1)}}%]</strong></span>
-                <span class="text-purple-400 font-semibold">Cota Inferior Garantizada</span>
+                <span>${{p.calibration_is_conformal ? 'Intervalo Conformal Venn-Abers:' : 'Intervalo Fallback (Sin Calibración Conformal):'}} <strong>[${{(Number(p.conformal_p_low) * 100).toFixed(1)}}%, ${{(Number(p.conformal_p_high) * 100).toFixed(1)}}%]</strong></span>
+                <span class="${{p.calibration_is_conformal ? 'text-purple-400' : 'text-amber-400'}} font-semibold">${{p.calibration_is_conformal ? 'Cobertura Venn-Abers Calibrada' : 'Sin Garantía Conformal'}}</span>
               </div>
               <div class="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden flex">
                 <div class="bg-purple-600 h-full rounded-full" style="width: ${{Math.min(95, Number(p.model_prob) * 100)}}%"></div>
@@ -1356,7 +1356,7 @@ def generate_interactive_html_dashboard(
             </div>
 
             <div class="flex items-center justify-between gap-3 pt-1">
-              <span class="text-[11px] text-[var(--muted-foreground)]">Puntaje de convicción conformal validado</span>
+              <span class="text-[11px] text-[var(--muted-foreground)]">${{p.calibration_is_conformal ? 'Calibración conformal Venn-Abers fuera de muestra' : 'Calibrador sin ajuste suficiente (solo informativo)'}}</span>
               <button id="copy-prop-${{idx}}" onclick="copyToClipboard('${{copyPropText.replace(/'/g, "\\'") }}', 'copy-prop-${{idx}}')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-500 transition-all flex items-center gap-1.5 shadow-sm">
                 📋 Copiar Selección
               </button>

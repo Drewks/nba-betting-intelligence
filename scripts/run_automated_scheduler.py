@@ -30,6 +30,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 from scripts.run_cloud_cycle import run_incremental_cloud_cycle
+from src.config import load_config
 from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.prediction.injury_sniper import InjurySniperMonitor
 from src.prediction.player_props import PlayerPropsEngine
@@ -80,65 +81,121 @@ class NBADailyScheduler:
         self.paper_engine = build_production_engine(self.db)
         self.parlay_engine = ParlayTradingEngine(self.db)
 
+    def _snapshot_observed_quote_counts(self) -> dict[str, int]:
+        """Count persisted observed quotes grouped by provider without failing on test mocks."""
+        try:
+            rows = self.db.fetch_all(
+                "SELECT provider, COUNT(*) AS cnt FROM v_observed_odds_snapshots GROUP BY provider"
+            )
+            counts: dict[str, int] = {}
+            for row in rows or []:
+                if isinstance(row, dict) and row.get("provider"):
+                    counts[str(row["provider"])] = int(row.get("cnt") or 0)
+            return counts
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _diff_quote_counts(before: dict[str, int], after: dict[str, int]) -> dict[str, int]:
+        """Compute newly persisted quotes per provider since cycle start."""
+        diff: dict[str, int] = {}
+        for prov, cnt_after in after.items():
+            delta = int(cnt_after) - int(before.get(prov, 0))
+            if delta > 0:
+                diff[prov] = delta
+        return diff
+
     def run_peru_playwright_odds_harvest(self) -> int:
         """
-        Executes dynamic Playwright scraping for RETAbet and Betano Perú.
-        Persists newly discovered observed quotes into odds_snapshots with source_type='OBSERVED'.
+        Reports Peruvian Playwright scraping availability for the automated scheduler.
+        Automated cloud runs skip direct Betano/RETAbet DOM scraping due to Cloudflare/Shape
+        anti-bot enforcement (use scripts/harvest_local_peru_odds.py in an interactive local browser session).
         """
-        logger.info("ℹ️ Scraping directo en scheduler desacoplado por cumplimiento de normativas. Coseche localmente con scripts/harvest_local_peru_odds.py")
+        logger.info(
+            "SKIPPED_SOURCE [peru_playwright_scraper]: desacoplado del scheduler automático por "
+            "protección anti-bot Cloudflare/Shape (cosecha local vía scripts/harvest_local_peru_odds.py)."
+        )
         return 0
 
     def execute_morning_cycle(self) -> dict[str, Any]:
         """
         Ventana 1: 10:00 AM PET (Apertura de Mercado)
-        - Ingesta los partidos de la jornada desde ESPN.
+        - Ingesta los partidos de la jornada desde ESPN y cuotas observadas.
         - Calcula ratings de equipo y características pre-partido.
-        - Genera predicciones de moneyline y totales.
-        - Escanea proposiciones de jugador (Props) y Same-Game Parlays (RETAbet/Betsson).
-        - Despacha las mejores oportunidades +EV a Telegram.
+        - Genera predicciones y apuestas paper filtradas según config/model_config.yaml.
+        - Reporta explícitamente sources_executed, sources_skipped y new_quotes_persisted_by_source.
         """
         now_pet = get_peru_time()
         logger.info(f"🌅 INICIANDO VENTANA MATUTINA (10:00 AM PET) — Hora actual: {now_pet.strftime('%Y-%m-%d %H:%M:%S PET')}")
+        quotes_before = self._snapshot_observed_quote_counts()
+        sources_executed: list[str] = []
+        sources_skipped: dict[str, str] = {}
 
         # 1. Run incremental cycle in pregame mode first (ingests slate games into DB)
         res_cycle = run_incremental_cloud_cycle(mode="pregame")
+        sources_executed.append("espn_public_adapter")
+        if isinstance(res_cycle, dict) and (res_cycle.get("sources_info") or {}).get("sportradar_api", {}).get("available"):
+            sources_executed.append("sportradar_api")
+        sources_executed.append("live_peru_odds_scraper")
 
-        # 2. Dynamic Headless Scraping for Peruvian Sportsbooks (Betano & RETAbet)
-        # Now slate_games is populated and ready for fuzzy matching
-        self.run_peru_playwright_odds_harvest()
+        # 2. Local Playwright harvester (explicitly skipped in cloud automation when returning 0)
+        playwright_quotes = int(self.run_peru_playwright_odds_harvest() or 0)
+        if playwright_quotes > 0:
+            sources_executed.append("peru_playwright_scraper")
+        else:
+            sources_skipped["peru_playwright_scraper"] = (
+                "skipped_decoupled_cloudflare_local_only: use scripts/harvest_local_peru_odds.py"
+            )
 
-        # 3. Run player props & SGP slate generator
-        props_engine = PlayerPropsEngine(db=self.db, min_ev_threshold=0.03)
-        now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        slate_games = self.db.fetch_all(
-            """
-            SELECT * FROM games
-            WHERE status = 'SCHEDULED'
-              AND game_start_time > ?
-              AND game_id NOT LIKE 'SYN%'
-            ORDER BY game_start_time ASC
-            LIMIT 15
-            """,
-            (now_utc_str,),
-        )
-        props_list = props_engine.generate_slate_prop_opportunities(
-            slate_games=slate_games,
-            bankroll_pen=self.paper_engine.get_bankroll_state()["settled_bankroll_pen"],
-            min_ev_pct=3.0,
-        )
-
-        # 2b. Auto-reserve top correlated SGPs / Parlays in isolated S/50 sub-bankroll
+        # 3. Fail-closed Props & Parlays gate driven strictly by config/model_config.yaml
+        risk_cfg = load_config().risk
         today_matchday_str = now_pet.strftime("%Y-%m-%d")
-        placed_parlays = self.parlay_engine.record_candidate_parlays(
-            candidates=props_list,
-            matchday_date=today_matchday_str,
-        )
-        if placed_parlays:
-            logger.info(f"🔥 [SUB-BANKROLL] {len(placed_parlays)} combinadas reservadas automáticamente en la banca S/50.")
+        props_list: list[dict[str, Any]] = []
+        placed_parlays: list[dict[str, Any]] = []
 
-        # 3. Dispatch fresh alerts to Telegram (deduplicated)
+        if risk_cfg.allow_player_props_betting or risk_cfg.allow_parlays:
+            props_engine = PlayerPropsEngine(db=self.db, min_ev_threshold=0.03)
+            now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            slate_games = self.db.fetch_all(
+                """
+                SELECT * FROM games
+                WHERE status = 'SCHEDULED'
+                  AND game_start_time > ?
+                  AND game_id NOT LIKE 'SYN%'
+                ORDER BY game_start_time ASC
+                LIMIT 15
+                """,
+                (now_utc_str,),
+            )
+            props_list = props_engine.generate_slate_prop_opportunities(
+                slate_games=slate_games,
+                bankroll_pen=self.paper_engine.get_bankroll_state()["settled_bankroll_pen"],
+                min_ev_pct=3.0,
+            )
+            if risk_cfg.allow_player_props_betting:
+                sources_executed.append("player_props_engine")
+            else:
+                sources_skipped["player_props_betting"] = "disabled_by_config (allow_player_props_betting=false)"
+
+            if risk_cfg.allow_parlays:
+                placed_parlays = self.parlay_engine.record_candidate_parlays(
+                    candidates=props_list,
+                    matchday_date=today_matchday_str,
+                    allow_parlays=True,
+                )
+                sources_executed.append("parlay_engine")
+                if placed_parlays:
+                    logger.info(f"🔥 [SUB-BANKROLL] {len(placed_parlays)} combinadas reservadas automáticamente en la banca S/50.")
+            else:
+                sources_skipped["parlays_sub_bankroll"] = "disabled_by_config (allow_parlays=false)"
+        else:
+            sources_skipped["player_props_betting"] = "disabled_by_config (allow_player_props_betting=false)"
+            sources_skipped["parlays_sub_bankroll"] = "disabled_by_config (allow_parlays=false)"
+
+        # 3b. Dispatch fresh alerts to Telegram (deduplicated)
         dispatched_count = 0
         if self.bot.is_live:
+            sources_executed.append("telegram_bot")
             dispatched_count += dispatch_pending_bet_alerts(
                 self.bot,
                 self.db,
@@ -148,27 +205,28 @@ class NBADailyScheduler:
             )
             sent_keys = load_dispatched_alert_keys(self.alert_state_path)
             keys_changed = False
-            for p in props_list or []:
-                ev_val = float(p.get("ev_pct") or 0.0)
-                if ev_val < 3.5:
-                    continue
-                prop_id = (
-                    p.get("sgp_id")
-                    or p.get("parlay_id")
-                    or p.get("prop_id")
-                    or f"{p.get('game_id', '')}:{p.get('player_name', '')}:{p.get('stat_type', p.get('prop_category', ''))}:{p.get('selection', '')}"
-                )
-                prop_key = f"PROP:{prop_id}"
-                if prop_key in sent_keys:
-                    continue
-                if p.get("type") == "RETABET_SGP" or "sgp_id" in p:
-                    msg = self.bot.format_sgp_parlay_alert(p)
-                else:
-                    msg = self.bot.format_single_bet_alert(p)
-                if self.bot.send_raw_message(msg):
-                    sent_keys.add(prop_key)
-                    keys_changed = True
-                    dispatched_count += 1
+            if risk_cfg.allow_player_props_betting or risk_cfg.allow_parlays:
+                for p in props_list or []:
+                    ev_val = float(p.get("ev_pct") or 0.0)
+                    if ev_val < 3.5:
+                        continue
+                    prop_id = (
+                        p.get("sgp_id")
+                        or p.get("parlay_id")
+                        or p.get("prop_id")
+                        or f"{p.get('game_id', '')}:{p.get('player_name', '')}:{p.get('stat_type', p.get('prop_category', ''))}:{p.get('selection', '')}"
+                    )
+                    prop_key = f"PROP:{prop_id}"
+                    if prop_key in sent_keys:
+                        continue
+                    if p.get("type") == "RETABET_SGP" or "sgp_id" in p:
+                        msg = self.bot.format_sgp_parlay_alert(p)
+                    else:
+                        msg = self.bot.format_single_bet_alert(p)
+                    if self.bot.send_raw_message(msg):
+                        sent_keys.add(prop_key)
+                        keys_changed = True
+                        dispatched_count += 1
 
             if dispatched_count == 0:
                 summary_key = f"SLATE_SUMMARY:{today_matchday_str}"
@@ -185,18 +243,34 @@ class NBADailyScheduler:
             if keys_changed:
                 save_dispatched_alert_keys(sent_keys, self.alert_state_path)
             logger.info(f"📲 [TELEGRAM] {dispatched_count} alertas matutinas despachadas a tu chat.")
+        else:
+            sources_skipped["telegram_bot"] = "not_configured_or_dry_run"
+
+        quotes_after = self._snapshot_observed_quote_counts()
+        new_quotes_by_source = self._diff_quote_counts(quotes_before, quotes_after)
 
         try:
             self.db.checkpoint(truncate=True)
         except Exception as cp_exc:
             logger.warning(f"Database checkpoint warning: {cp_exc}")
 
+        logger.info(
+            "SOURCES_TELEMETRY [MORNING] executed=%s skipped=%s new_quotes_persisted_by_source=%s",
+            sources_executed,
+            sources_skipped,
+            new_quotes_by_source,
+        )
+
         return {
             "status": "COMPLETED",
             "window": "MORNING",
             "executed_at_pet": now_pet.strftime("%Y-%m-%dT%H:%M:%S"),
             "props_found": len(props_list),
+            "placed_parlays_count": len(placed_parlays),
             "alerts_dispatched": dispatched_count,
+            "sources_executed": sources_executed,
+            "sources_skipped": sources_skipped,
+            "new_quotes_persisted_by_source": new_quotes_by_source,
             "cycle_summary": res_cycle,
         }
 
@@ -204,18 +278,29 @@ class NBADailyScheduler:
         """
         Ventana 2: 05:30 PM PET (Injury Sniper & Líneas Desfasadas)
         - Monitorea reportes oficiales de lesiones T-2h y confirmación de quintetos T-30m.
-        - Detecta líneas desfasadas en bookmakers peruanos.
+        - Escanea líneas observadas con fuente sharp sin asumir ejecución Playwright en nube.
         - Despacha alertas urgentes si se detecta valor tardío.
         """
         now_pet = get_peru_time()
         logger.info(f"🎯 INICIANDO VENTANA INJURY SNIPER (05:30 PM PET) — Hora actual: {now_pet.strftime('%Y-%m-%d %H:%M:%S PET')}")
+        quotes_before = self._snapshot_observed_quote_counts()
+        sources_executed: list[str] = ["injury_sniper_monitor"]
+        sources_skipped: dict[str, str] = {}
 
-        self.run_peru_playwright_odds_harvest()
+        playwright_quotes = int(self.run_peru_playwright_odds_harvest() or 0)
+        if playwright_quotes > 0:
+            sources_executed.append("peru_playwright_scraper")
+        else:
+            sources_skipped["peru_playwright_scraper"] = (
+                "skipped_decoupled_cloudflare_local_only: use scripts/harvest_local_peru_odds.py"
+            )
+
         sniper = InjurySniperMonitor(db=self.db)
         sniper_res = sniper.scan_pregame_slate(force_scan_all=False)
 
         alerts_sent = 0
         if self.bot.is_live and sniper_res.get("alerts"):
+            sources_executed.append("telegram_bot")
             sent_keys = load_dispatched_alert_keys(self.alert_state_path)
             keys_changed = False
             for alert in sniper_res["alerts"]:
@@ -231,12 +316,15 @@ class NBADailyScheduler:
             if keys_changed:
                 save_dispatched_alert_keys(sent_keys, self.alert_state_path)
             logger.info(f"📲 [TELEGRAM] {alerts_sent} alertas de Injury Sniper enviadas a tu chat.")
+        elif not self.bot.is_live:
+            sources_skipped["telegram_bot"] = "not_configured_or_dry_run"
 
-        # Escaneo en tiempo real de cuotas peruanas (Stale Lines & Arbitraje Surebet)
+        # Escaneo en tiempo real de cuotas observadas (Stale Lines & Arbitraje Surebet)
         live_res: dict[str, Any] = {}
         try:
             live_scraper = LivePeruOddsScraper(db=self.db)
             scan_rows = live_scraper.scan_and_alert_entire_slate(notify_telegram=True)
+            sources_executed.append("live_peru_odds_scraper")
             live_res = {
                 "games_scanned": len(scan_rows),
                 "stale_lines_found": sum(len(r.get("stale_lines") or []) for r in scan_rows),
@@ -246,12 +334,23 @@ class NBADailyScheduler:
             alerts_sent += live_res["stale_lines_found"] + live_res["surebets_found"]
             logger.info(f"📊 [LIVE ODDS] {live_res['games_scanned']} partidos con benchmark sharp observado escaneados.")
         except Exception as exc:
+            sources_skipped["live_peru_odds_scraper"] = f"error: {exc}"
             logger.warning(f"Error escaneando cuotas en vivo en el scheduler: {exc}")
+
+        quotes_after = self._snapshot_observed_quote_counts()
+        new_quotes_by_source = self._diff_quote_counts(quotes_before, quotes_after)
 
         try:
             self.db.checkpoint(truncate=True)
         except Exception as cp_exc:
             logger.warning(f"Database checkpoint warning: {cp_exc}")
+
+        logger.info(
+            "SOURCES_TELEMETRY [SNIPER] executed=%s skipped=%s new_quotes_persisted_by_source=%s",
+            sources_executed,
+            sources_skipped,
+            new_quotes_by_source,
+        )
 
         return {
             "status": "COMPLETED",
@@ -260,6 +359,9 @@ class NBADailyScheduler:
             "sniper_results": sniper_res,
             "live_odds_results": live_res,
             "alerts_dispatched": alerts_sent,
+            "sources_executed": sources_executed,
+            "sources_skipped": sources_skipped,
+            "new_quotes_persisted_by_source": new_quotes_by_source,
         }
 
     def execute_nightly_settlement_cycle(self) -> dict[str, Any]:
@@ -274,9 +376,15 @@ class NBADailyScheduler:
         now_pet = get_peru_time()
         today_str = now_pet.strftime("%Y-%m-%d")
         logger.info(f"🌙 INICIANDO VENTANA DE LIQUIDACIÓN NOCTURNA (11:30 PM PET) — Jornada: {today_str}")
+        quotes_before = self._snapshot_observed_quote_counts()
 
         # 1. Run incremental cycle in settle_and_calibrate mode
         settle_res = run_incremental_cloud_cycle(mode="settle_and_calibrate")
+        sources_executed = ["espn_public_adapter"]
+        sources_skipped: dict[str, str] = {
+            "peru_playwright_scraper": "skipped_in_settlement_window",
+            "live_peru_odds_scraper": "skipped_in_settlement_window",
+        }
 
         # 2. Extract settled bets and props today
         settled_today = self.db.fetch_all(
@@ -356,6 +464,9 @@ class NBADailyScheduler:
             + sum(float(pl.get("pnl_pen") or 0.0) for pl in settled_parlays)
         )
 
+        quotes_after = self._snapshot_observed_quote_counts()
+        new_quotes_by_source = self._diff_quote_counts(quotes_before, quotes_after)
+
         try:
             self.db.checkpoint(truncate=True)
         except Exception as cp_exc:
@@ -374,6 +485,9 @@ class NBADailyScheduler:
             "settled_bankroll_pen": curr_br,
             "current_bankroll_pen": curr_br,
             "cppi_multiplier": cppi_mult,
+            "sources_executed": sources_executed,
+            "sources_skipped": sources_skipped,
+            "new_quotes_persisted_by_source": new_quotes_by_source,
             "cycle_summary": settle_res,
         }
 

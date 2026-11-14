@@ -130,7 +130,7 @@ def sync_obsidian_vault(
             "Consulte el detalle de partidos evaluados y predicciones en `09-Reports/`.\n"
         ),
         f"04-Predictions/Predictions-Summary-{target_date}.md": (
-            f"---\ndate_generated: {now_str}\nmodel_versions: [model_c_point_margin_v1, model_d_total_points_v1]\n---\n"
+            f"---\ndate_generated: {now_str}\nmodel_versions: [model_f_ensemble_v8, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]\n---\n"
             "# Historial Auditable de Predicciones\n\n"
             "- Todas las predicciones están protegidas mediante triggers `BEFORE UPDATE` y `BEFORE DELETE` en SQLite (`data/nba_intelligence.sqlite3`).\n"
             "- Prohibido sobrescribir predicciones o cuotas originales.\n"
@@ -153,8 +153,8 @@ def sync_obsidian_vault(
             "3. **Modelo C (`model_c_point_margin_v2`)**: Regresión Ridge sobre `Offensive Rating`, `Defensive Rating`, `Net Rating`, `Pace`, descanso y forma reciente.\n"
             "4. **Modelo D (`model_d_total_points_v2`)**: Distribución normal con **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
             "5. **Modelo E (`model_e_lightgbm_v2`)**: `LightGBM` evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
-            "6. **Modelo F (`model_f_ensemble_v2`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E y G en escala log-odds con incertidumbre Conformal.\n"
-            "7. **Modelo G (`model_g_ml_montecarlo_v2`)**: **Simulador Híbrido ML + 10,000 Partidos Monte Carlo por Posesión** (modela `Q1–Q3`, desaceleración por `Blowout/Garbage-Time` en `Q4`, faltas intencionales en los últimos 90s `Clutch Fouling` y prórrogas `Overtime OT1/OT2` + intervalos `Conformal Prediction [Q10, Q90]`).\n"
+            "6. **Modelo F (`model_f_ensemble_v8`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E y G en escala log-odds.\n"
+            "7. **Modelo G (`model_g_ml_montecarlo_v8`)**: **Simulador Híbrido ML + 10,000 Partidos Monte Carlo por Posesión** (modela `Q1–Q3`, desaceleración por `Blowout/Garbage-Time` en `Q4`, faltas intencionales en los últimos 90s `Clutch Fouling` y prórrogas iterativas `Overtime` + percentiles de simulación `[Q10, Q90]`).\n"
         ),
         "07-Backtesting/Walk-Forward-Backtest-Results.md": weekly_report_md,
         "08-Calibration/Calibration-and-Reliability.md": (

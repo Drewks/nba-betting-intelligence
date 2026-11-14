@@ -43,7 +43,7 @@ def calibrate_clv_meta_labeling(
     query = """
         SELECT
             p.prediction_id,
-            p.calibrated_probability,
+            COALESCE(p.calibrated_model_probability, p.calibrated_probability) AS calibrated_probability,
             p.uncertainty_std,
             p.implied_prob_fair,
             p.bookmaker_overround,

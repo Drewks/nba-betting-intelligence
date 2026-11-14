@@ -22,17 +22,18 @@ def _fmt(value: Any, spec: str = ".5f", missing: str = "null") -> str:
 
 def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, Any]]:
     """
-    Computes pre-game odds, V6 model projections (Moneyline, Total Points, Spread, Conformal, OT/Blowout),
+    Computes pre-game odds, V8 model projections (Moneyline, Total Points, Spread, Simulation Quantiles, OT/Blowout),
     key basketball statistics (Elo, Off/Def Rating, Pace, Rest/B2B, Geodesic Travel Miles, Altitude),
     and clear Spanish explanations of why the bot placed a bet or decided NO_BET for each upcoming game.
     """
-    risk_cfg = load_config().risk
+    cfg = load_config()
+    risk_cfg = cfg.risk
     min_ev_pct = float(risk_cfg.min_ev_threshold) * 100.0
 
     all_final_games = db.fetch_all(
         "SELECT * FROM v_observed_games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time"
     )
-    model_f = EnsembleStackingModel("model_f_ensemble_v2")
+    model_f = EnsembleStackingModel(cfg.model.version_id)
     if all_final_games:
         model_f.fit(all_final_games, all_final_games[-1]["game_start_time"])
 
@@ -220,14 +221,15 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
                     "p_away_pct": round(pred_ml["p_away"] * 100, 1),
                     "expected_margin": pred_ml["expected_margin"],
                     "margin_std": pred_ml.get("margin_std", 11.5),
-                    "conformal_q10_margin": pred_ml.get("conformal_q10_margin", -15.0),
-                    "conformal_q90_margin": pred_ml.get("conformal_q90_margin", 15.0),
+                    "simulation_q10_margin": pred_ml.get("simulation_q10_margin", -15.0),
+                    "simulation_q90_margin": pred_ml.get("simulation_q90_margin", 15.0),
+                    "is_conformal": 0.0,
                     "expected_total": pred_tot["expected_total"],
                     "total_std": pred_tot.get("total_std_with_covariance", 18.2),
                     "p_over_pct": round(pred_tot["p_over"] * 100, 1),
                     "p_under_pct": round(pred_tot["p_under"] * 100, 1),
-                    "conformal_q10_total": pred_tot.get("conformal_q10_total", 205.0),
-                    "conformal_q90_total": pred_tot.get("conformal_q90_total", 252.0),
+                    "simulation_q10_total": pred_tot.get("simulation_q10_total", 205.0),
+                    "simulation_q90_total": pred_tot.get("simulation_q90_total", 252.0),
                     "overtime_prob_pct": round(pred_ml.get("overtime_prob", 0.055) * 100, 1),
                     "blowout_prob_pct": round(pred_ml.get("blowout_prob", 0.12) * 100, 1),
                     "home_ev_pct": h_ev,
