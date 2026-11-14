@@ -373,5 +373,8 @@ def test_47_automated_daily_settlement_and_telegram_report(tmp_path: Path) -> No
 
     # 4. Scheduler instantiation with test DB
     DatabaseManager(tmp_path / "sched_test.sqlite3")
-    sched = NBADailyScheduler(db_path=tmp_path / "sched_test.sqlite3")
+    sched = NBADailyScheduler(
+        db_path=tmp_path / "sched_test.sqlite3",
+        alert_state_path=tmp_path / "sched_alerts.json",
+    )
     assert sched.paper_engine.initial_bankroll_pen == 100.00

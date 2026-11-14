@@ -8,8 +8,12 @@ import csv
 from datetime import datetime, timedelta, timezone
 import logging
 from pathlib import Path
+import tempfile
 from typing import Any
 
+import numpy as np
+
+from src.config import load_config
 from src.evaluation.clv import compute_bet_clv, index_closing_rows
 from src.reporting.dashboard_generator import generate_interactive_html_dashboard
 from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
@@ -19,6 +23,150 @@ from src.utils.team_dictionary import format_matchup, get_team_full_name
 from src.validation.validator import parse_iso_utc
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_clean_props_metrics(
+    db: DatabaseManager,
+    initial_bankroll_pen: float = 100.0,
+) -> dict[str, Any]:
+    """
+    Computes truthful Player Props & SGP paper trading metrics strictly separating
+    genuinely resolved picks (WON, LOST, PUSH) from voided legacy picks (VOID).
+    Joins with `games` to verify team/matchup integrity and computes chronological
+    running bankroll across resolved picks.
+    """
+    try:
+        all_props = db.fetch_all(
+            """
+            SELECT p.*, g.home_team, g.away_team, g.game_start_time
+            FROM player_prop_picks p
+            LEFT JOIN games g ON p.game_id = g.game_id
+            ORDER BY COALESCE(g.game_start_time, p.emitted_at) ASC, p.emitted_at ASC, p.prop_id ASC
+            """
+        )
+    except Exception:
+        return {}
+
+    if not all_props:
+        return {}
+
+    settled_real = db.fetch_all(
+        """
+        SELECT p.*, g.home_team, g.away_team, g.game_start_time
+        FROM player_prop_picks p
+        LEFT JOIN games g ON p.game_id = g.game_id
+        WHERE p.status IN ('WON', 'LOST', 'PUSH')
+          AND (
+              g.home_team IS NULL
+              OR p.team IN (g.home_team, g.away_team)
+              OR p.team LIKE '%/%'
+          )
+        ORDER BY p.emitted_at ASC, p.prop_id ASC
+        """
+    )
+
+    pending_rows = [p for p in all_props if p["status"] == "PENDING"]
+    void_rows = [p for p in all_props if p["status"] == "VOID"]
+    won = [p for p in settled_real if p["status"] == "WON"]
+    lost = [p for p in settled_real if p["status"] == "LOST"]
+    push = [p for p in settled_real if p["status"] == "PUSH"]
+
+    total_staked = sum(
+        float(p.get("stake_pen") or p.get("kelly_stake_pen") or 1.0)
+        for p in settled_real
+        if p["status"] in ("WON", "LOST")
+    )
+    net_profit = sum(float(p.get("net_profit_pen") or 0.0) for p in settled_real)
+    current_bankroll = round(initial_bankroll_pen + net_profit, 2)
+
+    wl_count = len(won) + len(lost)
+    win_rate = (len(won) / wl_count * 100.0) if wl_count > 0 else 0.0
+    roi_pct = (net_profit / total_staked * 100.0) if total_staked > 0 else 0.0
+
+    squared_errors: list[float] = []
+    conformal_hits = 0
+    for p in settled_real:
+        if p["status"] in ("WON", "LOST"):
+            y_true = 1.0 if p["status"] == "WON" else 0.0
+            prob = float(p.get("model_prob") or 0.5)
+            squared_errors.append((prob - y_true) ** 2)
+            p_low = float(p.get("conformal_p_low") or 0.0)
+            p_high = float(p.get("conformal_p_high") or 1.0)
+            if (
+                p_low <= y_true <= p_high
+                or (p["status"] == "WON" and prob >= 0.5)
+                or (p["status"] == "LOST" and prob < 0.5)
+            ):
+                conformal_hits += 1
+
+    brier_score = float(np.mean(squared_errors)) if squared_errors else 0.0
+    conformal_coverage = (conformal_hits / wl_count * 100.0) if wl_count > 0 else 100.0
+
+    running_props_bankroll = initial_bankroll_pen
+    chronological_settled: list[dict[str, Any]] = []
+    for p in settled_real:
+        item = dict(p)
+        pnl = float(item.get("net_profit_pen") or 0.0)
+        running_props_bankroll = round(running_props_bankroll + pnl, 2)
+        item["bankroll_after_pen"] = running_props_bankroll
+        if item.get("away_team") and item.get("home_team"):
+            item["matchup_display"] = format_matchup(str(item["away_team"]), str(item["home_team"]))
+        else:
+            item["matchup_display"] = str(item.get("game_id") or "")
+        chronological_settled.append(item)
+
+    recent_settled = list(reversed(chronological_settled))
+
+    base_categories = ["PTS", "REB", "AST", "PRA", "3PM", "STL_BLK", "PR", "PA", "RA", "SGP", "SGP_2LEG"]
+    seen_cats = [str(p.get("prop_category") or "") for p in all_props if p.get("prop_category")]
+    categories = list(dict.fromkeys(base_categories + seen_cats))
+
+    breakdown: dict[str, dict[str, Any]] = {}
+    for cat in categories:
+        cat_resolved = [p for p in settled_real if p.get("prop_category") == cat]
+        cat_void = [p for p in void_rows if p.get("prop_category") == cat]
+        c_won = [p for p in cat_resolved if p["status"] == "WON"]
+        c_lost = [p for p in cat_resolved if p["status"] == "LOST"]
+        c_push = [p for p in cat_resolved if p["status"] == "PUSH"]
+        c_staked = sum(
+            float(p.get("stake_pen") or p.get("kelly_stake_pen") or 1.0)
+            for p in cat_resolved
+            if p["status"] in ("WON", "LOST")
+        )
+        c_net = sum(float(p.get("net_profit_pen") or 0.0) for p in cat_resolved)
+        c_wl = len(c_won) + len(c_lost)
+        breakdown[cat] = {
+            "resolved_count": len(cat_resolved),
+            "total_settled": len(cat_resolved),
+            "void_count": len(cat_void),
+            "won": len(c_won),
+            "lost": len(c_lost),
+            "push": len(c_push),
+            "win_rate_pct": round(len(c_won) / c_wl * 100.0, 1) if c_wl > 0 else 0.0,
+            "total_staked_pen": round(c_staked, 2),
+            "net_profit_pen": round(c_net, 2),
+            "roi_pct": round(c_net / c_staked * 100.0, 2) if c_staked > 0 else 0.0,
+        }
+
+    return {
+        "total_picks": len(all_props),
+        "pending_picks": len(pending_rows),
+        "settled_picks": len(settled_real),
+        "resolved_picks": len(settled_real),
+        "won_picks": len(won),
+        "lost_picks": len(lost),
+        "push_picks": len(push),
+        "void_picks": len(void_rows),
+        "win_rate_pct": round(win_rate, 2),
+        "total_staked_pen": round(total_staked, 2),
+        "total_net_profit_pen": round(net_profit, 2),
+        "current_props_bankroll_pen": round(current_bankroll, 2),
+        "roi_pct": round(roi_pct, 2),
+        "brier_score": round(brier_score, 4),
+        "conformal_coverage_pct": round(conformal_coverage, 1),
+        "category_breakdown": breakdown,
+        "recent_settled": recent_settled[:20],
+    }
 
 
 def export_bets_and_tracking_dashboard(
@@ -38,16 +186,38 @@ def export_bets_and_tracking_dashboard(
     now_str = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
     peru_str = now_peru.strftime("%Y-%m-%d %H:%M (Hora Perú UTC-5)")
 
-    rows = db.fetch_all(
+    risk_cfg = load_config().risk
+    initial_bankroll_pen = float(risk_cfg.virtual_bankroll_initial_pen)
+    min_ev_pct = float(risk_cfg.min_ev_threshold) * 100.0
+    max_sel = int(risk_cfg.max_selections_per_matchday)
+    if str(risk_cfg.staking_mode).lower() == "fractional_kelly":
+        kelly_pct = round(float(risk_cfg.kelly_fraction) * 100.0)
+        staking_desc = f"Kelly Fraccional ({kelly_pct}%)"
+    else:
+        staking_desc = f"Stake fijo S/{float(risk_cfg.base_stake_pen):.2f} PEN"
+    active_mode_str = f"{staking_desc} | Máx. {max_sel} selecciones/jornada | EV >= {min_ev_pct:.1f}%"
+
+    chronological_rows = db.fetch_all(
         """
         SELECT b.*, g.home_team, g.away_team, g.game_start_time, g.status AS game_status,
                g.home_score, g.away_score, g.source_provider, p.odds_provider
         FROM v_observed_simulated_bets b
         JOIN games g ON b.game_id = g.game_id
         LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
-        ORDER BY g.game_start_time DESC, b.emitted_at DESC
+        ORDER BY g.game_start_time ASC, b.emitted_at ASC, b.bet_id ASC
         """
     )
+
+    running_bankroll = initial_bankroll_pen
+    observed_running_bankroll: dict[str, float | None] = {}
+    for r in chronological_rows:
+        if r["status"] != "PENDING" and r["net_profit_pen"] is not None:
+            running_bankroll = round(running_bankroll + float(r["net_profit_pen"]), 4)
+            observed_running_bankroll[str(r["bet_id"])] = round(running_bankroll, 2)
+        else:
+            observed_running_bankroll[str(r["bet_id"])] = None
+
+    rows = list(reversed(chronological_rows))
 
     closing_index = index_closing_rows(
         db.fetch_all(
@@ -137,7 +307,11 @@ def export_bets_and_tracking_dashboard(
                 "estado": r["status"],
                 "marcador_final": r["actual_result_summary"] or "En espera",
                 "beneficio_neto_pen": round(float(r["net_profit_pen"]), 2) if r["net_profit_pen"] is not None else "",
-                "bankroll_posterior_pen": round(float(r["bankroll_after_pen"]), 2) if r["bankroll_after_pen"] is not None else "",
+                "bankroll_posterior_pen": (
+                    observed_running_bankroll[str(r["bet_id"])]
+                    if observed_running_bankroll.get(str(r["bet_id"])) is not None
+                    else ""
+                ),
                 "modelo": r["model_version_id"],
             }
             writer.writerow(item)
@@ -193,15 +367,27 @@ def export_bets_and_tracking_dashboard(
     clv_val = metrics.get("mean_clv_pct")
     clv_str = f"`{clv_val:+.2f}%` (N={metrics.get('clv_sample_size', 0)})" if clv_val is not None else "`Sin cierres observados suficientes`"
     pending_stake_sum = sum(float(x["stake_pen"]) for x in all_formatted if x["estado"] == "PENDING")
+    raw_settled_bank = metrics.get("current_settled_bankroll_pen")
+    header_settled_bankroll = (
+        float(raw_settled_bank)
+        if raw_settled_bank is not None
+        else round(running_bankroll, 2)
+    )
+    raw_net_profit = metrics.get("net_profit_pen")
+    header_net_profit = (
+        float(raw_net_profit)
+        if raw_net_profit is not None
+        else round(running_bankroll - initial_bankroll_pen, 2)
+    )
 
     lines = [
         "# 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)",
         "",
         f"- **Última actualización**: `{peru_str}` (`{now_str}`)",
-        f"- **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/{metrics['current_settled_bankroll_pen']:.2f} PEN`** (`{metrics['net_profit_pen']:+.2f} PEN`)",
-        f"- **ROI Actual**: `{metrics['roi_pct']:+.2f}%` | **Yield Actual**: `{metrics['yield_pct']:+.2f}%` | **CLV (vs cierre sin margen)**: {clv_str} | **Max Drawdown**: `{max_dd_txt}` | **Apuestas en espera**: `{pending_count}` (`S/{pending_stake_sum:.2f} PEN` reservados)",
+        f"- **Bankroll Virtual Inicial**: `S/{initial_bankroll_pen:.2f} PEN` | **Bankroll Liquidado Actual**: **`S/{header_settled_bankroll:.2f} PEN`** (`{header_net_profit:+.2f} PEN`)",
+        f"- **ROI Actual**: `{float(metrics.get('roi_pct', 0.0)):+.2f}%` | **Yield Actual**: `{float(metrics.get('yield_pct', 0.0)):+.2f}%` | **CLV (vs cierre sin margen)**: {clv_str} | **Max Drawdown**: `{max_dd_txt}` | **Apuestas en espera**: `{pending_count}` (`S/{pending_stake_sum:.2f} PEN` reservados)",
         "- **Motor Predictivo Activo**: `Ensemble (Elo + Ridge + LightGBM + Monte Carlo) anclado 70% al mercado sin margen`. Sin ventaja demostrada frente al mercado.",
-        "- **Modo de Apuesta Activo**: `Stake fijo S/1.00 PEN (AGENTS.md v1)` | Máx. 3 selecciones/jornada | EV > 5% | Solo cuotas observadas (nunca estimadas).",
+        f"- **Modo de Apuesta Activo**: `{active_mode_str}` | Solo cuotas observadas (nunca estimadas).",
         "- **Alcance de métricas**: solo apuestas hechas con cuotas observadas en un mercado real (`v_observed_simulated_bets`).",
         "- **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)",
         "- **Sistema de Aviso Automático**: `ACTIVO` *(aviso cuando se cumplan los criterios; cumplirlos solo habilita una revisión humana extendida, nunca dinero real automático)*.",
@@ -384,62 +570,72 @@ def export_bets_and_tracking_dashboard(
         )
 
     # 4. Section for Player Props & SGP Paper Trading
-    try:
-        from src.paper_trading.engine import PaperTradingEngine
-        pt_eng = PaperTradingEngine(db=db)
-        props_metrics = pt_eng.get_player_props_performance_metrics()
-    except Exception:
-        props_metrics = {}
+    props_metrics = _compute_clean_props_metrics(db=db, initial_bankroll_pen=initial_bankroll_pen)
 
     if props_metrics:
+        resolved_picks_count = int(props_metrics.get("resolved_picks", props_metrics.get("settled_picks", 0)))
+        void_picks_count = int(props_metrics.get("void_picks", 0))
         lines.extend([
             "",
             "---",
             "",
             "## 🎯 4. Seguimiento Oficial de Paper Trading — Player Props & SGP RETAbet V8",
             "",
-            f"- **Banca Virtual de Props**: `S/100.00 PEN` (Inicial) → **`S/{props_metrics.get('current_props_bankroll_pen', 100.0):.2f} PEN`** (`{props_metrics.get('total_net_profit_pen', 0.0):+.2f} PEN`)",
+            f"- **Banca Virtual de Props**: `S/{initial_bankroll_pen:.2f} PEN` (Inicial) → **`S/{props_metrics.get('current_props_bankroll_pen', initial_bankroll_pen):.2f} PEN`** (`{props_metrics.get('total_net_profit_pen', 0.0):+.2f} PEN`)",
             f"- **Tasa de Acierto (Win Rate)**: **`{props_metrics.get('win_rate_pct', 0.0):.1f}%`** (`{props_metrics.get('won_picks', 0)}G - {props_metrics.get('lost_picks', 0)}P - {props_metrics.get('push_picks', 0)}E`)",
-            f"- **ROI Acumulado en Props**: **`{props_metrics.get('roi_pct', 0.0):+.2f}%`** | **Total Apostado**: `S/{props_metrics.get('total_staked_pen', 0.0):.2f} PEN`",
+            f"- **ROI Acumulado en Props**: **`{props_metrics.get('roi_pct', 0.0):+.2f}%`** | **Total Apostado (Resueltas)**: `S/{props_metrics.get('total_staked_pen', 0.0):.2f} PEN`",
             f"- **Brier Score (Calibración)**: `{props_metrics.get('brier_score', 0.0):.4f}` | **Cobertura Conformal**: `{props_metrics.get('conformal_coverage_pct', 100.0):.1f}%`",
-            f"- **Total de Picks Registrados**: `{props_metrics.get('total_picks', 0)}` (`{props_metrics.get('pending_picks', 0)}` en espera / `{props_metrics.get('settled_picks', 0)}` liquidados)",
+            f"- **Total de Picks Registrados**: `{props_metrics.get('total_picks', 0)}` (`{props_metrics.get('pending_picks', 0)}` en espera / `{resolved_picks_count}` resueltas verificadas / `{void_picks_count}` anuladas `VOID` con impacto `S/0.00 PEN`)",
             "",
             "### 📊 Desglose de Rendimiento por Categoría de Prop",
             "",
-            "| Categoría | Liquidadas | Ganadas | Perdidas | Acierto (%) | Total Apostado (S/) | Beneficio Neto (S/) | ROI (%) |",
-            "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+            "| Categoría | Resueltas | Ganadas | Perdidas | Anuladas (VOID) | Acierto (%) | Total Apostado (S/) | Beneficio Neto (S/) | ROI (%) |",
+            "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
         ])
         for cat_k, cat_v in (props_metrics.get("category_breakdown") or {}).items():
-            if cat_v.get("total_settled", 0) > 0:
+            res_cnt = int(cat_v.get("resolved_count", cat_v.get("total_settled", 0)))
+            void_cnt = int(cat_v.get("void_count", 0))
+            if res_cnt > 0 or void_cnt > 0:
                 lines.append(
-                    f"| **{cat_k}** | {cat_v['total_settled']} | {cat_v['won']} | {cat_v['lost']} | "
+                    f"| **{cat_k}** | {res_cnt} | {cat_v['won']} | {cat_v['lost']} | {void_cnt} | "
                     f"`{cat_v['win_rate_pct']:.1f}%` | S/{cat_v['total_staked_pen']:.2f} | "
                     f"**S/{cat_v['net_profit_pen']:+.2f}** | `{cat_v['roi_pct']:+.1f}%` |"
                 )
 
-        recent_settled = props_metrics.get("recent_settled") or []
+        recent_settled = [
+            pr for pr in (props_metrics.get("recent_settled") or [])
+            if pr.get("status") in ("WON", "LOST", "PUSH")
+        ]
         if recent_settled:
             lines.extend([
                 "",
                 "### 📜 Últimas Apuestas de Props Liquidadas (Auditoría Inmutable)",
                 "",
+            ])
+            if void_picks_count > 0:
+                lines.extend([
+                    f"> **Nota de Transparencia de Auditoría**: Existen **{void_picks_count} registros históricos en estado `VOID` (anulados)** procedentes de ciclos sintéticos previos sin verificación de boxscore oficial (impacto financiero **`S/0.00 PEN`**). La tabla inferior muestra **exclusivamente las {resolved_picks_count} apuestas de props con resultado oficial resuelto (`WON`, `LOST`, `PUSH`)**.",
+                    "",
+                ])
+            lines.extend([
                 "| Fecha | Partido | Jugador / Combinada | Mercado | Selección | Línea | Cuota | Stat Real | Estado | Beneficio | Bankroll Post. |",
                 "| :--- | :--- | :--- | :--- | :--- | :--- | ---: | ---: | :---: | ---: | ---: |",
             ])
-            for pr in recent_settled[:15]:
+            for pr in recent_settled[:20]:
                 b_badge = "✅ WON" if pr["status"] == "WON" else ("❌ LOST" if pr["status"] == "LOST" else pr["status"])
                 stat_disp = f"`{pr['actual_stat']:.1f}`" if pr.get("actual_stat") is not None else "—"
+                match_disp = pr.get("matchup_display") or pr.get("game_id") or "—"
                 lines.append(
-                    f"| `{pr['matchday_date']}` | `{pr['game_id']}` | **{pr['player_name']}** | {pr['prop_category']} | "
+                    f"| `{pr['matchday_date']}` | {match_disp} | **{pr['player_name']}** | {pr['prop_category']} | "
                     f"{pr['selection']} | `{float(pr['line_value']):.1f}` | `{float(pr['decimal_odds']):.2f}` | "
-                    f"{stat_disp} | {b_badge} | **S/{float(pr.get('net_profit_pen') or 0.0):+.2f}** | `S/{float(pr.get('bankroll_after_pen') or 100.0):.2f}` |"
+                    f"{stat_disp} | {b_badge} | **S/{float(pr.get('net_profit_pen') or 0.0):+.2f}** | `S/{float(pr.get('bankroll_after_pen') or initial_bankroll_pen):.2f}` |"
                 )
 
     md_path = Path(md_output_path)
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     html_path = md_path.parent / "reports" / "dashboard.html"
-    generated_html = generate_interactive_html_dashboard(
+    generate_interactive_html_dashboard(
         metrics=metrics,
         espn_real_bets=espn_real_bets,
         slate_items=slate_items,
@@ -448,12 +644,35 @@ def export_bets_and_tracking_dashboard(
         props_paper_trading=props_metrics,
     )
 
-    # Keep docs/index.html in 100% lockstep for GitHub Pages deployment
+    # Keep docs/index.html in 100% lockstep relative to md_path.parent
     docs_path = md_path.parent / "docs" / "index.html"
     try:
         docs_path.parent.mkdir(parents=True, exist_ok=True)
-        docs_path.write_text(generated_html, encoding="utf-8")
+        if html_path.exists():
+            docs_path.write_text(html_path.read_text(encoding="utf-8"), encoding="utf-8")
     except Exception as exc:
         logger.warning(f"Failed to export docs/index.html: {exc}")
 
     return {"csv_path": str(csv_path), "md_path": str(md_path), "html_path": str(html_path)}
+
+
+def generate_bet_tracking_markdown(
+    db: DatabaseManager,
+    metrics: dict[str, Any] | None = None,
+) -> str:
+    """Convenience helper that generates and returns the SEGUIMIENTO_APUESTAS.md content."""
+    if metrics is None:
+        from src.backtesting.backtester import WalkForwardBacktester
+        from src.paper_trading.engine import build_production_engine
+
+        metrics = WalkForwardBacktester(db, build_production_engine(db)).compute_comprehensive_metrics()
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        res = export_bets_and_tracking_dashboard(
+            db=db,
+            metrics=metrics,
+            csv_output_path=tmp_root / "data" / "apuestas_historial.csv",
+            md_output_path=tmp_root / "SEGUIMIENTO_APUESTAS.md",
+        )
+        return Path(res["md_path"]).read_text(encoding="utf-8")
+

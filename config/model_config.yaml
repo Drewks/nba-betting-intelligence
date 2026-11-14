@@ -21,93 +21,22 @@ model:
 
 risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
   virtual_bankroll_initial_pen: 100.00
-  # High-conviction staking: the stake grows with the model's calibrated, market-anchored win probability
-  # for a given price (half Kelly). It is 0 when EV <= threshold and is never rounded up to a floor.
+  # Production fractional Kelly staking: stake grows with the model's calibrated, market-anchored win probability
+  # for a given price (quarter Kelly, 25%). It is 0 when EV <= threshold and is never rounded up to a floor.
   staking_mode: "fractional_kelly"   # "fractional_kelly" | "flat"
-  kelly_fraction: 0.50               # half Kelly
+  kelly_fraction: 0.25               # quarter Kelly (25%)
   min_stake_pen: 1.00                # smaller Kelly stakes are skipped
   max_stake_pen: 10.00               # hard cap per selection
   max_stake_bankroll_fraction: 0.10  # hard cap per selection as % of bankroll
   base_stake_pen: 1.00               # only used when staking_mode = "flat"
   max_selections_per_matchday: 3
-  min_ev_threshold: 0.05             # EV > 5%
+  min_ev_threshold: 0.02             # EV >= 2.0%
+  min_ev: 0.02                       # alias for min_ev_threshold (2.0%)
   max_portfolio_exposure_pct: 0.30
   # Combined bets and player props are paper-traded in their own ledger (player_prop_picks).
-  # No bookmaker prop/SGP prices are captured, so their lines and prices are ESTIMATES and every pick is
-  # labelled as such; they are never mixed into the observed-odds metrics.
+  # Only observed two-way bookmaker prop prices are eligible; they are never mixed into main-market metrics.
   allow_parlays: false
   allow_player_props_betting: false
-
-  # V8 Phase 1: Contextual Staking Conviction Tiers (Single source of truth)
-  conviction_tiers:
-    aggressive:
-      tier_low:
-        prob_floor: 0.35
-        prob_ceil: 0.50
-        base: 3.50
-        slope: 2.00
-        kelly_cap: 2.00
-        kelly_multiplier: 4.0
-      tier_mid:
-        prob_floor: 0.50
-        prob_ceil: 0.58
-        base: 6.00
-        slope: 3.50
-        kelly_cap: 3.00
-        kelly_multiplier: 6.0
-      tier_high:
-        prob_floor: 0.58
-        prob_ceil: 0.65
-        base: 10.00
-        slope: 4.50
-        kelly_cap: 4.50
-        kelly_multiplier: 8.0
-      tier_star:
-        prob_floor: 0.65
-        prob_ceil: 1.00
-        base: 15.00
-        slope: 5.00
-        kelly_cap: 5.00
-        kelly_multiplier: 10.0
-      edge_modulator_floor: 0.40
-      edge_modulator_div: 0.06
-      min_stake_floor: 2.50
-      max_longshot_odds: 4.00
-      max_longshot_stake: 6.00
-    conservative:
-      tier_low:
-        prob_floor: 0.35
-        prob_ceil: 0.50
-        base: 1.00
-        slope: 0.55
-        kelly_cap: 0.25
-        kelly_multiplier: 1.2
-      tier_mid:
-        prob_floor: 0.50
-        prob_ceil: 0.58
-        base: 2.00
-        slope: 0.95
-        kelly_cap: 0.35
-        kelly_multiplier: 1.5
-      tier_high:
-        prob_floor: 0.58
-        prob_ceil: 0.65
-        base: 3.50
-        slope: 0.95
-        kelly_cap: 0.40
-        kelly_multiplier: 1.8
-      tier_star:
-        prob_floor: 0.65
-        prob_ceil: 1.00
-        base: 4.80
-        slope: 0.85
-        kelly_cap: 0.45
-        kelly_multiplier: 2.0
-      edge_modulator_floor: 0.20
-      edge_modulator_div: 0.08
-      min_stake_floor: 1.00
-      max_longshot_odds: 2.50
-      max_longshot_stake: 1.65
 
   # Overtime Risk Guard
   overtime_guard:
@@ -165,14 +94,14 @@ hybrid_allocation:                   # Política de asignación 70% Totales / 30
   max_totals_per_matchday: 2
   max_moneyline_per_matchday: 1
 
-clv_meta_labeling:                   # V8 Phase 3: Calibración empírica CLV Meta-Labeling
+clv_meta_labeling:                   # V8 Phase 3: Calibración empírica CLV Meta-Labeling (pre-bet only, zero lookahead)
   enabled: false
   calibrated_weights_path: "config/calibrated_weights.json"
-  intercept: -0.2085
-  coef_steam_delta: 57.7103
-  coef_conformal_width_excess: -2.1211
-  coef_disagreement_excess: -0.1816
-  coef_overround_excess: -0.0556
+  intercept: -0.3569
+  coef_steam_delta: 11.2956
+  coef_conformal_width_excess: -3.0232
+  coef_disagreement_excess: -2.9046
+  coef_overround_excess: -0.0870
   time_decay_rate: 0.04
   max_hours_to_tipoff: 12.0
   adverse_steam_threshold: -0.040

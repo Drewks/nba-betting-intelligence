@@ -201,12 +201,14 @@ class PaperTradingEngine:
 
     def persist_closing_lines_for_games(self, as_of_utc: str | None = None) -> int:
         """
-        Promotes the latest strictly pre-tipoff OBSERVED odds capture to a formal closing line
+        Promotes the latest pre-tipoff OBSERVED odds capture to a formal closing line
         (is_closing_line = 1) for real games that are FINAL or within 45 minutes of tip-off.
         - Only rows from `v_observed_odds_snapshots` are eligible (never quarantined/derived/synthetic odds),
           so a fabricated quote can never be laundered into an "observed" closing line.
         - The closing copy inherits the source row's provider and source_type.
-        - Strictly requires captured_at < game_start_time (zero temporal leakage).
+        - Uses SQLite `datetime(...)` normalization so `+00:00` vs `Z` ISO-8601 formats never break
+          `datetime(captured_at) <= datetime(game_start_time)` pre-tip comparisons.
+        - Promotes the latest pre-tip capture per `(provider, market, selection, line_value)`.
         Returns the count of newly inserted closing odds rows.
         """
         now_dt = parse_iso_utc(as_of_utc) if as_of_utc else datetime.now(timezone.utc)
@@ -216,19 +218,12 @@ class PaperTradingEngine:
             SELECT g.game_id, g.game_start_time, g.status
             FROM games g
             WHERE g.game_id NOT LIKE 'SYN%'
-              AND (g.status IN ('FINAL', 'POSTPONED', 'CANCELLED') OR g.game_start_time <= ?)
+              AND (g.status IN ('FINAL', 'POSTPONED', 'CANCELLED') OR datetime(g.game_start_time) <= datetime(?))
               AND EXISTS (
                   SELECT 1 FROM v_observed_odds_snapshots o
-                  WHERE o.game_id = g.game_id AND o.is_closing_line = 0 AND o.captured_at < g.game_start_time
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM v_observed_odds_snapshots o
-                  WHERE o.game_id = g.game_id AND o.is_closing_line = 1
-                    AND o.captured_at >= (
-                        SELECT MAX(o2.captured_at) FROM v_observed_odds_snapshots o2
-                        WHERE o2.game_id = g.game_id AND o2.is_closing_line = 0
-                          AND o2.captured_at < g.game_start_time
-                    )
+                  WHERE o.game_id = g.game_id
+                    AND o.is_closing_line = 0
+                    AND datetime(o.captured_at) <= datetime(g.game_start_time)
               )
             """,
             (cutoff_str,),
@@ -238,32 +233,31 @@ class PaperTradingEngine:
             for g in games_needing_close:
                 gid = g["game_id"]
                 start_ts = g["game_start_time"]
-                latest_time_row = conn.execute(
-                    """
-                    SELECT MAX(captured_at) AS max_captured
-                    FROM v_observed_odds_snapshots
-                    WHERE game_id = ? AND is_closing_line = 0 AND captured_at < ?
-                    """,
-                    (gid, start_ts),
-                ).fetchone()
-                if not latest_time_row or not latest_time_row["max_captured"]:
-                    continue
-                max_captured = latest_time_row["max_captured"]
-
+                # Latest pre-tip capture PER (provider, market, selection, line) using normalized UTC datetime()
                 snapshots = conn.execute(
                     """
-                    SELECT * FROM v_observed_odds_snapshots
-                    WHERE game_id = ? AND is_closing_line = 0 AND captured_at = ?
+                    SELECT *
+                    FROM (
+                        SELECT o.*,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY o.provider, o.market, o.selection, COALESCE(o.line_value, -9999)
+                                   ORDER BY datetime(o.captured_at) DESC, o.captured_at DESC
+                               ) AS rn
+                        FROM v_observed_odds_snapshots o
+                        WHERE o.game_id = ?
+                          AND o.is_closing_line = 0
+                          AND datetime(o.captured_at) <= datetime(?)
+                    )
+                    WHERE rn = 1
                     """,
-                    (gid, max_captured),
+                    (gid, start_ts),
                 ).fetchall()
 
                 for s in snapshots:
                     close_id = f"{s['odds_id']}_CLOSE"
                     existing_close = conn.execute("SELECT 1 FROM odds_snapshots WHERE odds_id = ?", (close_id,)).fetchone()
                     if existing_close:
-                        ts_compact = s["captured_at"].replace("-", "").replace(":", "").replace("T", "_").replace("Z", "")
-                        close_id = f"{s['odds_id']}_CLOSE_{ts_compact}"
+                        continue
                     inserted = self.db.insert_odds_snapshot(
                         {
                             "odds_id": close_id,
@@ -300,12 +294,12 @@ class PaperTradingEngine:
         peak_bankroll_pen: float | None = None,
     ) -> float:
         """
-        Calculates contextual Kelly-Conviction stake:
-        - MODO ALFA PURO (Confianza Ciega en el Modelo, sin freno CPPI por defecto):
-          * Underdog (<50%): S/ 3.50 - S/ 5.50 PEN
-          * Medium probability (50% - 58%): S/ 6.00 - S/ 9.50 PEN
-          * High probability (58% - 65%): S/ 10.00 - S/ 14.50 PEN
-          * Maximum conviction (>=65%): S/ 15.00 - S/ 20.00 PEN
+        Calculates contextual Kelly-Conviction stake (research mode, capped at max_stake_pen):
+        - Tier brackets:
+          * Underdog (<50%): S/ 2.00 - S/ 3.50 PEN
+          * Medium probability (50% - 58%): S/ 4.00 - S/ 5.50 PEN
+          * High probability (58% - 65%): S/ 6.00 - S/ 7.50 PEN
+          * Maximum conviction (>=65%): S/ 8.00 - S/ 10.00 PEN
         Also integrates Monte Carlo Overtime Guard, Venn-Abers Conformal bounds,
         and sharp steam move modulation.
         """
@@ -428,7 +422,8 @@ class PaperTradingEngine:
         if peak_bankroll_override is not None:
             peak = float(peak_bankroll_override)
         elif self.db is not None:
-            peak_row = self.db.fetch_one("SELECT MAX(bankroll_after_pen) AS max_br FROM simulated_bets WHERE bankroll_after_pen IS NOT NULL")
+            bets_table = "simulated_bets" if (self.is_backtest and not self.exclude_synthetic) else "v_observed_simulated_bets"
+            peak_row = self.db.fetch_one(f"SELECT MAX(bankroll_after_pen) AS max_br FROM {bets_table} WHERE bankroll_after_pen IS NOT NULL")
             peak = max(self.initial_bankroll_pen, float(peak_row["max_br"] or self.initial_bankroll_pen) if peak_row else self.initial_bankroll_pen)
         else:
             peak = self.initial_bankroll_pen
@@ -451,13 +446,16 @@ class PaperTradingEngine:
 
     def get_bankroll_state(self) -> dict[str, float]:
         """
-        Computes current bankroll state from immutable simulated_bets history and verifies ledger consistency.
+        Computes current bankroll state strictly from observed simulated bets (`v_observed_simulated_bets`)
+        so that all reports and summaries share the exact same observed bankroll.
+        Falls back to `simulated_bets` only during explicit synthetic walk-forward backtests.
         """
+        bets_table = "simulated_bets" if (self.is_backtest and not self.exclude_synthetic) else "v_observed_simulated_bets"
         settled_rows = self.db.fetch_all(
-            f"SELECT net_profit_pen FROM simulated_bets WHERE status IN ('WON', 'LOST', 'PUSH', 'VOID') AND {self.scope_sql}"
+            f"SELECT net_profit_pen FROM {bets_table} WHERE status IN ('WON', 'LOST', 'PUSH', 'VOID') AND {self.scope_sql}"
         )
         pending_rows = self.db.fetch_all(
-            f"SELECT stake_pen FROM simulated_bets WHERE status = 'PENDING' AND {self.scope_sql}"
+            f"SELECT stake_pen FROM {bets_table} WHERE status = 'PENDING' AND {self.scope_sql}"
         )
 
         cumulative_profit = round(sum(float(r["net_profit_pen"] or 0.0) for r in settled_rows), 4)
@@ -1403,16 +1401,18 @@ class PaperTradingEngine:
         """
         Computes institutional performance metrics for Player Props & SGP Paper Trading:
         Win rate, Net Profit (PEN), ROI %, Brier Score, Conformal Coverage, and category breakdown.
+        Excludes VOID legacy rows from resolved settled counts and recent_settled table.
         """
         all_props = self.db.fetch_all("SELECT * FROM player_prop_picks ORDER BY emitted_at DESC")
-        settled = [p for p in all_props if p["status"] in ("WON", "LOST", "PUSH", "VOID")]
-        won = [p for p in settled if p["status"] == "WON"]
-        lost = [p for p in settled if p["status"] == "LOST"]
-        push = [p for p in settled if p["status"] == "PUSH"]
-        void = [p for p in settled if p["status"] == "VOID"]
+        settled_all = [p for p in all_props if p["status"] in ("WON", "LOST", "PUSH", "VOID")]
+        resolved = [p for p in all_props if p["status"] in ("WON", "LOST", "PUSH")]
+        won = [p for p in resolved if p["status"] == "WON"]
+        lost = [p for p in resolved if p["status"] == "LOST"]
+        push = [p for p in resolved if p["status"] == "PUSH"]
+        void = [p for p in settled_all if p["status"] == "VOID"]
 
-        total_staked = sum(float(p.get("stake_pen") or p.get("kelly_stake_pen") or 1.0) for p in settled if p["status"] in ("WON", "LOST"))
-        net_profit = sum(float(p.get("net_profit_pen") or 0.0) for p in settled)
+        total_staked = sum(float(p.get("stake_pen") or p.get("kelly_stake_pen") or 1.0) for p in resolved if p["status"] in ("WON", "LOST"))
+        net_profit = sum(float(p.get("net_profit_pen") or 0.0) for p in resolved)
 
         current_bankroll = round(self.initial_bankroll_pen + net_profit, 2)
 
@@ -1422,7 +1422,7 @@ class PaperTradingEngine:
 
         squared_errors = []
         conformal_hits = 0
-        for p in settled:
+        for p in resolved:
             if p["status"] in ("WON", "LOST"):
                 y_true = 1.0 if p["status"] == "WON" else 0.0
                 prob = float(p.get("model_prob") or 0.5)
@@ -1438,16 +1438,22 @@ class PaperTradingEngine:
         categories = ["PTS", "REB", "AST", "PRA", "3PM", "PR", "PA", "RA", "SGP"]
         breakdown: dict[str, dict[str, Any]] = {}
         for cat in categories:
-            cat_props = [p for p in settled if p.get("prop_category") == cat]
+            cat_props = [p for p in settled_all if p.get("prop_category") == cat]
             c_won = [p for p in cat_props if p["status"] == "WON"]
             c_lost = [p for p in cat_props if p["status"] == "LOST"]
+            c_push = [p for p in cat_props if p["status"] == "PUSH"]
+            c_void = [p for p in cat_props if p["status"] == "VOID"]
             c_staked = sum(float(p.get("stake_pen") or p.get("kelly_stake_pen") or 1.0) for p in cat_props if p["status"] in ("WON", "LOST"))
-            c_net = sum(float(p.get("net_profit_pen") or 0.0) for p in cat_props)
+            c_net = sum(float(p.get("net_profit_pen") or 0.0) for p in cat_props if p["status"] in ("WON", "LOST", "PUSH"))
             c_res = len(c_won) + len(c_lost)
+            c_resolved_total = len(c_won) + len(c_lost) + len(c_push)
             breakdown[cat] = {
-                "total_settled": len(cat_props),
+                "total_settled": c_resolved_total,
+                "resolved_picks": c_resolved_total,
                 "won": len(c_won),
                 "lost": len(c_lost),
+                "push": len(c_push),
+                "void": len(c_void),
                 "win_rate_pct": round(len(c_won) / c_res * 100.0, 1) if c_res > 0 else 0.0,
                 "total_staked_pen": round(c_staked, 2),
                 "net_profit_pen": round(c_net, 2),
@@ -1456,8 +1462,9 @@ class PaperTradingEngine:
 
         return {
             "total_picks": len(all_props),
-            "pending_picks": len(all_props) - len(settled),
-            "settled_picks": len(settled),
+            "pending_picks": len(all_props) - len(settled_all),
+            "settled_picks": len(resolved),
+            "resolved_picks": len(resolved),
             "won_picks": len(won),
             "lost_picks": len(lost),
             "push_picks": len(push),
@@ -1470,7 +1477,7 @@ class PaperTradingEngine:
             "brier_score": round(brier_score, 4),
             "conformal_coverage_pct": round(conformal_coverage, 1),
             "category_breakdown": breakdown,
-            "recent_settled": settled[:15],
+            "recent_settled": resolved[:15],
         }
 
 

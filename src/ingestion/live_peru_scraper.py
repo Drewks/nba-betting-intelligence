@@ -55,6 +55,7 @@ class LiveGameOddsQuote:
     total_points_line: float | None = None
     total_over_odds: float | None = None
     total_under_odds: float | None = None
+    player_props: list[dict[str, Any]] | None = None
     captured_at: str = ""
     source: str = "LIVE_EXTRACTOR"
     is_observed: bool = True
@@ -204,6 +205,12 @@ def parse_teapuesto_nba_events(
                         val = float(odd.get("value") or 0.0)
                         if val <= 1.0:
                             continue
+                        sv = odd.get("special_value")
+                        if sv is not None and p_line is None:
+                            try:
+                                p_line = float(sv)
+                            except (TypeError, ValueError):
+                                pass
                         if p_line is None:
                             m_num = _NUM_RE.search(oname)
                             if m_num:
@@ -216,7 +223,7 @@ def parse_teapuesto_nba_events(
                         player_props.append(
                             {
                                 "player_name": player_name,
-                                "prop_category": "POINTS",
+                                "prop_category": "PTS",
                                 "line_value": p_line,
                                 "over_odds": p_over,
                                 "under_odds": p_under,
@@ -521,6 +528,7 @@ class LivePeruOddsScraper:
                 total_points_line=row.get("total_points_line"),
                 total_over_odds=row.get("total_over_odds"),
                 total_under_odds=row.get("total_under_odds"),
+                player_props=row.get("player_props"),
                 captured_at=str(row.get("captured_at") or ""),
                 source=str(row.get("source") or "LIVE_EXTRACTOR"),
                 is_observed=True,
@@ -886,6 +894,44 @@ class LivePeruOddsScraper:
                             "source_type": "OBSERVED",
                         }
                     )
+            for pp in q.player_props or []:
+                p_name = str(pp.get("player_name") or "").strip()
+                raw_cat = str(pp.get("prop_category") or "PTS").strip().upper()
+                cat_code = "PTS" if raw_cat in ("PTS", "POINTS", "PUNTOS") else raw_cat
+                p_line = pp.get("line_value")
+                p_over = pp.get("over_odds")
+                p_under = pp.get("under_odds")
+                if (
+                    p_name
+                    and cat_code
+                    and p_line is not None
+                    and float(p_line) > 0.5
+                    and p_over is not None
+                    and p_under is not None
+                    and float(p_over) > 1.0
+                    and float(p_under) > 1.0
+                ):
+                    p_slug = re.sub(r"[^a-zA-Z0-9]+", "_", p_name).strip("_")
+                    prop_provider = f"{provider}|{p_name}|{cat_code}"
+                    for selection, price, counter in (
+                        ("OVER", float(p_over), float(p_under)),
+                        ("UNDER", float(p_under), float(p_over)),
+                    ):
+                        self.db.insert_odds_snapshot(
+                            {
+                                "odds_id": f"ODDS_LIVEAPI_{game_id}_{bid}_PROP_{p_slug}_{cat_code}_{selection}_{float(p_line)}_{cap_ts}",
+                                "game_id": game_id,
+                                "provider": prop_provider,
+                                "market": "player_prop",
+                                "selection": selection,
+                                "line_value": float(p_line),
+                                "decimal_odds": price,
+                                "counterpart_decimal_odds": counter,
+                                "captured_at": cap_ts,
+                                "is_closing_line": 0,
+                                "source_type": "OBSERVED",
+                            }
+                        )
             # Note: odds_snapshots CHECK constraint accepts ('moneyline', 'total_points', 'player_prop');
             # spread lines remain exposed on LiveGameOddsQuote & scan JSON outputs.
 

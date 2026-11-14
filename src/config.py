@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "model_config.yaml"
 
@@ -20,7 +20,7 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "model_config.
 AGENTS_MAX_STAKE_PEN = 10.00
 AGENTS_MAX_STAKE_BANKROLL_FRACTION = 0.10
 AGENTS_MAX_KELLY_FRACTION = 0.50
-AGENTS_MIN_EV_THRESHOLD = 0.05
+AGENTS_MIN_EV_THRESHOLD = 0.02
 AGENTS_MAX_SELECTIONS_PER_MATCHDAY = 3
 
 
@@ -63,15 +63,15 @@ class ConvictionProfileConfig:
 
 
 DEFAULT_AGGRESSIVE_PROFILE = ConvictionProfileConfig(
-    tier_low=TierConfig(0.35, 0.50, 3.50, 2.00, 2.00, 4.0),
-    tier_mid=TierConfig(0.50, 0.58, 6.00, 3.50, 3.00, 6.0),
-    tier_high=TierConfig(0.58, 0.65, 10.00, 4.50, 4.50, 8.0),
-    tier_star=TierConfig(0.65, 1.00, 15.00, 5.00, 5.00, 10.0),
+    tier_low=TierConfig(0.35, 0.50, 2.00, 1.50, 1.50, 2.5),
+    tier_mid=TierConfig(0.50, 0.58, 4.00, 1.50, 2.00, 3.5),
+    tier_high=TierConfig(0.58, 0.65, 6.00, 1.50, 2.00, 4.5),
+    tier_star=TierConfig(0.65, 1.00, 8.00, 2.00, 2.00, 5.0),
     edge_modulator_floor=0.40,
     edge_modulator_div=0.06,
-    min_stake_floor=2.50,
+    min_stake_floor=1.00,
     max_longshot_odds=4.00,
-    max_longshot_stake=6.00,
+    max_longshot_stake=5.00,
 )
 
 DEFAULT_CONSERVATIVE_PROFILE = ConvictionProfileConfig(
@@ -150,6 +150,14 @@ class RiskConfig:
     clv_governor: CLVGovernorConfig = field(default_factory=CLVGovernorConfig)
     risk_modulators: RiskModulatorsConfig = field(default_factory=RiskModulatorsConfig)
 
+    @property
+    def min_ev(self) -> float:
+        return self.min_ev_threshold
+
+    @property
+    def max_selections_per_day(self) -> int:
+        return self.max_selections_per_matchday
+
 
 @dataclass(frozen=True)
 class SubBankrollConfig:
@@ -175,13 +183,13 @@ class HybridAllocationConfig:
 
 @dataclass(frozen=True)
 class CLVMetaLabelingConfig:
-    enabled: bool = True
+    enabled: bool = False
     calibrated_weights_path: str = "config/calibrated_weights.json"
-    intercept: float = -0.2085
-    coef_steam_delta: float = 57.7103
-    coef_conformal_width_excess: float = -2.1211
-    coef_disagreement_excess: float = -0.1816
-    coef_overround_excess: float = -0.0556
+    intercept: float = -0.3569
+    coef_steam_delta: float = 11.2956
+    coef_conformal_width_excess: float = -3.0232
+    coef_disagreement_excess: float = -2.9046
+    coef_overround_excess: float = -0.0870
     time_decay_rate: float = 0.04
     max_hours_to_tipoff: float = 12.0
     adverse_steam_threshold: float = -0.040
@@ -445,6 +453,17 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         raise ConfigError("base_stake_pen cannot exceed max_stake_pen")
     if risk.min_stake_pen > risk.max_stake_pen:
         raise ConfigError("min_stake_pen cannot exceed max_stake_pen")
+    for prof_name, prof in (("aggressive", conviction_tiers.aggressive), ("conservative", conviction_tiers.conservative)):
+        for tier_name, tier in (
+            ("tier_low", prof.tier_low),
+            ("tier_mid", prof.tier_mid),
+            ("tier_high", prof.tier_high),
+            ("tier_star", prof.tier_star),
+        ):
+            if tier.base > AGENTS_MAX_STAKE_PEN:
+                raise ConfigError(
+                    f"conviction_tiers.{prof_name}.{tier_name}.base={tier.base} exceeds hard cap {AGENTS_MAX_STAKE_PEN}"
+                )
     allowed = tuple(str(x) for x in (src.get("betting_allowed_source_types") or ["OBSERVED"]))
     if allowed != ("OBSERVED",):
         raise ConfigError("Only OBSERVED odds may be used for betting decisions")
@@ -483,13 +502,13 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     clv_raw = raw.get("clv_meta_labeling")
     if clv_raw:
         clv_meta_labeling = CLVMetaLabelingConfig(
-            enabled=bool(clv_raw.get("enabled", True)),
+            enabled=bool(clv_raw.get("enabled", False)),
             calibrated_weights_path=str(clv_raw.get("calibrated_weights_path", "config/calibrated_weights.json")),
-            intercept=float(clv_raw.get("intercept", -0.2085)),
-            coef_steam_delta=float(clv_raw.get("coef_steam_delta", 57.7103)),
-            coef_conformal_width_excess=float(clv_raw.get("coef_conformal_width_excess", -2.1211)),
-            coef_disagreement_excess=float(clv_raw.get("coef_disagreement_excess", -0.1816)),
-            coef_overround_excess=float(clv_raw.get("coef_overround_excess", -0.0556)),
+            intercept=float(clv_raw.get("intercept", -0.3569)),
+            coef_steam_delta=float(clv_raw.get("coef_steam_delta", 11.2956)),
+            coef_conformal_width_excess=float(clv_raw.get("coef_conformal_width_excess", -3.0232)),
+            coef_disagreement_excess=float(clv_raw.get("coef_disagreement_excess", -2.9046)),
+            coef_overround_excess=float(clv_raw.get("coef_overround_excess", -0.0870)),
             time_decay_rate=float(clv_raw.get("time_decay_rate", 0.04)),
             max_hours_to_tipoff=float(clv_raw.get("max_hours_to_tipoff", 12.0)),
             adverse_steam_threshold=float(clv_raw.get("adverse_steam_threshold", -0.040)),

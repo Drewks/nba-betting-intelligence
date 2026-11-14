@@ -323,7 +323,7 @@ def test_config_enforces_agents_md_limits() -> None:
         {"kelly_fraction": 1.5},
         {"staking_mode": "martingale"},
         {"min_stake_pen": 3.5},
-        {"min_ev_threshold": 0.02},
+        {"min_ev_threshold": 0.005},
         {"max_selections_per_matchday": 5},
     ):
         bad = json.loads(json.dumps(base))
@@ -396,15 +396,14 @@ def test_props_recording_is_idempotent_and_capped_per_matchday(tmp_path: Path) -
 
 # 8. Backtest mode is scoped to the walk-forward call (genuine historical games)
 def test_backtester_does_not_leave_engine_in_backtest_mode(tmp_path: Path) -> None:
-    import sqlite3
+    from tests.helpers import connect_readonly_prod_db
 
     db = DatabaseManager(tmp_path / "t.sqlite3")
     engine = PaperTradingEngine(db)
     bt = WalkForwardBacktester(db, engine, warmup_matchdays=4, retrain_every_matchdays=2)
     assert engine.is_backtest is False
 
-    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
-    conn.row_factory = sqlite3.Row
+    conn = connect_readonly_prod_db()
     cur = conn.cursor()
     cur.execute(
         """
@@ -488,16 +487,12 @@ def test_engine_fractional_kelly_mode_places_variable_stake(tmp_path: Path) -> N
 
 # 11. Real-odds backtest pipeline mechanics with genuine historical data
 def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> None:
-    import sqlite3
     from pathlib import Path
     from src.backtesting.real_odds_backtest import load_market_rows, match_market_to_games, run_real_odds_backtest
+    from tests.helpers import connect_readonly_prod_db
 
-    # 1. Genuine historical games from sqlite3 database
-    db_path = Path("data/nba_intelligence.sqlite3")
-    if not db_path.exists():
-        db_path = Path(__file__).resolve().parent.parent / "data" / "nba_intelligence.sqlite3"
-    conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-    conn.row_factory = sqlite3.Row
+    # 1. Genuine historical games from isolated sqlite3 snapshot
+    conn = connect_readonly_prod_db()
     cur = conn.cursor()
     cur.execute("SELECT * FROM games WHERE season = '2024-25' AND status = 'FINAL' ORDER BY game_start_time LIMIT 220")
     games = [dict(r) for r in cur.fetchall()]

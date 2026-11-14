@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import sqlite3
 import numpy as np
 import pytest
 
@@ -17,7 +16,7 @@ from src.storage.db import DatabaseManager
 from src.validation.validator import (
     TemporalLeakageError,
 )
-from tests.helpers import _seed_sample_game_and_prediction
+from tests.helpers import _seed_sample_game_and_prediction, connect_readonly_prod_db
 
 
 
@@ -25,8 +24,7 @@ from tests.helpers import _seed_sample_game_and_prediction
 def test_19_deep_montecarlo_hybrid_model() -> None:
     from src.models.statistical_models import DeepMonteCarloHybridModel, EnsembleStackingModel
 
-    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
-    conn.row_factory = sqlite3.Row
+    conn = connect_readonly_prod_db()
     cur = conn.cursor()
     cur.execute("SELECT * FROM games WHERE status = 'FINAL' ORDER BY game_start_time LIMIT 50")
     games = [dict(r) for r in cur.fetchall()]
@@ -544,8 +542,7 @@ def test_30_optuna_walk_forward_hyperparameter_optimization(tmp_path: Path) -> N
         optimizer.optimize(games=[], n_trials=2)
 
     # 2. Run optimization over deterministic walk-forward schedule with genuine historical games
-    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
-    conn.row_factory = sqlite3.Row
+    conn = connect_readonly_prod_db()
     cur = conn.cursor()
     cur.execute("SELECT * FROM games WHERE status = 'FINAL' ORDER BY game_start_time LIMIT 120")
     games = [dict(r) for r in cur.fetchall()]

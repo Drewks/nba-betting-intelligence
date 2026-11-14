@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.config import load_config
 from src.reporting.slate_intelligence import _fmt
 
 
@@ -23,6 +24,14 @@ def sync_obsidian_vault(
     """Populates the dedicated Obsidian vault (`NBA/00-Inbox` through `NBA/09-Reports`)."""
     root = Path(vault_root)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    risk_cfg = load_config().risk
+    min_ev_pct = float(risk_cfg.min_ev_threshold) * 100.0
+    max_sel = int(risk_cfg.max_selections_per_matchday)
+    if str(risk_cfg.staking_mode).lower() == "fractional_kelly":
+        kelly_pct = round(float(risk_cfg.kelly_fraction) * 100.0)
+        staking_desc = f"Kelly Fraccional ({kelly_pct}%)"
+    else:
+        staking_desc = f"Stake fijo S/{float(risk_cfg.base_stake_pen):.2f}"
 
     files_to_write: dict[str, str] = {
         "00-Inbox/00-System-Status.md": (
@@ -134,7 +143,7 @@ def sync_obsidian_vault(
             f"- **Beneficio neto acumulado**: `S/{metrics['net_profit_pen']:+.2f} PEN`\n"
             f"- **Exposición pendiente**: `S/{metrics.get('pending_exposure_pen', 0.0):.2f} PEN`\n"
             f"- **Apuestas liquidadas**: `{metrics['settled_bets_count']}`\n"
-            "- **Reglas activas**: Stake fijo S/1.00, máx 3 selecciones/jornada, EV > 5.0%, sin combinadas ni martingala.\n"
+            f"- **Reglas activas**: {staking_desc}, máx {max_sel} selecciones/jornada, EV >= {min_ev_pct:.1f}%.\n"
         ),
         "06-Models/Model-Catalog-and-Versions.md": (
             f"---\ndate_generated: {now_str}\n---\n"

@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-14T13:49:33Z
+date_generated: 2026-11-14T14:49:30Z
 initial_bankroll_pen: 100.00
 current_bankroll_pen: 93.47
 ---
@@ -10,4 +10,4 @@ current_bankroll_pen: 93.47
 - **Beneficio neto acumulado**: `S/-6.53 PEN`
 - **Exposición pendiente**: `S/0.00 PEN`
 - **Apuestas liquidadas**: `28`
-- **Reglas activas**: Stake fijo S/1.00, máx 3 selecciones/jornada, EV > 5.0%, sin combinadas ni martingala.
+- **Reglas activas**: Kelly Fraccional (25%), máx 3 selecciones/jornada, EV >= 2.0%.

@@ -23,8 +23,9 @@ def test_phase1_config_loading_and_dataclasses() -> None:
     load_config.cache_clear()
     cfg = load_config()
 
-    # Conviction tiers
-    assert cfg.risk.conviction_tiers.aggressive.tier_star.base == 15.00
+    # Conviction tiers (never exceed max_stake_pen = 10.00)
+    assert cfg.risk.conviction_tiers.aggressive.tier_star.base == 8.00
+    assert cfg.risk.conviction_tiers.aggressive.tier_star.base <= cfg.risk.max_stake_pen
     assert cfg.risk.conviction_tiers.conservative.tier_star.base == 4.80
     assert cfg.risk.conviction_tiers.conservative.edge_modulator_floor == 0.20
 

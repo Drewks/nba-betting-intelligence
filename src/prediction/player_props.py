@@ -27,7 +27,9 @@ import logging
 import math
 import os
 from pathlib import Path
+import re
 from typing import Any
+import unicodedata
 import uuid
 
 import numpy as np
@@ -63,6 +65,73 @@ __all__ = [
     "PlayerPropsEngine",
     "get_fallback_rosters",
 ]
+
+_PROP_CATEGORY_ALIASES: dict[str, str] = {
+    "PTS": "PTS",
+    "POINTS": "PTS",
+    "POINT": "PTS",
+    "REB": "REB",
+    "REBOUNDS": "REB",
+    "REBOUND": "REB",
+    "AST": "AST",
+    "ASSISTS": "AST",
+    "ASSIST": "AST",
+    "3PM": "3PM",
+    "3PT": "3PM",
+    "THREES": "3PM",
+    "PRA": "PRA",
+    "PR": "PR",
+    "PA": "PA",
+    "RA": "RA",
+}
+
+
+def _normalize_player_match_key(name: str) -> str:
+    """Normalizes a player name for exact canonical matching across bookmakers and rosters."""
+    ascii_text = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode("ascii").lower()
+    cleaned = re.sub(r"[^a-z0-9 ]+", " ", ascii_text)
+    return " ".join(cleaned.split())
+
+
+def _parse_observed_prop_provider(provider_str: str) -> tuple[str, str] | None:
+    """
+    Extracts (player_name, canonical_category) from a bookmaker prop provider string.
+    Supports:
+      - Structured pipe format: '{book}|{player_name}|{category}' (or '{book}|{player_name}')
+      - Underscore format: '{book}_{player_name}_{category}' or '{book}_{player_name}' (defaults strictly to 'PTS')
+    Returns None if player_name or category cannot be cleanly parsed.
+    """
+    raw = str(provider_str or "").strip()
+    if not raw:
+        return None
+
+    if "|" in raw:
+        parts = [p.strip() for p in raw.split("|")]
+        if len(parts) < 2 or not parts[1]:
+            return None
+        player_part = parts[1]
+        cat_token = parts[2].upper() if len(parts) >= 3 and parts[2] else "PTS"
+        canonical_cat = _PROP_CATEGORY_ALIASES.get(cat_token)
+        if not canonical_cat:
+            return None
+        return player_part, canonical_cat
+
+    if "_" in raw:
+        parts = [p.strip() for p in raw.split("_") if p.strip()]
+        if len(parts) < 2:
+            return None
+        last_upper = parts[-1].upper()
+        if len(parts) >= 3 and last_upper in _PROP_CATEGORY_ALIASES:
+            canonical_cat = _PROP_CATEGORY_ALIASES[last_upper]
+            player_part = " ".join(parts[1:-1]).strip()
+        else:
+            canonical_cat = "PTS"
+            player_part = " ".join(parts[1:]).strip()
+        if not player_part:
+            return None
+        return player_part, canonical_cat
+
+    return None
 
 
 class PlayerPropsEngine:
@@ -1249,6 +1318,60 @@ class PlayerPropsEngine:
             spread_val = float(game.get("expected_margin") or 0.0)
             pace_val = float(game.get("stats", {}).get("expected_pace") or 99.5) if isinstance(game.get("stats"), dict) else 99.5
 
+            # Pre-index observed two-sided player_prop snapshots strictly by (normalized_player_name, canonical_category)
+            observed_props_index: dict[tuple[str, str], list[tuple[float, float, float]]] = {}
+            if self.db and gid:
+                g_start_str = str(game.get("game_start_time") or "").strip()
+                if g_start_str:
+                    raw_prop_rows = self.db.fetch_all(
+                        """
+                        SELECT provider, line_value, decimal_odds, counterpart_decimal_odds, selection
+                        FROM v_observed_odds_snapshots
+                        WHERE game_id = ?
+                          AND market = 'player_prop'
+                          AND COALESCE(is_closing_line, 0) = 0
+                          AND datetime(captured_at) < datetime(?)
+                        ORDER BY captured_at DESC
+                        """,
+                        (gid, g_start_str),
+                    )
+                else:
+                    raw_prop_rows = self.db.fetch_all(
+                        """
+                        SELECT provider, line_value, decimal_odds, counterpart_decimal_odds, selection
+                        FROM v_observed_odds_snapshots
+                        WHERE game_id = ?
+                          AND market = 'player_prop'
+                          AND COALESCE(is_closing_line, 0) = 0
+                        ORDER BY captured_at DESC
+                        """,
+                        (gid,),
+                    )
+                for oq in raw_prop_rows:
+                    parsed_prov = _parse_observed_prop_provider(str(oq.get("provider") or ""))
+                    if not parsed_prov:
+                        continue
+                    oq_player, oq_cat = parsed_prov
+                    p_key = _normalize_player_match_key(oq_player)
+                    if not p_key:
+                        continue
+                    lv = round(float(oq.get("line_value") or 0.0), 2)
+                    dec_odds = float(oq.get("decimal_odds") or 0.0)
+                    counter_odds = float(oq.get("counterpart_decimal_odds") or 0.0)
+                    sel_side = str(oq.get("selection") or "OVER").strip().upper()
+                    if sel_side == "UNDER":
+                        oo, uo = counter_odds, dec_odds
+                    else:
+                        oo, uo = dec_odds, counter_odds
+                    if lv > 0.5 and oo > 1.0 and uo > 1.0:
+                        bucket = observed_props_index.setdefault((p_key, oq_cat), [])
+                        quote_tuple = (lv, oo, uo)
+                        if quote_tuple not in bucket:
+                            bucket.append(quote_tuple)
+
+            if not observed_props_index:
+                continue
+
             for _is_home, team_code, opp_code in [(True, home_t, away_t), (False, away_t, home_t)]:
                 if not team_code:
                     continue
@@ -1279,6 +1402,9 @@ class PlayerPropsEngine:
                         continue
 
                     p_name = canonical_name
+                    target_p_key = _normalize_player_match_key(p_name)
+                    if not target_p_key:
+                        continue
 
                     # Evaluate primary stat lines: PTS and PRA for primary scorers, AST for guards, REB for bigs
                     categories_to_eval = ["PTS"]
@@ -1290,6 +1416,10 @@ class PlayerPropsEngine:
                         categories_to_eval.append("3PM")
                     categories_to_eval.append("PRA")
 
+                    matched_cats = [cat for cat in categories_to_eval if (target_p_key, cat) in observed_props_index]
+                    if not matched_cats:
+                        continue
+
                     # Project raw baseline to find standard retail market line
                     proj = self.project_player_stats(
                         player_name=p_name,
@@ -1300,34 +1430,12 @@ class PlayerPropsEngine:
                         spread_blowout_risk=spread_val,
                     )
 
-                    for cat in categories_to_eval:
+                    for cat in matched_cats:
                         p_data = proj["projections"].get(cat)
                         if not p_data:
                             continue
 
-                        # Strict Data Integrity: Require observed prop quotes from bookmaker snapshots
-                        observed_quotes: list[dict[str, Any]] = []
-                        if self.db and gid:
-                            observed_quotes = self.db.fetch_all(
-                                """
-                                SELECT line_value, decimal_odds, counterpart_decimal_odds, selection
-                                FROM v_observed_odds_snapshots
-                                WHERE game_id = ? AND market = 'player_prop' AND provider LIKE ?
-                                """,
-                                (gid, f"%{p_name}%"),
-                            )
-
-                        if not observed_quotes:
-                            continue
-
-                        lines_to_test: list[tuple[float, float, float]] = []
-                        for oq in observed_quotes:
-                            lv = float(oq.get("line_value") or 0.0)
-                            oo = float(oq.get("decimal_odds") or 0.0)
-                            uo = float(oq.get("counterpart_decimal_odds") or 0.0)
-                            if lv > 0.5 and oo > 1.0 and uo > 1.0:
-                                lines_to_test.append((lv, oo, uo))
-
+                        lines_to_test = observed_props_index.get((target_p_key, cat), [])
                         if not lines_to_test:
                             continue
 
@@ -1398,7 +1506,9 @@ class PlayerPropsEngine:
                 out_file.write_text(json.dumps(consolidated, indent=2, ensure_ascii=False), encoding="utf-8")
             except Exception as exc:
                 logger.debug(f"Failed to write props output file: {exc}")
-        elif not os.environ.get("PYTEST_CURRENT_TEST"):
+        elif not os.environ.get("PYTEST_CURRENT_TEST") and (
+            self.db is None or Path(self.db.db_path).resolve() == Path("data/nba_intelligence.sqlite3").resolve()
+        ):
             out_file = Path("data/evaluation/latest_player_props.json")
             try:
                 out_file.parent.mkdir(parents=True, exist_ok=True)

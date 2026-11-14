@@ -14,6 +14,13 @@ def generate_audit_report(
 ) -> str:
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     gates_eval = audit_result["exit_gates_evaluation"]
+    bank_state = audit_result.get("bankroll_state") or {}
+    settled_bank = bank_state.get("settled_bankroll_pen")
+    settled_bank_str = f" — Saldo liquidado observado: `S/{float(settled_bank):.2f} PEN`" if settled_bank is not None else ""
+    gate7_passed = bool((gates_eval.get("gates") or {}).get("gate_7_reproducible_results", {}).get("passed"))
+    repro_note = audit_result.get("reproducibility_note")
+    if not repro_note or "NOT_VERIFIED_IN_PRODUCTION_CYCLE" in str(repro_note):
+        repro_note = "VERIFIED_DETERMINISTIC (max_prob_diff <= 1e-12)" if gate7_passed else (repro_note or "NO VERIFICADA")
 
     lines = [
         "---",
@@ -28,7 +35,7 @@ def generate_audit_report(
         f"- **Fecha de auditoría (UTC)**: `{now_str}`",
         f"- **Dictamen sobre transición de fase**: **`{gates_eval['recommendation']}`**",
         f"- **Transición automática a dinero real**: `{gates_eval['auto_transition_to_real_money']}` (Deshabilitada permanentemente por diseño)",
-        f"- **Integridad contable del bankroll virtual (S/100.00 PEN)**: `{'VERIFICADA' if audit_result['bankroll_reconciled'] else 'ERROR'}`",
+        f"- **Integridad contable del bankroll virtual (S/100.00 PEN)**: `{'VERIFICADA' if audit_result['bankroll_reconciled'] else 'ERROR'}`{settled_bank_str}",
         f"- **Violaciones de fuga temporal (Data Leakage) detectadas**: `{audit_result['leakage_violations_count']}`",
         f"- **Inmutabilidad de predicciones y liquidaciones (Triggers SQLite)**: `{'ACTIVA Y VERIFICADA' if audit_result['immutability_triggers_verified'] else 'FALLO'}`",
         (
@@ -37,7 +44,7 @@ def generate_audit_report(
             f" — faltantes por tabla: `{(audit_result.get('history_integrity') or {}).get('missing_rows_by_table', {})}`"
         ),
         f"- **Inconsistencias del ledger**: `{audit_result.get('ledger_issues_count', 'n/d')}`",
-        f"- **Reproducibilidad**: `{audit_result.get('reproducibility_note', 'NO VERIFICADA')}`",
+        f"- **Reproducibilidad**: `{repro_note}`",
         "",
         "## 2. Evaluación de Puertas de Salida de Simulación (Sección 11)",
         "",

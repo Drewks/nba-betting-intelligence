@@ -716,14 +716,19 @@ class WalkForwardBacktester:
         """
         if not model_comparison_records:
             model_comparison_records = self._reconstruct_comparison_records_from_db()
-        if getattr(self.paper_engine, "exclude_synthetic", False):
+
+        # Production scope (exclude_synthetic=True or default non-backtest PaperTradingEngine):
+        # only bets placed on OBSERVED odds count (v_observed_simulated_bets).
+        # Simulation scope (synthetic walk-forward with is_backtest=True and exclude_synthetic=False):
+        # uses simulated_bets.
+        production_scope = bool(getattr(self.paper_engine, "exclude_synthetic", False)) or not bool(
+            getattr(self.paper_engine, "is_backtest", False)
+        )
+        if production_scope:
             model_comparison_records = [
                 r for r in model_comparison_records if not str(r["game_id"]).startswith("SYN")
             ]
 
-        # Production scope (exclude_synthetic=True): only bets placed on OBSERVED odds count.
-        # Simulation scope (synthetic walk-forward): every bet is synthetic by construction.
-        production_scope = bool(getattr(self.paper_engine, "exclude_synthetic", False))
         bets_source = "v_observed_simulated_bets" if production_scope else "simulated_bets"
         all_bets = self.db.fetch_all(
             f"SELECT * FROM {bets_source} WHERE {getattr(self.paper_engine, 'scope_sql', '1 = 1')} "
@@ -904,3 +909,27 @@ class WalkForwardBacktester:
 
         summary["exit_gates_evaluation"] = evaluate_simulation_exit_gates(summary)
         return summary
+
+    def compute_financial_and_statistical_metrics(
+        self,
+        model_comparison_records: list[dict[str, Any]] | None = None,
+        closing_rows: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Alias for compute_comprehensive_metrics (observed financial and statistical evaluation)."""
+        return self.compute_comprehensive_metrics(
+            model_comparison_records=model_comparison_records,
+            closing_rows=closing_rows,
+        )
+
+
+def compute_financial_and_statistical_metrics(
+    db: DatabaseManager,
+    paper_engine: PaperTradingEngine | None = None,
+) -> dict[str, Any]:
+    """
+    Computes observed financial and statistical metrics from v_observed_simulated_bets,
+    reconciled with PaperTradingEngine.get_bankroll_state().
+    """
+    engine = paper_engine or PaperTradingEngine(db, exclude_synthetic=True)
+    bt = WalkForwardBacktester(db, engine)
+    return bt.compute_comprehensive_metrics()

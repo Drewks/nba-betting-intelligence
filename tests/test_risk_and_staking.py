@@ -6,7 +6,6 @@ Modular test suite extracted from legacy test_nba_intelligence monolith.
 from __future__ import annotations
 
 from pathlib import Path
-import sqlite3
 
 from src.paper_trading.engine import PaperTradingEngine
 from src.storage.db import DatabaseManager
@@ -547,9 +546,10 @@ def test_50_unconstrained_staking_and_high_prob_parlays(tmp_path: Path) -> None:
     assert stake_in_drawdown <= stake_star  # Properly scaled down to protect capital
 
     # 4. Parlay Generator: Genuine mathematical product without x1.25 multiplier or fake floors (from real games)
+    from tests.helpers import connect_readonly_prod_db
+
     props_engine = PlayerPropsEngine(db=db)
-    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
-    conn.row_factory = sqlite3.Row
+    conn = connect_readonly_prod_db()
     cur = conn.cursor()
     cur.execute("SELECT game_id, home_team, away_team FROM games WHERE status = 'FINAL' ORDER BY game_start_time LIMIT 2")
     real_g = [dict(r) for r in cur.fetchall()]

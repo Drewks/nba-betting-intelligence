@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from src.config import load_config
 from src.storage.db import DatabaseManager
 
 
@@ -16,6 +17,16 @@ def generate_daily_report(
     live_games_summary: dict[str, Any] | None = None,
 ) -> str:
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    risk_cfg = load_config().risk
+    initial_bankroll_pen = float(risk_cfg.virtual_bankroll_initial_pen)
+    min_ev_pct = float(risk_cfg.min_ev_threshold) * 100.0
+    max_sel = int(risk_cfg.max_selections_per_matchday)
+    if str(risk_cfg.staking_mode).lower() == "fractional_kelly":
+        kelly_pct = round(float(risk_cfg.kelly_fraction) * 100.0)
+        staking_desc = f"Kelly Fraccional ({kelly_pct}%)"
+    else:
+        staking_desc = f"Stake fijo S/{float(risk_cfg.base_stake_pen):.2f} PEN"
+
     games = db.fetch_all("SELECT * FROM games WHERE matchday_date = ? ORDER BY game_start_time", (target_date,))
     preds = db.fetch_all(
         """
@@ -36,9 +47,13 @@ def generate_daily_report(
         (target_date,),
     )
     pending_all = db.fetch_all("SELECT * FROM v_observed_simulated_bets WHERE status = 'PENDING'")
+    settled_all = db.fetch_all("SELECT net_profit_pen FROM v_observed_simulated_bets WHERE status != 'PENDING'")
+    observed_net_profit = round(sum(float(r["net_profit_pen"] or 0.0) for r in settled_all), 2)
+    observed_settled_bankroll = round(initial_bankroll_pen + observed_net_profit, 2)
+    observed_settled_count = len(settled_all)
 
     discarded_games = live_games_summary.get("discarded_games", []) if live_games_summary else []
-    no_bets = [d for d in decisions if d["decision_type"] == "NO_BET"]
+    no_bets = [d for d in decisions if (d.get("decision_type") or d.get("decision")) == "NO_BET"]
 
     lines = [
         "---",
@@ -47,18 +62,23 @@ def generate_daily_report(
         "model_versions: [model_c_point_margin_v1, model_d_total_points_v1]",
         f"period_evaluated: {target_date}",
         f"predictions_count: {len(preds)}",
+        f"observed_settled_bets: {observed_settled_count}",
+        f"observed_bankroll_pen: {observed_settled_bankroll:.2f}",
         "simulation_only: true",
         "---",
         f"# Informe Diario NBA Betting Intelligence — {target_date}",
         "",
-        "## 1. Metadatos de Ejecución",
+        "## 1. Metadatos de Ejecución y Estado de Banca Observada",
         f"- **Fecha de generación (UTC)**: `{now_str}`",
         f"- **Jornada evaluada**: `{target_date}`",
         "- **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)",
+        f"- **Bankroll virtual inicial**: `S/{initial_bankroll_pen:.2f} PEN`",
+        f"- **Bankroll observado liquidado actual**: **`S/{observed_settled_bankroll:.2f} PEN`** (`S/{observed_net_profit:+.2f} PEN` en `{observed_settled_count}` apuestas observadas liquidadas)",
+        f"- **Modo de apuesta activo**: `{staking_desc} | Máx. {max_sel} selecciones/jornada | EV >= {min_ev_pct:.1f}%`",
         f"- **Partidos evaluados**: `{len(games)}`",
         f"- **Partidos descartados por falta de datos/cuotas**: `{len(discarded_games)}`",
         f"- **Predicciones emitidas**: `{len(preds)}`",
-        f"- **Apuestas simuladas registradas en la jornada**: `{len(bets)}` (límite diario: 3, stake máx: S/1.00 PEN)",
+        f"- **Apuestas simuladas registradas en la jornada**: `{len(bets)}` (límite diario: {max_sel}, {staking_desc}, EV >= {min_ev_pct:.1f}%)",
         f"- **Decisiones NO_BET registradas**: `{len(no_bets)}`",
         f"- **Resultados pendientes globales**: `{len(pending_all)}`",
         "",
@@ -90,7 +110,7 @@ def generate_daily_report(
 
     lines.extend([
         "",
-        "## 4. Apuestas Simuladas (Paper Trading S/100 PEN) y Resultados Pendientes",
+        f"## 4. Apuestas Simuladas (Paper Trading — Banca Observada S/{observed_settled_bankroll:.2f} PEN en {observed_settled_count} Apuestas Liquidadas)",
         "",
         "| Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |",
         "| :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |",
@@ -112,14 +132,15 @@ def generate_daily_report(
         "## 5. Registro de Decisiones NO_BET (Muestra de Control)",
     ])
     for nb in no_bets[:8]:
+        detail = str(nb.get("reason_detail") or "")
         lines.append(
-            f"- `{nb['game_id']}` (`{nb['market']}` - `{nb['selection']}`): **NO_BET** [{nb['reason_code']}] — {nb['reason_detail']}"
+            f"- `{nb['game_id']}` (`{nb['market']}` - `{nb['selection']}`): **NO_BET** [{nb['reason_code']}] — {detail}"
         )
 
     lines.extend([
         "",
         "## 6. Limitaciones Documentadas",
-        "- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual de **S/100.00 PEN**.",
+        f"- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual inicial de **S/{initial_bankroll_pen:.2f} PEN** (bankroll observado liquidado actual: **S/{observed_settled_bankroll:.2f} PEN** en **{observed_settled_count}** apuestas observadas).",
         "- Cuando una fuente externa no proporciona cuota verificable antes del inicio del partido (`captured_at < game_start_time`), el sistema bloquea el cálculo de EV y registra `NO_BET`.",
     ])
 

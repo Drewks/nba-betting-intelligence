@@ -18,8 +18,8 @@ import sys
 from typing import Any
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, brier_score_loss, roc_auc_score
+from sklearn.linear_model import LogisticRegression  # type: ignore[import-untyped]
+from sklearn.metrics import accuracy_score, brier_score_loss, roc_auc_score  # type: ignore[import-untyped]
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -36,9 +36,10 @@ def calibrate_clv_meta_labeling(
 ) -> dict[str, Any]:
     """
     Fits empirical Logistic Regression model to predict P(CLV > 0)
-    using historical opening vs closing odds snapshots and model predictions.
+    strictly from pre-bet features (zero lookahead target leakage: closing odds
+    are used ONLY for the binary outcome label `beat_close`, never in input features `X`).
     """
-    logger.info("Extracting opening vs closing odds pairs and model predictions...")
+    logger.info("Extracting pre-bet predictions, opening snapshots, and closing line labels...")
     query = """
         SELECT
             p.prediction_id,
@@ -46,52 +47,30 @@ def calibrate_clv_meta_labeling(
             p.uncertainty_std,
             p.implied_prob_fair,
             p.bookmaker_overround,
-            o1.decimal_odds as open_odds,
-            o1.captured_at as open_time,
-            o2.decimal_odds as close_odds,
+            p.decimal_odds_used AS curr_odds,
+            p.odds_captured_at AS bet_time,
+            o1.decimal_odds AS open_odds,
+            o1.captured_at AS open_time,
+            o2.decimal_odds AS close_odds,
             g.game_start_time
-        FROM predictions p
-        JOIN odds_snapshots o1 ON p.game_id = o1.game_id
-                             AND p.market = o1.market
-                             AND p.selection = o1.selection
-                             AND o1.is_closing_line = 0
-        JOIN odds_snapshots o2 ON p.game_id = o2.game_id
-                             AND p.market = o2.market
-                             AND p.selection = o2.selection
-                             AND o2.is_closing_line = 1
+        FROM v_observed_predictions p
+        JOIN v_observed_odds_snapshots o1 ON p.game_id = o1.game_id
+                                         AND p.market = o1.market
+                                         AND p.selection = o1.selection
+                                         AND o1.is_closing_line = 0
+                                         AND datetime(o1.captured_at) <= datetime(p.odds_captured_at)
+        JOIN v_observed_odds_snapshots o2 ON p.game_id = o2.game_id
+                                         AND p.market = o2.market
+                                         AND p.selection = o2.selection
+                                         AND o2.is_closing_line = 1
         JOIN games g ON g.game_id = p.game_id
-        WHERE o1.decimal_odds > 1.01 AND o2.decimal_odds > 1.01
+        WHERE o1.decimal_odds > 1.01
+          AND o2.decimal_odds > 1.01
+          AND datetime(p.odds_captured_at) <= datetime(g.game_start_time)
     """
     rows = db.fetch_all(query)
-    if len(rows) < 30:
-        logger.warning("Insufficient prediction pairs (%d); falling back to direct odds snapshots", len(rows))
-        # Fallback query using observed odds snapshots directly
-        fallback_query = """
-            SELECT
-                o1.game_id,
-                0.50 as calibrated_probability,
-                0.05 as uncertainty_std,
-                (1.0 / o1.decimal_odds) as implied_prob_fair,
-                0.045 as bookmaker_overround,
-                o1.decimal_odds as open_odds,
-                o1.captured_at as open_time,
-                o2.decimal_odds as close_odds,
-                g.game_start_time
-            FROM odds_snapshots o1
-            JOIN odds_snapshots o2 ON o1.game_id = o2.game_id
-                                 AND o1.market = o2.market
-                                 AND o1.selection = o2.selection
-                                 AND o1.is_closing_line = 0
-                                 AND o2.is_closing_line = 1
-            JOIN games g ON g.game_id = o1.game_id
-            WHERE o1.source_type = 'OBSERVED'
-              AND o2.source_type = 'OBSERVED'
-              AND o1.decimal_odds > 1.01 AND o2.decimal_odds > 1.01
-        """
-        rows = db.fetch_all(fallback_query)
-
     if len(rows) < 10:
-        logger.warning("Fewer than 10 pairs found; returning robust default prior weights")
+        logger.warning("Fewer than 10 observed pre-bet pairs found; returning default prior weights")
         return {
             "intercept": 0.15,
             "coef_steam_delta": 14.0,
@@ -112,19 +91,21 @@ def calibrate_clv_meta_labeling(
     for r in rows:
         cal_prob = float(r["calibrated_probability"])
         unc_std = float(r["uncertainty_std"]) if r["uncertainty_std"] is not None else 0.05
-        implied_fair = float(r["implied_prob_fair"]) if r["implied_prob_fair"] is not None else (1.0 / float(r["open_odds"]))
-        overround = float(r["bookmaker_overround"]) if r["bookmaker_overround"] is not None else 0.045
         open_odds = float(r["open_odds"])
-        open_time_str = str(r["open_time"])
+        curr_odds = float(r["curr_odds"]) if r.get("curr_odds") is not None else open_odds
+        implied_fair = float(r["implied_prob_fair"]) if r["implied_prob_fair"] is not None else (1.0 / max(1.01, curr_odds))
+        overround = float(r["bookmaker_overround"]) if r["bookmaker_overround"] is not None else 0.045
+        bet_time_str = str(r.get("bet_time") or r["open_time"])
         close_odds = float(r["close_odds"])
         game_start_str = str(r["game_start_time"])
 
-        # Target: positive closing line value
+        # Target label ONLY: positive closing line value (opening price beat closing price)
         beat_close = 1 if (open_odds > close_odds) else 0
 
+        # Strictly pre-bet steam signal (never uses close_odds or p_close):
         p_open = 1.0 / open_odds
-        p_close = 1.0 / close_odds
-        steam_delta = p_close - p_open
+        p_curr = implied_fair if implied_fair > 0.0 else (1.0 / max(1.01, curr_odds))
+        pre_bet_steam_delta = (p_curr - p_open) + 0.5 * (cal_prob - p_open)
 
         conformal_width = 2.0 * 1.96 * unc_std
         width_excess = max(0.0, conformal_width - 0.15)
@@ -136,15 +117,15 @@ def calibrate_clv_meta_labeling(
 
         try:
             t_game = datetime.fromisoformat(game_start_str.replace("Z", "+00:00"))
-            t_open = datetime.fromisoformat(open_time_str.replace("Z", "+00:00"))
-            hours_to_tip = max(0.1, (t_game - t_open).total_seconds() / 3600.0)
+            t_bet = datetime.fromisoformat(bet_time_str.replace("Z", "+00:00"))
+            hours_to_tip = max(0.1, (t_game - t_bet).total_seconds() / 3600.0)
         except Exception:
             hours_to_tip = 2.0
 
         time_factor = 1.0 / (1.0 + 0.04 * min(12.0, hours_to_tip))
 
         feat = [
-            steam_delta * time_factor,
+            pre_bet_steam_delta * time_factor,
             width_excess * time_factor,
             disag_excess * time_factor,
             overround_excess * time_factor,
@@ -155,7 +136,7 @@ def calibrate_clv_meta_labeling(
     X = np.array(X_list, dtype=float)
     y = np.array(y_list, dtype=int)
 
-    clf = LogisticRegression(C=1.0, random_state=42)
+    clf = LogisticRegression(C=100.0, random_state=42)
     clf.fit(X, y)
 
     probs = clf.predict_proba(X)[:, 1]
@@ -255,6 +236,17 @@ def calibrate_copula_correlations(
     return corrs
 
 
+def _portable_db_relpath(db_path: Path | str) -> str:
+    """Normalizes any db_path to a portable relative POSIX path (never a local machine absolute path)."""
+    db_p = Path(db_path)
+    if db_p.is_absolute():
+        try:
+            return db_p.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+        except ValueError:
+            return "data/nba_intelligence.sqlite3"
+    return db_p.as_posix()
+
+
 def calibrate_all_and_save(
     db_path: Path | str,
     output_file: Path | str,
@@ -264,17 +256,34 @@ def calibrate_all_and_save(
     clv_meta = calibrate_clv_meta_labeling(db)
     copula_corrs = calibrate_copula_correlations(db)
 
-    payload = {
+    portable_db = _portable_db_relpath(db_path)
+    out_p = Path(output_file)
+    default_weights_file = PROJECT_ROOT / "config" / "calibrated_weights.json"
+    existing_data: dict[str, Any] = {}
+    for candidate_path in (out_p, default_weights_file):
+        if candidate_path.exists():
+            try:
+                existing_data = json.loads(candidate_path.read_text(encoding="utf-8"))
+                if existing_data:
+                    break
+            except Exception:
+                continue
+
+    payload: dict[str, Any] = {
         "metadata": {
             "calibrated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "db_path": Path(db_path).resolve().relative_to(PROJECT_ROOT).as_posix() if Path(db_path).is_absolute() and PROJECT_ROOT in Path(db_path).resolve().parents else Path(db_path).as_posix(),
+            "db_path": portable_db,
+            "source_db": portable_db,
             "version": "v8_phase3",
         },
         "clv_meta_labeling": clv_meta,
         "sgp_copula_correlations": copula_corrs,
     }
+    if "player_synergy_profiles" in existing_data:
+        payload["player_synergy_profiles"] = existing_data["player_synergy_profiles"]
+    if "prop_dispersion_multipliers" in existing_data:
+        payload["prop_dispersion_multipliers"] = existing_data["prop_dispersion_multipliers"]
 
-    out_p = Path(output_file)
     out_p.parent.mkdir(parents=True, exist_ok=True)
     with open(out_p, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)

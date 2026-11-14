@@ -157,9 +157,10 @@ def test_playwright_scraper_1x2_filtering_logic() -> None:
     assert len(mkt_2way["selections"]) == 2
 
 
-def test_settlement_cycle_and_liquidar_keys() -> None:
+def test_settlement_cycle_and_liquidar_keys(tmp_path: Path) -> None:
     from unittest.mock import MagicMock, patch
     from src.reporting.telegram_interactive import TelegramInteractiveListener
+    from src.storage.db import DatabaseManager
 
     mock_scheduler = MagicMock()
     mock_scheduler.execute_nightly_settlement_cycle.return_value = {
@@ -172,18 +173,24 @@ def test_settlement_cycle_and_liquidar_keys() -> None:
         "current_bankroll_pen": 104.50,
     }
     with patch("scripts.run_automated_scheduler.NBADailyScheduler", return_value=mock_scheduler):
-        listener = TelegramInteractiveListener()
+        listener = TelegramInteractiveListener(
+            db=DatabaseManager(tmp_path / "liq_test.sqlite3"),
+            offset_file=tmp_path / "offset.txt",
+        )
         msg = listener.handle_liquidar()
         assert "Apuestas Liquidadas:* `3`" in msg
         assert "+S/ 4.50 PEN" in msg
         assert "S/ 104.50 PEN" in msg
 
 
-def test_morning_cycle_execution_order_in_scheduler() -> None:
+def test_morning_cycle_execution_order_in_scheduler(tmp_path: Path) -> None:
     from unittest.mock import patch
     from scripts.run_automated_scheduler import NBADailyScheduler
 
-    scheduler = NBADailyScheduler()
+    scheduler = NBADailyScheduler(
+        db_path=tmp_path / "sched_order.sqlite3",
+        alert_state_path=tmp_path / "sched_alerts.json",
+    )
     call_order = []
 
     def mock_cycle(*args, **kwargs):

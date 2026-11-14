@@ -1,21 +1,26 @@
 ---
-date_generated: 2026-11-14T13:49:32Z
+date_generated: 2026-11-14T14:49:28Z
 report_type: daily_report
 model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
 period_evaluated: 2026-11-14
 predictions_count: 36
+observed_settled_bets: 28
+observed_bankroll_pen: 93.47
 simulation_only: true
 ---
 # Informe Diario NBA Betting Intelligence — 2026-11-14
 
-## 1. Metadatos de Ejecución
-- **Fecha de generación (UTC)**: `2026-11-14T13:49:32Z`
+## 1. Metadatos de Ejecución y Estado de Banca Observada
+- **Fecha de generación (UTC)**: `2026-11-14T14:49:28Z`
 - **Jornada evaluada**: `2026-11-14`
 - **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
+- **Bankroll virtual inicial**: `S/100.00 PEN`
+- **Bankroll observado liquidado actual**: **`S/93.47 PEN`** (`S/-6.53 PEN` en `28` apuestas observadas liquidadas)
+- **Modo de apuesta activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%`
 - **Partidos evaluados**: `9`
 - **Partidos descartados por falta de datos/cuotas**: `0`
 - **Predicciones emitidas**: `36`
-- **Apuestas simuladas registradas en la jornada**: `0` (límite diario: 3, stake máx: S/1.00 PEN)
+- **Apuestas simuladas registradas en la jornada**: `0` (límite diario: 3, Kelly Fraccional (25%), EV >= 2.0%)
 - **Decisiones NO_BET registradas**: `36`
 - **Resultados pendientes globales**: `0`
 
@@ -37,7 +42,7 @@ simulation_only: true
 | `CLE @ MIA` | `total_points` | **UNDER** | 236.0 | 1.990 | 0.5025 | 0.5027 | +0.05% | `Pinnacle [LIVE_API]` |
 | `UTA @ HOU` | `moneyline` | **HOME** | — | 1.089 | 0.9179 | 0.9180 | +0.02% | `Pinnacle [LIVE_API]` |
 
-## 4. Apuestas Simuladas (Paper Trading S/100 PEN) y Resultados Pendientes
+## 4. Apuestas Simuladas (Paper Trading — Banca Observada S/93.47 PEN en 28 Apuestas Liquidadas)
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
@@ -54,5 +59,5 @@ simulation_only: true
 - `ESPN_401909296_2026-11-14_NYK_AT_IND` (`moneyline` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -16.64% <= threshold 5.00%
 
 ## 6. Limitaciones Documentadas
-- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual de **S/100.00 PEN**.
+- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual inicial de **S/100.00 PEN** (bankroll observado liquidado actual: **S/93.47 PEN** en **28** apuestas observadas).
 - Cuando una fuente externa no proporciona cuota verificable antes del inicio del partido (`captured_at < game_start_time`), el sistema bloquea el cálculo de EV y registra `NO_BET`.

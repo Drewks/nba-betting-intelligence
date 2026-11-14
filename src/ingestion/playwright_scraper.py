@@ -183,6 +183,48 @@ class PeruPlaywrightScraper:
                     "captured_at": cap,
                     "source_type": "OBSERVED",
                 })
+            for pp in row.get("player_props") or []:
+                p_name = str(pp.get("player_name") or "").strip()
+                raw_cat = str(pp.get("prop_category") or "PTS").strip().upper()
+                cat_code = "PTS" if raw_cat in ("PTS", "POINTS", "PUNTOS") else raw_cat
+                p_line = pp.get("line_value")
+                p_over = pp.get("over_odds")
+                p_under = pp.get("under_odds")
+                if (
+                    p_name
+                    and cat_code
+                    and p_line is not None
+                    and float(p_line) > 0.5
+                    and p_over
+                    and p_under
+                    and float(p_over) > 1.0
+                    and float(p_under) > 1.0
+                ):
+                    prop_prov = f"{prov}|{p_name}|{cat_code}"
+                    quotes.append({
+                        "provider": prop_prov,
+                        "home_team": h_code,
+                        "away_team": a_code,
+                        "market": "player_prop",
+                        "selection": "OVER",
+                        "decimal_odds": float(p_over),
+                        "counterpart_decimal_odds": float(p_under),
+                        "line_value": float(p_line),
+                        "captured_at": cap,
+                        "source_type": "OBSERVED",
+                    })
+                    quotes.append({
+                        "provider": prop_prov,
+                        "home_team": h_code,
+                        "away_team": a_code,
+                        "market": "player_prop",
+                        "selection": "UNDER",
+                        "decimal_odds": float(p_under),
+                        "counterpart_decimal_odds": float(p_over),
+                        "line_value": float(p_line),
+                        "captured_at": cap,
+                        "source_type": "OBSERVED",
+                    })
         return quotes
 
     def scrape_retabet_odds(self) -> list[dict[str, Any]]:
@@ -558,7 +600,7 @@ class PeruPlaywrightScraper:
                         sel = "HOME"
 
             prov_clean = re.sub(r"[^a-z0-9]+", "_", str(q["provider"]).lower()).strip("_") or "book"
-            mkt_slug = "ML" if mkt == "moneyline" else ("SPR" if mkt == "spread" else "TOT")
+            mkt_slug = "ML" if mkt == "moneyline" else ("SPR" if mkt == "spread" else ("PROP" if mkt == "player_prop" else "TOT"))
             line_str = f"_{lv}" if lv is not None else ""
             odds_id = f"ODDS_{prov_clean.upper()}_{gid}_{mkt_slug}_{sel}{line_str}_{q['captured_at']}"
 

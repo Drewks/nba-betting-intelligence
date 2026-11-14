@@ -4,7 +4,57 @@ Shared test helper fixtures and utilities (`tests/helpers.py`).
 
 from __future__ import annotations
 
+import atexit
+from pathlib import Path
+import shutil
+import sqlite3
+import tempfile
+
 from src.storage.db import DatabaseManager
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PROD_DB_SOURCE = PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"
+_SESSION_SNAPSHOT_DIR: Path | None = None
+_SESSION_SNAPSHOT_DB: Path | None = None
+
+
+def get_isolated_prod_db_snapshot() -> Path:
+    """
+    Returns a process-scoped temporary copy of `data/nba_intelligence.sqlite3`
+    created via raw file copy (`shutil.copy2`) so SQLite never opens or checkpoints
+    the repository's tracked `data/nba_intelligence.sqlite3` during tests.
+    """
+    global _SESSION_SNAPSHOT_DIR, _SESSION_SNAPSHOT_DB
+    if _SESSION_SNAPSHOT_DB is not None and _SESSION_SNAPSHOT_DB.exists():
+        return _SESSION_SNAPSHOT_DB
+
+    if not _PROD_DB_SOURCE.exists():
+        raise FileNotFoundError(f"Production SQLite database not found at {_PROD_DB_SOURCE}")
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="nba_pytest_hermetic_db_"))
+    atexit.register(lambda: shutil.rmtree(tmp_dir, ignore_errors=True))
+    dst = tmp_dir / "nba_intelligence.sqlite3"
+    shutil.copy2(_PROD_DB_SOURCE, dst)
+    _SESSION_SNAPSHOT_DIR = tmp_dir
+    _SESSION_SNAPSHOT_DB = dst
+    return dst
+
+
+def copy_prod_db(tmp_path: Path, filename: str = "nba_intelligence_copy.sqlite3") -> Path:
+    """Copies the isolated production DB snapshot into `tmp_path / filename` for writable test isolation."""
+    src = get_isolated_prod_db_snapshot()
+    dst = tmp_path / filename
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+    return dst
+
+
+def connect_readonly_prod_db() -> sqlite3.Connection:
+    """Opens a SQLite connection against the isolated snapshot copy (never the tracked repo file)."""
+    snap = get_isolated_prod_db_snapshot()
+    conn = sqlite3.connect(f"file:{snap.as_posix()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def _seed_sample_game_and_prediction(db: DatabaseManager, game_id: str = "G_TEST_01") -> str:

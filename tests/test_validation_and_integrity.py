@@ -6,7 +6,6 @@ Modular test suite extracted from legacy test_nba_intelligence monolith.
 from __future__ import annotations
 
 from pathlib import Path
-import sqlite3
 import pytest
 
 from src.backtesting.backtester import WalkForwardBacktester
@@ -73,8 +72,9 @@ def test_10_temporal_train_eval_separation() -> None:
 
 # 11. Reproducción de resultados históricos con datos genuinos
 def test_11_historical_reproducibility(tmp_path: Path) -> None:
-    conn = sqlite3.connect("data/nba_intelligence.sqlite3")
-    conn.row_factory = sqlite3.Row
+    from tests.helpers import connect_readonly_prod_db
+
+    conn = connect_readonly_prod_db()
     cur = conn.cursor()
     cur.execute(
         """
@@ -144,8 +144,9 @@ def test_14_source_failover_recovery() -> None:
         provider_name = "local_historical_db"
 
         def fetch_games_and_odds(self, date_str=None, as_of_utc=None):
-            conn = sqlite3.connect("data/nba_intelligence.sqlite3")
-            conn.row_factory = sqlite3.Row
+            from tests.helpers import connect_readonly_prod_db
+
+            conn = connect_readonly_prod_db()
             cur = conn.cursor()
             cur.execute("SELECT * FROM games WHERE status = 'FINAL' ORDER BY game_start_time LIMIT 10")
             games = [dict(r) for r in cur.fetchall()]

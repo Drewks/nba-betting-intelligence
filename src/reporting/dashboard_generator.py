@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from src.config import load_config
 from src.utils.team_dictionary import get_teams_json_for_frontend
 from src.ingestion.peru_sportsbooks import get_peru_sportsbooks_json_for_frontend
 
@@ -47,9 +48,13 @@ def generate_interactive_html_dashboard(
         except Exception:
             player_props = []
 
+    risk_cfg = load_config().risk
+    min_ev_pct = round(float(risk_cfg.min_ev_threshold) * 100.0, 1)
+    kelly_pct = round(float(risk_cfg.kelly_fraction) * 100.0)
     pending_stake = round(sum(float(b.get("stake_pen") or 0.0) for b in espn_real_bets if (b.get("estado") or b.get("status")) == "PENDING"), 2)
-    settled_bank = round(float(metrics.get("current_settled_bankroll_pen", 100.0)), 2)
+    settled_bank = round(float(metrics.get("current_settled_bankroll_pen", risk_cfg.virtual_bankroll_initial_pen)), 2)
     avail_bank = round(settled_bank - pending_stake, 2)
+    pending_cnt = sum(1 for b in espn_real_bets if (b.get("estado") or b.get("status")) == "PENDING")
     payload = {
         "updated_peru": peru_str,
         "summary": {
@@ -79,13 +84,22 @@ def generate_interactive_html_dashboard(
         try:
             db_p = Path(html_output_path).resolve().parent.parent / "data" / "nba_intelligence.sqlite3"
             if db_p.exists():
-                from src.paper_trading.engine import PaperTradingEngine
+                from src.reporting.dashboard_export import _compute_clean_props_metrics
                 from src.storage.db import DatabaseManager
                 pt_db = DatabaseManager(db_p)
-                pt_eng = PaperTradingEngine(db=pt_db)
-                props_paper_trading = pt_eng.get_player_props_performance_metrics()
+                props_paper_trading = _compute_clean_props_metrics(
+                    db=pt_db,
+                    initial_bankroll_pen=float(risk_cfg.virtual_bankroll_initial_pen),
+                )
         except Exception:
             props_paper_trading = {}
+
+    if props_paper_trading and "recent_settled" in props_paper_trading:
+        props_paper_trading = dict(props_paper_trading)
+        props_paper_trading["recent_settled"] = [
+            r for r in (props_paper_trading.get("recent_settled") or [])
+            if r.get("status") in ("WON", "LOST", "PUSH")
+        ]
 
     payload["props_paper_trading"] = props_paper_trading or {}
     data_json = json.dumps(payload, ensure_ascii=False)
@@ -176,11 +190,11 @@ def generate_interactive_html_dashboard(
       <div class="flex flex-wrap gap-2">
         <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2 text-right">
           <div class="text-xs text-[var(--muted-foreground)]">Banca Disponible / Liquidada</div>
-          <div class="text-base font-bold" id="hdr-bankroll">S/ 90.06 disp. / S/ 96.45 liq.</div>
+          <div class="text-base font-bold" id="hdr-bankroll">S/ {avail_bank:.2f} disp. / S/ {settled_bank:.2f} liq.</div>
         </div>
         <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl px-3.5 py-2 text-right">
           <div class="text-xs text-[var(--muted-foreground)]">En Juego Ahora</div>
-          <div class="text-base font-bold text-amber-500" id="hdr-pending">4 activas (S/ 6.39)</div>
+          <div class="text-base font-bold text-amber-500" id="hdr-pending">{pending_cnt} activas (S/ {pending_stake:.2f})</div>
         </div>
       </div>
     </div>
@@ -398,7 +412,7 @@ def generate_interactive_html_dashboard(
             </div>
             <div>
               <label class="text-xs font-semibold block mb-1">Banca Actual (S/ PEN)</label>
-              <input type="number" step="1" min="10" max="100000" value="96.45" id="calc-bank" oninput="updateCalculator()"
+              <input type="number" step="1" min="10" max="100000" value="{settled_bank:.2f}" id="calc-bank" oninput="updateCalculator()"
                 class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--background)] border border-[var(--border)] font-semibold" />
             </div>
           </div>
@@ -465,7 +479,7 @@ def generate_interactive_html_dashboard(
             <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
               <div class="font-bold text-sm text-sky-500">9. Predicción Conformal Venn-Abers y Lower-Bound EV (V7)</div>
               <p class="text-[var(--muted-foreground)]">
-                En lugar de confiar en una probabilidad puntual única, calculamos el intervalo garantizado <code>[p0, p1]</code> con calibración finita. Solo se confirma la apuesta si el límite inferior conservador mantiene <strong>EV positivo (> 5%)</strong> ante la cuota de la casa.
+                En lugar de confiar en una probabilidad puntual única, calculamos el intervalo garantizado <code>[p0, p1]</code> con calibración finita. Solo se confirma la apuesta si el límite inferior conservador mantiene <strong>EV positivo (>= {min_ev_pct:.1f}%)</strong> ante la cuota de la casa.
               </p>
             </div>
             <div class="p-3.5 rounded-xl bg-[var(--background)] border border-[var(--border)] space-y-1">
@@ -1111,8 +1125,8 @@ def generate_interactive_html_dashboard(
       // Populate Settled Props Audit Table
       const histTbody = document.getElementById('props-history-tbody');
       const histCount = document.getElementById('props-history-count');
-      const recentSettled = pt.recent_settled || [];
-      if (histCount) histCount.textContent = `${{recentSettled.length}} apuestas liquidadas`;
+      const recentSettled = (pt.recent_settled || []).filter(r => ['WON', 'LOST', 'PUSH'].includes(r.status));
+      if (histCount) histCount.textContent = `${{recentSettled.length}} apuestas resueltas verificadas`;
       if (histTbody) {{
         if (!recentSettled.length) {{
           histTbody.innerHTML = `<tr><td colspan="11" class="py-4 text-center text-[var(--muted-foreground)]">No hay apuestas de props liquidadas aún en la base de datos inmutable.</td></tr>`;
@@ -1355,7 +1369,7 @@ def generate_interactive_html_dashboard(
     function updateCalculator() {{
       const odds = parseFloat(document.getElementById('calc-odds').value) || 1.91;
       const probPct = parseFloat(document.getElementById('calc-prob').value) || 53.5;
-      const bank = parseFloat(document.getElementById('calc-bank').value) || 96.45;
+      const bank = parseFloat(document.getElementById('calc-bank').value) || {settled_bank:.2f};
       const p = Math.min(0.99, Math.max(0.01, probPct / 100.0));
       const implPct = (1.0 / odds) * 100.0;
       const fairOdds = 1.0 / p;
@@ -1364,7 +1378,7 @@ def generate_interactive_html_dashboard(
       const rawKelly = b > 0 ? Math.max(0.0, ((b * p) - (1.0 - p)) / b) : 0.0;
       const fracKellyStake = Math.min(bank * 0.05, bank * rawKelly * 0.25);
 
-      const isPositive = evPct >= 1.5;
+      const isPositive = evPct >= {min_ev_pct:.1f};
       document.getElementById('calc-results').innerHTML = `
         <div class="flex justify-between text-xs">
           <span class="text-[var(--muted-foreground)]">Probabilidad Implícita de la Casa:</span>
@@ -1379,11 +1393,11 @@ def generate_interactive_html_dashboard(
           <span class="font-bold ${{evPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}}">${{evPct >= 0 ? '+' : ''}}${{evPct.toFixed(2)}}%</span>
         </div>
         <div class="flex justify-between text-xs">
-          <span class="text-[var(--muted-foreground)]">Stake Recomendado (Kelly 25% Conservador):</span>
+          <span class="text-[var(--muted-foreground)]">Stake Recomendado (Kelly {kelly_pct}% Conservador):</span>
           <span class="font-bold">S/ ${{fracKellyStake.toFixed(2)}} PEN</span>
         </div>
         <div class="mt-2 pt-2 border-t border-[var(--border)] text-xs font-semibold ${{isPositive ? 'text-emerald-500' : 'text-amber-500'}}">
-          ${{isPositive ? '✅ APUESTA CON VALOR (+EV >= 1.5%): La casa paga más de lo que debería.' : '🛡️ NO APOSTAR: La cuota es inferior o muy cercana al precio justo.'}}
+          ${{isPositive ? '✅ APUESTA CON VALOR (+EV >= {min_ev_pct:.1f}%): La casa paga más de lo que debería.' : '🛡️ NO APOSTAR: La cuota es inferior o muy cercana al precio justo.'}}
         </div>
       `;
     }}
@@ -1465,22 +1479,5 @@ def generate_interactive_html_dashboard(
     out = Path(html_output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
-
-    # Sync to docs/index.html for automatic GitHub Pages deployment and to conversation artifact
-    has_real_content = (len(slate_items) > 0 or len(espn_real_bets) > 0)
-    if has_real_content:
-        docs_dash = Path("docs/index.html")
-        try:
-            docs_dash.parent.mkdir(parents=True, exist_ok=True)
-            docs_dash.write_text(html, encoding="utf-8")
-        except Exception as exc:
-            logger.warning(f"Failed to sync docs/index.html: {exc}")
-
-        artifact_dash = Path(r"C:\Users\faboa\.gemini\antigravity\brain\369616bb-9a6e-460b-be8c-b9c7e1a798b7\nba_dashboard.html")
-        if artifact_dash.parent.exists():
-            try:
-                artifact_dash.write_text(html, encoding="utf-8")
-            except Exception as exc:
-                logging.warning(f"Handled exception in reporter (line 1720): {exc}")
 
     return str(out)

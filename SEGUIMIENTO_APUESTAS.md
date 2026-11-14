@@ -1,10 +1,10 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-14 08:49 (Hora Perú UTC-5)` (`2026-11-14T13:49:32Z`)
+- **Última actualización**: `2026-11-14 09:49 (Hora Perú UTC-5)` (`2026-11-14T14:49:28Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/93.47 PEN`** (`-6.53 PEN`)
-- **ROI Actual**: `-17.21%` | **Yield Actual**: `-17.21%` | **CLV (vs cierre sin margen)**: `-2.17%` (N=13) | **Max Drawdown**: `9.00%` | **Apuestas en espera**: `0` (`S/0.00 PEN` reservados)
+- **ROI Actual**: `-17.21%` | **Yield Actual**: `-17.21%` | **CLV (vs cierre sin margen)**: `-2.17%` (N=13) | **Max Drawdown**: `9.87%` | **Apuestas en espera**: `0` (`S/0.00 PEN` reservados)
 - **Motor Predictivo Activo**: `Ensemble (Elo + Ridge + LightGBM + Monte Carlo) anclado 70% al mercado sin margen`. Sin ventaja demostrada frente al mercado.
-- **Modo de Apuesta Activo**: `Stake fijo S/1.00 PEN (AGENTS.md v1)` | Máx. 3 selecciones/jornada | EV > 5% | Solo cuotas observadas (nunca estimadas).
+- **Modo de Apuesta Activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%` | Solo cuotas observadas (nunca estimadas).
 - **Alcance de métricas**: solo apuestas hechas con cuotas observadas en un mercado real (`v_observed_simulated_bets`).
 - **Archivo Excel/CSV descargable**: [`data/apuestas_historial.csv`](data/apuestas_historial.csv)
 - **Sistema de Aviso Automático**: `ACTIVO` *(aviso cuando se cumplan los criterios; cumplirlos solo habilita una revisión humana extendida, nunca dinero real automático)*.
@@ -26,7 +26,7 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 | 3 | **No peor que el Mercado sin margen ni que el Baseline (Brier & LogLoss)** | 🔴 PENDIENTE | `Modelo 0.2183 vs Mercado 0.2153 (N=96) | Baseline 0.2506` | **Modelo <= Mercado** | **Modelo <= Mercado** |
 | 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.1085 (10.85%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
 | 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -17.21% / Yield -17.21%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
-| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 9.00% (En vivo: 9.00%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
+| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 9.87% (En vivo: 9.87%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
 | 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-49.2%, +19.1%] / IC95 [-55.1%, +25.3%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal, historial íntegro y ledger reconciliado** | ✅ VERDE | `Sin violaciones` | **0 violaciones** | **0 violaciones** |
 
@@ -63,11 +63,11 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 | `2026-10-30 21:00` | **Denver Nuggets @ Phoenix Suns (DEN @ PHX)** | Total Puntos (Over/Under) | **UNDER 230.5 (Denver Nuggets @ Phoenix Suns)** | **1.909** *(DraftKings)* | 66.3% | `+26.6%` | — | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 120 - AWAY 127 (Total: 247)) |
 | `2026-10-30 19:00` | **Houston Rockets @ Dallas Mavericks (HOU @ DAL)** | Ganador (Moneyline) | **Gana Dallas Mavericks (DAL)** | **2.600** *(DraftKings)* | 49.9% | `+29.8%` | — | S/1.00 | ✅ GANADA | S/+1.60 (HOME 116 - AWAY 111 (Total: 227)) |
 | `2026-10-29 21:00` | **Memphis Grizzlies @ Portland Trail Blazers (MEM @ POR)** | Total Puntos (Over/Under) | **UNDER 232.5 (Memphis Grizzlies @ Portland Trail Blazers)** | **1.910** *(DraftKings)* | 63.5% | `+21.2%` | `-6.67%` | S/1.00 | ✅ GANADA | S/+0.91 (HOME 103 - AWAY 124 (Total: 227)) |
-| `2026-10-29 19:00` | **Sacramento Kings @ New Orleans Pelicans (SAC @ NOP)** | Ganador (Moneyline) | **Gana New Orleans Pelicans (NOP)** | **1.520** *(DraftKings)* | 71.7% | `+9.0%` | `+1.94%` | S/1.00 | ✅ GANADA | S/+0.52 (HOME 132 - AWAY 120 (Total: 252)) |
 | `2026-10-29 19:00` | **Sacramento Kings @ New Orleans Pelicans (SAC @ NOP)** | Total Puntos (Over/Under) | **UNDER 237.5 (Sacramento Kings @ New Orleans Pelicans)** | **1.950** *(Coolbet)* | 66.9% | `+30.4%` | — | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 132 - AWAY 120 (Total: 252)) |
+| `2026-10-29 19:00` | **Sacramento Kings @ New Orleans Pelicans (SAC @ NOP)** | Ganador (Moneyline) | **Gana New Orleans Pelicans (NOP)** | **1.520** *(DraftKings)* | 71.7% | `+9.0%` | `+1.94%` | S/1.00 | ✅ GANADA | S/+0.52 (HOME 132 - AWAY 120 (Total: 252)) |
 | `2026-10-28 21:30` | **Los Angeles Lakers @ LA Clippers (LAL @ LAC)** | Ganador (Moneyline) | **Gana LA Clippers (LAC)** | **1.970** *(Matchbook)* | 59.9% | `+17.9%` | `-1.25%` | S/1.00 | ❌ PERDIDA | S/-1.00 (HOME 87 - AWAY 103 (Total: 190)) |
-| `2026-10-28 20:30` | **Oklahoma City Thunder @ Dallas Mavericks (OKC @ DAL)** | Ganador (Moneyline) | **Gana Dallas Mavericks (DAL)** | **2.760** *(FanDuel)* | 49.8% | `+37.3%` | `-1.03%` | S/1.00 | ✅ GANADA | S/+1.76 (HOME 120 - AWAY 96 (Total: 216)) |
 | `2026-10-28 20:30` | **Oklahoma City Thunder @ Dallas Mavericks (OKC @ DAL)** | Total Puntos (Over/Under) | **UNDER 228.5 (Oklahoma City Thunder @ Dallas Mavericks)** | **1.920** *(GTbets)* | 57.0% | `+9.4%` | `-4.00%` | S/1.00 | ✅ GANADA | S/+0.92 (HOME 120 - AWAY 96 (Total: 216)) |
+| `2026-10-28 20:30` | **Oklahoma City Thunder @ Dallas Mavericks (OKC @ DAL)** | Ganador (Moneyline) | **Gana Dallas Mavericks (DAL)** | **2.760** *(FanDuel)* | 49.8% | `+37.3%` | `-1.03%` | S/1.00 | ✅ GANADA | S/+1.76 (HOME 120 - AWAY 96 (Total: 216)) |
 
 ### 🔍 2.A Radiografía de Apuestas Activas (¿Qué Está Apostando Hoy, Cuotas y Estadísticas Clave?)
 
@@ -77,11 +77,11 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Hora (UTC) | Partido | Cuotas Ganador (`Local / Visita`) | Proyección Modelo (`Margen / Total`) | Estadísticas Clave (`Elo`, `NetRtg`, `Descanso`) | ¿Qué Hace el Bot y Por Qué? |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `2026-11-15T00:00:00Z` | **New Orleans Pelicans @ Denver Nuggets (NOP @ DEN)** | ⏳ *Sin cuotas publicadas* | **Margen -8.0 pts** (Local `25.4%`) · Total **233.3 pts** | Elo `1368.3/1574.2` · Net `-8.9` · Pace `99.7` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (> 5.0% EV) para justificar una entrada segura._ |
-| `2026-11-15T00:30:00Z` | **Cleveland Cavaliers @ Dallas Mavericks (CLE @ DAL)** | ⏳ *Sin cuotas publicadas* | **Margen +3.4 pts** (Local `65.0%`) · Total **229.8 pts** | Elo `1555.3/1433.9` · Net `+2.9` · Pace `99.7` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (> 5.0% EV) para justificar una entrada segura._ |
-| `2026-11-15T01:00:00Z` | **Miami Heat @ Detroit Pistons (MIA @ DET)** | ⏳ *Sin cuotas publicadas* | **Margen -5.0 pts** (Local `33.0%`) · Total **229.2 pts** | Elo `1494.8/1645.3` · Net `-5.0` · Pace `99.9` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (> 5.0% EV) para justificar una entrada segura._ |
-| `2026-11-15T01:00:00Z` | **Memphis Grizzlies @ Brooklyn Nets (MEM @ BKN)** | ⏳ *Sin cuotas publicadas* | **Margen +5.2 pts** (Local `68.8%`) · Total **224.8 pts** | Elo `1447.7/1338.2` · Net `+5.1` · Pace `99.0` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (> 5.0% EV) para justificar una entrada segura._ |
-| `2026-11-15T01:00:00Z` | **Minnesota Timberwolves @ Chicago Bulls (MIN @ CHI)** | ⏳ *Sin cuotas publicadas* | **Margen +15.1 pts** (Local `89.1%`) · Total **232.8 pts** | Elo `1628.9/1367.5` · Net `+13.1` · Pace `100.3` · Desc `+1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (> 5.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T00:00:00Z` | **New Orleans Pelicans @ Denver Nuggets (NOP @ DEN)** | ⏳ *Sin cuotas publicadas* | **Margen -8.0 pts** (Local `25.4%`) · Total **233.3 pts** | Elo `1368.3/1574.2` · Net `-8.9` · Pace `99.7` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T00:30:00Z` | **Cleveland Cavaliers @ Dallas Mavericks (CLE @ DAL)** | ⏳ *Sin cuotas publicadas* | **Margen +3.4 pts** (Local `65.0%`) · Total **229.8 pts** | Elo `1555.3/1433.9` · Net `+2.9` · Pace `99.7` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T01:00:00Z` | **Miami Heat @ Detroit Pistons (MIA @ DET)** | ⏳ *Sin cuotas publicadas* | **Margen -5.0 pts** (Local `33.0%`) · Total **229.2 pts** | Elo `1494.8/1645.3` · Net `-5.0` · Pace `99.9` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T01:00:00Z` | **Memphis Grizzlies @ Brooklyn Nets (MEM @ BKN)** | ⏳ *Sin cuotas publicadas* | **Margen +5.2 pts** (Local `68.8%`) · Total **224.8 pts** | Elo `1447.7/1338.2` · Net `+5.1` · Pace `99.0` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T01:00:00Z` | **Minnesota Timberwolves @ Chicago Bulls (MIN @ CHI)** | ⏳ *Sin cuotas publicadas* | **Margen +15.1 pts** (Local `89.1%`) · Total **232.8 pts** | Elo `1628.9/1367.5` · Net `+13.1` · Pace `100.3` · Desc `+1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
 
 ---
 
@@ -89,26 +89,26 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Bet ID | Fecha | Partido | Mercado | Selección | Cuota | Prob. | EV (%) | Estado | Beneficio | Bankroll Post. |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :---: | ---: | ---: |
-| `BET_20261110_60276AD1` | `2026-11-10` | `Denver Nuggets @ Houston Rockets (DEN @ HOU)` | Ganador (Moneyline) | **Gana Denver Nuggets (DEN)** | 3.370 | 30.8% | `+3.8%` | ❌ LOST | **S/-1.12** | `S/102.51` |
-| `BET_20261110_A565DE31` | `2026-11-10` | `Memphis Grizzlies @ Toronto Raptors (MEM @ TOR)` | Ganador (Moneyline) | **Gana Toronto Raptors (TOR)** | 1.641 | 63.3% | `+3.9%` | ❌ LOST | **S/-3.50** | `S/99.01` |
-| `BET_20261110_E8F6F562` | `2026-11-10` | `Los Angeles Lakers @ Atlanta Hawks (LAL @ ATL)` | Total Puntos (Over/Under) | **UNDER 235.5 (Los Angeles Lakers @ Atlanta Hawks)** | 1.909 | 53.5% | `+2.1%` | ❌ LOST | **S/-2.00** | `S/97.01` |
-| `BET_20261108_2DE83152` | `2026-11-08` | `San Antonio Spurs @ Portland Trail Blazers (SAS @ POR)` | Total Puntos (Over/Under) | **UNDER 228.5 (San Antonio Spurs @ Portland Trail Blazers)** | 1.909 | 53.5% | `+2.2%` | ✅ WON | **S/+1.22** | `S/103.00` |
+| `BET_20261110_60276AD1` | `2026-11-10` | `Denver Nuggets @ Houston Rockets (DEN @ HOU)` | Ganador (Moneyline) | **Gana Denver Nuggets (DEN)** | 3.370 | 30.8% | `+3.8%` | ❌ LOST | **S/-1.12** | `S/93.47` |
+| `BET_20261110_A565DE31` | `2026-11-10` | `Memphis Grizzlies @ Toronto Raptors (MEM @ TOR)` | Ganador (Moneyline) | **Gana Toronto Raptors (TOR)** | 1.641 | 63.3% | `+3.9%` | ❌ LOST | **S/-3.50** | `S/94.59` |
+| `BET_20261110_E8F6F562` | `2026-11-10` | `Los Angeles Lakers @ Atlanta Hawks (LAL @ ATL)` | Total Puntos (Over/Under) | **UNDER 235.5 (Los Angeles Lakers @ Atlanta Hawks)** | 1.909 | 53.5% | `+2.1%` | ❌ LOST | **S/-2.00** | `S/98.09` |
+| `BET_20261108_2DE83152` | `2026-11-08` | `San Antonio Spurs @ Portland Trail Blazers (SAS @ POR)` | Total Puntos (Over/Under) | **UNDER 228.5 (San Antonio Spurs @ Portland Trail Blazers)** | 1.909 | 53.5% | `+2.2%` | ✅ WON | **S/+1.22** | `S/100.09` |
 | `BET_20261107_7EA0942D` | `2026-11-07` | `San Antonio Spurs @ Sacramento Kings (SAS @ SAC)` | Total Puntos (Over/Under) | **UNDER 228.5 (San Antonio Spurs @ Sacramento Kings)** | 1.930 | 53.2% | `+2.8%` | ❌ LOST | **S/-1.68** | `S/98.87` |
 | `BET_20261107_7C4523D5` | `2026-11-07` | `Oklahoma City Thunder @ Memphis Grizzlies (OKC @ MEM)` | Ganador (Moneyline) | **Gana Oklahoma City Thunder (OKC)** | 1.606 | 63.5% | `+2.0%` | ✅ WON | **S/+1.19** | `S/100.55` |
 | `BET_20261107_CB5E045A` | `2026-11-07` | `Philadelphia 76ers @ Cleveland Cavaliers (PHI @ CLE)` | Ganador (Moneyline) | **Gana Cleveland Cavaliers (CLE)** | 2.210 | 47.9% | `+5.9%` | ✅ WON | **S/+1.65** | `S/99.36` |
 | `BET_20261106_92B26B33` | `2026-11-06` | `Orlando Magic @ Phoenix Suns (ORL @ PHX)` | Ganador (Moneyline) | **Gana Phoenix Suns (PHX)** | 1.910 | 53.5% | `+2.2%` | ✅ WON | **S/+1.26** | `S/97.72` |
 | `BET_20261105_A563FA74` | `2026-11-05` | `Toronto Raptors @ Denver Nuggets (TOR @ DEN)` | Ganador (Moneyline) | **Gana Toronto Raptors (TOR)** | 2.900 | 37.2% | `+7.9%` | ❌ LOST | **S/-1.10** | `S/96.45` |
-| `BET_20261105_63E8261D` | `2026-11-05` | `Cleveland Cavaliers @ Oklahoma City Thunder (CLE @ OKC)` | Ganador (Moneyline) | **Gana Oklahoma City Thunder (OKC)** | 1.770 | 58.5% | `+3.6%` | ✅ WON | **S/+1.69** | `S/99.12` |
-| `BET_20261105_11DC3E0B` | `2026-11-05` | `Philadelphia 76ers @ Detroit Pistons (PHI @ DET)` | Ganador (Moneyline) | **Gana Detroit Pistons (DET)** | 1.810 | 56.6% | `+2.5%` | ❌ LOST | **S/-1.57** | `S/97.55` |
+| `BET_20261105_63E8261D` | `2026-11-05` | `Cleveland Cavaliers @ Oklahoma City Thunder (CLE @ OKC)` | Ganador (Moneyline) | **Gana Oklahoma City Thunder (OKC)** | 1.770 | 58.5% | `+3.6%` | ✅ WON | **S/+1.69** | `S/97.55` |
+| `BET_20261105_11DC3E0B` | `2026-11-05` | `Philadelphia 76ers @ Detroit Pistons (PHI @ DET)` | Ganador (Moneyline) | **Gana Detroit Pistons (DET)** | 1.810 | 56.6% | `+2.5%` | ❌ LOST | **S/-1.57** | `S/95.87` |
 | `BET_20261103_06657F1C` | `2026-11-03` | `Boston Celtics @ Houston Rockets (BOS @ HOU)` | Total Puntos (Over/Under) | **OVER 219.5 (Boston Celtics @ Houston Rockets)** | 1.990 | 51.3% | `+2.1%` | ❌ LOST | **S/-1.00** | `S/97.44` |
 | `BET_20261103_EF0858D0` | `2026-11-03` | `New Orleans Pelicans @ Memphis Grizzlies (NOP @ MEM)` | Ganador (Moneyline) | **Gana New Orleans Pelicans (NOP)** | 2.900 | 36.3% | `+5.3%` | ✅ WON | **S/+1.90** | `S/98.44` |
 | `BET_20261103_E59224AE` | `2026-11-03` | `Washington Wizards @ Orlando Magic (WAS @ ORL)` | Total Puntos (Over/Under) | **OVER 225.5 (Washington Wizards @ Orlando Magic)** | 1.990 | 51.8% | `+3.0%` | ❌ LOST | **S/-1.13** | `S/96.54` |
-| `BET_20261102_555C3423` | `2026-11-02` | `Toronto Raptors @ Los Angeles Lakers (TOR @ LAL)` | Ganador (Moneyline) | **Gana Toronto Raptors (TOR)** | 2.670 | 39.2% | `+4.7%` | ❌ LOST | **S/-1.00** | `S/96.51` |
-| `BET_20261102_B4E13E3C` | `2026-11-02` | `LA Clippers @ Golden State Warriors (LAC @ GSW)` | Ganador (Moneyline) | **Gana Golden State Warriors (GSW)** | 1.820 | 56.9% | `+3.6%` | ✅ WON | **S/+1.16** | `S/97.67` |
+| `BET_20261102_555C3423` | `2026-11-02` | `Toronto Raptors @ Los Angeles Lakers (TOR @ LAL)` | Ganador (Moneyline) | **Gana Toronto Raptors (TOR)** | 2.670 | 39.2% | `+4.7%` | ❌ LOST | **S/-1.00** | `S/97.67` |
+| `BET_20261102_B4E13E3C` | `2026-11-02` | `LA Clippers @ Golden State Warriors (LAC @ GSW)` | Ganador (Moneyline) | **Gana Golden State Warriors (GSW)** | 1.820 | 56.9% | `+3.6%` | ✅ WON | **S/+1.16** | `S/98.67` |
 | `BET_20261101_C66174F8` | `2026-11-01` | `Brooklyn Nets @ Indiana Pacers (BKN @ IND)` | Ganador (Moneyline) | **Gana Indiana Pacers (IND)** | 1.630 | 63.9% | `+4.2%` | ❌ LOST | **S/-2.16** | `S/97.51` |
 | `BET_20261101_3A37DB1F` | `2026-11-01` | `Minnesota Timberwolves @ San Antonio Spurs (MIN @ SAS)` | Ganador (Moneyline) | **Gana Minnesota Timberwolves (MIN)** | 5.400 | 20.8% | `+12.2%` | ❌ LOST | **S/-1.00** | `S/99.67` |
 | `BET_20261101_B7BAE33B` | `2026-11-01` | `Sacramento Kings @ Memphis Grizzlies (SAC @ MEM)` | Ganador (Moneyline) | **Gana Sacramento Kings (SAC)** | 4.400 | 24.1% | `+6.1%` | ❌ LOST | **S/-1.04** | `S/100.67` |
-| `BET_20261031_B0C4035D` | `2026-10-31` | `Denver Nuggets @ Phoenix Suns (DEN @ PHX)` | Ganador (Moneyline) | **Gana Phoenix Suns (PHX)** | 2.420 | 56.4% | `+36.4%` | ❌ LOST | **S/-1.00** | `S/101.11` |
+| `BET_20261031_B0C4035D` | `2026-10-31` | `Denver Nuggets @ Phoenix Suns (DEN @ PHX)` | Ganador (Moneyline) | **Gana Phoenix Suns (PHX)** | 2.420 | 56.4% | `+36.4%` | ❌ LOST | **S/-1.00** | `S/101.71` |
 
 ---
 
@@ -116,37 +116,44 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 - **Banca Virtual de Props**: `S/100.00 PEN` (Inicial) → **`S/86.35 PEN`** (`-13.65 PEN`)
 - **Tasa de Acierto (Win Rate)**: **`42.9%`** (`9G - 12P - 0E`)
-- **ROI Acumulado en Props**: **`-18.57%`** | **Total Apostado**: `S/73.50 PEN`
+- **ROI Acumulado en Props**: **`-18.57%`** | **Total Apostado (Resueltas)**: `S/73.50 PEN`
 - **Brier Score (Calibración)**: `0.2766` | **Cobertura Conformal**: `42.9%`
-- **Total de Picks Registrados**: `345` (`0` en espera / `345` liquidados)
+- **Total de Picks Registrados**: `345` (`0` en espera / `21` resueltas verificadas / `324` anuladas `VOID` con impacto `S/0.00 PEN`)
 
 ### 📊 Desglose de Rendimiento por Categoría de Prop
 
-| Categoría | Liquidadas | Ganadas | Perdidas | Acierto (%) | Total Apostado (S/) | Beneficio Neto (S/) | ROI (%) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **PTS** | 21 | 0 | 4 | `0.0%` | S/14.00 | **S/-14.00** | `-100.0%` |
-| **REB** | 16 | 3 | 0 | `100.0%` | S/10.50 | **S/+9.45** | `+90.0%` |
-| **AST** | 40 | 3 | 4 | `42.9%` | S/24.50 | **S/-4.55** | `-18.6%` |
-| **PRA** | 60 | 3 | 4 | `42.9%` | S/24.50 | **S/-4.55** | `-18.6%` |
-| **3PM** | 88 | 0 | 0 | `0.0%` | S/0.00 | **S/+0.00** | `+0.0%` |
-| **SGP** | 120 | 0 | 0 | `0.0%` | S/0.00 | **S/+0.00** | `+0.0%` |
+| Categoría | Resueltas | Ganadas | Perdidas | Anuladas (VOID) | Acierto (%) | Total Apostado (S/) | Beneficio Neto (S/) | ROI (%) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **PTS** | 4 | 0 | 4 | 17 | `0.0%` | S/14.00 | **S/-14.00** | `-100.0%` |
+| **REB** | 3 | 3 | 0 | 13 | `100.0%` | S/10.50 | **S/+9.45** | `+90.0%` |
+| **AST** | 7 | 3 | 4 | 33 | `42.9%` | S/24.50 | **S/-4.55** | `-18.6%` |
+| **PRA** | 7 | 3 | 4 | 53 | `42.9%` | S/24.50 | **S/-4.55** | `-18.6%` |
+| **3PM** | 0 | 0 | 0 | 88 | `0.0%` | S/0.00 | **S/+0.00** | `+0.0%` |
+| **SGP** | 0 | 0 | 0 | 120 | `0.0%` | S/0.00 | **S/+0.00** | `+0.0%` |
 
 ### 📜 Últimas Apuestas de Props Liquidadas (Auditoría Inmutable)
 
+> **Nota de Transparencia de Auditoría**: Existen **324 registros históricos en estado `VOID` (anulados)** procedentes de ciclos sintéticos previos sin verificación de boxscore oficial (impacto financiero **`S/0.00 PEN`**). La tabla inferior muestra **exclusivamente las 21 apuestas de props con resultado oficial resuelto (`WON`, `LOST`, `PUSH`)**.
+
 | Fecha | Partido | Jugador / Combinada | Mercado | Selección | Línea | Cuota | Stat Real | Estado | Beneficio | Bankroll Post. |
 | :--- | :--- | :--- | :--- | :--- | :--- | ---: | ---: | :---: | ---: | ---: |
-| `2026-11-11` | `ESPN_401909961_2026-11-11_BOS_AT_PHI` | **Joel Embiid** | PRA | UNDER | `49.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909961_2026-11-11_BOS_AT_PHI` | **LeBron James** | AST | UNDER | `8.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909961_2026-11-11_BOS_AT_PHI` | **LeBron James** | PRA | UNDER | `40.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909961_2026-11-11_BOS_AT_PHI` | **Anfernee Simons** | 3PM | UNDER | `3.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909962_2026-11-11_LAC_AT_PHX` | **Gradey Dick** | 3PM | UNDER | `2.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909963_2026-11-11_MIA_AT_UTA` | **Keyonte George** | AST | UNDER | `6.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909963_2026-11-11_MIA_AT_UTA` | **Giannis Antetokounmpo** | PRA | OVER | `49.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909964_2026-11-11_ORL_AT_SAC` | **Zach LaVine** | 3PM | UNDER | `3.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909964_2026-11-11_ORL_AT_SAC` | **Zach LaVine** | PRA | UNDER | `35.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909964_2026-11-11_ORL_AT_SAC` | **Keegan Murray** | PRA | UNDER | `23.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909965_2026-11-11_OKC_AT_POR` | **Damian Lillard** | 3PM | UNDER | `3.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909965_2026-11-11_OKC_AT_POR` | **Ja Morant** | AST | UNDER | `8.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-11` | `ESPN_401909965_2026-11-11_OKC_AT_POR` | **Jared McCain** | 3PM | UNDER | `2.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-12` | `ESPN_401909966_2026-11-12_WAS_AT_IND` | **Kelly Oubre Jr.** | PRA | OVER | `21.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
-| `2026-11-12` | `ESPN_401909966_2026-11-12_WAS_AT_IND` | **Pascal Siakam** | PTS | OVER | `21.5` | `1.90` | — | VOID | **S/+0.00** | `S/100.00` |
+| `2026-11-08` | Houston Rockets @ Phoenix Suns (HOU @ PHX) | **Devin Booker** | AST | UNDER | `7.5` | `1.90` | `3.0` | ✅ WON | **S/+3.15** | `S/86.35` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Stephen Curry** | PTS | UNDER | `27.5` | `1.90` | `41.0` | ❌ LOST | **S/-3.50** | `S/83.20` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Stephen Curry** | PRA | UNDER | `37.5` | `1.90` | `53.0` | ❌ LOST | **S/-3.50** | `S/86.70` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | REB | UNDER | `7.5` | `1.90` | `6.0` | ✅ WON | **S/+3.15** | `S/90.20` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | PRA | UNDER | `22.5` | `1.90` | `21.0` | ✅ WON | **S/+3.15** | `S/87.05` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | AST | UNDER | `6.5` | `1.90` | `13.0` | ❌ LOST | **S/-3.50** | `S/83.90` |
+| `2026-11-08` | Houston Rockets @ Phoenix Suns (HOU @ PHX) | **Devin Booker** | AST | UNDER | `7.5` | `1.90` | `3.0` | ✅ WON | **S/+3.15** | `S/87.40` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Stephen Curry** | PTS | UNDER | `27.5` | `1.90` | `41.0` | ❌ LOST | **S/-3.50** | `S/84.25` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Stephen Curry** | PRA | UNDER | `37.5` | `1.90` | `53.0` | ❌ LOST | **S/-3.50** | `S/87.75` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | REB | UNDER | `7.5` | `1.90` | `6.0` | ✅ WON | **S/+3.15** | `S/91.25` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | PRA | UNDER | `22.5` | `1.90` | `21.0` | ✅ WON | **S/+3.15** | `S/88.10` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | AST | UNDER | `6.5` | `1.90` | `13.0` | ❌ LOST | **S/-3.50** | `S/84.95` |
+| `2026-11-08` | Houston Rockets @ Phoenix Suns (HOU @ PHX) | **Devin Booker** | AST | UNDER | `7.5` | `1.90` | `3.0` | ✅ WON | **S/+3.15** | `S/88.45` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Stephen Curry** | PTS | UNDER | `27.5` | `1.90` | `41.0` | ❌ LOST | **S/-3.50** | `S/85.30` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Stephen Curry** | PRA | UNDER | `37.5` | `1.90` | `53.0` | ❌ LOST | **S/-3.50** | `S/88.80` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | REB | UNDER | `7.5` | `1.90` | `6.0` | ✅ WON | **S/+3.15** | `S/92.30` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | PRA | UNDER | `22.5` | `1.90` | `21.0` | ✅ WON | **S/+3.15** | `S/89.15` |
+| `2026-11-08` | Orlando Magic @ Golden State Warriors (ORL @ GSW) | **Draymond Green** | AST | UNDER | `6.5` | `1.90` | `13.0` | ❌ LOST | **S/-3.50** | `S/86.00` |
+| `2026-11-08` | Washington Wizards @ Oklahoma City Thunder (WAS @ OKC) | **Shai Gilgeous-Alexander** | PTS | OVER | `30.5` | `1.90` | `30.0` | ❌ LOST | **S/-3.50** | `S/89.50` |
+| `2026-11-08` | Washington Wizards @ Oklahoma City Thunder (WAS @ OKC) | **Shai Gilgeous-Alexander** | PRA | OVER | `42.5` | `1.90` | `41.0` | ❌ LOST | **S/-3.50** | `S/93.00` |

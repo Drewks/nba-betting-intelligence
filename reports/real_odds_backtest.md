@@ -1,9 +1,9 @@
 # Backtest con cuotas reales (consenso de apertura/cierre, sin margen)
 
-- Generado: `2026-11-13T01:11:13Z`
+- Generado: `2026-11-14T14:38:50Z`
 - Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).
 - Periodo de prueba desde `2025-01-01` | partidos con mercado emparejado: `2301`
-- Reentrenamiento cada `7` días | margen supuesto `4.5%` | peso del modelo `0.3` | EV mínimo `5%`
+- Reentrenamiento cada `7` días | margen supuesto `4.5%` | peso del modelo `0.3` | EV mínimo `2%`
 
 ## 1. Calidad probabilística fuera de muestra (todos los partidos)
 
@@ -21,26 +21,28 @@
 
 ## 2. Apuestas simuladas (reglas de producción, precio de apertura)
 
-- Apuestas: `81` (ganadas `28` / liquidadas `81`, push `0`)
-- **Stake fijo S/1**: neto `S/-1.96` | ROI `-2.42%` | IC95 bootstrap `[-32.4807%, 27.2807%]` | MaxDD `12.22%`
-- **Stake Kelly 50%** (S/1.00–S/10.00): banca final `S/93.09` | ROI `-4.63%` | stake medio `S/1.84` | MaxDD `22.56%`
-- **CLV vs cierre sin margen**: media `-2.412%` | gana al cierre `0.3333` | IC95 `[-6.1119%, 1.3624%]`
+- Apuestas: `91` (ganadas `45` / liquidadas `91`, push `0`)
+- **Stake fijo S/1**: neto `S/-1.41` | ROI `-1.55%` | IC95 bootstrap `[-22.5645%, 19.8729%]` | MaxDD `8.99%`
+- **Stake Kelly 25%** (S/1.00–S/10.00): banca final `S/98.03` | ROI `-2.0%` | stake medio `S/1.08` | MaxDD `9.92%`
+- **CLV vs cierre sin margen**: media `1.369%` | gana al cierre `0.5275` | IC95 `[-1.4111%, 4.718%]`
 
 | Grupo | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |
 | :--- | ---: | ---: | ---: | ---: |
-| mercado: `moneyline` | 81 | 28 | -2.42% [-32.5, 27.3] | -2.412% [-6.1, 1.4] |
-| temporada: `2024-25` | 32 | 12 | 5.15% [-40.1, 51.5] | -4.193% [-9.5, 1.1] |
-| temporada: `2025-26` | 46 | 15 | -6.67% [-46.6, 36.2] | -2.231% [-6.9, 2.4] |
-| temporada: `2026-27` | 3 | 1 | -18.04% [-100.0, 145.9] | 13.798% [2.3, 34.1] |
+| mercado: `moneyline` | 47 | 22 | -3.05% [-33.2, 26.4] | -3.131% [-7.4, 0.8] |
+| mercado: `total_points` | 44 | 23 | 0.04% [-26.1, 26.1] | 6.176% [2.0, 10.9] |
+| temporada: `2024-25` | 40 | 19 | -5.35% [-38.6, 29.0] | 4.13% [-0.6, 8.9] |
+| temporada: `2025-26` | 47 | 25 | 5.98% [-22.6, 35.3] | -1.779% [-5.8, 2.6] |
+| temporada: `2026-27` | 4 | 1 | -52.15% [-100.0, -4.3] | 10.745% [-6.8, 34.1] |
 
 ## 3. Sensibilidad al margen supuesto
 
 | Margen | Mercado | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |
 | ---: | :--- | ---: | ---: | ---: | ---: |
-| 4.5% | `moneyline` | 81 | 28 | -2.42% [-32.5, 27.3] | -2.412% [-6.1, 1.4] |
-| 2.5% | `moneyline` | 182 | 72 | 1.9% [-16.9, 20.0] | -0.554% [-2.7, 1.6] |
-| 2.5% | `total_points` | 81 | 48 | 15.63% [-3.7, 35.8] | 4.939% [1.8, 8.1] |
-| 6.0% | `moneyline` | 39 | 10 | -24.6% [-64.3, 17.8] | -4.114% [-9.7, 1.0] |
+| 4.5% | `moneyline` | 47 | 22 | -3.05% [-33.2, 26.4] | -3.131% [-7.4, 0.8] |
+| 4.5% | `total_points` | 44 | 23 | 0.04% [-26.1, 26.1] | 6.176% [2.0, 10.9] |
+| 2.5% | `moneyline` | 265 | 133 | 5.16% [-8.3, 18.8] | -0.406% [-2.0, 1.2] |
+| 2.5% | `total_points` | 291 | 156 | 4.6% [-6.8, 14.5] | 2.175% [0.7, 3.8] |
+| 6.0% | `moneyline` | 4 | 0 | -100.0% [-100.0, -100.0] | -6.348% [-21.0, 2.9] |
 
 ## 4. ¿El modelo anticipa el movimiento de línea? (todos los partidos, sin reglas de apuesta)
 

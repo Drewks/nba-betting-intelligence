@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.config import load_config
 from src.models.statistical_models import EnsembleStackingModel, build_pregame_features
 from src.storage.db import DatabaseManager
 from src.utils.team_dictionary import format_matchup, get_team_full_name
@@ -25,6 +26,9 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
     key basketball statistics (Elo, Off/Def Rating, Pace, Rest/B2B, Geodesic Travel Miles, Altitude),
     and clear Spanish explanations of why the bot placed a bet or decided NO_BET for each upcoming game.
     """
+    risk_cfg = load_config().risk
+    min_ev_pct = float(risk_cfg.min_ev_threshold) * 100.0
+
     all_final_games = db.fetch_all(
         "SELECT * FROM v_observed_games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time"
     )
@@ -111,8 +115,10 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
 
         active_bet = db.fetch_one(
             """
-            SELECT * FROM v_observed_simulated_bets
-            WHERE game_id = ? AND status = 'PENDING'
+            SELECT b.*, p.odds_provider
+            FROM v_observed_simulated_bets b
+            LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
+            WHERE b.game_id = ? AND b.status = 'PENDING'
             LIMIT 1
             """,
             (gid,),
@@ -122,17 +128,36 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
             "SELECT * FROM decision_log WHERE game_id = ? ORDER BY emitted_at DESC",
             (gid,),
         )
-        no_bet_reasons = [f"{d['selection']}: {d['reason_detail']}" for d in dec_rows if d.get("decision") == "NO_BET"]
+        no_bet_reasons: list[str] = []
+        for d in dec_rows:
+            d_type = d.get("decision_type") or d.get("decision")
+            if d_type == "NO_BET":
+                detail = str(d.get("reason_detail") or "")
+                no_bet_reasons.append(f"{d['selection']}: {detail}")
 
         verdict_status = "PENDING_BET" if active_bet else "NO_BET"
         if active_bet:
             mkt = active_bet["market"]
             sel = active_bet["selection"]
-            ev = float(active_bet["ev_pct"]) * 100
+            raw_ev = (
+                active_bet["ev_pct"]
+                if active_bet.get("ev_pct") is not None
+                else active_bet.get("estimated_ev", 0.0)
+            )
+            ev = float(raw_ev) * 100.0
             stake = float(active_bet["stake_pen"])
             odds = float(active_bet["decimal_odds"])
-            prob = float(active_bet["model_probability"]) * 100
-            book = active_bet["bookmaker"]
+            raw_prob = (
+                active_bet["model_probability"]
+                if active_bet.get("model_probability") is not None
+                else active_bet.get("estimated_prob", 0.5)
+            )
+            prob = float(raw_prob) * 100.0
+            book = str(
+                active_bet.get("bookmaker")
+                or active_bet.get("odds_provider")
+                or "DraftKings"
+            )
 
             if mkt == "moneyline":
                 sel_label = f"Victoria {get_team_full_name(ht)}" if sel == "HOME" else f"Victoria {get_team_full_name(at)}"
@@ -156,7 +181,10 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
             if no_bet_reasons:
                 verdict_reason = "; ".join(no_bet_reasons[:2])
             else:
-                verdict_reason = "Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (> 5.0% EV) para justificar una entrada segura."
+                verdict_reason = (
+                    f"Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado "
+                    f"(>= {min_ev_pct:.1f}% EV) para justificar una entrada segura."
+                )
             sel_label = None
             fair_odds = None
             pot_profit = None
@@ -242,3 +270,36 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
             }
         )
     return slate_items
+
+
+def generate_slate_intelligence_markdown(db: DatabaseManager) -> str:
+    """Renders the upcoming slate intelligence table in Markdown using active config thresholds."""
+    slate_items = compute_upcoming_slate_intelligence(db)
+    lines = [
+        "### 📋 Cartelera Completa de Próximos Partidos: Cuotas, Estadísticas a Tomar en Cuenta y Veredicto",
+        "",
+        "| Hora (UTC) | Partido | Cuotas Ganador (`Local / Visita`) | Proyección Modelo (`Margen / Total`) | Estadísticas Clave (`Elo`, `NetRtg`, `Descanso`) | ¿Qué Hace el Bot y Por Qué? |",
+        "| :--- | :--- | :--- | :--- | :--- | :--- |",
+    ]
+    for s in slate_items:
+        st = s["basketball_context"]
+        proj = s["projections"]
+        odds_dict = s["odds"]
+        ml_str = (
+            f"Local **{odds_dict['home_odds']:.3f}** / Visita **{odds_dict['away_odds']:.3f}**"
+            if odds_dict.get("home_odds") and odds_dict.get("away_odds")
+            else "⏳ *Sin cuotas publicadas*"
+        )
+        proj_str = (
+            f"**Margen {proj['expected_margin']:+.1f} pts** (Local `{proj['p_home_pct']:.1f}%`) · Total **{proj['expected_total']:.1f} pts**"
+        )
+        stats_str = (
+            f"Elo `{st['home_elo']}/{st['away_elo']}` · Net `{st['net_rtg_diff']:+.1f}` · Pace `{st['expected_pace']:.1f}` · "
+            f"Desc `{st['rest_diff']:+d}d`"
+        )
+        verdict_cell = f"**{s['verdict_summary']}** — _{s['verdict_reason']}_"
+        lines.append(
+            f"| `{s['game_start_time']}` | **{s['matchup_display']}** | {ml_str} | {proj_str} | {stats_str} | {verdict_cell} |"
+        )
+    return "\n".join(lines)
+

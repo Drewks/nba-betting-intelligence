@@ -6,7 +6,7 @@ Designed to run unattended in the cloud (e.g., GitHub Actions cron 2x/day) witho
 - Settles any PENDING simulated bets whose games are now FINAL
 - Automatically recalibrates (`ProbabilityCalibrator`) and evaluates walk-forward model promotion
   when new settled outcomes accumulate, strictly without temporal lookahead
-- Generates new pre-game predictions and virtual S/1.00 PEN selections (max 3/day, EV > 5%)
+- Generates new pre-game predictions and fractional Kelly paper selections (capped per matchday/EV config)
 - Updates `reports/*.md` and the `NBA/` Obsidian Vault
 """
 
@@ -456,29 +456,73 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             # Betting decisions may ONLY use quotes observed in a real market (never quarantined,
             # derived or system-generated prices).
             raw_game_odds = db.fetch_all(
-                "SELECT * FROM v_observed_odds_snapshots WHERE game_id = ? AND is_closing_line = 0 ORDER BY captured_at ASC",
+                """
+                SELECT * FROM v_observed_odds_snapshots
+                WHERE game_id = ? AND is_closing_line = 0 AND market IN ('moneyline', 'total_points')
+                ORDER BY datetime(captured_at) ASC, captured_at ASC
+                """,
                 (g["game_id"],),
             )
             if not raw_game_odds:
                 continue
-
-            # Keep only the freshest pre-game line per (market, selection) so stale earlier lines are ignored
-            latest_by_mkt_sel: dict[tuple[str, str], dict[str, Any]] = {}
-            for o in raw_game_odds:
-                latest_by_mkt_sel[(o["market"], o["selection"])] = o
-            game_odds = list(latest_by_mkt_sel.values())
-
-            latest_odds_ts = max(str(o["captured_at"]) for o in game_odds)
-            existing_pred = db.fetch_one(
-                "SELECT MAX(odds_captured_at) AS max_cap FROM predictions WHERE game_id = ? AND model_version_id = ?",
-                (g["game_id"], MODEL_VERSION_ID),
-            )
-            if existing_pred and existing_pred.get("max_cap") and str(existing_pred["max_cap"]) >= latest_odds_ts:
-                continue
+            raw_game_odds.sort(key=lambda r: parse_iso_utc(str(r["captured_at"])))
 
             start_dt = parse_iso_utc(g["game_start_time"])
             avail_dt = parse_iso_utc(g["features_available_at"])
-            latest_odds_dt = max(parse_iso_utc(o["captured_at"]) for o in game_odds)
+
+            # Keep only the freshest pre-tipoff quote per (provider, market, line_key, selection), then keep
+            # ALL complete two-sided pre-tip pairs per (provider, market, line_key): HOME+AWAY for moneyline,
+            # OVER+UNDER at the exact same line_value for total_points. Never mix HOME from one book and AWAY from another.
+            latest_by_key: dict[tuple[str, str, float | None, str], tuple[datetime, dict[str, Any]]] = {}
+            for o in raw_game_odds:
+                try:
+                    cap_dt = parse_iso_utc(str(o["captured_at"]))
+                    dec_val = float(o.get("decimal_odds") or 0.0)
+                except Exception:
+                    continue
+                if cap_dt >= start_dt or dec_val <= 1.0:
+                    continue
+                mkt_str = str(o["market"])
+                raw_lv = o.get("line_value")
+                lv_key: float | None = round(float(raw_lv), 2) if (mkt_str == "total_points" and raw_lv is not None) else None
+                if mkt_str == "moneyline" and raw_lv is not None:
+                    continue
+                if mkt_str == "total_points" and (lv_key is None or lv_key <= 50.0):
+                    continue
+                key_t = (str(o["provider"]), mkt_str, lv_key, str(o["selection"]))
+                prev = latest_by_key.get(key_t)
+                if prev is None or cap_dt >= prev[0]:
+                    latest_by_key[key_t] = (cap_dt, o)
+
+            sides_by_market = {"moneyline": ("HOME", "AWAY"), "total_points": ("OVER", "UNDER")}
+            all_valid_provider_pairs: list[dict[str, Any]] = []
+            for mkt_name, (side_a, side_b) in sides_by_market.items():
+                prov_lines = sorted({(k[0], k[2]) for k in latest_by_key if k[1] == mkt_name})
+                for prov, lv_key in prov_lines:
+                    entry_a = latest_by_key.get((prov, mkt_name, lv_key, side_a))
+                    entry_b = latest_by_key.get((prov, mkt_name, lv_key, side_b))
+                    if not entry_a or not entry_b:
+                        continue
+                    row_a = entry_a[1]
+                    row_b = entry_b[1]
+                    pair_a = {**row_a, "counterpart_decimal_odds": float(row_b["decimal_odds"])}
+                    pair_b = {**row_b, "counterpart_decimal_odds": float(row_a["decimal_odds"])}
+                    all_valid_provider_pairs.extend([pair_a, pair_b])
+
+            game_odds = all_valid_provider_pairs
+            if not game_odds:
+                continue
+
+            latest_odds_dt = max(parse_iso_utc(str(o["captured_at"])) for o in game_odds)
+            existing_preds = db.fetch_all(
+                "SELECT odds_captured_at FROM predictions WHERE game_id = ? AND model_version_id = ? AND odds_captured_at IS NOT NULL",
+                (g["game_id"], MODEL_VERSION_ID),
+            )
+            if existing_preds:
+                max_pred_dt = max(parse_iso_utc(str(r["odds_captured_at"])) for r in existing_preds)
+                if max_pred_dt >= latest_odds_dt:
+                    continue
+
             pred_dt = max(avail_dt, latest_odds_dt)
             if pred_dt >= start_dt:
                 continue
@@ -491,21 +535,55 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             cal_p_home = ml_cal.transform_single(raw_p_home)
             va_home_int = ml_va.predict_interval(raw_p_home)
 
-            tot_odds = [o for o in game_odds if o["market"] == "total_points"]
-            line_val = float(tot_odds[0]["line_value"]) if tot_odds else 228.5
-            pred_f_tot = model_f.predict_total_points(g, all_final_games, line_val)
-            raw_p_over = pred_f_tot["p_over"]
-            cal_p_over = tot_cal.transform_single(raw_p_over)
-            va_over_int = tot_va.predict_interval(raw_p_over)
+            tot_odds = [o for o in game_odds if o["market"] == "total_points" and o.get("line_value") is not None]
+            tot_preds_by_line: dict[float, dict[str, Any]] = {}
+            for tot_row in tot_odds:
+                lv_key = round(float(tot_row["line_value"]), 2)
+                if lv_key not in tot_preds_by_line:
+                    pred_tot_lv = model_f.predict_total_points(g, all_final_games, lv_key)
+                    raw_over_lv = pred_tot_lv["p_over"]
+                    cal_over_lv = tot_cal.transform_single(raw_over_lv)
+                    va_over_lv = tot_va.predict_interval(raw_over_lv)
+                    tot_preds_by_line[lv_key] = {
+                        "pred_f_tot": pred_tot_lv,
+                        "raw_p_over": raw_over_lv,
+                        "cal_p_over": cal_over_lv,
+                        "va_over_int": va_over_lv,
+                    }
+
+            if tot_odds:
+                # Choose target_total_line for baseline feature diagnostics: prefer Pinnacle/sharp line or best bookmaker coverage
+                line_scores: dict[float, tuple[int, int, datetime]] = {}
+                for tot_row in tot_odds:
+                    lv_k = round(float(tot_row["line_value"]), 2)
+                    is_sharp = 1 if "pinnacle" in str(tot_row.get("provider", "")).lower() else 0
+                    cap_k_dt = parse_iso_utc(str(tot_row.get("captured_at") or "1970-01-01T00:00:00Z"))
+                    prev_score = line_scores.get(lv_k)
+                    if prev_score is None:
+                        line_scores[lv_k] = (is_sharp, 1, cap_k_dt)
+                    else:
+                        line_scores[lv_k] = (
+                            max(prev_score[0], is_sharp),
+                            prev_score[1] + 1,
+                            max(prev_score[2], cap_k_dt),
+                        )
+                target_total_line = max(line_scores.keys(), key=lambda k: line_scores[k])
+                base_tot_eval = tot_preds_by_line[target_total_line]
+                pred_f_tot = base_tot_eval["pred_f_tot"]
+                va_over_int_default = base_tot_eval["va_over_int"]
+            else:
+                target_total_line = round(float(feats.get("structural_total") or 228.5) * 2.0) / 2.0
+                pred_f_tot = model_f.predict_total_points(g, all_final_games, target_total_line)
+                va_over_int_default = tot_va.predict_interval(pred_f_tot["p_over"])
 
             feats["mc_overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
             feats["mc_blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
             feats["mc_conformal_q10_total"] = pred_f_tot.get("conformal_q10_total", 205.0)
             feats["mc_conformal_q90_total"] = pred_f_tot.get("conformal_q90_total", 250.0)
             feats["va_conformal_home_width"] = va_home_int["width"]
-            feats["va_conformal_over_width"] = va_over_int["width"]
+            feats["va_conformal_over_width"] = va_over_int_default["width"]
 
-            consensus_map = compute_market_consensus(game_odds)
+            consensus_map = compute_market_consensus(all_valid_provider_pairs)
             steam_map = compute_line_steam(raw_game_odds)
 
             for o in game_odds:
@@ -523,6 +601,8 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                     cal_p = cal_p_home if sel == "HOME" else round(1.0 - cal_p_home, 6)
                     unc = pred_f_ml["uncertainty_std"]
                     m_ver = model_f.version_id
+                    row_tot_pred = pred_f_tot
+                    row_feats = feats
                     if sel == "HOME":
                         conf_int = va_home_int
                     else:
@@ -533,18 +613,25 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                             "width": va_home_int["width"],
                         }
                 else:
-                    raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
-                    cal_p = cal_p_over if sel == "OVER" else round(1.0 - cal_p_over, 6)
-                    unc = pred_f_tot["uncertainty_std"]
+                    lv_exact = round(float(line_v), 2)  # type: ignore[arg-type]
+                    tot_eval_row = tot_preds_by_line[lv_exact]
+                    row_tot_pred = tot_eval_row["pred_f_tot"]
+                    raw_p_over_row = tot_eval_row["raw_p_over"]
+                    cal_p_over_row = tot_eval_row["cal_p_over"]
+                    va_over_int_row = tot_eval_row["va_over_int"]
+                    raw_p = raw_p_over_row if sel == "OVER" else round(1.0 - raw_p_over_row, 6)
+                    cal_p = cal_p_over_row if sel == "OVER" else round(1.0 - cal_p_over_row, 6)
+                    unc = row_tot_pred["uncertainty_std"]
                     m_ver = model_f.version_id
+                    row_feats = {**feats, "va_conformal_over_width": va_over_int_row["width"]}
                     if sel == "OVER":
-                        conf_int = va_over_int
+                        conf_int = va_over_int_row
                     else:
                         conf_int = {
-                            "p0": round(1.0 - va_over_int["p1"], 6),
-                            "p1": round(1.0 - va_over_int["p0"], 6),
-                            "p_va": round(1.0 - va_over_int["p_va"], 6),
-                            "width": va_over_int["width"],
+                            "p0": round(1.0 - va_over_int_row["p1"], 6),
+                            "p1": round(1.0 - va_over_int_row["p0"], 6),
+                            "p_va": round(1.0 - va_over_int_row["p_va"], 6),
+                            "width": va_over_int_row["width"],
                         }
 
                 opp = evaluate_market_opportunity(
@@ -579,15 +666,15 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                         m_ver, raw_p, opp["estimated_probability"], unc, opp["implied_prob_gross"],
                         opp["implied_prob_fair"], opp["bookmaker_overround"],
                         opp["decimal_odds_used"], opp["odds_provider"], opp["odds_captured_at"],
-                        opp["ev_unit"], opp["ev_pct"], pred_ts, json.dumps(feats),
+                        opp["ev_unit"], opp["ev_pct"], pred_ts, json.dumps(row_feats),
                     ),
                 )
                 opp["prediction_id"] = pred_id
                 opp["raw_probability"] = raw_p
                 opp["calibrated_probability"] = opp["estimated_probability"]
                 opp["uncertainty_std"] = unc
-                opp["overtime_prob"] = pred_f_tot.get("overtime_prob", 0.05)
-                opp["blowout_prob"] = pred_f_tot.get("blowout_prob", 0.12)
+                opp["overtime_prob"] = row_tot_pred.get("overtime_prob", 0.05)
+                opp["blowout_prob"] = row_tot_pred.get("blowout_prob", 0.12)
                 opp["emitted_at"] = pred_ts
                 candidates_by_matchday[g["matchday_date"]].append(opp)
 
