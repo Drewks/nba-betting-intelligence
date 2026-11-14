@@ -41,7 +41,7 @@ DDL_STATEMENTS = [
         odds_id TEXT PRIMARY KEY,
         game_id TEXT NOT NULL,
         provider TEXT NOT NULL,
-        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'player_prop')),
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
         selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
         line_value REAL,
         decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
@@ -77,7 +77,7 @@ DDL_STATEMENTS = [
     CREATE TABLE IF NOT EXISTS model_versions (
         model_version_id TEXT PRIMARY KEY,
         model_family TEXT NOT NULL,
-        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'player_prop')),
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
         train_start_date TEXT NOT NULL,
         train_end_date TEXT NOT NULL,
         trained_at TEXT NOT NULL,
@@ -90,15 +90,50 @@ DDL_STATEMENTS = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS run_manifests (
+        run_id TEXT PRIMARY KEY,
+        commit_sha TEXT NOT NULL,
+        model_version_id TEXT NOT NULL,
+        ensemble_version TEXT NOT NULL,
+        submodel_versions_json TEXT NOT NULL,
+        config_hash TEXT NOT NULL,
+        config_version TEXT NOT NULL,
+        calibrator_metadata_json TEXT NOT NULL,
+        seeds_json TEXT NOT NULL,
+        data_cutoff_utc TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_run_manifest_update
+    BEFORE UPDATE ON run_manifests
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: run_manifests is append-only.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_run_manifest_delete
+    BEFORE DELETE ON run_manifests
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: run_manifests cannot be deleted.');
+    END;
+    """,
+    """
     CREATE TABLE IF NOT EXISTS predictions (
         prediction_id TEXT PRIMARY KEY,
         game_id TEXT NOT NULL,
-        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'player_prop')),
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
         selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
         line_value REAL,
         model_version_id TEXT NOT NULL,
         raw_probability REAL NOT NULL CHECK (raw_probability >= 0.0 AND raw_probability <= 1.0),
         calibrated_probability REAL NOT NULL CHECK (calibrated_probability >= 0.0 AND calibrated_probability <= 1.0),
+        raw_model_probability REAL CHECK (raw_model_probability IS NULL OR (raw_model_probability >= 0.0 AND raw_model_probability <= 1.0)),
+        calibrated_model_probability REAL CHECK (calibrated_model_probability IS NULL OR (calibrated_model_probability >= 0.0 AND calibrated_model_probability <= 1.0)),
+        market_fair_probability REAL CHECK (market_fair_probability IS NULL OR (market_fair_probability >= 0.0 AND market_fair_probability <= 1.0)),
+        market_anchored_probability REAL CHECK (market_anchored_probability IS NULL OR (market_anchored_probability >= 0.0 AND market_anchored_probability <= 1.0)),
+        run_manifest_id TEXT,
         uncertainty_std REAL NOT NULL CHECK (uncertainty_std >= 0.0),
         implied_prob_gross REAL NOT NULL,
         implied_prob_fair REAL,
@@ -134,7 +169,7 @@ DDL_STATEMENTS = [
         prediction_id TEXT NOT NULL UNIQUE,
         game_id TEXT NOT NULL,
         matchday_date TEXT NOT NULL,
-        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'player_prop')),
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
         selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
         line_value REAL,
         decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),

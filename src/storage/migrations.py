@@ -692,6 +692,390 @@ def m011_reconcile_observed_ledger_and_player_boxscores(
     }
 
 
+def m012_separate_prob_semantics_spread_and_manifests(
+    conn: sqlite3.Connection, migration_id: str
+) -> dict[str, Any]:
+    """
+    Audited Schema Migration m012 (F-008, F-010, F-017):
+    1. Allows 'spread' market in `odds_snapshots`, `model_versions`, `predictions`, and `simulated_bets`.
+    2. Adds explicit immutable probability semantics to `predictions`:
+       - `raw_model_probability`
+       - `calibrated_model_probability` (left NULL for pre-m012 legacy rows whose `calibrated_probability` mixed market anchoring)
+       - `market_fair_probability`
+       - `market_anchored_probability`
+       - `run_manifest_id`
+    3. Ensures `run_manifests` append-only table exists for full run reproducibility.
+    Preserves 100% of historical rows and verifies exact row counts before & after.
+    """
+    from src.storage.schema import VIEW_DDL
+
+    odds_sql = str((conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='odds_snapshots'").fetchone() or [""])[0])
+    mv_sql = str((conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='model_versions'").fetchone() or [""])[0])
+    pred_sql = str((conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='predictions'").fetchone() or [""])[0])
+    bet_sql = str((conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='simulated_bets'").fetchone() or [""])[0])
+
+    needs_upgrade = (
+        "'spread'" not in odds_sql
+        or "'spread'" not in mv_sql
+        or "'spread'" not in pred_sql
+        or "'spread'" not in bet_sql
+        or "calibrated_model_probability" not in pred_sql
+        or "run_manifest_id" not in pred_sql
+    )
+    if not needs_upgrade:
+        return {"action": "noop", "reason": "m012 schema already up to date"}
+
+    existing_views = [
+        (str(r[0]), str(r[1]))
+        for r in conn.execute("SELECT name, sql FROM sqlite_master WHERE type = 'view'").fetchall()
+        if r[0] and r[1]
+    ]
+    for v_name, _ in existing_views:
+        conn.execute(f'DROP VIEW IF EXISTS "{v_name}"')
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS run_manifests (
+            run_id TEXT PRIMARY KEY,
+            commit_sha TEXT NOT NULL,
+            model_version_id TEXT NOT NULL,
+            ensemble_version TEXT NOT NULL,
+            submodel_versions_json TEXT NOT NULL,
+            config_hash TEXT NOT NULL,
+            config_version TEXT NOT NULL,
+            calibrator_metadata_json TEXT NOT NULL,
+            seeds_json TEXT NOT NULL,
+            data_cutoff_utc TEXT NOT NULL,
+            notes TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS prevent_run_manifest_update
+        BEFORE UPDATE ON run_manifests
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: run_manifests is append-only.');
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS prevent_run_manifest_delete
+        BEFORE DELETE ON run_manifests
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: run_manifests cannot be deleted.');
+        END
+        """
+    )
+
+    bet_before = int(conn.execute("SELECT COUNT(*) FROM simulated_bets").fetchone()[0])
+    pred_before = int(conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0])
+    mv_before = int(conn.execute("SELECT COUNT(*) FROM model_versions").fetchone()[0])
+    odds_before = int(conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0])
+
+    # 1. Stage simulated_bets rows into flat table & drop child table before parent tables
+    conn.execute("DROP TRIGGER IF EXISTS prevent_settled_bet_tampering")
+    conn.execute("DROP TRIGGER IF EXISTS prevent_bet_delete")
+    conn.execute("DROP TABLE IF EXISTS _m012_bets_stage")
+    conn.execute("CREATE TABLE _m012_bets_stage AS SELECT * FROM simulated_bets")
+    bet_staged = int(conn.execute("SELECT COUNT(*) FROM _m012_bets_stage").fetchone()[0])
+    if bet_staged != bet_before:
+        raise RuntimeError(f"m012 simulated_bets stage count mismatch: before={bet_before}, staged={bet_staged}")
+    conn.execute("DROP TABLE simulated_bets")
+
+    # 2. Stage predictions rows into flat table & drop predictions before upgrading model_versions
+    conn.execute("DROP TRIGGER IF EXISTS prevent_prediction_update")
+    conn.execute("DROP TRIGGER IF EXISTS prevent_prediction_delete")
+    conn.execute("DROP INDEX IF EXISTS idx_predictions_lookup")
+    conn.execute("DROP TABLE IF EXISTS _m012_preds_stage")
+    existing_pred_cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(predictions)").fetchall()}
+    raw_m_expr = "raw_model_probability" if "raw_model_probability" in existing_pred_cols else "raw_probability"
+    cal_m_expr = "calibrated_model_probability" if "calibrated_model_probability" in existing_pred_cols else "NULL"
+    mkt_f_expr = "market_fair_probability" if "market_fair_probability" in existing_pred_cols else "implied_prob_fair"
+    mkt_a_expr = "market_anchored_probability" if "market_anchored_probability" in existing_pred_cols else "calibrated_probability"
+    run_m_expr = "run_manifest_id" if "run_manifest_id" in existing_pred_cols else "NULL"
+    conn.execute(
+        f"""
+        CREATE TABLE _m012_preds_stage AS
+        SELECT
+            prediction_id, game_id, market, selection, line_value, model_version_id,
+            raw_probability, calibrated_probability,
+            {raw_m_expr} AS raw_model_probability,
+            {cal_m_expr} AS calibrated_model_probability,
+            {mkt_f_expr} AS market_fair_probability,
+            {mkt_a_expr} AS market_anchored_probability,
+            {run_m_expr} AS run_manifest_id,
+            uncertainty_std, implied_prob_gross, implied_prob_fair, bookmaker_overround,
+            decimal_odds_used, odds_provider, odds_captured_at, ev_unit, ev_pct,
+            emitted_at, features_snapshot_json
+        FROM predictions
+        """
+    )
+    pred_staged = int(conn.execute("SELECT COUNT(*) FROM _m012_preds_stage").fetchone()[0])
+    if pred_staged != pred_before:
+        raise RuntimeError(f"m012 predictions stage count mismatch: before={pred_before}, staged={pred_staged}")
+    conn.execute("DROP TABLE predictions")
+
+    # 3. Upgrade model_versions ('spread' market permitted)
+    conn.execute("DROP TABLE IF EXISTS model_versions_v12")
+    conn.execute(
+        """
+        CREATE TABLE model_versions_v12 (
+            model_version_id TEXT PRIMARY KEY,
+            model_family TEXT NOT NULL,
+            market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+            train_start_date TEXT NOT NULL,
+            train_end_date TEXT NOT NULL,
+            trained_at TEXT NOT NULL,
+            hyperparameters_json TEXT NOT NULL,
+            oos_brier_score REAL,
+            oos_log_loss REAL,
+            is_active INTEGER NOT NULL DEFAULT 0,
+            approved_by TEXT NOT NULL,
+            parent_version_id TEXT
+        )
+        """
+    )
+    conn.execute("INSERT INTO model_versions_v12 SELECT * FROM model_versions")
+    mv_after = int(conn.execute("SELECT COUNT(*) FROM model_versions_v12").fetchone()[0])
+    if mv_after != mv_before:
+        raise RuntimeError(f"m012 model_versions count mismatch: before={mv_before}, after={mv_after}")
+    conn.execute("DROP TABLE model_versions")
+    conn.execute("ALTER TABLE model_versions_v12 RENAME TO model_versions")
+
+    # 4. Recreate predictions with FKs pointing at upgraded model_versions + restore triggers/index
+    conn.execute(
+        """
+        CREATE TABLE predictions (
+            prediction_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL,
+            market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+            selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+            line_value REAL,
+            model_version_id TEXT NOT NULL,
+            raw_probability REAL NOT NULL CHECK (raw_probability >= 0.0 AND raw_probability <= 1.0),
+            calibrated_probability REAL NOT NULL CHECK (calibrated_probability >= 0.0 AND calibrated_probability <= 1.0),
+            raw_model_probability REAL CHECK (raw_model_probability IS NULL OR (raw_model_probability >= 0.0 AND raw_model_probability <= 1.0)),
+            calibrated_model_probability REAL CHECK (calibrated_model_probability IS NULL OR (calibrated_model_probability >= 0.0 AND calibrated_model_probability <= 1.0)),
+            market_fair_probability REAL CHECK (market_fair_probability IS NULL OR (market_fair_probability >= 0.0 AND market_fair_probability <= 1.0)),
+            market_anchored_probability REAL CHECK (market_anchored_probability IS NULL OR (market_anchored_probability >= 0.0 AND market_anchored_probability <= 1.0)),
+            run_manifest_id TEXT,
+            uncertainty_std REAL NOT NULL CHECK (uncertainty_std >= 0.0),
+            implied_prob_gross REAL NOT NULL,
+            implied_prob_fair REAL,
+            bookmaker_overround REAL,
+            decimal_odds_used REAL NOT NULL CHECK (decimal_odds_used > 1.0),
+            odds_provider TEXT NOT NULL,
+            odds_captured_at TEXT NOT NULL,
+            ev_unit REAL NOT NULL,
+            ev_pct REAL NOT NULL,
+            emitted_at TEXT NOT NULL,
+            features_snapshot_json TEXT NOT NULL,
+            FOREIGN KEY (game_id) REFERENCES games(game_id),
+            FOREIGN KEY (model_version_id) REFERENCES model_versions(model_version_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO predictions (
+            prediction_id, game_id, market, selection, line_value, model_version_id,
+            raw_probability, calibrated_probability,
+            raw_model_probability, calibrated_model_probability,
+            market_fair_probability, market_anchored_probability, run_manifest_id,
+            uncertainty_std, implied_prob_gross, implied_prob_fair, bookmaker_overround,
+            decimal_odds_used, odds_provider, odds_captured_at, ev_unit, ev_pct,
+            emitted_at, features_snapshot_json
+        )
+        SELECT
+            prediction_id, game_id, market, selection, line_value, model_version_id,
+            raw_probability, calibrated_probability,
+            raw_model_probability, calibrated_model_probability,
+            market_fair_probability, market_anchored_probability, run_manifest_id,
+            uncertainty_std, implied_prob_gross, implied_prob_fair, bookmaker_overround,
+            decimal_odds_used, odds_provider, odds_captured_at, ev_unit, ev_pct,
+            emitted_at, features_snapshot_json
+        FROM _m012_preds_stage
+        """
+    )
+    pred_after = int(conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0])
+    if pred_after != pred_before:
+        raise RuntimeError(f"m012 predictions count mismatch: before={pred_before}, after={pred_after}")
+    conn.execute("DROP TABLE _m012_preds_stage")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_predictions_lookup ON predictions (game_id, market, selection, model_version_id, emitted_at)"
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_prediction_update
+        BEFORE UPDATE ON predictions
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Historical predictions cannot be modified.');
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_prediction_delete
+        BEFORE DELETE ON predictions
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Historical predictions cannot be deleted.');
+        END
+        """
+    )
+
+    # 5. Recreate simulated_bets with FKs pointing at upgraded predictions + restore triggers
+    conn.execute(
+        """
+        CREATE TABLE simulated_bets (
+            bet_id TEXT PRIMARY KEY,
+            prediction_id TEXT NOT NULL UNIQUE,
+            game_id TEXT NOT NULL,
+            matchday_date TEXT NOT NULL,
+            market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+            selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+            line_value REAL,
+            decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+            estimated_prob REAL NOT NULL,
+            estimated_ev REAL NOT NULL,
+            stake_pen REAL NOT NULL CHECK (stake_pen > 0.0 AND stake_pen <= 25.0),
+            emitted_at TEXT NOT NULL,
+            model_version_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+            net_profit_pen REAL,
+            bankroll_after_pen REAL,
+            actual_result_summary TEXT,
+            settled_at TEXT,
+            UNIQUE(game_id, market, selection, line_value),
+            FOREIGN KEY (prediction_id) REFERENCES predictions(prediction_id),
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        )
+        """
+    )
+    conn.execute("INSERT INTO simulated_bets SELECT * FROM _m012_bets_stage")
+    bet_after = int(conn.execute("SELECT COUNT(*) FROM simulated_bets").fetchone()[0])
+    if bet_after != bet_before:
+        raise RuntimeError(f"m012 simulated_bets count mismatch: before={bet_before}, after={bet_after}")
+    conn.execute("DROP TABLE _m012_bets_stage")
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_settled_bet_tampering
+        BEFORE UPDATE ON simulated_bets
+        BEGIN
+            SELECT CASE
+                WHEN OLD.status != 'PENDING' THEN
+                    RAISE(ABORT, 'DOUBLE_SETTLEMENT_OR_TAMPERING: Bet has already been settled and is immutable.')
+                WHEN NEW.decimal_odds != OLD.decimal_odds
+                  OR NEW.stake_pen != OLD.stake_pen
+                  OR NEW.selection != OLD.selection
+                  OR COALESCE(NEW.line_value, -9999) != COALESCE(OLD.line_value, -9999)
+                  OR NEW.prediction_id != OLD.prediction_id
+                  OR NEW.emitted_at != OLD.emitted_at
+                  OR NEW.estimated_prob != OLD.estimated_prob
+                  OR NEW.estimated_ev != OLD.estimated_ev THEN
+                    RAISE(ABORT, 'IMMUTABLE_VIOLATION: Original bet parameters and odds cannot be modified.')
+            END;
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_bet_delete
+        BEFORE DELETE ON simulated_bets
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Simulated bets cannot be deleted from audit history.');
+        END
+        """
+    )
+
+    # 6. Upgrade odds_snapshots ('spread' market permitted)
+    conn.execute("DROP TRIGGER IF EXISTS prevent_odds_update")
+    conn.execute("DROP TRIGGER IF EXISTS prevent_odds_delete")
+    conn.execute("DROP TABLE IF EXISTS odds_snapshots_v12")
+    conn.execute(
+        """
+        CREATE TABLE odds_snapshots_v12 (
+            odds_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+            selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+            line_value REAL,
+            decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+            counterpart_decimal_odds REAL CHECK (counterpart_decimal_odds IS NULL OR counterpart_decimal_odds > 1.0),
+            captured_at TEXT NOT NULL,
+            is_closing_line INTEGER NOT NULL DEFAULT 0,
+            source_type TEXT NOT NULL CHECK (source_type IN ('OBSERVED', 'DERIVED', 'SYNTHETIC')),
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO odds_snapshots_v12 (
+            odds_id, game_id, provider, market, selection, line_value,
+            decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line, source_type
+        )
+        SELECT
+            odds_id, game_id, provider, market, selection, line_value,
+            decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line,
+            COALESCE(source_type, 'OBSERVED')
+        FROM odds_snapshots
+        """
+    )
+    odds_after = int(conn.execute("SELECT COUNT(*) FROM odds_snapshots_v12").fetchone()[0])
+    if odds_after != odds_before:
+        raise RuntimeError(f"m012 odds_snapshots count mismatch: before={odds_before}, after={odds_after}")
+    conn.execute("DROP TABLE odds_snapshots")
+    conn.execute("ALTER TABLE odds_snapshots_v12 RENAME TO odds_snapshots")
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_odds_update
+        BEFORE UPDATE ON odds_snapshots
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Captured odds snapshots cannot be modified.');
+        END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER prevent_odds_delete
+        BEFORE DELETE ON odds_snapshots
+        BEGIN
+            SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Captured odds snapshots cannot be deleted.');
+        END
+        """
+    )
+
+    # 7. Recreate views
+    for ddl in VIEW_DDL.values():
+        conn.execute(ddl)
+    for v_name, v_sql in existing_views:
+        if v_name not in VIEW_DDL:
+            conn.execute(v_sql)
+
+    _log_repair(
+        conn,
+        migration_id,
+        "predictions",
+        "SCHEMA_AND_PROB_SEMANTICS_UPGRADE",
+        "SEPARATE_PROBS_ALLOW_SPREAD_ADD_RUN_MANIFESTS",
+        (
+            f"Upgraded CHECK constraints to allow 'spread', separated probability columns on "
+            f"{pred_after} predictions, created run_manifests (odds={odds_after}, bets={bet_after}, mv={mv_after})."
+        ),
+    )
+    return {
+        "action": "upgraded",
+        "odds_snapshots_rows": odds_after,
+        "model_versions_rows": mv_after,
+        "predictions_rows": pred_after,
+        "simulated_bets_rows": bet_after,
+    }
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -704,6 +1088,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_10_009_enforce_observed_games_view", m009_enforce_observed_games_view),
     ("2026_11_14_010_allow_player_prop_in_odds_snapshots", m010_allow_player_prop_in_odds_snapshots),
     ("2026_11_14_011_reconcile_observed_ledger_and_player_boxscores", m011_reconcile_observed_ledger_and_player_boxscores),
+    ("2026_11_14_012_separate_prob_semantics_spread_and_manifests", m012_separate_prob_semantics_spread_and_manifests),
 ]
 
 

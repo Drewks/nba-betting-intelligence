@@ -1190,6 +1190,34 @@ class LivePeruOddsScraper:
                             "source_type": "OBSERVED",
                         }
                     )
+            if (
+                q.spread_home_line is not None
+                and q.spread_home_odds is not None
+                and q.spread_away_odds is not None
+                and q.spread_home_odds > 1.0
+                and q.spread_away_odds > 1.0
+            ):
+                h_line = float(q.spread_home_line)
+                a_line = -h_line if h_line != 0.0 else 0.0
+                for selection, s_line, price, counter in (
+                    ("HOME", h_line, q.spread_home_odds, q.spread_away_odds),
+                    ("AWAY", a_line, q.spread_away_odds, q.spread_home_odds),
+                ):
+                    self.db.insert_odds_snapshot(
+                        {
+                            "odds_id": f"ODDS_LIVEAPI_{game_id}_{bid}_SPR_{selection}_{s_line}_{cap_ts}",
+                            "game_id": game_id,
+                            "provider": provider,
+                            "market": "spread",
+                            "selection": selection,
+                            "line_value": s_line,
+                            "decimal_odds": float(price),
+                            "counterpart_decimal_odds": float(counter),
+                            "captured_at": cap_ts,
+                            "is_closing_line": 0,
+                            "source_type": "OBSERVED",
+                        }
+                    )
             for pp in q.player_props or []:
                 p_name = str(pp.get("player_name") or "").strip()
                 raw_cat = str(pp.get("prop_category") or "PTS").strip().upper()
@@ -1228,8 +1256,7 @@ class LivePeruOddsScraper:
                                 "source_type": "OBSERVED",
                             }
                         )
-            # Note: odds_snapshots CHECK constraint accepts ('moneyline', 'total_points', 'player_prop');
-            # spread lines remain exposed on LiveGameOddsQuote & scan JSON outputs.
+            # Spread, moneyline, total_points, and player_prop snapshots are all persisted.
 
     def _latest_observed_sharp_benchmark(self, game_id: str) -> dict[str, Any] | None:
         """Latest observed Pinnacle moneyline pair (HOME and AWAY from the same capture)."""

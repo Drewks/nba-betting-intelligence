@@ -34,6 +34,14 @@ ESSENTIAL_GAME_FEATURES: dict[str, list[str]] = {
         "home_pace",
         "away_pace",
     ],
+    "spread": [
+        "home_off_rtg",
+        "home_def_rtg",
+        "away_off_rtg",
+        "away_def_rtg",
+        "home_rest_days",
+        "away_rest_days",
+    ],
 }
 
 
@@ -190,8 +198,19 @@ def validate_odds_record(
     elif market == "total_points":
         if selection not in ("OVER", "UNDER"):
             raise DataValidationError(f"Invalid selection '{selection}' for total_points market")
-        if line_value is None or not isinstance(line_value, (int, float)) or line_value <= 50.0:
+        if line_value is None or not isinstance(line_value, (int, float)) or isinstance(line_value, bool) or math.isnan(float(line_value)) or line_value <= 50.0:
             raise DataValidationError(f"Missing or unrealistic total_points line_value: {line_value!r}")
+    elif market == "spread":
+        if selection not in ("HOME", "AWAY"):
+            raise DataValidationError(f"Invalid selection '{selection}' for spread market")
+        if (
+            line_value is None
+            or not isinstance(line_value, (int, float))
+            or isinstance(line_value, bool)
+            or math.isnan(float(line_value))
+            or abs(float(line_value)) > 45.0
+        ):
+            raise DataValidationError(f"Missing or unrealistic spread line_value: {line_value!r}")
     else:
         raise DataValidationError(f"Unsupported market in odds record: {market!r}")
 

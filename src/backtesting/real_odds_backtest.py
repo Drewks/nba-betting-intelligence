@@ -46,6 +46,7 @@ from src.calibration.calibrator import (
     compute_brier_score,
     compute_log_loss,
 )
+from src.config import load_config
 from src.features.boxscore_features import attach_boxscore_features
 from src.features.team_ratings import compute_pregame_team_ratings, is_synthetic_game_id
 from src.ingestion.normalizer import normalize_team_code
@@ -312,38 +313,47 @@ def run_real_odds_backtest(
                 "open_home": p_open_home, "close_home": p_close_home,
             }
 
-            sides: list[tuple[str, str, float | None, float, float, float, dict[str, float], str]] = [
+            sides: list[tuple[str, str, float | None, float, float, float, dict[str, Any], str, float, float]] = [
                 ("moneyline", "HOME", None, cal_home, p_open_home, p_close_home, va_home,
-                 "WON" if home_won == 1 else "LOST"),
+                 "WON" if home_won == 1 else "LOST", 0.0, raw_home),
                 ("moneyline", "AWAY", None, 1.0 - cal_home, 1.0 - p_open_home, 1.0 - p_close_home,
                  {"p0": 1.0 - va_home["p1"], "p1": 1.0 - va_home["p0"], "width": va_home["width"]},
-                 "WON" if home_won == 0 else "LOST"),
+                 "WON" if home_won == 0 else "LOST", 0.0, 1.0 - raw_home),
             ]
 
             line = m.get("open_total")
             tot_result = str(m.get("total_result_open") or "")
             if line is not None and tot_result in ("over", "under", "push"):
-                raw_over = float(model.predict_total_points(g, history, float(line))["p_over"])
+                tot_pred = model.predict_total_points(g, history, float(line))
+                raw_over = float(tot_pred["p_over"])
+                p_push_tot = float(tot_pred.get("p_push", 0.0))
                 cal_over = float(tot_cal.transform_single(raw_over))
+                if p_push_tot > 0.0:
+                    cal_over = min(cal_over, 1.0 - p_push_tot)
                 va_over = tot_va.predict_interval(raw_over)
                 p_close_over = _close_over_prob_at_line(m.get("close_total"), m.get("close_over_prob"), float(line))
+                non_push_tot = max(1e-9, 1.0 - p_push_tot)
+                anchored_over = non_push_tot * (model_weight * (cal_over / non_push_tot if p_push_tot > 0.0 else cal_over) + (1.0 - model_weight) * 0.5)
                 rec.update({
                     "total_line": float(line), "total_result": tot_result,
                     "raw_over": raw_over, "cal_over": cal_over,
-                    "anchored_over": model_weight * cal_over + (1.0 - model_weight) * 0.5,
+                    "anchored_over": anchored_over,
+                    "p_push_tot": p_push_tot,
                     "close_over_at_open_line": p_close_over,
                     "close_total_line": m.get("close_total"),
                 })
                 if p_close_over is not None:
                     over_res = "PUSH" if tot_result == "push" else ("WON" if tot_result == "over" else "LOST")
                     under_res = "PUSH" if tot_result == "push" else ("WON" if tot_result == "under" else "LOST")
-                    sides.append(("total_points", "OVER", float(line), cal_over, 0.5, p_close_over, va_over, over_res))
-                    sides.append(("total_points", "UNDER", float(line), 1.0 - cal_over, 0.5, 1.0 - p_close_over,
+                    cal_under = max(0.0, 1.0 - cal_over - p_push_tot)
+                    raw_under = max(0.0, 1.0 - raw_over - p_push_tot)
+                    sides.append(("total_points", "OVER", float(line), cal_over, 0.5, p_close_over, va_over, over_res, p_push_tot, raw_over))
+                    sides.append(("total_points", "UNDER", float(line), cal_under, 0.5, 1.0 - p_close_over,
                                   {"p0": 1.0 - va_over["p1"], "p1": 1.0 - va_over["p0"], "width": va_over["width"]},
-                                  under_res))
+                                  under_res, p_push_tot, raw_under))
             day_records.append((g, rec))
 
-            for market, sel, ln, cal_p, p_open, p_close, conf, result in sides:
+            for market, sel, ln, cal_p, p_open, p_close, conf, result, p_push_s, raw_s in sides:
                 price = _price(p_open, vig)
                 counter = _price(1.0 - p_open, vig)
                 eff_mw = (
@@ -363,15 +373,17 @@ def run_real_odds_backtest(
                 }
                 opp = evaluate_market_opportunity(
                     estimated_prob=float(np.clip(cal_p, 0.001, 0.999)),
+                    raw_model_prob=float(np.clip(raw_s, 0.001, 0.999)),
                     uncertainty_std=0.05,
                     odds_record=odds_record,
                     game_start_time=g["game_start_time"],
-                    model_version_id="model_f_ensemble_backtest",
+                    model_version_id=load_config().model.version_id,
                     simulated_prediction_time=decision_ts,
                     market_consensus_prob=p_open,
                     model_weight=eff_mw,
                     max_disagreement=eff_md,
                     conformal_interval=conf,
+                    p_push=p_push_s,
                 )
                 ev = float(opp["ev_unit"])
                 reason = None
@@ -480,6 +492,7 @@ def _summarize(
             out["totals_quality_at_open_line"] = {
                 "model_raw": _score([r["raw_over"] for r in tot], yt),
                 "model_calibrated": _score([r["cal_over"] for r in tot], yt),
+                "model_anchored_30_70": _score([r["anchored_over"] for r in tot], yt),
                 "market_open_assumed_0.5": _score([0.5] * len(tot), yt),
                 "market_close_normal_approx": _score([r["close_over_at_open_line"] for r in tot], yt),
             }

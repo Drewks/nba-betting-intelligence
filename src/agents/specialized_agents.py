@@ -592,15 +592,24 @@ class NBAAuditorAgent:
         max_diff = 1.0
         model_ok = False
         try:
-            m1 = EnsembleStackingModel("model_f_ensemble_v2")
-            m2 = EnsembleStackingModel("model_f_ensemble_v2")
+            from src.config import load_config
+
+            cfg_ver = load_config().model.version_id
+            m1 = EnsembleStackingModel(cfg_ver)
+            m2 = EnsembleStackingModel(cfg_ver)
             cutoff = str(hist[-1]["game_start_time"])
             m1.fit(hist, cutoff)
             m2.fit(hist, cutoff)
             ml1 = m1.predict_moneyline(target_game, hist)
             ml2 = m2.predict_moneyline(target_game, hist)
-            tot1 = m1.predict_total_points(target_game, hist, line_value=228.5)
-            tot2 = m2.predict_total_points(target_game, hist, line_value=228.5)
+            hist_totals = [
+                float(g["home_score"]) + float(g["away_score"])
+                for g in hist
+                if g.get("home_score") is not None and g.get("away_score") is not None
+            ]
+            ref_tot_line = round((sum(hist_totals) / len(hist_totals)) * 2.0) / 2.0 if hist_totals else 220.5
+            tot1 = m1.predict_total_points(target_game, hist, line_value=ref_tot_line)
+            tot2 = m2.predict_total_points(target_game, hist, line_value=ref_tot_line)
             max_diff = max(
                 abs(float(ml1["p_home"]) - float(ml2["p_home"])),
                 abs(float(ml1["p_away"]) - float(ml2["p_away"])),
