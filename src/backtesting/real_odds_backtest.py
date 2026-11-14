@@ -228,6 +228,9 @@ def run_real_odds_backtest(
     kelly_max_fraction: float = 0.03,
     history_lag_days: int = 0,
     boxscores: dict[str, dict[str, Any]] | None = None,
+    moneyline_model_weight: float | None = None,
+    moneyline_max_disagreement: float | None = None,
+    moneyline_max_odds: float | None = None,
 ) -> dict[str, Any]:
     """
     `history_lag_days` > 0 drops the most recent days of results from the model's information set, as a
@@ -301,10 +304,11 @@ def run_real_odds_backtest(
             va_home = ml_va.predict_interval(raw_home)
             home_won = 1 if int(g["home_score"]) > int(g["away_score"]) else 0
 
+            ml_mw = moneyline_model_weight if moneyline_model_weight is not None else model_weight
             rec: dict[str, Any] = {
                 "game_id": g["game_id"], "season": m["season"], "matchday_date": day,
                 "home_won": home_won, "raw_home": raw_home, "cal_home": cal_home,
-                "anchored_home": model_weight * cal_home + (1.0 - model_weight) * p_open_home,
+                "anchored_home": ml_mw * cal_home + (1.0 - ml_mw) * p_open_home,
                 "open_home": p_open_home, "close_home": p_close_home,
             }
 
@@ -342,6 +346,16 @@ def run_real_odds_backtest(
             for market, sel, ln, cal_p, p_open, p_close, conf, result in sides:
                 price = _price(p_open, vig)
                 counter = _price(1.0 - p_open, vig)
+                eff_mw = (
+                    moneyline_model_weight
+                    if (market == "moneyline" and moneyline_model_weight is not None)
+                    else model_weight
+                )
+                eff_md = (
+                    moneyline_max_disagreement
+                    if (market == "moneyline" and moneyline_max_disagreement is not None)
+                    else max_disagreement
+                )
                 odds_record = {
                     "odds_id": f"BT_{g['game_id']}_{market}_{sel}", "game_id": g["game_id"],
                     "provider": "consensus_open", "market": market, "selection": sel, "line_value": ln,
@@ -355,18 +369,20 @@ def run_real_odds_backtest(
                     model_version_id="model_f_ensemble_backtest",
                     simulated_prediction_time=decision_ts,
                     market_consensus_prob=p_open,
-                    model_weight=model_weight,
-                    max_disagreement=max_disagreement,
+                    model_weight=eff_mw,
+                    max_disagreement=eff_md,
                     conformal_interval=conf,
                 )
                 ev = float(opp["ev_unit"])
                 reason = None
                 if ev <= min_ev:
                     reason = "EV_BELOW_THRESHOLD"
-                elif abs(float(opp.get("model_market_disagreement") or 0.0)) > max_disagreement:
+                elif abs(float(opp.get("model_market_disagreement") or 0.0)) > eff_md:
                     reason = "MODEL_MARKET_DISAGREEMENT"
                 elif ev > 0.45:
                     reason = "UNVERIFIED_INJURY_OR_LINEUP_OUTLIER"
+                elif market == "moneyline" and moneyline_max_odds is not None and price > moneyline_max_odds:
+                    reason = "EXCESSIVE_LONGSHOT_VARIANCE"
                 elif price > 3.50 and ev < 0.15:
                     reason = "EXCESSIVE_LONGSHOT_VARIANCE"
                 elif conf.get("width") is not None and float(conf["width"]) > 0.22:
@@ -427,6 +443,9 @@ def run_real_odds_backtest(
         "start_date": start_date, "end_date": end_date, "retrain_every_days": retrain_every_days,
         "vig_assumption": vig, "model_weight": model_weight, "min_ev": min_ev, "history_lag_days": history_lag_days,
         "max_disagreement": max_disagreement, "max_bets_per_day": max_bets_per_day,
+        "moneyline_model_weight": moneyline_model_weight,
+        "moneyline_max_disagreement": moneyline_max_disagreement,
+        "moneyline_max_odds": moneyline_max_odds,
         "kelly": {"fraction": kelly_fraction, "min_stake": kelly_min_stake, "max_stake": kelly_max_stake,
                   "max_bankroll_fraction": kelly_max_fraction},
         "market_rows": len(market_rows), "matched_games": len(market_by_game), "test_games": len(test_games),
@@ -581,6 +600,11 @@ def _line_movement_signal(eval_rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None = None) -> str:
     cfg = result["config"]
+    ml_cap_txt = (
+        f" | tope cuota Moneyline `{cfg['moneyline_max_odds']}`"
+        if cfg.get("moneyline_max_odds") is not None
+        else ""
+    )
     lines = [
         "# Backtest con cuotas reales (consenso de apertura/cierre, sin margen)",
         "",
@@ -588,7 +612,7 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         f"- {result['data_attribution']}",
         f"- Periodo de prueba desde `{cfg['start_date']}` | partidos con mercado emparejado: `{cfg['test_games']}`",
         f"- Reentrenamiento cada `{cfg['retrain_every_days']}` días | margen supuesto `{cfg['vig_assumption'] * 100:.1f}%` | "
-        f"peso del modelo `{cfg['model_weight']}` | EV mínimo `{cfg['min_ev'] * 100:.0f}%`",
+        f"peso del modelo `{cfg['model_weight']}` | EV mínimo `{cfg['min_ev'] * 100:.0f}%`{ml_cap_txt}",
         "",
         "## 1. Calidad probabilística fuera de muestra (todos los partidos)",
         "",

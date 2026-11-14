@@ -11,10 +11,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import json
 import logging
+import sqlite3
 from typing import Any
 import urllib.request
 
-from src.ingestion.normalizer import normalize_team_code
+from src.ingestion.normalizer import normalize_player_match_key, normalize_team_code
 from src.storage.db import DatabaseManager
 
 logger = logging.getLogger(__name__)
@@ -97,16 +98,68 @@ def fetch_boxscore(event_id: str, timeout: int = 15) -> dict[str, Any] | None:
         return parse_boxscore(json.loads(resp.read().decode("utf-8")))
 
 
+def upsert_player_boxscores_rows(
+    conn: sqlite3.Connection,
+    game_id: str,
+    game_start_time: str,
+    players_by_team: dict[str, Any] | None,
+) -> int:
+    """Flattens ESPN per-player boxscore JSON into the indexed `player_boxscores` table."""
+    if not isinstance(players_by_team, dict) or not game_start_time:
+        return 0
+    upserted = 0
+    for raw_team, p_list in players_by_team.items():
+        if not isinstance(p_list, list):
+            continue
+        try:
+            team_code = normalize_team_code(str(raw_team))
+        except ValueError:
+            team_code = str(raw_team or "").strip().upper()
+        if not team_code:
+            continue
+        for p in p_list:
+            if not isinstance(p, dict):
+                continue
+            p_name = str(p.get("name") or "").strip()
+            p_key = normalize_player_match_key(p_name)
+            if not p_key:
+                continue
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO player_boxscores (
+                    game_id, player_name, player_key, team, game_start_time,
+                    minutes, pts, reb, ast, threed, starter
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    game_id,
+                    p_name,
+                    p_key,
+                    team_code,
+                    game_start_time,
+                    float(p.get("min") or 0.0),
+                    float(p.get("pts") or 0.0),
+                    float(p.get("reb") or 0.0),
+                    float(p.get("ast") or 0.0),
+                    float(p.get("threed") or 0.0),
+                    1 if p.get("starter") else 0,
+                ),
+            )
+            upserted += 1
+    return upserted
+
+
 def backfill_boxscores(db: DatabaseManager, limit: int | None = None, workers: int = 8) -> dict[str, int]:
     """Fetches box scores for FINAL real games that do not have one yet (oldest first)."""
     missing = db.fetch_all(
         """
-        SELECT g.game_id FROM games g
+        SELECT g.game_id, g.game_start_time FROM games g
         WHERE g.status = 'FINAL' AND g.game_id LIKE 'ESPN_%'
           AND g.game_id NOT IN (SELECT game_id FROM game_boxscores)
         ORDER BY g.game_start_time ASC
         """
     )
+    start_by_id = {str(r["game_id"]): str(r["game_start_time"]) for r in missing}
     ids = [r["game_id"] for r in missing if espn_event_id(r["game_id"])]
     if limit is not None:
         ids = ids[:limit]
@@ -119,6 +172,7 @@ def backfill_boxscores(db: DatabaseManager, limit: int | None = None, workers: i
             return game_id, None
 
     stored = 0
+    player_rows_stored = 0
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(_one, ids))
@@ -131,8 +185,14 @@ def backfill_boxscores(db: DatabaseManager, limit: int | None = None, workers: i
                 "VALUES (?, ?, ?, 'espn_summary', ?)",
                 (game_id, json.dumps(box["teams"]), json.dumps(box["players"], ensure_ascii=False), now),
             )
+            player_rows_stored += upsert_player_boxscores_rows(
+                conn,
+                game_id,
+                start_by_id.get(game_id, ""),
+                box.get("players"),
+            )
             stored += 1
-    return {"requested": len(ids), "stored": stored}
+    return {"requested": len(ids), "stored": stored, "player_rows_stored": player_rows_stored}
 
 
 def load_boxscores(db: DatabaseManager) -> dict[str, dict[str, Any]]:

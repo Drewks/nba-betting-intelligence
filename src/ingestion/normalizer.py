@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
+
 from src.utils.team_dictionary import (
     NBA_TEAMS as RAW_NBA_TEAMS,
     TEAM_ALIASES,
@@ -49,3 +52,10 @@ def american_to_decimal_odds(american_odds: str | int | float) -> float:
     if val > 0:
         return round(1.0 + (val / 100.0), 4)
     return round(1.0 + (100.0 / abs(val)), 4)
+
+
+def normalize_player_match_key(name: str) -> str:
+    """Normalizes a player name to ASCII lowercase tokens for cross-feed matching."""
+    ascii_text = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode("ascii").lower()
+    cleaned = re.sub(r"[^a-z0-9 ]+", " ", ascii_text)
+    return " ".join(cleaned.split())

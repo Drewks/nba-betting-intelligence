@@ -23,6 +23,7 @@ from src.storage.db import DatabaseManager
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Walk-forward hyperparameter optimization with a final holdout.")
+    parser.add_argument("--db", default=str(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"))
     parser.add_argument("--trials", type=int, default=300)
     parser.add_argument("--eval-slice", type=int, default=300, help="Validation window size (games)")
     parser.add_argument("--holdout", type=int, default=300, help="Untouched final holdout size (games)")
@@ -30,7 +31,7 @@ def main() -> None:
     parser.add_argument("--out", default=str(PROJECT_ROOT / "data" / "evaluation" / "optimal_hyperparameters.json"))
     args = parser.parse_args()
 
-    db = DatabaseManager(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3")
+    db = DatabaseManager(args.db)
     games = [
         g
         for g in db.fetch_all("SELECT * FROM games WHERE status = 'FINAL' ORDER BY game_start_time ASC")

@@ -27,9 +27,7 @@ import logging
 import math
 import os
 from pathlib import Path
-import re
 from typing import Any
-import unicodedata
 import uuid
 
 import numpy as np
@@ -39,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 from src.calibration.calibrator import VennAbersConformalInterval
 from src.config import load_config
+from src.ingestion.normalizer import normalize_player_match_key
 from src.prediction.ev_calculator import (
     calculate_ev,
     devig_multiplicative,
@@ -88,9 +87,7 @@ _PROP_CATEGORY_ALIASES: dict[str, str] = {
 
 def _normalize_player_match_key(name: str) -> str:
     """Normalizes a player name for exact canonical matching across bookmakers and rosters."""
-    ascii_text = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode("ascii").lower()
-    cleaned = re.sub(r"[^a-z0-9 ]+", " ", ascii_text)
-    return " ".join(cleaned.split())
+    return normalize_player_match_key(name)
 
 
 def _parse_observed_prop_provider(provider_str: str) -> tuple[str, str] | None:
@@ -153,8 +150,8 @@ class PlayerPropsEngine:
         self.calibrator = VennAbersConformalInterval(window=1200)
         self.minutes_engine = MinutesProjectionEngine()
         self.vine_copula_engine = VineCopulaSGP()
-        self._player_baselines_cache: dict[str, tuple[float, float, float, float, float, float]] = {}
-        self._team_multipliers_cache: dict[str, dict[str, Any]] = {}
+        self._player_baselines_cache: dict[tuple[str, str], tuple[float, float, float, float, float, float]] = {}
+        self._team_multipliers_cache: dict[tuple[str, str], dict[str, Any]] = {}
 
     def _props_exposure_allows(self, stake_pen: float, bankroll_pen: float) -> bool:
         """Props/SGP ledger exposure cap: pending stakes may not exceed max_portfolio_exposure_pct of bankroll."""
@@ -257,177 +254,256 @@ class PlayerPropsEngine:
             logger.warning(f"Failed to persist SGP opportunity: {exc}")
             return False
 
+    @staticmethod
+    def _compute_ewma_baseline_from_records(
+        records: list[tuple[float, float, float, float, float]],
+        prior_profile: tuple[float, float, float, float, float, float],
+        alpha: float = 0.85,
+    ) -> tuple[float, float, float, float, float, float] | None:
+        """Computes EWMA (minutes, usg, pts/min, reb/min, ast/min, 3pm/min) from newest-first logs."""
+        valid = [r for r in records if r[0] >= 8.0]
+        if len(valid) < 3:
+            return None
+        _p_min, prior_usg, prior_ppm, _p_rpm, _p_apm, _p_tpm = prior_profile
+        weights = [alpha ** i for i in range(len(valid))]
+        w_sum = sum(weights)
+        dyn_min = sum(w * r[0] for w, r in zip(weights, valid, strict=False)) / w_sum
+        dyn_ppm = sum(w * (r[1] / max(1.0, r[0])) for w, r in zip(weights, valid, strict=False)) / w_sum
+        dyn_rpm = sum(w * (r[2] / max(1.0, r[0])) for w, r in zip(weights, valid, strict=False)) / w_sum
+        dyn_apm = sum(w * (r[3] / max(1.0, r[0])) for w, r in zip(weights, valid, strict=False)) / w_sum
+        dyn_tpm = sum(w * (r[4] / max(1.0, r[0])) for w, r in zip(weights, valid, strict=False)) / w_sum
+
+        scoring_ratio = dyn_ppm / max(0.20, prior_ppm)
+        dyn_usg = float(np.clip(prior_usg * (0.50 + 0.50 * scoring_ratio), 12.0, 40.0))
+        return (
+            round(float(dyn_min), 1),
+            round(float(dyn_usg), 1),
+            round(float(dyn_ppm), 3),
+            round(float(dyn_rpm), 3),
+            round(float(dyn_apm), 3),
+            round(float(dyn_tpm), 3),
+        )
+
     def get_player_baseline(
         self,
         player_name: str,
         team_abbr: str | None = None,
         lookback_games: int = 15,
         alpha: float = 0.85,
+        as_of_utc: str | None = None,
     ) -> tuple[float, float, float, float, float, float]:
         """
         Dynamically computes rolling baseline stats for a player:
         (minutes, usg_pct, pts_per_min, reb_per_min, ast_per_min, threed_per_min).
 
         Resolution Order:
-        1. In-memory session cache.
-        2. Rolling EWMA from SQLite game_boxscores (last lookback_games).
-        3. Static calibrated prior (PLAYER_PROP_BASELINES).
-        4. Generic rotation player fallback (26.0, 17.5, 0.45, 0.16, 0.09, 0.04).
+        1. In-memory session cache keyed by (player_name, as_of_utc).
+        2. Rolling EWMA from indexed SQLite `player_boxscores` (strictly < as_of_utc when provided).
+        3. Fallback scan of `game_boxscores.players_json` for test/unmigrated rows.
+        4. Static calibrated prior (`PLAYER_PROP_BASELINES`) or rotation player default.
         """
         norm_name = player_name.strip()
-        if norm_name in self._player_baselines_cache:
-            return self._player_baselines_cache[norm_name]
+        cache_key = (norm_name, str(as_of_utc or ""))
+        if cache_key in self._player_baselines_cache:
+            return self._player_baselines_cache[cache_key]
 
-        # Check calibrated static prior for reference ratios (reb, ast, usg)
+        p_key = normalize_player_match_key(norm_name)
         prior = PLAYER_PROP_BASELINES.get(norm_name)
-        if prior is None:
-            clean_search = norm_name.lower().replace(".", "").replace("'", "").replace("-", " ")
+        if prior is None and p_key:
             for b_name, b_prof in PLAYER_PROP_BASELINES.items():
-                if b_name.lower().replace(".", "").replace("'", "").replace("-", " ") == clean_search:
+                if normalize_player_match_key(b_name) == p_key:
                     prior = b_prof
                     break
 
-        prior_min, prior_usg, prior_ppm, prior_rpm, prior_apm, prior_tpm = (
-            prior if prior is not None else (26.0, 17.5, 0.45, 0.16, 0.09, 0.04)
-        )
+        prior_profile = prior if prior is not None else (26.0, 17.5, 0.45, 0.16, 0.09, 0.04)
 
-        # Dynamic rolling extraction from SQLite game_boxscores
-        if self.db is not None:
+        if self.db is not None and p_key:
             try:
-                like_pattern = f"%{norm_name}%"
-                rows = self.db.fetch_all(
-                    """
-                    SELECT g.game_id, g.players_json, m.game_start_time
-                    FROM game_boxscores g
-                    JOIN games m ON g.game_id = m.game_id
-                    WHERE g.players_json LIKE ?
-                    ORDER BY m.game_start_time DESC
-                    LIMIT ?
-                    """,
-                    (like_pattern, lookback_games * 2),
-                )
-                p_lower = norm_name.lower().replace(".", "").replace("'", "")
-                mins_list: list[float] = []
-                pts_list: list[float] = []
-                reb_list: list[tuple[float, float]] = []  # (reb, min)
-                ast_list: list[tuple[float, float]] = []  # (ast, min)
-                th_list: list[tuple[float, float]] = []   # (threed, min)
+                # 1. Primary path: indexed normalized `player_boxscores` table
+                if as_of_utc:
+                    pb_rows = self.db.fetch_all(
+                        """
+                        SELECT minutes, pts, reb, ast, threed
+                        FROM player_boxscores
+                        WHERE player_key = ?
+                          AND game_id NOT LIKE 'SYN%'
+                          AND minutes >= 8.0
+                          AND datetime(game_start_time) < datetime(?)
+                        ORDER BY game_start_time DESC
+                        LIMIT ?
+                        """,
+                        (p_key, as_of_utc, lookback_games),
+                    )
+                else:
+                    pb_rows = self.db.fetch_all(
+                        """
+                        SELECT minutes, pts, reb, ast, threed
+                        FROM player_boxscores
+                        WHERE player_key = ?
+                          AND game_id NOT LIKE 'SYN%'
+                          AND minutes >= 8.0
+                        ORDER BY game_start_time DESC
+                        LIMIT ?
+                        """,
+                        (p_key, lookback_games),
+                    )
 
-                for r in rows:
-                    p_data = json.loads(r.get("players_json") or "{}")
-                    found = False
-                    if isinstance(p_data, dict):
-                        for _, plist in p_data.items():
+                records: list[tuple[float, float, float, float, float]] = [
+                    (
+                        float(r["minutes"]),
+                        float(r["pts"]),
+                        float(r["reb"]),
+                        float(r["ast"]),
+                        float(r["threed"]),
+                    )
+                    for r in pb_rows
+                ]
+
+                # 2. Fallback path: raw `game_boxscores.players_json` (handles direct inserts in unit tests)
+                if len(records) < 3:
+                    like_pattern = f"%{norm_name}%"
+                    if as_of_utc:
+                        gb_rows = self.db.fetch_all(
+                            """
+                            SELECT g.players_json
+                            FROM game_boxscores g
+                            JOIN games m ON g.game_id = m.game_id
+                            WHERE g.players_json LIKE ?
+                              AND m.game_id NOT LIKE 'SYN%'
+                              AND datetime(m.game_start_time) < datetime(?)
+                            ORDER BY m.game_start_time DESC
+                            LIMIT ?
+                            """,
+                            (like_pattern, as_of_utc, lookback_games * 2),
+                        )
+                    else:
+                        gb_rows = self.db.fetch_all(
+                            """
+                            SELECT g.players_json
+                            FROM game_boxscores g
+                            JOIN games m ON g.game_id = m.game_id
+                            WHERE g.players_json LIKE ?
+                              AND m.game_id NOT LIKE 'SYN%'
+                            ORDER BY m.game_start_time DESC
+                            LIMIT ?
+                            """,
+                            (like_pattern, lookback_games * 2),
+                        )
+                    records = []
+                    for r in gb_rows:
+                        p_data = json.loads(r.get("players_json") or "{}")
+                        if not isinstance(p_data, dict):
+                            continue
+                        matched = False
+                        for _team_key, plist in p_data.items():
+                            if not isinstance(plist, list):
+                                continue
                             for p in plist:
-                                p_cand = str(p.get("name", "")).strip().lower().replace(".", "").replace("'", "")
-                                if p_cand == p_lower or (len(p_lower) > 5 and (p_lower in p_cand or p_cand in p_lower)):
+                                p_cand = normalize_player_match_key(str(p.get("name", "")))
+                                if p_cand == p_key or (len(p_key) > 5 and (p_key in p_cand or p_cand in p_key)):
                                     m_val = float(p.get("min", 0.0))
                                     if m_val >= 8.0:
-                                        mins_list.append(m_val)
-                                        pts_list.append(float(p.get("pts", 0.0)))
-                                        if "reb" in p and p["reb"] is not None:
-                                            reb_list.append((float(p["reb"]), m_val))
-                                        if "ast" in p and p["ast"] is not None:
-                                            ast_list.append((float(p["ast"]), m_val))
-                                        if "threed" in p and p["threed"] is not None:
-                                            th_list.append((float(p["threed"]), m_val))
-                                    found = True
+                                        records.append((
+                                            m_val,
+                                            float(p.get("pts", 0.0)),
+                                            float(p.get("reb") or 0.0),
+                                            float(p.get("ast") or 0.0),
+                                            float(p.get("threed") or 0.0),
+                                        ))
+                                    matched = True
                                     break
-                            if found:
+                            if matched:
                                 break
-                    if len(mins_list) >= lookback_games:
-                        break
+                        if len(records) >= lookback_games:
+                            break
 
-                if len(mins_list) >= 3:
-                    weights = [alpha ** i for i in range(len(mins_list))]
-                    W = sum(weights)
-                    dyn_min = sum(w * m for w, m in zip(weights, mins_list, strict=False)) / W
-                    dyn_ppm = sum(w * (pt / max(1.0, m)) for w, pt, m in zip(weights, pts_list, mins_list, strict=False)) / W
-
-                    if len(reb_list) >= 3:
-                        rw = [alpha ** i for i in range(len(reb_list))]
-                        dyn_rpm = sum(w * (rb / max(1.0, m)) for w, (rb, m) in zip(rw, reb_list, strict=False)) / sum(rw)
-                    else:
-                        dyn_rpm = prior_rpm
-
-                    if len(ast_list) >= 3:
-                        aw = [alpha ** i for i in range(len(ast_list))]
-                        dyn_apm = sum(w * (a / max(1.0, m)) for w, (a, m) in zip(aw, ast_list, strict=False)) / sum(aw)
-                    else:
-                        dyn_apm = prior_apm
-
-                    if len(th_list) >= 3:
-                        tw = [alpha ** i for i in range(len(th_list))]
-                        dyn_tpm = sum(w * (th / max(1.0, m)) for w, (th, m) in zip(tw, th_list, strict=False)) / sum(tw)
-                    else:
-                        dyn_tpm = prior_tpm
-
-                    scoring_ratio = dyn_ppm / max(0.20, prior_ppm)
-                    dyn_usg = float(np.clip(prior_usg * (0.50 + 0.50 * scoring_ratio), 12.0, 40.0))
-
-                    result = (
-                        round(float(dyn_min), 1),
-                        round(float(dyn_usg), 1),
-                        round(float(dyn_ppm), 3),
-                        round(float(dyn_rpm), 3),
-                        round(float(dyn_apm), 3),
-                        round(float(dyn_tpm), 3),
-                    )
-                    self._player_baselines_cache[norm_name] = result
-                    return result
+                computed = self._compute_ewma_baseline_from_records(records, prior_profile, alpha=alpha)
+                if computed is not None:
+                    self._player_baselines_cache[cache_key] = computed
+                    return computed
             except Exception as exc:
                 logger.debug(f"Dynamic baseline query error for {player_name}: {exc}")
 
-        result = (prior_min, prior_usg, prior_ppm, prior_rpm, prior_apm, prior_tpm)
-        self._player_baselines_cache[norm_name] = result
-        return result
+        self._player_baselines_cache[cache_key] = prior_profile
+        return prior_profile
 
     def get_team_defensive_multipliers(
         self,
         opponent_team: str | None,
         lookback_window: int = 30,
+        as_of_utc: str | None = None,
     ) -> dict[str, Any]:
         """
         Dynamically computes Defense vs Position (DvP) and Pace multipliers for all 30 NBA teams
-        from real finished games and team stats in SQLite.
+        from real finished games and team stats in SQLite (strictly < as_of_utc when provided).
         Falls back to TEAM_DEFENSIVE_MULTIPLIERS if team data is absent or insufficient.
         """
         if not opponent_team:
             return {"PTS": 1.00, "REB": 1.00, "AST": 1.00, "3PM": 1.00, "pace": 99.5, "tier": "AVERAGE"}
 
         opp = opponent_team.strip().upper()
-        if opp in self._team_multipliers_cache:
-            return self._team_multipliers_cache[opp]
+        cache_key = (opp, str(as_of_utc or ""))
+        if cache_key in self._team_multipliers_cache:
+            return self._team_multipliers_cache[cache_key]
 
         fallback = TEAM_DEFENSIVE_MULTIPLIERS.get(opp, {"PTS": 1.00, "REB": 1.00, "AST": 1.00, "3PM": 1.00, "pace": 99.5, "tier": "AVERAGE"})
 
         if self.db is None:
-            self._team_multipliers_cache[opp] = fallback
+            self._team_multipliers_cache[cache_key] = fallback
             return fallback
 
         try:
-            rows = self.db.fetch_all(
-                """
-                SELECT home_team, away_team, home_score, away_score, home_pace, away_pace
-                FROM games
-                WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
-                  AND (home_team = ? OR away_team = ?)
-                ORDER BY game_start_time DESC
-                LIMIT ?
-                """,
-                (opp, opp, lookback_window),
-            )
+            if as_of_utc:
+                rows = self.db.fetch_all(
+                    """
+                    SELECT home_team, away_team, home_score, away_score, home_pace, away_pace
+                    FROM games
+                    WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                      AND game_id NOT LIKE 'SYN%'
+                      AND datetime(game_start_time) < datetime(?)
+                      AND (home_team = ? OR away_team = ?)
+                    ORDER BY game_start_time DESC
+                    LIMIT ?
+                    """,
+                    (as_of_utc, opp, opp, lookback_window),
+                )
+            else:
+                rows = self.db.fetch_all(
+                    """
+                    SELECT home_team, away_team, home_score, away_score, home_pace, away_pace
+                    FROM games
+                    WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                      AND game_id NOT LIKE 'SYN%'
+                      AND (home_team = ? OR away_team = ?)
+                    ORDER BY game_start_time DESC
+                    LIMIT ?
+                    """,
+                    (opp, opp, lookback_window),
+                )
             if len(rows) < 5:
-                self._team_multipliers_cache[opp] = fallback
+                self._team_multipliers_cache[cache_key] = fallback
                 return fallback
 
-            league_row = self.db.fetch_one(
-                """
-                SELECT AVG(home_score + away_score) / 2.0 AS avg_pts
-                FROM games
-                WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
-                """
-            )
+            if as_of_utc:
+                league_row = self.db.fetch_one(
+                    """
+                    SELECT AVG(home_score + away_score) / 2.0 AS avg_pts
+                    FROM games
+                    WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                      AND game_id NOT LIKE 'SYN%'
+                      AND datetime(game_start_time) < datetime(?)
+                    """,
+                    (as_of_utc,),
+                )
+            else:
+                league_row = self.db.fetch_one(
+                    """
+                    SELECT AVG(home_score + away_score) / 2.0 AS avg_pts
+                    FROM games
+                    WHERE status = 'FINAL' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                      AND game_id NOT LIKE 'SYN%'
+                    """
+                )
             league_avg_pts = float(league_row["avg_pts"]) if league_row and league_row["avg_pts"] else 114.2
 
             pts_allowed: list[float] = []
@@ -445,17 +521,33 @@ class PlayerPropsEngine:
             mean_pa = float(np.mean(pts_allowed))
             pts_mult = round(float(np.clip(mean_pa / league_avg_pts, 0.88, 1.15)), 2)
 
-            b_rows = self.db.fetch_all(
-                """
-                SELECT g.team_stats_json
-                FROM game_boxscores g
-                JOIN games m ON g.game_id = m.game_id
-                WHERE (m.home_team = ? OR m.away_team = ?)
-                ORDER BY m.game_start_time DESC
-                LIMIT ?
-                """,
-                (opp, opp, lookback_window),
-            )
+            if as_of_utc:
+                b_rows = self.db.fetch_all(
+                    """
+                    SELECT g.team_stats_json
+                    FROM game_boxscores g
+                    JOIN games m ON g.game_id = m.game_id
+                    WHERE m.game_id NOT LIKE 'SYN%'
+                      AND datetime(m.game_start_time) < datetime(?)
+                      AND (m.home_team = ? OR m.away_team = ?)
+                    ORDER BY m.game_start_time DESC
+                    LIMIT ?
+                    """,
+                    (as_of_utc, opp, opp, lookback_window),
+                )
+            else:
+                b_rows = self.db.fetch_all(
+                    """
+                    SELECT g.team_stats_json
+                    FROM game_boxscores g
+                    JOIN games m ON g.game_id = m.game_id
+                    WHERE m.game_id NOT LIKE 'SYN%'
+                      AND (m.home_team = ? OR m.away_team = ?)
+                    ORDER BY m.game_start_time DESC
+                    LIMIT ?
+                    """,
+                    (opp, opp, lookback_window),
+                )
             tpm_allowed: list[float] = []
             for br in b_rows:
                 tdata = json.loads(br.get("team_stats_json") or "{}")
@@ -491,11 +583,11 @@ class PlayerPropsEngine:
                 "pace": team_pace,
                 "tier": tier,
             }
-            self._team_multipliers_cache[opp] = result
+            self._team_multipliers_cache[cache_key] = result
             return result
         except Exception as exc:
             logger.debug(f"Dynamic team multipliers error for {opp}: {exc}")
-            self._team_multipliers_cache[opp] = fallback
+            self._team_multipliers_cache[cache_key] = fallback
             return fallback
 
     def project_player_stats(
@@ -509,13 +601,14 @@ class PlayerPropsEngine:
         referee_foul_rate: float = 1.0,
         injury_status: str = "ACTIVE",
         foul_trouble_prone: bool = False,
+        as_of_utc: str | None = None,
     ) -> dict[str, Any]:
         """
         Computes projected Points, Rebounds, Assists, 3PM, PRA, PR, PA, and RA.
         When star teammates are absent, redistributes vacated usage rate and minutes.
         Adjusts for opponent defensive efficiency (DvP), projected game pace, and blowout risk.
         """
-        profile = self.get_player_baseline(player_name, team)
+        profile = self.get_player_baseline(player_name, team, as_of_utc=as_of_utc)
         base_min, base_usg, pts_pm, reb_pm, ast_pm, th_pm = profile
 
         absent = absent_teammates or []
@@ -524,7 +617,7 @@ class PlayerPropsEngine:
 
         # Vacated usage & minute redistribution logic
         for abs_p in absent:
-            abs_prof = self.get_player_baseline(abs_p, team)
+            abs_prof = self.get_player_baseline(abs_p, team, as_of_utc=as_of_utc)
             if abs_prof:
                 _abs_min, abs_usg = abs_prof[0], abs_prof[1]
                 # High-usage star out (>26% USG)
@@ -543,7 +636,7 @@ class PlayerPropsEngine:
 
         # Matchup defense adjustment (dynamic from SQLite with fallback to prior)
         opp = opponent_team.upper() if opponent_team else None
-        matchup_info = self.get_team_defensive_multipliers(opp) if opp else None
+        matchup_info = self.get_team_defensive_multipliers(opp, as_of_utc=as_of_utc) if opp else None
         def_tier = str(matchup_info.get("tier", "AVERAGE")) if matchup_info else "NEUTRAL"
         m_pts = float(matchup_info.get("PTS", 1.0)) if matchup_info else 1.0
         m_reb = float(matchup_info.get("REB", 1.0)) if matchup_info else 1.0
@@ -661,6 +754,7 @@ class PlayerPropsEngine:
         spread_blowout_risk: float | None = None,
         persist: bool = True,
         line_source: str = "OBSERVED",
+        as_of_utc: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Evaluates a specific player prop line against our tactical & injury-adjusted projection.
@@ -674,6 +768,7 @@ class PlayerPropsEngine:
             opponent_team=opponent_team,
             expected_game_pace=expected_game_pace,
             spread_blowout_risk=spread_blowout_risk,
+            as_of_utc=as_of_utc,
         )
         cat_data = proj_info["projections"].get(prop_category)
         if not cat_data:
@@ -1363,7 +1458,7 @@ class PlayerPropsEngine:
                         oo, uo = counter_odds, dec_odds
                     else:
                         oo, uo = dec_odds, counter_odds
-                    if lv > 0.5 and oo > 1.0 and uo > 1.0:
+                    if lv > 0.0 and oo > 1.0 and uo > 1.0:
                         bucket = observed_props_index.setdefault((p_key, oq_cat), [])
                         quote_tuple = (lv, oo, uo)
                         if quote_tuple not in bucket:
@@ -1372,27 +1467,38 @@ class PlayerPropsEngine:
             if not observed_props_index:
                 continue
 
+            as_of_game_str = str(game.get("game_start_time") or now_iso)
             for _is_home, team_code, opp_code in [(True, home_t, away_t), (False, away_t, home_t)]:
                 if not team_code:
                     continue
-                team_players = active_rosters.get(team_code)
+                team_players = list(active_rosters.get(team_code) or [])
                 if not team_players and self.db:
                     try:
                         db_p = self.db.fetch_all(
-                            "SELECT player_name FROM game_boxscores WHERE team = ? GROUP BY player_name ORDER BY COUNT(*) DESC LIMIT 10",
-                            (team_code,),
+                            """
+                            SELECT MAX(player_name) AS player_name
+                            FROM player_boxscores
+                            WHERE team = ?
+                              AND game_id NOT LIKE 'SYN%'
+                              AND datetime(game_start_time) < datetime(?)
+                              AND minutes >= 10.0
+                            GROUP BY player_key
+                            ORDER BY MAX(game_start_time) DESC, COUNT(*) DESC
+                            LIMIT 12
+                            """,
+                            (team_code, as_of_game_str),
                         )
                         if db_p:
                             team_players = [r["player_name"] for r in db_p]
                     except Exception:
                         pass
                 if not team_players:
-                    team_players = fallback_rosters.get(team_code, [])
+                    team_players = list(fallback_rosters.get(team_code, []))
                 absent_list = team_injuries.get(team_code, [])
 
                 for p_raw in team_players:
-                    # Match canonical baseline profile or compute dynamic rolling baseline
-                    prof = self.get_player_baseline(p_raw, team_code)
+                    # Match canonical baseline profile or compute dynamic rolling baseline strictly < tip-off
+                    prof = self.get_player_baseline(p_raw, team_code, as_of_utc=as_of_game_str)
                     canonical_name = p_raw
                     if not prof:
                         continue
@@ -1406,21 +1512,22 @@ class PlayerPropsEngine:
                     if not target_p_key:
                         continue
 
-                    # Evaluate primary stat lines: PTS and PRA for primary scorers, AST for guards, REB for bigs
-                    categories_to_eval = ["PTS"]
-                    if prof[4] >= 0.18:  # Good passer (AST)
+                    # Evaluate categories offered by the bookmaker (respecting minimum rotation/rate thresholds)
+                    categories_to_eval = ["PTS", "PRA"]
+                    if prof[4] >= 0.18 or ((target_p_key, "AST") in observed_props_index and prof[0] >= 12.0):
                         categories_to_eval.append("AST")
-                    if prof[3] >= 0.25:  # Good rebounder (REB)
+                    if prof[3] >= 0.25 or ((target_p_key, "REB") in observed_props_index and prof[0] >= 12.0):
                         categories_to_eval.append("REB")
-                    if prof[5] >= 0.08:  # Good shooter (3PM)
+                    if prof[5] >= 0.08 or (
+                        (target_p_key, "3PM") in observed_props_index and (prof[0] * prof[5]) >= 0.30
+                    ):
                         categories_to_eval.append("3PM")
-                    categories_to_eval.append("PRA")
 
                     matched_cats = [cat for cat in categories_to_eval if (target_p_key, cat) in observed_props_index]
                     if not matched_cats:
                         continue
 
-                    # Project raw baseline to find standard retail market line
+                    # Project raw baseline strictly using pre-tipoff history
                     proj = self.project_player_stats(
                         player_name=p_name,
                         team=team_code,
@@ -1428,6 +1535,7 @@ class PlayerPropsEngine:
                         opponent_team=opp_code,
                         expected_game_pace=pace_val,
                         spread_blowout_risk=spread_val,
+                        as_of_utc=as_of_game_str,
                     )
 
                     for cat in matched_cats:
@@ -1456,6 +1564,7 @@ class PlayerPropsEngine:
                                 spread_blowout_risk=spread_val,
                                 persist=False,
                                 line_source="OBSERVED",
+                                as_of_utc=as_of_game_str,
                             )
                             for pk in picks:
                                 if pk["ev_pct"] >= min_ev_pct and pk["ev_lower_bound_pct"] >= -10.0:
@@ -1517,3 +1626,113 @@ class PlayerPropsEngine:
                 logger.debug(f"Failed to write props output file: {exc}")
 
         return consolidated
+
+    def evaluate_historical_oos_calibration(
+        self,
+        *,
+        min_date: str = "2026-01-01T00:00:00Z",
+        min_minutes: float = 12.0,
+        max_samples: int = 2000,
+        benchmarks: tuple[tuple[str, float, str], ...] = (
+            ("PTS", 15.5, "pts"),
+            ("PTS", 20.5, "pts"),
+            ("REB", 5.5, "reb"),
+            ("AST", 4.5, "ast"),
+            ("3PM", 0.5, "threed"),
+            ("3PM", 1.5, "threed"),
+            ("PRA", 24.5, "pts+reb+ast"),
+        ),
+    ) -> dict[str, Any]:
+        """
+        Evaluates strictly pre-tipoff out-of-sample calibration and Brier Skill Score
+        against persisted `player_boxscores` using `as_of_utc = game_start_time`.
+        """
+        if self.db is None:
+            return {"eligible_samples": 0, "evaluated_samples": 0, "benchmarks": {}}
+
+        rows = self.db.fetch_all(
+            """
+            SELECT pb.game_id, pb.player_name, pb.player_key, pb.team, pb.game_start_time,
+                   pb.minutes, pb.pts, pb.reb, pb.ast, pb.threed,
+                   g.home_team, g.away_team
+            FROM player_boxscores pb
+            JOIN games g ON g.game_id = pb.game_id
+            WHERE pb.game_start_time >= ?
+              AND pb.minutes >= ?
+              AND g.status = 'FINAL'
+              AND g.game_id NOT LIKE 'SYN%'
+            ORDER BY pb.game_start_time ASC, pb.player_key ASC
+            """,
+            (min_date, float(min_minutes)),
+        )
+        if not rows:
+            return {"eligible_samples": 0, "evaluated_samples": 0, "benchmarks": {}}
+
+        step = max(1, len(rows) // max(1, int(max_samples)))
+        sample = rows[::step][:max_samples]
+        series: dict[str, list[tuple[float, int, float, float]]] = {
+            f"{cat}>{line:.1f}": [] for cat, line, _ in benchmarks
+        }
+
+        for r in sample:
+            opp_team = r["away_team"] if r["team"] == r["home_team"] else r["home_team"]
+            proj = self.project_player_stats(
+                player_name=r["player_name"],
+                team=r["team"],
+                opponent_team=opp_team,
+                as_of_utc=r["game_start_time"],
+            )
+            stat_vals = {
+                "pts": float(r["pts"]),
+                "reb": float(r["reb"]),
+                "ast": float(r["ast"]),
+                "threed": float(r["threed"]),
+                "pts+reb+ast": float(r["pts"] + r["reb"] + r["ast"]),
+            }
+            for cat, line, expr in benchmarks:
+                c = proj["projections"].get(cat)
+                if not c or expr not in stat_vals:
+                    continue
+                p_over, _ = self.compute_exceedance_probabilities(
+                    prop_category=cat,
+                    line_value=line,
+                    proj_mean=float(c["mean"]),
+                    proj_std=float(c["std"]),
+                    dist_type=c["dist"],
+                )
+                act = stat_vals[expr]
+                series[f"{cat}>{line:.1f}"].append((p_over, 1 if act > line else 0, float(c["mean"]), act))
+
+        metrics: dict[str, dict[str, Any]] = {}
+        for label, items in series.items():
+            if not items:
+                continue
+            p_arr = np.clip(np.asarray([x[0] for x in items], dtype=float), 1e-4, 1.0 - 1e-4)
+            y_arr = np.asarray([x[1] for x in items], dtype=float)
+            mu_arr = np.asarray([x[2] for x in items], dtype=float)
+            act_arr = np.asarray([x[3] for x in items], dtype=float)
+            base_rate = float(np.mean(y_arr))
+            base_p = float(np.clip(base_rate, 1e-4, 1.0 - 1e-4))
+            brier = float(np.mean((p_arr - y_arr) ** 2))
+            brier_base = float(np.mean((base_p - y_arr) ** 2))
+            ll = float(-np.mean(y_arr * np.log(p_arr) + (1.0 - y_arr) * np.log(1.0 - p_arr)))
+            ll_base = float(-np.mean(y_arr * np.log(base_p) + (1.0 - y_arr) * np.log(1.0 - base_p)))
+            bss = ((1.0 - brier / brier_base) * 100.0) if brier_base > 0.0 else 0.0
+            metrics[label] = {
+                "n": len(items),
+                "base_over_rate": round(base_rate, 4),
+                "mean_pred_prob": round(float(np.mean(p_arr)), 4),
+                "mae": round(float(np.mean(np.abs(mu_arr - act_arr))), 3),
+                "brier": round(brier, 4),
+                "brier_baseline": round(brier_base, 4),
+                "brier_skill_score_pct": round(bss, 2),
+                "log_loss": round(ll, 4),
+                "log_loss_baseline": round(ll_base, 4),
+            }
+
+        return {
+            "min_date": min_date,
+            "eligible_samples": len(rows),
+            "evaluated_samples": len(sample),
+            "benchmarks": metrics,
+        }

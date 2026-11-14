@@ -37,6 +37,9 @@ class ModelConfig:
     tempo_alpha_fast: float
     market_anchor_model_weight: float
     max_model_market_disagreement: float = 0.15
+    moneyline_model_weight: float | None = None
+    moneyline_max_disagreement: float | None = None
+    moneyline_max_odds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -391,6 +394,9 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     r = raw.get("risk_management") or {}
     src = raw.get("sources") or {}
 
+    ml_mw_raw = m.get("moneyline_model_weight")
+    ml_md_raw = m.get("moneyline_max_disagreement")
+    ml_mo_raw = m.get("moneyline_max_odds")
     model = ModelConfig(
         version_id=str(_require(m, "version_id", "model")),
         ewma_alpha_slow=_in_range("ewma_alpha_slow", _require(m, "ewma_alpha_slow", "model"), 0.001, 0.5),
@@ -405,6 +411,15 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
             m.get("max_model_market_disagreement", 0.15),
             0.01,
             0.50,
+        ),
+        moneyline_model_weight=(
+            _in_range("moneyline_model_weight", ml_mw_raw, 0.0, 1.0) if ml_mw_raw is not None else None
+        ),
+        moneyline_max_disagreement=(
+            _in_range("moneyline_max_disagreement", ml_md_raw, 0.01, 0.50) if ml_md_raw is not None else None
+        ),
+        moneyline_max_odds=(
+            _in_range("moneyline_max_odds", ml_mo_raw, 1.05, 50.0) if ml_mo_raw is not None else None
         ),
     )
     staking_mode = str(_require(r, "staking_mode", "risk_management"))

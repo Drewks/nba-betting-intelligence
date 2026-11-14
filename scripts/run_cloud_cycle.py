@@ -60,6 +60,7 @@ from src.prediction.ev_calculator import (
     compute_line_steam,
     compute_market_consensus,
     evaluate_market_opportunity,
+    select_best_line_shopping_candidates,
 )
 from src.reporting.reporter import (
     export_bets_and_tracking_dashboard,
@@ -72,8 +73,12 @@ from src.storage.db import DatabaseManager
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
 
 # Model identity and market-anchor weight come from config/model_config.yaml (single source of truth).
-MODEL_VERSION_ID = load_config().model.version_id
-MARKET_ANCHOR_MODEL_WEIGHT = load_config().model.market_anchor_model_weight
+_MODEL_CFG = load_config().model
+MODEL_VERSION_ID = _MODEL_CFG.version_id
+MARKET_ANCHOR_MODEL_WEIGHT = _MODEL_CFG.market_anchor_model_weight
+MONEYLINE_MODEL_WEIGHT = _MODEL_CFG.moneyline_model_weight
+MONEYLINE_MAX_DISAGREEMENT = _MODEL_CFG.moneyline_max_disagreement
+MONEYLINE_MAX_ODDS = _MODEL_CFG.moneyline_max_odds
 MIN_REAL_GAMES_FOR_TRAINING = 120
 BOXSCORE_BACKFILL_PER_CYCLE = 600
 
@@ -585,6 +590,8 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
 
             consensus_map = compute_market_consensus(all_valid_provider_pairs)
             steam_map = compute_line_steam(raw_game_odds)
+            game_opps: list[dict[str, Any]] = []
+            pred_meta_by_quote: dict[tuple[str, str, str, float | None, str], tuple[str, str, float, float, dict[str, Any]]] = {}
 
             for o in game_odds:
                 validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
@@ -634,6 +641,16 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                             "width": va_over_int_row["width"],
                         }
 
+                eff_model_weight = (
+                    MONEYLINE_MODEL_WEIGHT
+                    if (mkt == "moneyline" and MONEYLINE_MODEL_WEIGHT is not None)
+                    else MARKET_ANCHOR_MODEL_WEIGHT
+                )
+                eff_max_disagreement = (
+                    MONEYLINE_MAX_DISAGREEMENT
+                    if (mkt == "moneyline" and MONEYLINE_MAX_DISAGREEMENT is not None)
+                    else MAX_MODEL_MARKET_DISAGREEMENT
+                )
                 opp = evaluate_market_opportunity(
                     estimated_prob=cal_p,
                     uncertainty_std=unc,
@@ -642,15 +659,50 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                     model_version_id=m_ver,
                     simulated_prediction_time=pred_ts,
                     market_consensus_prob=cons_p,
-                    model_weight=MARKET_ANCHOR_MODEL_WEIGHT,
-                    max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
+                    model_weight=eff_model_weight,
+                    max_disagreement=eff_max_disagreement,
                     steam_delta=s_delta,
                     conformal_interval=conf_int,
                 )
-                # Deterministic id bound to the exact odds snapshot used: re-running the cycle is idempotent,
-                # and a re-priced line always yields a NEW immutable prediction, so a bet can never point to
-                # a prediction made with different odds.
                 pred_id = f"PRED_{m_ver}_{o['odds_id']}"
+                opp["prediction_id"] = pred_id
+                opp["raw_probability"] = raw_p
+                opp["calibrated_probability"] = opp["estimated_probability"]
+                opp["uncertainty_std"] = unc
+                opp["overtime_prob"] = row_tot_pred.get("overtime_prob", 0.05)
+                opp["blowout_prob"] = row_tot_pred.get("blowout_prob", 0.12)
+                opp["emitted_at"] = pred_ts
+                if mkt == "moneyline" and MONEYLINE_MAX_ODDS is not None:
+                    opp["moneyline_max_odds"] = MONEYLINE_MAX_ODDS
+
+                quote_key = (
+                    str(opp["odds_provider"]),
+                    str(mkt),
+                    str(sel),
+                    round(float(line_v), 2) if line_v is not None else None,
+                    str(opp["odds_captured_at"]),
+                )
+                pred_meta_by_quote[quote_key] = (pred_id, m_ver, raw_p, unc, row_feats)
+                game_opps.append(opp)
+
+            # Cross-book line shopping: persist & submit only the best accessible quote per contract
+            best_game_opps = select_best_line_shopping_candidates(game_opps)
+            for opp in best_game_opps:
+                lv_raw = opp.get("line_value")
+                quote_key = (
+                    str(opp["odds_provider"]),
+                    str(opp["market"]),
+                    str(opp["selection"]),
+                    round(float(lv_raw), 2) if lv_raw is not None else None,
+                    str(opp["odds_captured_at"]),
+                )
+                pred_id, m_ver, raw_p, unc, row_feats = pred_meta_by_quote[quote_key]
+                snapshot_feats = {
+                    **row_feats,
+                    "line_shop_books": opp.get("line_shop_books", 1),
+                    "line_shop_gain_pct": opp.get("line_shop_gain_pct", 0.0),
+                    "runner_up_provider": opp.get("runner_up_provider"),
+                }
                 db.execute_insert(
                     """
                     INSERT OR IGNORE INTO predictions (
@@ -662,20 +714,13 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        pred_id, g["game_id"], mkt, sel, o.get("line_value"),
+                        pred_id, g["game_id"], opp["market"], opp["selection"], lv_raw,
                         m_ver, raw_p, opp["estimated_probability"], unc, opp["implied_prob_gross"],
                         opp["implied_prob_fair"], opp["bookmaker_overround"],
                         opp["decimal_odds_used"], opp["odds_provider"], opp["odds_captured_at"],
-                        opp["ev_unit"], opp["ev_pct"], pred_ts, json.dumps(row_feats),
+                        opp["ev_unit"], opp["ev_pct"], pred_ts, json.dumps(snapshot_feats),
                     ),
                 )
-                opp["prediction_id"] = pred_id
-                opp["raw_probability"] = raw_p
-                opp["calibrated_probability"] = opp["estimated_probability"]
-                opp["uncertainty_std"] = unc
-                opp["overtime_prob"] = row_tot_pred.get("overtime_prob", 0.05)
-                opp["blowout_prob"] = row_tot_pred.get("blowout_prob", 0.12)
-                opp["emitted_at"] = pred_ts
                 candidates_by_matchday[g["matchday_date"]].append(opp)
 
         for m_date in sorted(candidates_by_matchday.keys()):

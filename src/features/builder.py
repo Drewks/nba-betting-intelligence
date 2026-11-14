@@ -177,6 +177,21 @@ def _get_situational_factors_config() -> Any:
     return _SITUATIONAL_CONFIG_CACHE
 
 
+def _get_model_ewma_params() -> tuple[float, float, float, float]:
+    """Loads EWMA slow/fast efficiency and tempo learning rates from model_config.yaml."""
+    try:
+        from src.config import load_config
+        m = load_config().model
+        return (
+            float(m.ewma_alpha_slow),
+            float(m.ewma_alpha_fast),
+            float(m.tempo_alpha_slow),
+            float(m.tempo_alpha_fast),
+        )
+    except Exception:
+        return (0.045, 0.110, 0.055, 0.130)
+
+
 def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
     if g.get("status") != "FINAL" or g.get("home_score") is None or g.get("away_score") is None:
         return
@@ -278,15 +293,18 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
         else (a_cur["streak"] - 1 if a_cur["streak"] < 0 else -1)
     )
 
+    alpha_slow, alpha_fast, tempo_slow, tempo_fast = (
+        idx["ewma_sig"] if "ewma_sig" in idx else _get_model_ewma_params()
+    )
     h_next = {
         "elo_slow": new_h_elo_s,
         "elo_fast": new_h_elo_f,
-        "pf_slow": h_cur["pf_slow"] + 0.045 * (h_fa - h_cur["pf_slow"]),
-        "pa_slow": h_cur["pa_slow"] + 0.045 * (h_aa - h_cur["pa_slow"]),
-        "pf_fast": h_cur["pf_fast"] + 0.110 * (h_fa - h_cur["pf_fast"]),
-        "pa_fast": h_cur["pa_fast"] + 0.110 * (h_aa - h_cur["pa_fast"]),
-        "tempo_slow": h_cur["tempo_slow"] + 0.055 * tempo_err,
-        "tempo_fast": h_cur["tempo_fast"] + 0.130 * tempo_err,
+        "pf_slow": h_cur["pf_slow"] + alpha_slow * (h_fa - h_cur["pf_slow"]),
+        "pa_slow": h_cur["pa_slow"] + alpha_slow * (h_aa - h_cur["pa_slow"]),
+        "pf_fast": h_cur["pf_fast"] + alpha_fast * (h_fa - h_cur["pf_fast"]),
+        "pa_fast": h_cur["pa_fast"] + alpha_fast * (h_aa - h_cur["pa_fast"]),
+        "tempo_slow": h_cur["tempo_slow"] + tempo_slow * tempo_err,
+        "tempo_fast": h_cur["tempo_fast"] + tempo_fast * tempo_err,
         "var_total": h_cur["var_total"] + 0.04 * (tot_err_sq - h_cur["var_total"]),
         "last_start": start_dt,
         "recent_starts": (*h_cur["recent_starts"][-11:], start_dt),
@@ -307,12 +325,12 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
     a_next = {
         "elo_slow": new_a_elo_s,
         "elo_fast": new_a_elo_f,
-        "pf_slow": a_cur["pf_slow"] + 0.045 * (a_fa - a_cur["pf_slow"]),
-        "pa_slow": a_cur["pa_slow"] + 0.045 * (a_aa - a_cur["pa_slow"]),
-        "pf_fast": a_cur["pf_fast"] + 0.110 * (a_fa - a_cur["pf_fast"]),
-        "pa_fast": a_cur["pa_fast"] + 0.110 * (a_aa - a_cur["pa_fast"]),
-        "tempo_slow": a_cur["tempo_slow"] + 0.055 * tempo_err,
-        "tempo_fast": a_cur["tempo_fast"] + 0.130 * tempo_err,
+        "pf_slow": a_cur["pf_slow"] + alpha_slow * (a_fa - a_cur["pf_slow"]),
+        "pa_slow": a_cur["pa_slow"] + alpha_slow * (a_aa - a_cur["pa_slow"]),
+        "pf_fast": a_cur["pf_fast"] + alpha_fast * (a_fa - a_cur["pf_fast"]),
+        "pa_fast": a_cur["pa_fast"] + alpha_fast * (a_aa - a_cur["pa_fast"]),
+        "tempo_slow": a_cur["tempo_slow"] + tempo_slow * tempo_err,
+        "tempo_fast": a_cur["tempo_fast"] + tempo_fast * tempo_err,
         "var_total": a_cur["var_total"] + 0.04 * (tot_err_sq - a_cur["var_total"]),
         "last_start": start_dt,
         "recent_starts": (*a_cur["recent_starts"][-11:], start_dt),
@@ -348,6 +366,7 @@ def _append_game_to_index(idx: dict[str, Any], g: dict[str, Any]) -> None:
 
 
 def _get_or_build_history_index(historical_final_games: list[dict[str, Any]]) -> tuple[dict[str, Any], str | None]:
+    ewma_sig = _get_model_ewma_params()
     if not historical_final_games:
         return {
             "team_ts": {},
@@ -355,6 +374,7 @@ def _get_or_build_history_index(historical_final_games: list[dict[str, Any]]) ->
             "league_ts": [],
             "league_vals": [],
             "game_ids": [],
+            "ewma_sig": ewma_sig,
         }, None
 
     first_id = str(historical_final_games[0].get("game_id", ""))
@@ -362,7 +382,7 @@ def _get_or_build_history_index(historical_final_games: list[dict[str, Any]]) ->
     n_in = len(historical_final_games)
 
     existing = _INDEX_STORE.get(first_id)
-    if existing is not None:
+    if existing is not None and existing.get("ewma_sig") == ewma_sig:
         n_ex = len(existing["game_ids"])
         # Case A: Exact prefix or match of already indexed monotonic history
         if n_in <= n_ex and n_in > 0 and existing["game_ids"][n_in - 1] == last_id:
@@ -401,6 +421,7 @@ def _get_or_build_history_index(historical_final_games: list[dict[str, Any]]) ->
         "league_ts": [],
         "league_vals": [],
         "game_ids": [],
+        "ewma_sig": ewma_sig,
     }
     for g in valid:
         _append_game_to_index(new_idx, g)
@@ -546,9 +567,12 @@ def build_pregame_features(
 
     venue_split_diff = float(h_snap["home_venue_edge"] - a_snap["away_venue_edge"])
     streak_diff = float(h_snap["streak"] - a_snap["streak"])
-    matchup_mismatch = (h_off - a_def) - (a_off - h_def)
-
     scale_100 = 100.0 / LEAGUE_PACE_BASE
+    league_rtg = league_ppg * scale_100
+    # Higher def_rtg means more points allowed (weaker defense), so home's offensive matchup
+    # advantage is (h_off + a_def - 2*league_rtg) and away's is (a_off + h_def - 2*league_rtg).
+    matchup_mismatch = ((h_off - league_rtg) + (a_def - league_rtg)) - ((a_off - league_rtg) + (h_def - league_rtg))
+
     dyn_h_net_s = (h_snap["pf_slow"] - h_snap["pa_slow"]) * scale_100
     dyn_a_net_s = (a_snap["pf_slow"] - a_snap["pa_slow"]) * scale_100
     dyn_h_net_f = (h_snap["pf_fast"] - h_snap["pa_fast"]) * scale_100
@@ -569,7 +593,6 @@ def build_pregame_features(
     w_elo_mar = min(0.55, max(0.15, min_games / 25.0))
     structural_margin = w_elo_mar * elo_spread + (1.0 - w_elo_mar) * eff_spread
 
-    league_rtg = league_ppg * scale_100
     off_def_sum = (h_off - league_rtg) + (a_def - league_rtg) + (a_off - league_rtg) + (h_def - league_rtg)
     h_tempo = 0.72 * h_snap["tempo_slow"] + 0.28 * h_snap["tempo_fast"]
     a_tempo = 0.72 * a_snap["tempo_slow"] + 0.28 * a_snap["tempo_fast"]

@@ -614,6 +614,84 @@ def m010_allow_player_prop_in_odds_snapshots(conn: sqlite3.Connection, migration
     return {"action": "upgraded", "rows_preserved": after_cnt}
 
 
+def m011_reconcile_observed_ledger_and_player_boxscores(
+    conn: sqlite3.Connection, migration_id: str
+) -> dict[str, Any]:
+    """
+    1. Rebuilds `v_observed_bankroll_ledger` cleanly so non-observed derived bets (e.g. legacy
+       `[T-6H Peru]`) are excluded and running settled balances match `v_observed_simulated_bets`.
+    2. Populates the normalized `player_boxscores` table from all existing historical
+       `game_boxscores` rows so player prop projections run without JSON scans or leakage.
+    """
+    from src.ingestion.boxscores import upsert_player_boxscores_rows
+    from src.storage.schema import VIEW_DDL
+
+    conn.execute("DROP VIEW IF EXISTS v_observed_bankroll_ledger")
+    conn.execute(VIEW_DDL["v_observed_bankroll_ledger"])
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS player_boxscores (
+            game_id TEXT NOT NULL,
+            player_name TEXT NOT NULL,
+            player_key TEXT NOT NULL,
+            team TEXT NOT NULL,
+            game_start_time TEXT NOT NULL,
+            minutes REAL NOT NULL,
+            pts REAL NOT NULL,
+            reb REAL NOT NULL,
+            ast REAL NOT NULL,
+            threed REAL NOT NULL,
+            starter INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (game_id, team, player_key),
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_player_boxscores_lookup ON player_boxscores (player_key, game_start_time DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_player_boxscores_team ON player_boxscores (team, game_start_time DESC)"
+    )
+
+    rows = conn.execute(
+        """
+        SELECT gb.game_id, gb.players_json, g.game_start_time
+        FROM game_boxscores gb
+        JOIN games g ON gb.game_id = g.game_id
+        WHERE g.game_id NOT LIKE 'SYN%'
+          AND length(COALESCE(gb.players_json, '')) > 2
+        """
+    ).fetchall()
+
+    games_processed = 0
+    player_rows_upserted = 0
+    for gid, players_raw, game_start_time in rows:
+        try:
+            parsed = json.loads(players_raw)
+        except Exception:
+            continue
+        cnt = upsert_player_boxscores_rows(conn, str(gid), str(game_start_time), parsed)
+        if cnt:
+            games_processed += 1
+            player_rows_upserted += cnt
+
+    _log_repair(
+        conn,
+        migration_id,
+        "player_boxscores",
+        "SCHEMA_AND_VIEW_UPGRADE",
+        "RECONCILE_OBSERVED_LEDGER_AND_POPULATE_PLAYER_BOXSCORES",
+        f"Reconciled v_observed_bankroll_ledger and backfilled {player_rows_upserted} player boxscore rows across {games_processed} games.",
+    )
+    return {
+        "status": "APPLIED",
+        "games_processed": games_processed,
+        "player_rows_upserted": player_rows_upserted,
+    }
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -625,6 +703,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_10_008_quarantine_legacy_synthetic_bets", m008_quarantine_legacy_synthetic_bets),
     ("2026_11_10_009_enforce_observed_games_view", m009_enforce_observed_games_view),
     ("2026_11_14_010_allow_player_prop_in_odds_snapshots", m010_allow_player_prop_in_odds_snapshots),
+    ("2026_11_14_011_reconcile_observed_ledger_and_player_boxscores", m011_reconcile_observed_ledger_and_player_boxscores),
 ]
 
 

@@ -218,6 +218,7 @@ def main() -> None:
         "history_lag_days": args.history_lag_days,
         "boxscores": boxscores,
         "model_weight": cfg.model.market_anchor_model_weight,
+        "max_disagreement": cfg.model.max_model_market_disagreement,
         "min_ev": cfg.risk.min_ev_threshold,
         "max_bets_per_day": cfg.risk.max_selections_per_matchday,
         "initial_bankroll": cfg.risk.virtual_bankroll_initial_pen,
@@ -225,6 +226,9 @@ def main() -> None:
         "kelly_min_stake": cfg.risk.min_stake_pen,
         "kelly_max_stake": cfg.risk.max_stake_pen,
         "kelly_max_fraction": cfg.risk.max_stake_bankroll_fraction,
+        "moneyline_model_weight": cfg.model.moneyline_model_weight,
+        "moneyline_max_disagreement": cfg.model.moneyline_max_disagreement,
+        "moneyline_max_odds": cfg.model.moneyline_max_odds,
     }
     result = run_real_odds_backtest(games, market_rows, vig=args.vig, **common)
     zero_lookahead = verify_zero_lookahead_leakage(

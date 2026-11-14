@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import itertools
 import json
 import math
@@ -121,33 +122,41 @@ def calculate_ev(estimated_prob: float, decimal_odds: float) -> dict[str, float]
 SHARP_BOOK_KEYWORDS: tuple[str, ...] = ("pinnacle", "betfair", "matchbook", "lowvig", "circa", "bookmaker")
 
 
+_BOOKMAKER_ALIASES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("pinnacle",), "pinnacle"),
+    (("draftkings", "draft kings"), "draftkings"),
+    (("fanduel", "fan duel"), "fanduel"),
+    (("betmgm", "bet mgm"), "betmgm"),
+    (("caesars",), "caesars"),
+    (("bet365",), "bet365"),
+    (("betfair",), "betfair"),
+    (("matchbook",), "matchbook"),
+    (("lowvig",), "lowvig"),
+    (("circa",), "circa"),
+    (("retabet",), "retabet"),
+    (("betano",), "betano"),
+    (("te apuesto", "te_apuesto", "teapuesto"), "te_apuesto"),
+    (("betsson",), "betsson"),
+    (("coolbet",), "coolbet"),
+    (("apuesta total", "apuesta_total", "apuestatotal"), "apuesta_total"),
+    (("inkabet",), "inkabet"),
+    (("doradobet",), "doradobet"),
+    (("1xbet",), "1xbet"),
+    (("unibet",), "unibet"),
+    (("betrivers",), "betrivers"),
+    (("william hill",), "william_hill"),
+    (("marathon",), "marathonbet"),
+    (("bovada",), "bovada"),
+    (("888sport",), "888sport"),
+)
+
+
 def canonical_bookmaker_name(provider: str) -> str:
     """Canonicalizes provider names across line-shopping and scraped data feeds."""
     s = str(provider or "").strip().lower()
-    if "pinnacle" in s:
-        return "pinnacle"
-    if "draftkings" in s or "draft kings" in s:
-        return "draftkings"
-    if "fanduel" in s or "fan duel" in s:
-        return "fanduel"
-    if "betmgm" in s or "bet mgm" in s:
-        return "betmgm"
-    if "caesars" in s:
-        return "caesars"
-    if "bet365" in s:
-        return "bet365"
-    if "betfair" in s:
-        return "betfair"
-    if "retabet" in s:
-        return "retabet"
-    if "betano" in s:
-        return "betano"
-    if "inkabet" in s:
-        return "inkabet"
-    if "doradobet" in s:
-        return "doradobet"
-    if "bovada" in s:
-        return "bovada"
+    for aliases, canonical in _BOOKMAKER_ALIASES:
+        if any(alias in s for alias in aliases):
+            return canonical
     return s
 
 # Weight of the (calibrated) model probability when blending with the de-vigged market consensus.
@@ -491,6 +500,97 @@ def evaluate_market_opportunity(
         "ev_lower_bound": round(float(ev_lb_unit), 6),
         "ev_lower_bound_pct": ev_lb_pct,
     }
+
+
+def _cand_odds(c: dict[str, Any]) -> float:
+    return float(c.get("decimal_odds_used") or c.get("decimal_odds") or 0.0)
+
+
+def _cand_provider(c: dict[str, Any]) -> str:
+    return str(c.get("odds_provider") or c.get("provider") or "")
+
+
+def _cand_sort_key(c: dict[str, Any]) -> tuple[float, float, str]:
+    return (
+        _cand_odds(c),
+        float(c.get("ev_unit") or 0.0),
+        str(c.get("odds_captured_at") or c.get("captured_at") or ""),
+    )
+
+
+def select_best_line_shopping_candidates(
+    candidates: list[dict[str, Any]],
+    accessible_books: Iterable[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Groups evaluated opportunities by (game_id, market, selection, line_value) across
+    bookmakers and selects the highest-odds quote for each contract, recording cross-book
+    metadata (`line_shop_books`, `line_shop_gain_pct`, `runner_up_provider`).
+    If `accessible_books` is provided, restricts selection to matching canonical books
+    when at least one exists for that contract.
+    """
+    if not candidates:
+        return []
+
+    allowed_books = (
+        {canonical_bookmaker_name(b) for b in accessible_books if str(b or "").strip()}
+        if accessible_books is not None
+        else None
+    )
+
+    grouped: dict[tuple[str, str, str, float | None], list[dict[str, Any]]] = {}
+    for c in candidates:
+        lv = c.get("line_value")
+        lv_norm = round(float(lv), 2) if lv is not None else None
+        key = (
+            str(c.get("game_id") or ""),
+            str(c.get("market") or ""),
+            str(c.get("selection") or ""),
+            lv_norm,
+        )
+        grouped.setdefault(key, []).append(c)
+
+    selected: list[dict[str, Any]] = []
+    for group in grouped.values():
+        best_by_book: dict[str, dict[str, Any]] = {}
+        for item in group:
+            book = canonical_bookmaker_name(_cand_provider(item))
+            prev = best_by_book.get(book)
+            if prev is None or _cand_sort_key(item) > _cand_sort_key(prev):
+                best_by_book[book] = item
+
+        pool = (
+            [entry for book, entry in best_by_book.items() if book in allowed_books]
+            if allowed_books is not None
+            else []
+        )
+        if not pool:
+            pool = list(best_by_book.values())
+
+        pool.sort(key=_cand_sort_key, reverse=True)
+        winner = dict(pool[0])
+        winner_book = canonical_bookmaker_name(_cand_provider(winner))
+        others = sorted(
+            (entry for book, entry in best_by_book.items() if book != winner_book and _cand_odds(entry) > 1.0),
+            key=_cand_sort_key,
+            reverse=True,
+        )
+
+        if others:
+            runner_up = others[0]
+            runner_odds = _cand_odds(runner_up)
+            gain_pct = round(((_cand_odds(winner) / runner_odds) - 1.0) * 100.0, 2) if runner_odds > 0.0 else 0.0
+            runner_provider: str | None = _cand_provider(runner_up)
+        else:
+            gain_pct = 0.0
+            runner_provider = None
+
+        winner["line_shop_books"] = len(best_by_book)
+        winner["line_shop_gain_pct"] = gain_pct
+        winner["runner_up_provider"] = runner_provider
+        selected.append(winner)
+
+    return selected
 
 
 def optimize_simultaneous_kelly_portfolio(

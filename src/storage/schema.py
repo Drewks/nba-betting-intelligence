@@ -341,6 +341,31 @@ DDL_STATEMENTS = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS player_boxscores (
+        game_id TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        player_key TEXT NOT NULL,
+        team TEXT NOT NULL,
+        game_start_time TEXT NOT NULL,
+        minutes REAL NOT NULL,
+        pts REAL NOT NULL,
+        reb REAL NOT NULL,
+        ast REAL NOT NULL,
+        threed REAL NOT NULL,
+        starter INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (game_id, team, player_key),
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_player_boxscores_lookup
+    ON player_boxscores (player_key, game_start_time DESC);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_player_boxscores_team
+    ON player_boxscores (team, game_start_time DESC);
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_predictions_lookup
     ON predictions (game_id, market, selection, model_version_id, emitted_at);
     """,
@@ -502,9 +527,31 @@ VIEW_DDL: dict[str, str] = {
     """,
     "v_observed_bankroll_ledger": """
     CREATE VIEW v_observed_bankroll_ledger AS
-    SELECT l.* FROM bankroll_ledger l
-    LEFT JOIN simulated_bets b ON l.reference_bet_id = b.bet_id
-    WHERE l.reference_bet_id IS NULL OR b.game_id NOT LIKE 'SYN%';
+    SELECT
+        l.entry_id,
+        l.timestamp,
+        l.event_type,
+        l.reference_bet_id,
+        l.amount_delta_pen,
+        ROUND(
+            SUM(l.amount_delta_pen) OVER (
+                ORDER BY l.entry_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ),
+            4
+        ) AS settled_bankroll_pen,
+        l.pending_exposure_pen,
+        ROUND(
+            SUM(l.amount_delta_pen) OVER (
+                ORDER BY l.entry_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) - l.pending_exposure_pen,
+            4
+        ) AS available_balance_pen,
+        l.settled_bankroll_pen AS raw_settled_bankroll_pen
+    FROM bankroll_ledger l
+    WHERE l.reference_bet_id IS NULL
+       OR l.reference_bet_id IN (SELECT bet_id FROM v_observed_simulated_bets);
     """,
     "v_observed_games": """
     CREATE VIEW v_observed_games AS

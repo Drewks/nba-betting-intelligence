@@ -604,8 +604,25 @@ class PaperTradingEngine:
                 )
                 continue
 
-            # 2c. Longshot bias variance guard: deep underdogs (> 3.50 odds) require a substantial margin of safety
-            # (EV >= 15%) because low-probability tails carry high estimation variance on a micro-bankroll.
+            # 2c. Moneyline max-odds & Longshot bias variance guard:
+            # Empirically validated ML cap protects bankroll from injury/lineup underdog traps,
+            # while deep non-ML underdogs (> 3.50 odds) require a substantial EV >= 15% safety margin.
+            ml_max_odds = cand.get("moneyline_max_odds")
+            if ml_max_odds is None:
+                try:
+                    ml_max_odds = load_config().model.moneyline_max_odds
+                except Exception:
+                    ml_max_odds = None
+            if market == "moneyline" and ml_max_odds is not None and dec_odds > float(ml_max_odds):
+                no_bet_decisions.append(
+                    self._record_decision(
+                        game_id, matchday_date, market, selection, "NO_BET",
+                        "EXCESSIVE_LONGSHOT_VARIANCE",
+                        f"Moneyline odds {dec_odds:.2f} (> {float(ml_max_odds):.2f} max cap); skipped to protect bankroll and CLV.",
+                        ev_pct, emitted_at, model_version_id
+                    )
+                )
+                continue
             if dec_odds > 3.50 and ev_pct < 15.0:
                 no_bet_decisions.append(
                     self._record_decision(

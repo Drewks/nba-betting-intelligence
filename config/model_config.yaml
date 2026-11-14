@@ -12,12 +12,15 @@
 
 model:
   version_id: "model_f_ensemble_v8"
-  ewma_alpha_slow: 0.045
-  ewma_alpha_fast: 0.110
+  ewma_alpha_slow: 0.0375
+  ewma_alpha_fast: 0.130
   tempo_alpha_slow: 0.055
   tempo_alpha_fast: 0.130
   market_anchor_model_weight: 0.30   # p_final = 0.30 * p_model + 0.70 * p_market (de-vigged)
   max_model_market_disagreement: 0.15 # Maximum allowable spread between model and sharp market consensus
+  moneyline_model_weight: 0.30       # Market-specific ML anchor weight
+  moneyline_max_disagreement: 0.15   # Market-specific ML max model-vs-market disagreement
+  moneyline_max_odds: 2.80           # Walk-forward validated ML decimal odds cap (mitigates underdog CLV/injury traps)
 
 risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
   virtual_bankroll_initial_pen: 100.00

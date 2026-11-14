@@ -1,21 +1,22 @@
 {
-  "objective": "raw model Brier + 0.5 * LogLoss (no market anchoring tuned)",
-  "n_trials": 300,
-  "eval_sample_size": 300,
-  "holdout_sample_size": 300,
-  "baseline_score": 0.86543,
-  "baseline_brier": 0.366279,
-  "baseline_log_loss": 0.99831,
-  "best_score": 0.73756,
-  "improvement_pct": 14.78,
+  "objective": "ML (Brier + 0.5*LogLoss) + 0.15*(TotalsRMSE/18)^2 (zero market leakage)",
+  "n_trials": 250,
+  "eval_sample_size": 500,
+  "holdout_sample_size": 500,
+  "baseline_score": 0.70791,
+  "baseline_brier": 0.219243,
+  "baseline_log_loss": 0.629702,
+  "baseline_totals_rmse": 19.3764,
+  "best_score": 0.69284,
+  "improvement_pct": 2.13,
   "best_hyperparameters": {
-    "alpha_slow": 0.016,
-    "alpha_fast": 0.16499999999999998,
-    "tempo_alpha_slow": 0.048,
-    "tempo_alpha_fast": 0.14500000000000002,
-    "blowout_cap": 23.0,
-    "spread_sigma": 13.0,
-    "momentum_blend_weight": 0.95
+    "alpha_slow": 0.0375,
+    "alpha_fast": 0.13,
+    "tempo_alpha_slow": 0.055,
+    "tempo_alpha_fast": 0.03,
+    "blowout_cap": 34.0,
+    "spread_sigma": 9.5,
+    "momentum_blend_weight": 0.98
   },
   "default_hyperparameters": {
     "alpha_slow": 0.045,
@@ -27,34 +28,14 @@
     "momentum_blend_weight": 0.88
   },
   "holdout": {
-    "baseline_score": 0.7761,
-    "baseline_brier": 0.329113,
-    "baseline_log_loss": 0.893968,
-    "best_score": 0.68937,
-    "best_brier": 0.29395,
-    "best_log_loss": 0.790845
+    "baseline_score": 0.66333,
+    "baseline_brier": 0.201379,
+    "baseline_log_loss": 0.590936,
+    "baseline_totals_rmse": 18.9631,
+    "best_score": 0.65208,
+    "best_brier": 0.196574,
+    "best_log_loss": 0.578991,
+    "best_totals_rmse": 18.9362
   },
-  "adoption_decision": "REJECT_KEEP_CURRENT_DEFAULTS",
-  "production_ab_validation": {
-    "backtest_start_date": "2025-01-01",
-    "assumed_margin": 0.045,
-    "min_ev": 0.05,
-    "current_defaults": {
-      "bets": 81,
-      "wins": 28,
-      "flat_roi_pct": -2.42,
-      "kelly_50_roi_pct": -4.63,
-      "final_bankroll_pen": 93.09,
-      "mean_clv_pct": -2.412
-    },
-    "optuna_candidate": {
-      "bets": 64,
-      "wins": 21,
-      "flat_roi_pct": -9.10,
-      "kelly_50_roi_pct": -12.42,
-      "final_bankroll_pen": 86.58,
-      "mean_clv_pct": -3.052
-    },
-    "notes": "Surrogate heuristic Brier improved, but real LightGBM+Logistic walk-forward backtest degraded under Optuna candidate alphas; config/model_config.yaml kept at baseline defaults."
-  }
+  "adoption_decision": "ADOPT_ON_HOLDOUT_IMPROVEMENT"
 }

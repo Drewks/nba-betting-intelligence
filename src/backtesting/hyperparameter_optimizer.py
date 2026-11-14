@@ -60,7 +60,7 @@ class _ParametricTeamState:
         self.games = 0
 
 
-def _simulate_parametric_ratings_and_preds(
+def _simulate_parametric_pass(
     games: list[dict[str, Any]],
     alpha_slow: float,
     alpha_fast: float,
@@ -68,14 +68,14 @@ def _simulate_parametric_ratings_and_preds(
     tempo_alpha_fast: float,
     blowout_cap: float,
     market_model_weight: float,
-    spread_sigma: float = 11.6,
+    spread_sigma: float = 12.2,
     momentum_blend_weight: float = 0.88,
     eval_slice_size: int = 150,
     holdout_size: int = 0,
-) -> tuple[list[float], list[float], list[int]]:
+) -> tuple[list[float], list[float], list[int], list[float], list[float]]:
     """
     Computes strict chronological ratings with trial parameters and returns
-    (raw_probs, anchored_probs, outcomes) on the out-of-sample evaluation slice.
+    (raw_probs, anchored_probs, outcomes, expected_totals, actual_totals) on the OOS slice.
     """
     real = [g for g in games if not is_synthetic_game_id(g.get("game_id")) and g.get("status") == "FINAL"]
     if len(real) < 80:
@@ -84,7 +84,7 @@ def _simulate_parametric_ratings_and_preds(
     real.sort(key=lambda g: (str(g.get("game_start_time", "")), str(g.get("game_id", ""))))
 
     if len(real) < 80:
-        return [], [], []
+        return [], [], [], [], []
 
     eval_n = min(eval_slice_size, len(real) // 3)
     # Evaluation window [window_start, window_end): the last `holdout_size` games are excluded so they
@@ -92,7 +92,7 @@ def _simulate_parametric_ratings_and_preds(
     window_end = len(real) - max(0, int(holdout_size))
     train_end_idx = window_end - eval_n
     if train_end_idx < 40:
-        return [], [], []
+        return [], [], [], [], []
 
     league_ppg = LEAGUE_PPG_PRIOR
     league_total = 2.0 * LEAGUE_PPG_PRIOR
@@ -117,6 +117,8 @@ def _simulate_parametric_ratings_and_preds(
     raw_preds: list[float] = []
     anchored_preds: list[float] = []
     outcomes: list[int] = []
+    pred_totals: list[float] = []
+    actual_totals: list[float] = []
 
     from scipy.stats import norm
 
@@ -135,13 +137,34 @@ def _simulate_parametric_ratings_and_preds(
         h_off, h_def = h_pf * scale_100, h_pa * scale_100
         a_off, a_def = a_pf * scale_100, a_pa * scale_100
 
-        # Estimated margin in points
-        expected_margin = (h_off - a_def) - (a_off - h_def) + (2.0 * HCA_PER_SIDE)
+        # Pre-game expected net margin: 0.5 * (home_net - away_net) + HCA
+        expected_margin = 0.5 * ((h_off - h_def) - (a_off - a_def)) + (2.0 * HCA_PER_SIDE)
         p_home_model = float(np.clip(1.0 - norm.cdf(0.0, loc=expected_margin, scale=spread_sigma), 0.05, 0.95))
 
+        # Pre-game expected total from team offensive/defensive efficiency & decoupled tempo
+        h_tempo_blend = 0.72 * h.tempo_slow + 0.28 * h.tempo_fast
+        a_tempo_blend = 0.72 * a.tempo_slow + 0.28 * a.tempo_fast
+        exp_eff_total = (
+            league_total
+            + (h.pts_for_slow - league_ppg)
+            + (a.pts_against_slow - league_ppg)
+            + (a.pts_for_slow - league_ppg)
+            + (h.pts_against_slow - league_ppg)
+        )
+        exp_game_total = exp_eff_total + h.tempo_slow + a.tempo_slow
+        pred_game_total = (
+            league_total
+            + (h_pf - league_ppg)
+            + (a_pa - league_ppg)
+            + (a_pf - league_ppg)
+            + (h_pa - league_ppg)
+            + 0.70 * (h_tempo_blend + a_tempo_blend)
+        )
+
         # Out-of-sample evaluation slice (never in-sample, strictly pre-game without score leakage)
+        hs, as_ = float(g["home_score"]), float(g["away_score"])
         if train_end_idx <= idx < window_end:
-            actual_y = 1 if int(g["home_score"]) > int(g["away_score"]) else 0
+            actual_y = 1 if hs > as_ else 0
             # Anchor ONLY to a genuine pre-game market probability when the record carries one.
             # Without it there is no anchoring at all (a constant 0.50 "market" is not a market).
             pregame_mkt = g.get("market_prob")
@@ -154,20 +177,12 @@ def _simulate_parametric_ratings_and_preds(
             raw_preds.append(round(p_home_model, 5))
             anchored_preds.append(round(anchored_p, 5))
             outcomes.append(actual_y)
+            pred_totals.append(round(pred_game_total, 4))
+            actual_totals.append(hs + as_)
 
         # Update ratings strictly after predicting (causal order)
-        hs, as_ = float(g["home_score"]), float(g["away_score"])
         raw_total = hs + as_
         raw_margin = hs - as_
-
-        exp_eff_total = (
-            league_total
-            + (h.pts_for_slow - league_ppg)
-            + (a.pts_against_slow - league_ppg)
-            + (a.pts_for_slow - league_ppg)
-            + (h.pts_against_slow - league_ppg)
-        )
-        exp_game_total = exp_eff_total + h.tempo_slow + a.tempo_slow
 
         is_likely_ot = (abs(raw_margin) <= 7.0) and (raw_total > exp_game_total + 18.0)
         reg_total = (raw_total - 13.0) if is_likely_ot else raw_total
@@ -200,6 +215,39 @@ def _simulate_parametric_ratings_and_preds(
         league_ppg += LEAGUE_ALPHA * (0.5 * capped_total - league_ppg)
         league_total = 2.0 * league_ppg
 
+    return raw_preds, anchored_preds, outcomes, pred_totals, actual_totals
+
+
+def _simulate_parametric_ratings_and_preds(
+    games: list[dict[str, Any]],
+    alpha_slow: float,
+    alpha_fast: float,
+    tempo_alpha_slow: float,
+    tempo_alpha_fast: float,
+    blowout_cap: float,
+    market_model_weight: float,
+    spread_sigma: float = 12.2,
+    momentum_blend_weight: float = 0.88,
+    eval_slice_size: int = 150,
+    holdout_size: int = 0,
+) -> tuple[list[float], list[float], list[int]]:
+    """
+    Computes strict chronological ratings with trial parameters and returns
+    (raw_probs, anchored_probs, outcomes) on the out-of-sample evaluation slice.
+    """
+    raw_preds, anchored_preds, outcomes, _, _ = _simulate_parametric_pass(
+        games=games,
+        alpha_slow=alpha_slow,
+        alpha_fast=alpha_fast,
+        tempo_alpha_slow=tempo_alpha_slow,
+        tempo_alpha_fast=tempo_alpha_fast,
+        blowout_cap=blowout_cap,
+        market_model_weight=market_model_weight,
+        spread_sigma=spread_sigma,
+        momentum_blend_weight=momentum_blend_weight,
+        eval_slice_size=eval_slice_size,
+        holdout_size=holdout_size,
+    )
     return raw_preds, anchored_preds, outcomes
 
 
@@ -226,8 +274,8 @@ class OptunaWalkForwardOptimizer:
         Tunes rating hyperparameters on a VALIDATION window and decides adoption on an untouched
         HOLDOUT window (the most recent games). Selecting and reporting on the same games would overfit
         the selection; here the holdout is evaluated exactly twice (baseline vs. best) after tuning.
-        The objective scores the raw model probability; no market anchoring is tuned because historical
-        games carry no observed pre-game market probability.
+        The objective scores BOTH raw moneyline probability (Brier + 0.5*LogLoss) and totals RMSE
+        so slow/fast efficiency and tempo parameters are all grounded in out-of-sample accuracy.
         """
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -247,8 +295,8 @@ class OptunaWalkForwardOptimizer:
             "momentum_blend_weight": 0.88,
         }
 
-        def _score(params: dict[str, float], holdout: bool) -> tuple[float, float, float, int]:
-            raw, _anch, y = _simulate_parametric_ratings_and_preds(
+        def _score(params: dict[str, float], holdout: bool) -> tuple[float, float, float, float, int]:
+            raw, _anch, y, p_tot, y_tot = _simulate_parametric_pass(
                 games=games,
                 alpha_slow=params["alpha_slow"],
                 alpha_fast=params["alpha_fast"],
@@ -265,43 +313,46 @@ class OptunaWalkForwardOptimizer:
                 raise ValueError("Insufficient games for walk-forward optimization (need validation + holdout windows).")
             brier = compute_brier_score(raw, y)
             logloss = compute_log_loss(raw, y)
-            return round(brier + 0.5 * logloss, 5), brier, logloss, len(y)
+            tot_rmse = float(np.sqrt(np.mean((np.asarray(p_tot) - np.asarray(y_tot)) ** 2)))
+            combined = round(brier + 0.5 * logloss + 0.15 * ((tot_rmse / 18.0) ** 2), 5)
+            return combined, brier, logloss, round(tot_rmse, 4), len(y)
 
-        baseline_score, base_brier, base_logloss, val_n = _score(defaults, holdout=False)
+        baseline_score, base_brier, base_logloss, base_tot_rmse, val_n = _score(defaults, holdout=False)
 
         sampler = optuna.samplers.TPESampler(seed=self.seed)
         study = optuna.create_study(direction="minimize", sampler=sampler)
 
         def objective(trial: optuna.Trial) -> float:
             params = {
-                "alpha_slow": trial.suggest_float("alpha_slow", 0.016, 0.060, step=0.002),
-                "alpha_fast": trial.suggest_float("alpha_fast", 0.090, 0.190, step=0.005),
-                "tempo_alpha_slow": trial.suggest_float("tempo_alpha_slow", 0.020, 0.070, step=0.002),
-                "tempo_alpha_fast": trial.suggest_float("tempo_alpha_fast", 0.060, 0.150, step=0.005),
-                "blowout_cap": trial.suggest_float("blowout_cap", 22.0, 30.0, step=1.0),
-                "spread_sigma": trial.suggest_float("spread_sigma", 10.2, 13.0, step=0.1),
-                "momentum_blend_weight": trial.suggest_float("momentum_blend_weight", 0.75, 0.95, step=0.01),
+                "alpha_slow": trial.suggest_float("alpha_slow", 0.020, 0.110, step=0.0025),
+                "alpha_fast": trial.suggest_float("alpha_fast", 0.080, 0.220, step=0.005),
+                "tempo_alpha_slow": trial.suggest_float("tempo_alpha_slow", 0.010, 0.070, step=0.0025),
+                "tempo_alpha_fast": trial.suggest_float("tempo_alpha_fast", 0.030, 0.140, step=0.005),
+                "blowout_cap": trial.suggest_float("blowout_cap", 18.0, 34.0, step=1.0),
+                "spread_sigma": trial.suggest_float("spread_sigma", 9.5, 14.0, step=0.1),
+                "momentum_blend_weight": trial.suggest_float("momentum_blend_weight", 0.70, 0.98, step=0.02),
             }
             return _score(params, holdout=False)[0]
 
         study.optimize(objective, n_trials=n_trials)
 
         best_score = float(study.best_value)
-        best_params = {k: float(v) for k, v in study.best_params.items()}
+        best_params = {k: round(float(v), 5) for k, v in study.best_params.items()}
         improvement = round(max(0.0, (baseline_score - best_score) / baseline_score) * 100.0, 2)
 
-        hold_base, hold_base_brier, hold_base_ll, hold_count = _score(defaults, holdout=True)
-        hold_best, hold_best_brier, hold_best_ll, _ = _score(best_params, holdout=True)
+        hold_base, hold_base_brier, hold_base_ll, hold_base_rmse, hold_count = _score(defaults, holdout=True)
+        hold_best, hold_best_brier, hold_best_ll, hold_best_rmse, _ = _score(best_params, holdout=True)
         adopt = hold_best < hold_base
 
         summary: dict[str, Any] = {
-            "objective": "raw model Brier + 0.5 * LogLoss (no market anchoring tuned)",
+            "objective": "ML (Brier + 0.5*LogLoss) + 0.15*(TotalsRMSE/18)^2 (zero market leakage)",
             "n_trials": len(study.trials),
             "eval_sample_size": val_n,
             "holdout_sample_size": hold_count,
             "baseline_score": baseline_score,
             "baseline_brier": base_brier,
             "baseline_log_loss": base_logloss,
+            "baseline_totals_rmse": base_tot_rmse,
             "best_score": best_score,
             "improvement_pct": improvement,
             "best_hyperparameters": best_params,
@@ -310,9 +361,11 @@ class OptunaWalkForwardOptimizer:
                 "baseline_score": hold_base,
                 "baseline_brier": hold_base_brier,
                 "baseline_log_loss": hold_base_ll,
+                "baseline_totals_rmse": hold_base_rmse,
                 "best_score": hold_best,
                 "best_brier": hold_best_brier,
                 "best_log_loss": hold_best_ll,
+                "best_totals_rmse": hold_best_rmse,
             },
             "adoption_decision": "ADOPT_ON_HOLDOUT_IMPROVEMENT" if adopt else "REJECT_NO_HOLDOUT_IMPROVEMENT",
         }

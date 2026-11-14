@@ -566,8 +566,8 @@ def test_30_optuna_walk_forward_hyperparameter_optimization(tmp_path: Path) -> N
     loaded = json.loads(out_json.read_text(encoding="utf-8"))
     assert loaded["best_score"] == summary["best_score"]
     best_p = summary["best_hyperparameters"]
-    assert 0.010 <= best_p["alpha_slow"] <= 0.080
-    assert 0.080 <= best_p["alpha_fast"] <= 0.200
+    assert 0.020 <= best_p["alpha_slow"] <= 0.110
+    assert 0.080 <= best_p["alpha_fast"] <= 0.220
     assert "spread_sigma" in best_p
     assert "momentum_blend_weight" in best_p
     # No fake market anchor is tuned (historical games carry no observed market probability)
