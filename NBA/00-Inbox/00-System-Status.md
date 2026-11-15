@@ -1,18 +1,18 @@
 ---
-date_generated: 2026-11-15T02:19:44Z
+date_generated: 2026-11-15T02:13:54Z
 status: PAPER_TRADING_ACTIVE
 bankroll_initial: 100.00
 current_bankroll_pen: 93.47
 net_profit_pen: -6.53
 roi_pct: -17.21
-mean_clv_pct: -3.68
+mean_clv_pct: -2.17
 brier_score: null
 market_brier_score: 0.21527
 settled_bets: 28
 ---
 # NBA Betting Intelligence — Inbox Operativo
 
-- **Última sincronización**: `2026-11-15T02:19:44Z`
+- **Última sincronización**: `2026-11-15T02:13:54Z`
 - **Bankroll virtual actual**: `S/93.47 PEN`
 - **Dictamen del auditor**: `REMAIN_IN_PAPER_TRADING`
 - **Dashboard Cuantitativo DataviewJS**: [[01-Dataview-Quant-Dashboard]]
