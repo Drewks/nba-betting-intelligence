@@ -5,8 +5,10 @@ Regression tests for the 2026-11-15 audit remediation findings & roadmap items.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 from pathlib import Path
 import sqlite3
+import sys
 
 import pytest
 
@@ -367,3 +369,311 @@ def test_sync_state_live_refuses_tracked_main_db_overwrite() -> None:
 
     with pytest.raises(RuntimeError, match="Refusing to overwrite tracked"):
         extract_state_live_db(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3", fetch=False)
+
+
+def test_dispatch_pending_bet_alerts_defaults_to_config_min_ev(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Default min_ev resolves from risk.min_ev_threshold (2.0%) instead of legacy hardcoded 5.0%."""
+    import scripts.run_telegram_alerts as alerts_cli
+    from src.reporting.telegram_bot import TelegramAlertBot, dispatch_pending_bet_alerts
+
+    db_path = tmp_path / "alerts_min_ev.sqlite3"
+    db = DatabaseManager(db_path)
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO model_versions (
+                model_version_id, model_family, market, train_start_date, train_end_date,
+                trained_at, hyperparameters_json, is_active, approved_by
+            ) VALUES ('v8', 'ensemble', 'moneyline', '2024-10-01', '2026-10-01', ?, '{}', 1, 'test')
+            """,
+            (now_iso,),
+        )
+        conn.execute(
+            """
+            INSERT INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, features_available_at, source_provider, ingested_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("G_ALERT_01", "2026-27", today_str, now_iso, "WAS", "HOU", "SCHEDULED", now_iso, "espn", now_iso),
+        )
+        conn.execute(
+            """
+            INSERT INTO predictions (
+                prediction_id, game_id, market, selection, model_version_id,
+                raw_probability, calibrated_probability, uncertainty_std, implied_prob_gross,
+                implied_prob_fair, decimal_odds_used, odds_provider, odds_captured_at,
+                ev_unit, ev_pct, emitted_at, features_snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "P_EV_263", "G_ALERT_01", "moneyline", "AWAY", "v8",
+                0.814, 0.814, 0.03, 0.794, 0.794, 1.26, "Betano Perú", now_iso,
+                0.0263, 2.63, now_iso, "{}",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO simulated_bets (
+                bet_id, prediction_id, game_id, matchday_date, market, selection,
+                line_value, decimal_odds, estimated_prob, estimated_ev, stake_pen,
+                emitted_at, model_version_id, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BET_EV_263", "P_EV_263", "G_ALERT_01", today_str, "moneyline", "AWAY",
+                None, 1.26, 0.814, 0.0263, 2.36, now_iso, "v8", "PENDING",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO predictions (
+                prediction_id, game_id, market, selection, model_version_id,
+                raw_probability, calibrated_probability, uncertainty_std, implied_prob_gross,
+                implied_prob_fair, decimal_odds_used, odds_provider, odds_captured_at,
+                ev_unit, ev_pct, emitted_at, features_snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "P_EV_140", "G_ALERT_01", "moneyline", "HOME", "v8",
+                0.50, 0.50, 0.03, 0.493, 0.493, 2.028, "Te Apuesto Perú", now_iso,
+                0.014, 1.40, now_iso, "{}",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO simulated_bets (
+                bet_id, prediction_id, game_id, matchday_date, market, selection,
+                line_value, decimal_odds, estimated_prob, estimated_ev, stake_pen,
+                emitted_at, model_version_id, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BET_EV_140", "P_EV_140", "G_ALERT_01", today_str, "moneyline", "HOME",
+                None, 2.028, 0.50, 0.014, 1.00, now_iso, "v8", "PENDING",
+            ),
+        )
+
+    sent: list[str] = []
+    bot = TelegramAlertBot(bot_token="fake_token", chat_id="12345")
+    monkeypatch.setattr(bot, "send_raw_message", lambda text, **_kw: sent.append(text) or True)
+    monkeypatch.setattr(TelegramAlertBot, "_persist_alert_log", lambda self, _record: None)
+
+    state_file = tmp_path / "alert_state.json"
+    dispatched = dispatch_pending_bet_alerts(bot, db, state_path=state_file)
+    assert dispatched == 1
+    assert len(sent) == 1
+    assert "G_ALERT_01" in sent[0]
+    assert "+2.6%" in sent[0]
+    assert dispatch_pending_bet_alerts(bot, db, state_path=state_file) == 0
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_telegram_alerts.py", "--db", str(db_path), "--state-path", str(tmp_path / "cli_state.json"), "--dry-run"],
+    )
+    alerts_cli.main()
+    out = capsys.readouterr().out
+    assert "Filtro Mínimo EV : >= 2.0%" in out
+    assert "Alertas despachadas exitosamente: 1" in out
+
+
+def test_execute_sniper_cycle_runs_pregame_and_dispatches_bet_alerts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Evening Sniper windows evaluate pregame paper trading and dispatch new >=2% EV Telegram alerts."""
+    import scripts.run_automated_scheduler as sched_mod
+
+    db_path = tmp_path / "sniper_cycle.sqlite3"
+    state_file = tmp_path / "sniper_alerts.json"
+    db = DatabaseManager(db_path)
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO model_versions (
+                model_version_id, model_family, market, train_start_date, train_end_date,
+                trained_at, hyperparameters_json, is_active, approved_by
+            ) VALUES ('v8', 'ensemble', 'moneyline', '2024-10-01', '2026-10-01', ?, '{}', 1, 'test')
+            """,
+            (now_iso,),
+        )
+        conn.execute(
+            """
+            INSERT INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, features_available_at, source_provider, ingested_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("G_SNIPER_01", "2026-27", today_str, now_iso, "PHI", "IND", "SCHEDULED", now_iso, "espn", now_iso),
+        )
+
+    scheduler = sched_mod.NBADailyScheduler(db_path=db_path, alert_state_path=state_file)
+    sent: list[str] = []
+    scheduler.bot.bot_token = "fake_token"
+    scheduler.bot.chat_id = "999"
+    scheduler.bot.is_live = True
+    monkeypatch.setattr(scheduler.bot, "send_raw_message", lambda text, **_kw: sent.append(text) or True)
+
+    monkeypatch.setattr(
+        sched_mod.InjurySniperMonitor,
+        "scan_pregame_slate",
+        lambda self, force_scan_all=False: {"games_scanned": 1, "alerts_triggered": 0, "alerts": []},
+    )
+    monkeypatch.setattr(
+        sched_mod.LivePeruOddsScraper,
+        "scan_and_alert_entire_slate",
+        lambda self, notify_telegram=True: [],
+    )
+
+    observed_db_paths: list[Path | str | None] = []
+
+    def fake_pregame_cycle(mode: str = "pregame", db_path: Path | str | None = None) -> dict[str, object]:
+        observed_db_paths.append(db_path)
+        assert mode == "pregame"
+        if len(observed_db_paths) == 1:
+            with scheduler.db.connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO predictions (
+                        prediction_id, game_id, market, selection, model_version_id,
+                        raw_probability, calibrated_probability, uncertainty_std, implied_prob_gross,
+                        implied_prob_fair, decimal_odds_used, odds_provider, odds_captured_at,
+                        ev_unit, ev_pct, emitted_at, features_snapshot_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "P_SNIPER_01", "G_SNIPER_01", "moneyline", "HOME", "v8",
+                        0.748, 0.748, 0.03, 0.719, 0.719, 1.39, "Betano Perú", now_iso,
+                        0.0405, 4.05, now_iso, "{}",
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO simulated_bets (
+                        bet_id, prediction_id, game_id, matchday_date, market, selection,
+                        line_value, decimal_odds, estimated_prob, estimated_ev, stake_pen,
+                        emitted_at, model_version_id, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "BET_SNIPER_01", "P_SNIPER_01", "G_SNIPER_01", today_str, "moneyline", "HOME",
+                        None, 1.39, 0.748, 0.0405, 2.43, now_iso, "v8", "PENDING",
+                    ),
+                )
+        return {"mode": mode, "bets_placed": 1 if len(observed_db_paths) == 1 else 0}
+
+    monkeypatch.setattr(sched_mod, "run_incremental_cloud_cycle", fake_pregame_cycle)
+
+    res1 = scheduler.execute_sniper_cycle()
+    assert observed_db_paths == [db_path]
+    assert "pregame_paper_trading" in res1["sources_executed"]
+    assert "telegram_bot" in res1["sources_executed"]
+    assert res1["alerts_dispatched"] == 1
+    assert len(sent) == 1
+    assert "G_SNIPER_01" in sent[0]
+
+    res2 = scheduler.execute_sniper_cycle()
+    assert res2["alerts_dispatched"] == 0
+    assert len(sent) == 1
+
+
+def test_the_odds_api_logs_sanitized_warning_on_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import urllib.request
+    from src.ingestion.the_odds_api import TheOddsAPIAdapter
+
+    adapter = TheOddsAPIAdapter(api_key="SECRET_TOKEN_XYZ_987")
+
+    def boom(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("HTTP 401 for url https://api.the-odds-api.com?apiKey=SECRET_TOKEN_XYZ_987")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    with caplog.at_level(logging.WARNING, logger="src.ingestion.the_odds_api"):
+        res = adapter.fetch_multi_book_odds_by_matchup(datetime.now(timezone.utc))
+
+    assert res == {}
+    assert "TheOddsAPI request failed" in caplog.text
+    assert "***" in caplog.text
+    assert "SECRET_TOKEN_XYZ_987" not in caplog.text
+
+
+def test_harvest_local_peru_odds_sync_state_live_and_run_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scripts.harvest_local_peru_odds as harvest_mod
+
+    seed_db_path = tmp_path / "seed_state_live.sqlite3"
+    seed_db = DatabaseManager(seed_db_path)
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with seed_db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, features_available_at, source_provider, ingested_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("G_HARV_01", "2026-27", today_str, now_iso, "LAL", "BOS", "SCHEDULED", now_iso, "espn", now_iso),
+        )
+    seed_db.checkpoint(truncate=True)
+
+    temp_dir = tmp_path / "tmp_env"
+    temp_dir.mkdir()
+    monkeypatch.setenv("TEMP", str(temp_dir))
+
+    extracted_targets: list[Path] = []
+
+    def fake_extract(out_path: Path, **_kw: object) -> dict[str, object]:
+        resolved = Path(out_path)
+        extracted_targets.append(resolved)
+        data = seed_db_path.read_bytes()
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        resolved.write_bytes(data)
+        return {"source_ref": "origin/state-live", "size_bytes": len(data)}
+
+    monkeypatch.setattr(harvest_mod, "extract_state_live_db", fake_extract)
+    monkeypatch.setattr(
+        harvest_mod.PeruPlaywrightScraper,
+        "scrape_teapuesto_odds",
+        lambda self: [
+            {
+                "provider": "Betano Perú",
+                "market": "moneyline",
+                "home_team": "LAL",
+                "away_team": "BOS",
+                "selection": "HOME",
+                "decimal_odds": 2.15,
+            }
+        ],
+    )
+    monkeypatch.setattr(harvest_mod.PeruPlaywrightScraper, "scrape_pinnacle_odds", lambda self: [])
+    monkeypatch.setattr(harvest_mod.PeruPlaywrightScraper, "scrape_betano_api_odds", lambda self: [])
+    monkeypatch.setattr(harvest_mod.PeruPlaywrightScraper, "persist_scraped_quotes", lambda self, quotes, games: len(quotes))
+
+    cycle_calls: list[tuple[str, Path | str | None]] = []
+    monkeypatch.setattr(
+        harvest_mod,
+        "run_incremental_cloud_cycle",
+        lambda mode="pregame", db_path=None: cycle_calls.append((mode, db_path)) or {"bets_placed": 0},
+    )
+    monkeypatch.setattr(harvest_mod, "TelegramAlertBot", lambda: type("OfflineBot", (), {"is_live": False})())
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["harvest_local_peru_odds.py", "--sync-state-live", "--run-cycle"],
+    )
+
+    harvest_mod.main()
+
+    expected_local_db = temp_dir / "nba_state_live_local.sqlite3"
+    assert extracted_targets == [expected_local_db]
+    assert cycle_calls == [("pregame", expected_local_db)]

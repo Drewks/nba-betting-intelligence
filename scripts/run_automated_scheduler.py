@@ -12,6 +12,7 @@ Supports running as a continuous background daemon, or executing specific window
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 from datetime import datetime, timezone, timedelta
 import logging
@@ -199,7 +200,7 @@ class NBADailyScheduler:
             dispatched_count += dispatch_pending_bet_alerts(
                 self.bot,
                 self.db,
-                min_ev=5.0,
+                min_ev=None,
                 max_alerts=10,
                 state_path=self.alert_state_path,
             )
@@ -337,6 +338,35 @@ class NBADailyScheduler:
             sources_skipped["live_peru_odds_scraper"] = f"error: {exc}"
             logger.warning(f"Error escaneando cuotas en vivo en el scheduler: {exc}")
 
+        # 3. Re-evaluar ciclo pregame / Paper Trading con las líneas frescas recién ingresadas
+        pregame_res: dict[str, Any] = {}
+        try:
+            cycle_params = inspect.signature(run_incremental_cloud_cycle).parameters
+            if "db_path" in cycle_params:
+                pregame_res = run_incremental_cloud_cycle(mode="pregame", db_path=self.db.db_path) or {}
+            else:
+                pregame_res = run_incremental_cloud_cycle(mode="pregame") or {}
+            sources_executed.append("pregame_paper_trading")
+        except Exception as exc:
+            sources_skipped["pregame_paper_trading"] = f"error: {exc}"
+            logger.warning(f"Error ejecutando ciclo pregame tras Sniper en el scheduler: {exc}")
+
+        # 4. Despachar alertas Telegram para nuevas apuestas PENDING >= min_ev configurado (deduplicadas)
+        if self.bot.is_live:
+            try:
+                if "telegram_bot" not in sources_executed:
+                    sources_executed.append("telegram_bot")
+                alerts_sent += dispatch_pending_bet_alerts(
+                    self.bot,
+                    self.db,
+                    min_ev=None,
+                    max_alerts=10,
+                    state_path=self.alert_state_path,
+                )
+            except Exception as exc:
+                sources_skipped["telegram_bot"] = f"error: {exc}"
+                logger.warning(f"Error despachando alertas de apuestas tras Sniper: {exc}")
+
         quotes_after = self._snapshot_observed_quote_counts()
         new_quotes_by_source = self._diff_quote_counts(quotes_before, quotes_after)
 
@@ -358,6 +388,7 @@ class NBADailyScheduler:
             "executed_at_pet": now_pet.strftime("%Y-%m-%dT%H:%M:%S"),
             "sniper_results": sniper_res,
             "live_odds_results": live_res,
+            "pregame_results": pregame_res,
             "alerts_dispatched": alerts_sent,
             "sources_executed": sources_executed,
             "sources_skipped": sources_skipped,
