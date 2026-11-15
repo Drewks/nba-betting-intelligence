@@ -1,10 +1,10 @@
 ---
-date_generated: 2026-11-14T14:49:30Z
+date_generated: 2026-11-15T02:13:54Z
 dashboard_type: retabet_sgp_copula_v8
 ---
 # 🎰 Apuestas Correlacionadas SGP (Crea tu Apuesta — RETAbet Perú)
 
-> [!NOTE] Simulación de Cópula Gaussiana Bivariada (V8 Fase 3)
+> [!NOTE] Simulación de Cópula Student-t Multivariada (V8 Fase 3)
 > Modela la interdependencia estocástica entre resultados de equipo y props de jugadores (PTS, REB, AST, PRA) para explotar tablas de correlación rígidas en **RETAbet Perú**.
 
 ```dataview

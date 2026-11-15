@@ -303,12 +303,12 @@ def generate_interactive_html_dashboard(
         <div>
           <h2 class="text-base font-bold">🏀 Player Props & Cópulas SGP V8 — Proyecciones, Desajustes y 'Crea tu Apuesta' RETAbet</h2>
           <p class="text-xs text-[var(--muted-foreground)]">
-            Oportunidades +EV detectadas en líneas individuales (PTS, REB, AST, 3PM, PRA) y combinadas correlacionadas para casas peruanas mediante Cópulas Gaussianas y Calibración Conformal Venn-Abers.
+            Oportunidades +EV detectadas en líneas individuales (PTS, REB, AST, 3PM, PRA) y combinadas correlacionadas para casas peruanas mediante Cópulas Elípticas Student-t y Calibración Conformal Venn-Abers.
           </p>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30">
-            🇵🇪 RETAbet SGP Activo
+            🇵🇪 Análisis SGP RETAbet (Simulación)
           </span>
           <span class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-purple-500/15 text-purple-400 border border-purple-500/30">
             Filtro Conformal: Lower-Bound EV > 3%
@@ -1232,12 +1232,12 @@ def generate_interactive_html_dashboard(
                 <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
                   <div class="text-[var(--muted-foreground)]">Impulso Correlación</div>
                   <div class="text-base font-bold mt-0.5 text-emerald-400">+${{Number(p.correlation_boost_pct).toFixed(1)}}%</div>
-                  <div class="text-[10px] text-[var(--muted-foreground)]">Cópula Gaussiana</div>
+                  <div class="text-[10px] text-[var(--muted-foreground)]">Cópula Student-t</div>
                 </div>
                 <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
                   <div class="text-[var(--muted-foreground)]">Valor Esperado</div>
                   <div class="text-base font-bold mt-0.5 text-purple-400">+${{Number(p.ev_pct).toFixed(1)}}% EV</div>
-                  <div class="text-[10px] text-[var(--muted-foreground)]">Edge Sintético</div>
+                  <div class="text-[10px] text-[var(--muted-foreground)]">Edge Simulado (Student-t)</div>
                 </div>
                 <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 text-center">
                   <div class="text-[var(--muted-foreground)]">Kelly Stake Sugerido</div>

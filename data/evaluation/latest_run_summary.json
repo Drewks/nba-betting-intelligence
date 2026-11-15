@@ -1,7 +1,7 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "settle_and_calibrate",
-  "timestamp_utc": "2026-11-14T13:49:18Z",
+  "timestamp_utc": "2026-11-15T02:13:52Z",
   "ingested_dates": [
     "2026-11-12",
     "2026-11-13",
@@ -45,12 +45,12 @@
     "won_count": 12,
     "lost_count": 16,
     "push_count": 0,
-    "max_drawdown_pen": 10.2408,
-    "overall_brier_score": 0.218255,
+    "max_drawdown_pen": 9.2408,
+    "overall_brier_score": null,
     "baseline_brier_score": 0.250648,
-    "overall_log_loss": 0.623184,
+    "overall_log_loss": null,
     "market_brier_score": 0.215265,
-    "model_brier_on_market_subset": 0.218255,
+    "model_brier_on_market_subset": null,
     "market_comparison_sample_size": 96,
     "history_integrity": {
       "missing_rows_total": 0,
@@ -67,7 +67,8 @@
     },
     "baseline_log_loss": 0.695917,
     "mean_clv_pct": -2.1706,
-    "clv_governor_factor": 1.0
+    "clv_governor_factor": 1.0,
+    "by_market": null
   },
   "sources_info": {
     "espn_public_api": {
@@ -162,12 +163,25 @@
   },
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
+    "model_version_id": "model_f_ensemble_v8",
+    "run_manifest_id": null,
+    "commit_sha": "aab1aafc22a19dca1a4ce240b75616abd9975c83",
+    "config_hash": "0530545005505767af2d374cec2470aec6b30942588bddaba4f8db3cffaefb72",
     "sportradar_status": "CONFIGURED_RATE_LIMITED",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
-    "playwright_status": "OPERATIONAL",
+    "playwright_status": "Paquete instalado v1.64.1",
     "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)",
-    "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
+    "obsidian_vault_path": "NBA"
   },
   "reproducibility_verified": true,
-  "reproducibility_note": "VERIFIED_DETERMINISTIC (max_prob_diff=0.00e+00 <= 1e-12, weights_sha256=f3c6f1817194, schema_sha256=13596d3a31d7)"
+  "reproducibility_note": "VERIFIED_DETERMINISTIC (max_prob_diff=0.00e+00 <= 1e-12, weights_sha256=f3c6f1817194, schema_sha256=13596d3a31d7)",
+  "run_manifest": {
+    "run_id": null,
+    "commit_sha": "aab1aafc22a19dca1a4ce240b75616abd9975c83",
+    "model_version_id": "model_f_ensemble_v8",
+    "ensemble_version": "model_f_ensemble_v8",
+    "config_hash": "0530545005505767af2d374cec2470aec6b30942588bddaba4f8db3cffaefb72",
+    "config_version": "model_f_ensemble_v8",
+    "snapshot_source": "pre_audit_artifact_refresh_readonly_db_copy"
+  }
 }

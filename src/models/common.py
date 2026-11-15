@@ -131,7 +131,7 @@ def iter_expanding_temporal_oof_folds(
             continue
         val_indices = [i for grp in fold_val_groups for i in grp]
         first_val_idx = val_indices[0]
-        train_indices = list(range(0, first_val_idx))
+        train_indices = list(range(first_val_idx))
         if not train_indices:
             continue
         fold_cutoff = str(sorted_games[first_val_idx]["game_start_time"])

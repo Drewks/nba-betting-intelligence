@@ -19,6 +19,7 @@ from src.evaluation.clv import summarize_clv
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
     VennAbersConformalInterval,
+    calibrate_binary_with_push,
     compute_brier_score,
     compute_log_loss,
     compute_reliability_curve,
@@ -485,15 +486,18 @@ class WalkForwardBacktester:
                         p_tot_k = model_f.predict_total_points(g, prior_final_games, lv_k)
                         r_over_k = float(p_tot_k["p_over"])
                         p_push_k = float(p_tot_k.get("p_push", 0.0))
-                        c_over_k = float(tot_calibrator.transform_single(r_over_k))
-                        if p_push_k > 0.0:
-                            c_over_k = min(c_over_k, 1.0 - p_push_k)
+                        cal_tot_res = calibrate_binary_with_push(
+                            r_over_k,
+                            p_push=p_push_k,
+                            calibrator=tot_calibrator,
+                            va_calibrator=tot_va,
+                        )
                         tot_eval_cache[lv_k] = {
                             "pred": p_tot_k,
                             "raw_over": r_over_k,
-                            "cal_over": c_over_k,
+                            "cal_over": float(cal_tot_res["cal_prob"]),
                             "p_push": p_push_k,
-                            "va": tot_va.predict_interval(r_over_k),
+                            "va": cal_tot_res["va_interval"],
                         }
 
                 sp_odds = [o for o in game_odds if o["market"] == "spread" and o.get("line_value") is not None]
@@ -504,15 +508,18 @@ class WalkForwardBacktester:
                         p_sp_k = model_f.predict_spread(g, prior_final_games, h_line_k)
                         r_sp_home = float(p_sp_k["p_cover_home"])
                         p_push_sp = float(p_sp_k.get("p_push", 0.0))
-                        c_sp_home = float(sp_calibrator.transform_single(r_sp_home))
-                        if p_push_sp > 0.0:
-                            c_sp_home = min(c_sp_home, 1.0 - p_push_sp)
+                        cal_sp_res = calibrate_binary_with_push(
+                            r_sp_home,
+                            p_push=p_push_sp,
+                            calibrator=sp_calibrator,
+                            va_calibrator=sp_va,
+                        )
                         sp_eval_cache[h_line_k] = {
                             "pred": p_sp_k,
                             "raw_home": r_sp_home,
-                            "cal_home": c_sp_home,
+                            "cal_home": float(cal_sp_res["cal_prob"]),
                             "p_push": p_push_sp,
-                            "va": sp_va.predict_interval(r_sp_home),
+                            "va": cal_sp_res["va_interval"],
                         }
 
                 market_p_home: float | None = None
@@ -835,13 +842,14 @@ class WalkForwardBacktester:
                     "model_a_ml": base_model.predict_moneyline(g_full, prior_g)["p_home"],
                     "model_raw_ml": ml_raw,
                     "model_cal_ml": ml_cal,
-                    "model_c_ml": ml_cal if ml_cal is not None else ml_anch,
+                    # F-008: Never conflate missing calibrated_model_probability (pre-m012) with market_anchored_probability
+                    "model_c_ml": ml_cal,
                     "model_anchored_ml": ml_anch,
                     "market_ml": ml_mkt,
                     "model_a_tot": base_model.predict_total_points(g_full, prior_g, line_v)["p_over"],
                     "model_raw_tot": tot_raw,
                     "model_cal_tot": tot_cal,
-                    "model_d_tot": tot_cal if tot_cal is not None else tot_anch,
+                    "model_d_tot": tot_cal,
                     "model_anchored_tot": tot_anch,
                     "market_tot": tot_mkt,
                     "model_raw_sp": sp_raw,
@@ -966,23 +974,41 @@ class WalkForwardBacktester:
         recs = model_comparison_records
         if recs:
             y_ml = [int(r["home_won"]) for r in recs]
-            tot_recs = [r for r in recs if r.get("has_observed_tot_line", True) and r.get("model_d_tot") is not None and r.get("model_a_tot") is not None]
-            y_tot = [int(r["over_hit"]) for r in tot_recs]
+            tot_base_recs = [
+                r for r in recs
+                if r.get("has_observed_tot_line", True) and r.get("model_a_tot") is not None
+            ]
+            cal_ml_recs = [r for r in recs if r.get("model_c_ml") is not None]
+            cal_tot_recs = [r for r in tot_base_recs if r.get("model_d_tot") is not None]
+
             model_metrics["baseline_naive_ml"] = self._score([r["model_a_ml"] for r in recs], y_ml)
-            model_metrics["ensemble_calibrated_ml"] = self._score([r["model_c_ml"] for r in recs], y_ml, with_curve=True)
-            if tot_recs:
-                model_metrics["baseline_naive_totals"] = self._score([r["model_a_tot"] for r in tot_recs], y_tot)
-                model_metrics["ensemble_calibrated_totals"] = self._score([r["model_d_tot"] for r in tot_recs], y_tot, with_curve=True)
+            if cal_ml_recs:
+                model_metrics["ensemble_calibrated_ml"] = self._score(
+                    [float(r["model_c_ml"]) for r in cal_ml_recs],
+                    [int(r["home_won"]) for r in cal_ml_recs],
+                    with_curve=True,
+                )
+            if tot_base_recs:
+                model_metrics["baseline_naive_totals"] = self._score(
+                    [r["model_a_tot"] for r in tot_base_recs],
+                    [int(r["over_hit"]) for r in tot_base_recs],
+                )
+            if cal_tot_recs:
+                model_metrics["ensemble_calibrated_totals"] = self._score(
+                    [float(r["model_d_tot"]) for r in cal_tot_recs],
+                    [int(r["over_hit"]) for r in cal_tot_recs],
+                    with_curve=True,
+                )
             for field, key, subset, y_key in (
                 ("model_raw_ml", "ensemble_raw_ml", recs, "home_won"),
                 ("model_cal_ml", "ensemble_calibrated_model_ml", recs, "home_won"),
                 ("model_anchored_ml", "ensemble_market_anchored_ml", recs, "home_won"),
                 ("model_b_ml", "elo_ml", recs, "home_won"),
                 ("model_e_ml", "lightgbm_ml", recs, "home_won"),
-                ("model_raw_tot", "ensemble_raw_totals", tot_recs, "over_hit"),
-                ("model_cal_tot", "ensemble_calibrated_model_totals", tot_recs, "over_hit"),
-                ("model_anchored_tot", "ensemble_market_anchored_totals", tot_recs, "over_hit"),
-                ("model_e_tot", "lightgbm_totals", tot_recs, "over_hit"),
+                ("model_raw_tot", "ensemble_raw_totals", tot_base_recs, "over_hit"),
+                ("model_cal_tot", "ensemble_calibrated_model_totals", tot_base_recs, "over_hit"),
+                ("model_anchored_tot", "ensemble_market_anchored_totals", tot_base_recs, "over_hit"),
+                ("model_e_tot", "lightgbm_totals", tot_base_recs, "over_hit"),
                 ("model_raw_sp", "ensemble_raw_spread", recs, "spread_hit"),
                 ("model_cal_sp", "ensemble_calibrated_model_spread", recs, "spread_hit"),
                 ("market_sp", "market_devig_spread", recs, "spread_hit"),
@@ -1003,21 +1029,23 @@ class WalkForwardBacktester:
                         )),
                     )
 
-            sub = [
+            sub_mkt = [
                 r for r in recs
                 if r.get("market_ml") is not None
                 and r.get("market_tot") is not None
                 and r.get("has_observed_tot_line", True)
-                and r.get("model_d_tot") is not None
             ]
+            sub_cal = [
+                r for r in sub_mkt
+                if r.get("model_c_ml") is not None and r.get("model_d_tot") is not None
+            ]
+            sub = sub_cal if sub_cal else sub_mkt
             market_subset_n = len(sub)
             if sub:
                 ys_ml = [int(r["home_won"]) for r in sub]
                 ys_tot = [int(r["over_hit"]) for r in sub]
                 m_ml = self._score([float(r["market_ml"]) for r in sub], ys_ml, with_curve=True)
                 m_tot = self._score([float(r["market_tot"]) for r in sub], ys_tot, with_curve=True)
-                e_ml = self._score([float(r["model_c_ml"]) for r in sub], ys_ml, with_curve=True)
-                e_tot = self._score([float(r["model_d_tot"]) for r in sub], ys_tot, with_curve=True)
                 model_metrics["market_devig_ml"] = m_ml
                 model_metrics["market_devig_totals"] = m_tot
                 if all(r.get("model_raw_ml") is not None and r.get("model_raw_tot") is not None for r in sub):
@@ -1031,26 +1059,31 @@ class WalkForwardBacktester:
                     model_metrics["common_subset_market_anchored_totals"] = self._score([float(r["model_anchored_tot"]) for r in sub], ys_tot, with_curve=True)
                 market_brier = round(0.5 * (m_ml["brier_score"] + m_tot["brier_score"]), 6)
                 market_ll = round(0.5 * (m_ml["log_loss"] + m_tot["log_loss"]), 6)
-                model_brier_mkt_subset = round(0.5 * (e_ml["brier_score"] + e_tot["brier_score"]), 6)
-                model_ll_mkt_subset = round(0.5 * (e_ml["log_loss"] + e_tot["log_loss"]), 6)
+                if sub_cal:
+                    e_ml = self._score([float(r["model_c_ml"]) for r in sub_cal], ys_ml, with_curve=True)
+                    e_tot = self._score([float(r["model_d_tot"]) for r in sub_cal], ys_tot, with_curve=True)
+                    model_metrics["common_subset_ensemble_ml"] = e_ml
+                    model_metrics["common_subset_ensemble_totals"] = e_tot
+                    model_brier_mkt_subset = round(0.5 * (e_ml["brier_score"] + e_tot["brier_score"]), 6)
+                    model_ll_mkt_subset = round(0.5 * (e_ml["log_loss"] + e_tot["log_loss"]), 6)
 
-            ens_ml = model_metrics["ensemble_calibrated_ml"]
+            ens_ml = model_metrics.get("ensemble_calibrated_ml")
             ens_tot = model_metrics.get("ensemble_calibrated_totals")
-            if ens_tot is not None:
-                overall_brier = round(0.5 * (ens_ml["brier_score"] + ens_tot["brier_score"]), 6)
-                baseline_brier = round(
-                    0.5 * (model_metrics["baseline_naive_ml"]["brier_score"] + model_metrics["baseline_naive_totals"]["brier_score"]), 6
-                )
-                overall_ll = round(0.5 * (ens_ml["log_loss"] + ens_tot["log_loss"]), 6)
-                baseline_ll = round(
-                    0.5 * (model_metrics["baseline_naive_ml"]["log_loss"] + model_metrics["baseline_naive_totals"]["log_loss"]), 6
-                )
-                overall_ece = round(0.5 * (ens_ml["ece"] + ens_tot["ece"]), 6)
+            base_ml_m = model_metrics["baseline_naive_ml"]
+            base_tot_m = model_metrics.get("baseline_naive_totals")
+            if base_tot_m is not None:
+                baseline_brier = round(0.5 * (base_ml_m["brier_score"] + base_tot_m["brier_score"]), 6)
+                baseline_ll = round(0.5 * (base_ml_m["log_loss"] + base_tot_m["log_loss"]), 6)
             else:
+                baseline_brier = round(base_ml_m["brier_score"], 6)
+                baseline_ll = round(base_ml_m["log_loss"], 6)
+            if ens_ml is not None and ens_tot is not None:
+                overall_brier = round(0.5 * (ens_ml["brier_score"] + ens_tot["brier_score"]), 6)
+                overall_ll = round(0.5 * (ens_ml["log_loss"] + ens_tot["log_loss"]), 6)
+                overall_ece = round(0.5 * (ens_ml["ece"] + ens_tot["ece"]), 6)
+            elif ens_ml is not None:
                 overall_brier = round(ens_ml["brier_score"], 6)
-                baseline_brier = round(model_metrics["baseline_naive_ml"]["brier_score"], 6)
                 overall_ll = round(ens_ml["log_loss"], 6)
-                baseline_ll = round(model_metrics["baseline_naive_ml"]["log_loss"], 6)
                 overall_ece = round(ens_ml["ece"], 6)
         oos_seasons = len({r["season"] for r in recs}) if recs else 0
 

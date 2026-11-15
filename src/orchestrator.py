@@ -1,5 +1,5 @@
 """
-Main Coordinator (`orchestrator` on Gemini Argon):
+Main Coordinator (`orchestrator`):
 Controls the 12-phase sequential workflow, waits for each agent's completion before invoking the next,
 enforces at most 2 controlled retries on failure, and halts for human intervention if errors persist.
 """
@@ -22,7 +22,7 @@ from src.agents.specialized_agents import (
 )
 from src.backtesting.backtester import WalkForwardBacktester
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
-from src.paper_trading.engine import PaperTradingEngine
+from src.paper_trading.engine import build_production_engine
 from src.reporting.reporter import (
     export_bets_and_tracking_dashboard,
     generate_audit_report,
@@ -54,14 +54,7 @@ class Orchestrator:
         self.max_retries = max_retries
         self.run_id = f"RUN_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6].upper()}"
 
-        self.paper_engine = PaperTradingEngine(
-            db=self.db,
-            initial_bankroll_pen=100.00,
-            base_stake_pen=1.00,
-            max_stake_pen=1.00,
-            max_selections_per_matchday=3,
-            min_ev_threshold=0.05,
-        )
+        self.paper_engine = build_production_engine(self.db)
         self.scout_agent = NBADataScoutAgent(self.db)
         self.visual_agent = VisualResearcherAgent()
         self.calibrator_agent = ModelCalibratorAgent()

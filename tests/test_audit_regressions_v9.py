@@ -592,14 +592,14 @@ def test_t012_backtester_compares_model_vs_market_on_exact_matched_subset(tmp_pa
         {
             "game_id": "G1", "season": "2025-26", "matchday_date": "2026-01-01",
             "home_won": 1, "over_hit": 1, "has_observed_tot_line": True,
-            "model_a_ml": 0.55, "model_c_ml": 0.60, "model_raw_ml": 0.64, "model_cal_ml": 0.62, "model_anchored_ml": 0.60, "market_ml": 0.58,
-            "model_a_tot": 0.50, "model_d_tot": 0.57, "model_raw_tot": 0.60, "model_cal_tot": 0.58, "model_anchored_tot": 0.57, "market_tot": 0.54,
+            "model_a_ml": 0.55, "model_c_ml": 0.62, "model_raw_ml": 0.64, "model_cal_ml": 0.62, "model_anchored_ml": 0.60, "market_ml": 0.58,
+            "model_a_tot": 0.50, "model_d_tot": 0.58, "model_raw_tot": 0.60, "model_cal_tot": 0.58, "model_anchored_tot": 0.57, "market_tot": 0.54,
         },
         {
             "game_id": "G2", "season": "2025-26", "matchday_date": "2026-01-02",
             "home_won": 0, "over_hit": 0, "has_observed_tot_line": True,
-            "model_a_ml": 0.50, "model_c_ml": 0.42, "model_raw_ml": 0.40, "model_cal_ml": 0.41, "model_anchored_ml": 0.42, "market_ml": 0.45,
-            "model_a_tot": 0.50, "model_d_tot": 0.44, "model_raw_tot": 0.42, "model_cal_tot": 0.43, "model_anchored_tot": 0.44, "market_tot": 0.46,
+            "model_a_ml": 0.50, "model_c_ml": 0.41, "model_raw_ml": 0.40, "model_cal_ml": 0.41, "model_anchored_ml": 0.42, "market_ml": 0.45,
+            "model_a_tot": 0.50, "model_d_tot": 0.43, "model_raw_tot": 0.42, "model_cal_tot": 0.43, "model_anchored_tot": 0.44, "market_tot": 0.46,
         },
         # 1 game missing real Totals line -> excluded from matched comparison & Totals evaluation
         {
@@ -618,6 +618,8 @@ def test_t012_backtester_compares_model_vs_market_on_exact_matched_subset(tmp_pa
     assert mc["common_subset_raw_ml"]["sample_size"] == 2
     assert mc["common_subset_calibrated_model_ml"]["sample_size"] == 2
     assert mc["common_subset_market_anchored_ml"]["sample_size"] == 2
+    assert mc["common_subset_ensemble_ml"]["brier_score"] == mc["common_subset_calibrated_model_ml"]["brier_score"]
+    assert mc["common_subset_ensemble_ml"]["brier_score"] != mc["common_subset_market_anchored_ml"]["brier_score"]
 
 
 def test_t013_spread_validation_scraping_and_settlement() -> None:
@@ -775,6 +777,11 @@ def test_t018_workflows_least_privilege_and_ci_branch_gate() -> None:
     pages_perms = jobs["deploy-pages"]["permissions"]
     assert pages_perms == {"contents": "read", "pages": "write", "id-token": "write"}
 
+    auto_raw = (PROJECT_ROOT / ".github" / "workflows" / "nba_cloud_automation.yml").read_text(encoding="utf-8")
+    assert "git push origin main" not in auto_raw
+    assert "state-live" in auto_raw
+    assert "nba-pages-docs" in auto_raw
+
     ci_wf = yaml.safe_load(
         (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     )
@@ -840,3 +847,177 @@ def test_t020_readme_matches_active_model_config() -> None:
     assert f"`allow_player_props_betting: {str(cfg.risk.allow_player_props_betting).lower()}`" in readme
     assert "50% Kelly" not in readme
     assert "EV <= 5%" not in readme
+
+
+def test_t021_pre_m012_db_rows_never_conflate_calibrated_with_market_anchored(tmp_path: Path) -> None:
+    """T-021 (F-008): Legacy pre-m012 rows with NULL calibrated_model_probability fail closed and never masquerade as market_anchored."""
+    db = DatabaseManager(tmp_path / "pre_m012.sqlite3")
+    db.execute_insert(
+        "INSERT INTO model_versions (model_version_id, model_family, market, train_start_date, train_end_date, trained_at, hyperparameters_json, approved_by) "
+        "VALUES ('model_f_ensemble_v8', 'f', 'moneyline', '2026-01-01', '2026-02-01', '2026-02-01T00:00:00Z', '{}', 'test')"
+    )
+    games_data = [
+        ("G_PRE_1", "2026-02-10", "2026-02-11T00:00:00Z", "BOS", "NYK", 112, 102, 2.15, 220.5),
+        ("G_PRE_2", "2026-02-11", "2026-02-12T00:00:00Z", "DEN", "DAL", 104, 111, 1.85, 224.5),
+    ]
+    for idx, (gid, mdate, gtime, ht, at, hs, as_, line_tot_odds, tot_line) in enumerate(games_data):
+        db.execute_insert(
+            """
+            INSERT INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
+                away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
+                features_available_at, source_provider, ingested_at
+            ) VALUES (?, '2025-26', ?, ?, ?, ?, 'FINAL', ?, ?, 115.0, 111.0, 99.0, 113.0, 112.0, 98.5, 2, 2, '2026-02-09T12:00:00Z', 'espn', '2026-02-09T12:00:00Z')
+            """,
+            (gid, mdate, gtime, ht, at, hs, as_),
+        )
+        db.execute_insert(
+            """
+            INSERT INTO predictions (
+                prediction_id, game_id, market, selection, model_version_id, raw_probability,
+                calibrated_probability, uncertainty_std, implied_prob_gross, implied_prob_fair,
+                decimal_odds_used, odds_provider, odds_captured_at, ev_unit, ev_pct, emitted_at,
+                features_snapshot_json, raw_model_probability, calibrated_model_probability,
+                market_fair_probability, market_anchored_probability
+            ) VALUES (?, ?, 'moneyline', 'HOME', 'model_f_ensemble_v8', ?, ?, 0.05, 0.52, 0.50, 1.95, 'DraftKings', '2026-02-09T20:00:00Z', 0.02, 2.0, '2026-02-09T20:00:00Z', '{}', ?, NULL, 0.50, ?)
+            """,
+            (f"PM_{idx}", gid, 0.64 if idx == 0 else 0.40, 0.54 if idx == 0 else 0.45, 0.64 if idx == 0 else 0.40, 0.54 if idx == 0 else 0.45),
+        )
+        db.execute_insert(
+            """
+            INSERT INTO predictions (
+                prediction_id, game_id, market, selection, line_value, model_version_id, raw_probability,
+                calibrated_probability, uncertainty_std, implied_prob_gross, implied_prob_fair,
+                decimal_odds_used, odds_provider, odds_captured_at, ev_unit, ev_pct, emitted_at,
+                features_snapshot_json, raw_model_probability, calibrated_model_probability,
+                market_fair_probability, market_anchored_probability
+            ) VALUES (?, ?, 'total_points', 'OVER', ?, 'model_f_ensemble_v8', ?, ?, 0.05, 0.52, 0.50, ?, 'DraftKings', '2026-02-09T20:00:00Z', 0.02, 2.0, '2026-02-09T20:00:00Z', '{}', ?, NULL, 0.50, ?)
+            """,
+            (f"PT_{idx}", gid, tot_line, 0.58 if idx == 0 else 0.42, 0.52 if idx == 0 else 0.47, line_tot_odds, 0.58 if idx == 0 else 0.42, 0.52 if idx == 0 else 0.47),
+        )
+
+    bt = WalkForwardBacktester(db, PaperTradingEngine(db))
+    recs = bt._reconstruct_comparison_records_from_db()
+    assert len(recs) == 2
+    assert all(r["model_c_ml"] is None for r in recs)
+    assert all(r["model_d_tot"] is None for r in recs)
+
+    metrics = bt.compute_comprehensive_metrics(model_comparison_records=recs, closing_rows=[])
+    mc = metrics["model_comparison"]
+    assert "ensemble_calibrated_ml" not in mc
+    assert "ensemble_calibrated_totals" not in mc
+    assert "common_subset_market_anchored_ml" in mc
+    assert metrics["overall_brier_score"] is None
+    assert metrics["model_brier_on_market_subset"] is None
+    assert metrics["exit_gates_evaluation"]["gates"]["gate_3_calibration_non_inferior_to_baseline"]["passed"] is False
+    assert metrics["exit_gates_evaluation"]["gates"]["gate_10_non_inferior_to_devigged_market"]["passed"] is False
+
+
+def test_t022_calibrate_binary_with_push_preserves_push_budget() -> None:
+    """T-022: Conditional push calibration maps into decisive space and scales intervals coherently by (1 - p_push)."""
+    from src.calibration.calibrator import ProbabilityCalibrator, calibrate_binary_with_push
+
+    cal = ProbabilityCalibrator(method="logistic", min_samples_logistic=10)
+    va = VennAbersConformalInterval(window=200, min_samples=10)
+    rng = np.random.default_rng(99)
+    hist = [
+        {"game_start_time": f"2026-01-{1 + (i % 25):02d}T12:00:00Z", "raw_probability": float(p), "outcome": int(rng.random() < p)}
+        for i, p in enumerate(rng.uniform(0.35, 0.70, size=40))
+    ]
+    cal.fit(hist, "2026-02-01T00:00:00Z")
+    va.fit(hist, "2026-02-01T00:00:00Z")
+
+    no_push = calibrate_binary_with_push(0.58, p_push=0.0, calibrator=cal, va_calibrator=va)
+    assert no_push["cal_prob"] == pytest.approx(cal.transform_single(0.58), abs=1e-9)
+
+    p_push = 0.08
+    with_push = calibrate_binary_with_push(0.54, p_push=p_push, calibrator=cal, va_calibrator=va)
+    assert with_push["cal_prob"] <= 1.0 - p_push + 1e-9
+    va_int = with_push["va_interval"]
+    assert va_int is not None and va_int["is_conformal"] is True
+    assert 0.0 <= va_int["p0"] <= va_int["p_va"] <= va_int["p1"] <= 1.0 - p_push + 1e-6
+
+
+def test_t023_reporting_and_orchestrator_config_and_copula_honesty(tmp_path: Path) -> None:
+    """T-023: Orchestrator uses build_production_engine and reporting labels match Student-t copula & runtime config."""
+    from src.orchestrator import Orchestrator
+    from src.reporting.audit_report import generate_audit_report
+    from src.reporting.dashboard_generator import generate_interactive_html_dashboard
+    from src.reporting.obsidian_sync import sync_obsidian_vault
+
+    cfg = load_config()
+    orch = Orchestrator(db_path=tmp_path / "orch.sqlite3", reports_dir=tmp_path / "r", obsidian_vault_dir=tmp_path / "n")
+    assert orch.paper_engine.kelly_fraction == cfg.risk.kelly_fraction
+    assert orch.paper_engine.max_stake_pen == cfg.risk.max_stake_pen
+    assert orch.paper_engine.min_ev_threshold == cfg.risk.min_ev_threshold
+
+    audit_md = generate_audit_report(
+        {
+            "leakage_violations_count": 0,
+            "bankroll_reconciled": True,
+            "immutability_triggers_verified": True,
+            "history_integrity": {"missing_rows_total": 0, "missing_rows_by_table": {}},
+            "auditor_approved": False,
+            "exit_gates_evaluation": {
+                "auto_transition_to_real_money": False,
+                "recommendation": "REMAIN_IN_PAPER_TRADING",
+                "passed_count": 3,
+                "total_gates": 10,
+                "gates": {
+                    "gate_3_calibration_non_inferior_to_baseline": {"passed": False, "observed": "n/d", "required": "<= baseline"},
+                    "gate_10_non_inferior_to_devigged_market": {"passed": False, "observed": "n/d", "required": "<= market"},
+                },
+            },
+        },
+        {"playwright_status": "Playwright runtime verificado dinámicamente"},
+    )
+    assert "Gemini Argon" not in audit_md
+    assert "Playwright runtime verificado dinámicamente" in audit_md
+    assert "aún no supera simultáneamente las puertas estadísticas" in audit_md
+    assert cfg.model.version_id in audit_md
+
+    vault = sync_obsidian_vault(
+        tmp_path / "vault",
+        daily_report_md="# Daily",
+        weekly_report_md="# Weekly",
+        audit_report_md=audit_md,
+        metrics={
+            "current_settled_bankroll_pen": 100.0,
+            "net_profit_pen": 0.0,
+            "roi_pct": 0.0,
+            "settled_bets_count": 0,
+            "exit_gates_evaluation": {"recommendation": "REMAIN_IN_PAPER_TRADING"},
+        },
+        environment_status={},
+        target_date="2026-11-14",
+    )
+    sgp_note = (tmp_path / "vault" / "00-Inbox/02-SGP-Correlated-Parlays.md").read_text(encoding="utf-8")
+    models_note = (tmp_path / "vault" / "06-Models/Model-Catalog-and-Versions.md").read_text(encoding="utf-8")
+    sources_note = (tmp_path / "vault" / "01-Sources/Data-Sources-and-Limitations.md").read_text(encoding="utf-8")
+    assert "00-Inbox/02-SGP-Correlated-Parlays.md" in vault
+    assert "Gaussiana" not in sgp_note
+    assert "Student-t" in sgp_note
+    assert "model_b_elo_v2" not in models_note
+    assert cfg.model.version_id in models_note
+    assert "OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY" not in sources_note
+
+    out_html = tmp_path / "dashboard.html"
+    generate_interactive_html_dashboard(
+        {
+            "current_settled_bankroll_pen": 100.0,
+            "net_profit_pen": 0.0,
+            "roi_pct": 0.0,
+            "settled_bets_count": 0,
+            "exit_gates_evaluation": {"gates": {}, "recommendation": "REMAIN_IN_PAPER_TRADING"},
+        },
+        [],
+        [],
+        out_html,
+        "2026-11-14 15:00 PET",
+        player_props=[],
+    )
+    html = out_html.read_text(encoding="utf-8")
+    assert "Cópulas Gaussianas" not in html
+    assert "Edge Sintético" not in html
+    assert "Cópula Student-t" in html

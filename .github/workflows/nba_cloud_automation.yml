@@ -36,7 +36,7 @@ jobs:
       contents: write
 
     steps:
-      - name: 1. Clonar repositorio con historial SQLite y Vault Obsidian (Nativo sin Node.js)
+      - name: 1. Clonar código de main y restaurar estado vivo desde state-live
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -44,6 +44,21 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git fetch --depth=1 origin main
           git checkout -B main origin/main
+          STATE_BASE_SHA=""
+          if git ls-remote --exit-code --heads origin state-live >/dev/null 2>&1; then
+            git fetch --depth=1 origin state-live
+            STATE_BASE_SHA="$(git rev-parse origin/state-live)"
+            for state_path in \
+              data/nba_intelligence.sqlite3 \
+              data/evaluation/dispatched_telegram_alerts.json \
+              data/evaluation/telegram_last_update_id.txt \
+              data/visual_rag/latest_visual_context.json; do
+              if git cat-file -e "${STATE_BASE_SHA}:${state_path}" 2>/dev/null; then
+                git checkout "${STATE_BASE_SHA}" -- "${state_path}"
+              fi
+            done
+          fi
+          echo "STATE_BASE_SHA=${STATE_BASE_SHA}" >> "$GITHUB_ENV"
 
       - name: 2. Instalar uv y configurar Python 3.12 (Nativo sin Node.js)
         run: |
@@ -55,8 +70,11 @@ jobs:
           uv sync --extra dev --python 3.12
           uv run playwright install chromium
 
-      - name: 4. Ejecutar suite de pruebas de integridad y anti-leakage
-        run: uv run pytest
+      - name: 4. Ejecutar lint, type check y suite de pruebas
+        run: |
+          uv run ruff check src/ scripts/ tests/
+          uv run mypy src/
+          uv run pytest
 
       - name: 5. Ejecutar Ciclo de Inteligencia, Modelos y Despacho a Telegram
         env:
@@ -95,39 +113,56 @@ jobs:
 
       - name: 6. Publicar Tablero de Pronósticos, Semáforo y Auditoría en el Summary de GitHub Actions
         run: |
-          cat SEGUIMIENTO_APUESTAS.md >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          cat reports/daily_report.md >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          cat reports/audit_report.md >> $GITHUB_STEP_SUMMARY
+          for summary_file in SEGUIMIENTO_APUESTAS.md reports/daily_report.md reports/audit_report.md; do
+            if [ -f "$summary_file" ]; then
+              cat "$summary_file" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "---" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
 
-      - name: 6b. Checkpoint WAL y optimización de base de datos SQLite
+      - name: 6b. Checkpoint WAL, optimización de base de datos SQLite y preparación de Pages
         run: |
           uv run python -c "from src.storage.db import DatabaseManager; db = DatabaseManager('data/nba_intelligence.sqlite3'); db.checkpoint(truncate=True)"
           uv run python -c "import sqlite3; conn = sqlite3.connect('data/nba_intelligence.sqlite3'); conn.execute('VACUUM;'); conn.close()"
+          mkdir -p docs
+          if [ -f "reports/dashboard.html" ]; then
+            cp reports/dashboard.html docs/index.html
+          fi
+          touch docs/.nojekyll
 
-      - name: 7. Guardar estado (SQLite, CSV, Alerta de Madurez, Reportes, Evaluación y Vault Obsidian)
+      - name: 7. Guardar estado runtime en rama state-live (respeta protección de main)
         run: |
           git config user.name "nba-intelligence-bot"
           git config user.email "nba-intelligence-bot@users.noreply.github.com"
-          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/visual_rag/latest_visual_context.json data/nba_intelligence.sqlite3 data/evaluation/*.json reports/*.md reports/dashboard.html docs/index.html NBA/
-          if git diff --staged --quiet; then
-            echo "Sin cambios nuevos para confirmar."
+          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/visual_rag/latest_visual_context.json data/nba_intelligence.sqlite3 data/evaluation/*.json reports/*.md reports/dashboard.html docs/.nojekyll docs/index.html NBA/
+          TREE_SHA="$(git write-tree)"
+          if [ -n "${STATE_BASE_SHA:-}" ] && git diff --quiet "${STATE_BASE_SHA}" "${TREE_SHA}" -- \
+            data/nba_intelligence.sqlite3 SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv \
+            data/readiness_status.json data/visual_rag/latest_visual_context.json \
+            data/evaluation reports docs NBA; then
+            echo "Sin cambios nuevos de estado para confirmar en state-live."
           else
-            git commit -m "chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]"
-            # The SQLite audit database is binary and cannot be merged. If main moved during this run,
-            # abort instead of rebasing/overwriting: losing one cycle is recoverable, losing history is not.
-            git fetch --depth=2 origin main
-            if [ "$(git rev-parse HEAD~1)" != "$(git rev-parse origin/main)" ]; then
-              echo "::error::main changed during the cycle; refusing to overwrite the audit database. Re-run the workflow."
-              exit 1
+            if [ -n "${STATE_BASE_SHA:-}" ]; then
+              git fetch --depth=1 origin state-live
+              if [ "$(git rev-parse origin/state-live)" != "${STATE_BASE_SHA}" ]; then
+                echo "::error::state-live changed concurrently during the cycle; refusing to overwrite the audit database. Re-run the workflow."
+                exit 1
+              fi
+              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -p "$STATE_BASE_SHA" -m 'chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]')"
+            else
+              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -p HEAD -m 'chore(auto-cycle): bootstrap inicial state-live de paper trading S/100 y calibración [skip ci]')"
             fi
-            git push origin main
+            git push origin "${NEW_COMMIT}:refs/heads/state-live"
           fi
+
+      - name: 7a. Subir artefacto web actualizado para GitHub Pages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-pages-docs
+          path: docs/
+          retention-days: 7
 
       - name: 7b. Sincronizar rama gh-pages con el nuevo dashboard
         uses: peaceiris/actions-gh-pages@v4
@@ -149,17 +184,15 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Clonar repositorio
-        uses: actions/checkout@v4
+      - name: 1. Descargar artefacto web actualizado del ciclo
+        uses: actions/download-artifact@v4
         with:
-          ref: main
+          name: nba-pages-docs
+          path: docs/
 
-      - name: 1b. Asegurar existencia de docs/index.html y .nojekyll
+      - name: 1b. Asegurar existencia de docs/.nojekyll
         run: |
           mkdir -p docs
-          if [ -f "reports/dashboard.html" ]; then
-            cp reports/dashboard.html docs/index.html
-          fi
           touch docs/.nojekyll
 
       - name: 2. Configurar entorno de GitHub Pages

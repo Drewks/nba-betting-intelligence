@@ -33,6 +33,7 @@ def sync_obsidian_vault(
     else:
         staking_desc = f"Stake fijo S/{float(risk_cfg.base_stake_pen):.2f}"
 
+    active_model_id = str((metrics.get("run_manifest") or {}).get("model_version_id") or load_config().model.version_id)
     files_to_write: dict[str, str] = {
         "00-Inbox/00-System-Status.md": (
             f"---\ndate_generated: {now_str}\nstatus: PAPER_TRADING_ACTIVE\nbankroll_initial: 100.00\n"
@@ -53,7 +54,7 @@ def sync_obsidian_vault(
         "00-Inbox/02-SGP-Correlated-Parlays.md": (
             f"---\ndate_generated: {now_str}\ndashboard_type: retabet_sgp_copula_v8\n---\n"
             "# 🎰 Apuestas Correlacionadas SGP (Crea tu Apuesta — RETAbet Perú)\n\n"
-            "> [!NOTE] Simulación de Cópula Gaussiana Bivariada (V8 Fase 3)\n"
+            "> [!NOTE] Simulación de Cópula Student-t Multivariada (V8 Fase 3)\n"
             "> Modela la interdependencia estocástica entre resultados de equipo y props de jugadores (PTS, REB, AST, PRA) "
             "para explotar tablas de correlación rígidas en **RETAbet Perú**.\n\n"
             "```dataview\n"
@@ -111,13 +112,13 @@ def sync_obsidian_vault(
             "- Proporciona calendario oficial, estados de partido (`SCHEDULED`, `FINAL`), estadísticas de equipo y cuotas pre-partido de `DraftKings` (`moneyline` y `total_points`).\n"
             "- Limitación histórica: en partidos históricos finalizados, `pickcenter` refleja la línea archivada sin historial tick-a-tick; por ello el sistema exige `captured_at < game_start_time` para toda captura en vivo.\n\n"
             "## 2. Sportradar NBA API v8 & Synergy Basketball NBA API (`SportradarAdapter`)\n"
-            f"- Estado: `{environment_status.get('sportradar_status', 'OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY')}`.\n"
+            f"- Estado: `{environment_status.get('sportradar_status', 'Adaptador implementado; verificar SPORTRADAR_API_KEY en runtime')}`.\n"
             "- Sincroniza el parte médico oficial de la liga (`league/injuries.json`), los splits tácticos de los 30 equipos (`seasons/2026/REG/standings.json`) y la telemetría de posesiones y jugadas de **Synergy Basketball NBA API** (`/synergy/basketball/nba/games` y `/events`) usando `SPORTRADAR_API_KEY`.\n\n"
             "## 3. TheOddsAPI Multi-Bookmaker Line Shopping (`TheOddsAPIAdapter`)\n"
             "- Escanea en tiempo real hasta 25+ casas de apuestas (`Pinnacle`, `DraftKings`, `FanDuel`, `BetMGM`, `Coolbet`, `Matchbook`, `GTbets`, etc.) para elegir siempre la cuota máxima disponible.\n\n"
             "## 4. Playwright + PixelRAG (`visual_researcher`)\n"
-            f"- Playwright: `{environment_status.get('playwright_status', 'OPERATIONAL (PLAYWRIGHT_CHROMIUM_HEADLESS)')}`.\n"
-            f"- PixelRAG: `{environment_status.get('pixelrag_status', 'OPERATIONAL_NATIVE_TABULAR_RAG')}` indexando lesiones oficiales de Sportradar, perfiles tácticos de Synergy Basketball NBA y tablas DOM de ESPN.\n"
+            f"- Playwright: `{environment_status.get('playwright_status', 'Verificar estado en runtime')}`.\n"
+            f"- PixelRAG: `{environment_status.get('pixelrag_status', 'Pipeline tabular/RAG local (verificar estado en runtime)')}`.\n"
         ),
         "02-Teams/NBA-30-Canonical-Teams.md": (
             f"---\ndate_generated: {now_str}\ntotal_teams: 30\n---\n"
@@ -130,7 +131,7 @@ def sync_obsidian_vault(
             "Consulte el detalle de partidos evaluados y predicciones en `09-Reports/`.\n"
         ),
         f"04-Predictions/Predictions-Summary-{target_date}.md": (
-            f"---\ndate_generated: {now_str}\nmodel_versions: [model_f_ensemble_v8, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]\n---\n"
+            f"---\ndate_generated: {now_str}\nmodel_versions: [{active_model_id}, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]\n---\n"
             "# Historial Auditable de Predicciones\n\n"
             "- Todas las predicciones están protegidas mediante triggers `BEFORE UPDATE` y `BEFORE DELETE` en SQLite (`data/nba_intelligence.sqlite3`).\n"
             "- Prohibido sobrescribir predicciones o cuotas originales.\n"
@@ -149,11 +150,11 @@ def sync_obsidian_vault(
             f"---\ndate_generated: {now_str}\n---\n"
             "# Catálogo de Modelos Cuantitativos (Modelos A–G)\n\n"
             "1. **Modelo A (`model_a_baseline_v1`)**: Frecuencia histórica de victoria local y media/desviación de puntos totales.\n"
-            "2. **Modelo B (`model_b_elo_v2`)**: Sistema Elo secuencial con ajuste por localía (+65 Elo) y descanso (+12 Elo/día).\n"
-            "3. **Modelo C (`model_c_point_margin_v2`)**: Regresión Ridge sobre `Offensive Rating`, `Defensive Rating`, `Net Rating`, `Pace`, descanso y forma reciente.\n"
-            "4. **Modelo D (`model_d_total_points_v2`)**: Distribución normal con **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
-            "5. **Modelo E (`model_e_lightgbm_v2`)**: `LightGBM` evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
-            "6. **Modelo F (`model_f_ensemble_v8`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E y G en escala log-odds.\n"
+            "2. **Modelo B (`model_b_elo_v8`)**: Sistema Elo secuencial con ajuste por localía (+65 Elo) y descanso (+12 Elo/día).\n"
+            "3. **Modelo C (`model_c_point_margin_v8`)**: Regresión Ridge sobre `Offensive Rating`, `Defensive Rating`, `Net Rating`, `Pace`, descanso y forma reciente.\n"
+            "4. **Modelo D (`model_d_total_points_v8`)**: Distribución normal con **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
+            "5. **Modelo E (`model_e_lightgbm_v8`)**: `LightGBM` evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
+            f"6. **Modelo F (`{str((metrics.get('run_manifest') or {}).get('model_version_id') or load_config().model.version_id)}`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E y G en escala log-odds.\n"
             "7. **Modelo G (`model_g_ml_montecarlo_v8`)**: **Simulador Híbrido ML + 10,000 Partidos Monte Carlo por Posesión** (modela `Q1–Q3`, desaceleración por `Blowout/Garbage-Time` en `Q4`, faltas intencionales en los últimos 90s `Clutch Fouling` y prórrogas iterativas `Overtime` + percentiles de simulación `[Q10, Q90]`).\n"
         ),
         "07-Backtesting/Walk-Forward-Backtest-Results.md": weekly_report_md,
