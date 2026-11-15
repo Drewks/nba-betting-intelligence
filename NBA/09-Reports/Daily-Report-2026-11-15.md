@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-15T03:53:30Z
+date_generated: 2026-11-15T04:04:16Z
 report_type: daily_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
 period_evaluated: 2026-11-15
-predictions_count: 70
+predictions_count: 98
 observed_settled_bets: 28
 observed_bankroll_pen: 93.47
 simulation_only: true
@@ -11,7 +11,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-15
 
 ## 1. Metadatos de Ejecución y Estado de Banca Observada
-- **Fecha de generación (UTC)**: `2026-11-15T03:53:30Z`
+- **Fecha de generación (UTC)**: `2026-11-15T04:04:16Z`
 - **Jornada evaluada**: `2026-11-15`
 - **Versión de modelo activa**: `model_f_ensemble_v8` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)
 - **Bankroll virtual inicial**: `S/100.00 PEN`
@@ -19,9 +19,9 @@ simulation_only: true
 - **Modo de apuesta activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%`
 - **Partidos evaluados**: `11`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `70`
+- **Predicciones emitidas**: `98`
 - **Apuestas simuladas registradas en la jornada**: `0` (límite diario: 3, Kelly Fraccional (25%), EV >= 2.0%)
-- **Decisiones NO_BET registradas**: `78`
+- **Decisiones NO_BET registradas**: `116`
 - **Resultados pendientes globales**: `0`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
@@ -31,6 +31,8 @@ simulation_only: true
 
 | Partido | Mercado | Selección | Línea | Cuota Dec. | Prob. Implícita Bruta | Prob. Estimada (Cal.) | EV (%) | Proveedor |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- |
+| `IND @ PHI` | `total_points` | **UNDER** | 224.5 | 1.909 | 0.5238 | 0.5292 | +1.03% | `DraftKings` |
+| `NYK @ TOR` | `total_points` | **UNDER** | 217.5 | 1.935 | 0.5169 | 0.5217 | +0.94% | `Pinnacle [LIVE_API]` |
 | `NYK @ TOR` | `total_points` | **UNDER** | 217.5 | 1.935 | 0.5169 | 0.5217 | +0.94% | `Pinnacle [LIVE_API]` |
 | `NYK @ TOR` | `total_points` | **UNDER** | 217.5 | 1.935 | 0.5169 | 0.5208 | +0.75% | `Pinnacle [LIVE_API]` |
 | `SAS @ UTA` | `total_points` | **UNDER** | 224.5 | 1.909 | 0.5238 | 0.5268 | +0.57% | `Draft Kings` |
@@ -38,9 +40,7 @@ simulation_only: true
 | `SAS @ UTA` | `total_points` | **UNDER** | 223.5 | 1.935 | 0.5169 | 0.5193 | +0.46% | `Pinnacle [LIVE_API]` |
 | `SAS @ UTA` | `total_points` | **UNDER** | 224.5 | 1.909 | 0.5238 | 0.5258 | +0.39% | `DraftKings` |
 | `SAS @ UTA` | `total_points` | **UNDER** | 223.5 | 1.901 | 0.5261 | 0.5268 | +0.15% | `Pinnacle [LIVE_API]` |
-| `SAS @ UTA` | `total_points` | **UNDER** | 223.5 | 1.901 | 0.5261 | 0.5259 | -0.03% | `Pinnacle [LIVE_API]` |
-| `IND @ PHI` | `total_points` | **UNDER** | 223.5 | 1.909 | 0.5238 | 0.5228 | -0.18% | `Draft Kings` |
-| `SAS @ UTA` | `spread` | **HOME** | 17.0 | 1.962 | 0.5098 | 0.4945 | -0.35% | `Pinnacle [LIVE_API]` |
+| `SAS @ UTA` | `total_points` | **UNDER** | 223.5 | 1.901 | 0.5261 | 0.5268 | +0.15% | `Pinnacle [LIVE_API]` |
 
 ## 4. Apuestas Simuladas (Paper Trading — Banca Observada S/93.47 PEN en 28 Apuestas Liquidadas)
 

@@ -1,20 +1,20 @@
 ---
-date_generated: 2026-11-15T03:53:30Z
+date_generated: 2026-11-15T04:04:16Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 model_version_id: model_f_ensemble_v8
-run_manifest_id: RUN_20261115T035254Z_2A97133D
-commit_sha: a789adc357c222c40060aafa93e1ada84866611c
+run_manifest_id: RUN_20261115T040348Z_F07B06B3
+commit_sha: 765e52a74ed6c2e22053a0dc27279d791197ed27
 config_hash: e762cb953560edba9594fdcf87d58fb4d9d3812f33252bfff8d8462b5d8da515
 final_verdict: REMAIN_IN_PAPER_TRADING
 ---
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-15T03:53:30Z`
-- **Run Manifest / Versión activa**: `RUN_20261115T035254Z_2A97133D` (`model_f_ensemble_v8`, commit `a789adc357c2`, config `e762cb953560`)
+- **Fecha de auditoría (UTC)**: `2026-11-15T04:04:16Z`
+- **Run Manifest / Versión activa**: `RUN_20261115T040348Z_F07B06B3` (`model_f_ensemble_v8`, commit `765e52a74ed6`, config `e762cb953560`)
 - **Origen de Base de Datos (`DB Provenance`)**: PRODUCTION_STATE_LIVE (`live: origin/state-live:data/nba_intelligence.sqlite3` | `main: FROZEN_CI_BASELINE`)
-- **Shadow Signal Ledger**: Total `7` señales +EV registradas (liquidadas `0`, ROI 1u `0.0%`, CLV medio `None%`; cero impacto en banca S/100)
+- **Shadow Signal Ledger**: Total `12` señales +EV registradas (liquidadas `0`, ROI 1u `0.0%`, CLV medio `None%`; cero impacto en banca S/100)
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/93.47 PEN`

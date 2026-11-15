@@ -13,6 +13,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -66,21 +67,39 @@ class TelegramAlertBot:
             return True
 
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-        payload = {
+        payload: dict[str, Any] = {
             "chat_id": self.chat_id,
             "text": text,
-            "parse_mode": parse_mode,
             "disable_web_page_preview": True,
         }
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+
         try:
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=10) as resp:
-                success = (resp.status == 200)
+                success = resp.status == 200
                 self._persist_alert_log({"text": text, "sent_at": now_str, "mode": "LIVE_TELEGRAM"})
                 return success
+        except urllib.error.HTTPError as exc:
+            err_detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 400 and parse_mode:
+                logger.warning(
+                    "Telegram Markdown entity error (%s); retrying without parse_mode.",
+                    err_detail[:200],
+                )
+                return self.send_raw_message(text, parse_mode="")
+            sanitized = f"HTTP {exc.code}: {err_detail[:200]}"
+            if self.bot_token:
+                sanitized = sanitized.replace(self.bot_token, "***")
+            logger.warning(f"Failed to deliver Telegram notification: {sanitized}")
+            return False
         except Exception as exc:
-            logger.warning(f"Failed to deliver Telegram notification: {exc}")
+            sanitized = str(exc)
+            if self.bot_token:
+                sanitized = sanitized.replace(self.bot_token, "***")
+            logger.warning(f"Failed to deliver Telegram notification: {sanitized}")
             return False
 
     def _persist_alert_log(self, record: dict[str, Any]) -> None:
@@ -143,12 +162,12 @@ class TelegramAlertBot:
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📍 *Partido:* `{game_id}`\n"
             f"🎯 *Mercado:* `{mkt}` | *Selección:* *{sel}*\n"
-            f"💰 *Casa Sugerida:* *{book}*\n"
+            f"💰 *Casa Sugerida:* `{book}`\n"
             f"📈 *Cuota:* `{odds_str}` (Prob. Modelo: `{prob_str}`)\n"
             f"⚡ *Valor Esperado (EV):* `+{ev:.1f}%`\n"
             f"💵 *Stake Sugerido:* *S/ {stake:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔗 _Registra este pick revisando la cuota vigente en {book}_"
+            f"🔗 _Registra este pick revisando la cuota vigente en_ `{book}`"
         )
         return msg
 
