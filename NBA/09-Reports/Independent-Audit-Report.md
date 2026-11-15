@@ -1,18 +1,18 @@
 ---
-date_generated: 2026-11-15T02:13:53Z
+date_generated: 2026-11-15T02:19:42Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 model_version_id: model_f_ensemble_v8
-run_manifest_id: n/d
-commit_sha: aab1aafc22a19dca1a4ce240b75616abd9975c83
-config_hash: 0530545005505767af2d374cec2470aec6b30942588bddaba4f8db3cffaefb72
+run_manifest_id: RUN_20261115T021930Z_A5B6567D
+commit_sha: 540a59ab742b4e4c233608318d9123da4e587070
+config_hash: 42b0dab00c3e1caa7a269275d128c2d3abfb3e423d47ab6030b8c5c0a4d1746a
 final_verdict: REMAIN_IN_PAPER_TRADING
 ---
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-15T02:13:53Z`
-- **Run Manifest / Versión activa**: `n/d` (`model_f_ensemble_v8`, commit `aab1aafc22a1`, config `053054500550`)
+- **Fecha de auditoría (UTC)**: `2026-11-15T02:19:42Z`
+- **Run Manifest / Versión activa**: `RUN_20261115T021930Z_A5B6567D` (`model_f_ensemble_v8`, commit `540a59ab742b`, config `42b0dab00c3e`)
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/93.47 PEN`
@@ -20,7 +20,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Inmutabilidad de predicciones y liquidaciones (Triggers SQLite)**: `ACTIVA Y VERIFICADA`
 - **Integridad del historial (registro append-only de filas)**: `ÍNTEGRO` — faltantes por tabla: `{'predictions': 0, 'simulated_bets': 0, 'odds_snapshots': 0, 'decision_log': 0, 'player_prop_picks': 0, 'bankroll_ledger': 0, 'sniper_alerts': 0}`
 - **Inconsistencias del ledger**: `0`
-- **Reproducibilidad**: `VERIFIED_DETERMINISTIC (max_prob_diff=0.00e+00 <= 1e-12, weights_sha256=f3c6f1817194, schema_sha256=de0698cd2cb2)`
+- **Reproducibilidad**: `VERIFIED_DETERMINISTIC (max_prob_diff=0.00e+00 <= 1e-12, weights_sha256=ab08be6b7a10, schema_sha256=aeadf560d9d8)`
 
 ## 2. Evaluación de Puertas de Salida de Simulación (Sección 11)
 
@@ -43,9 +43,9 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Fuente Primaria Activa sin Credenciales**: `ESPNPublicAdapter` (`site.api.espn.com` — Calendario, marcadores, estadísticas y cuotas pre-partido DraftKings)
 - **Sportradar (`SportradarAdapter`)**: `CONFIGURED_RATE_LIMITED`
 - **NBA.com/stats (`NBAStatsAdapter`)**: `FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION`
-- **Playwright (`PlaywrightAuthorizedScraper`)**: `Paquete instalado v1.64.1`
-- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)`
-- **Obsidian Vault (`NBA/`)**: `Operativo en NBA`
+- **Playwright (`PlaywrightAuthorizedScraper`)**: `OPERATIONAL`
+- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)`
+- **Obsidian Vault (`NBA/`)**: `Operativo en /home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA`
 
 ## 4. Conclusión Estadística del Auditor
 - Con las predicciones calibradas actualmente registradas, el sistema aún no supera simultáneamente las puertas estadísticas de calibración (`gate_3` / `gate_10`); manteniendo trazabilidad contable del bankroll virtual de **S/100.00 PEN**, el sistema **`REMAIN_IN_PAPER_TRADING`** hasta superar las 10 puertas estadísticas (incluyendo >= **500 selecciones liquidadas** e IC 95% Block Bootstrap > 0%).

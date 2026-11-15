@@ -1,56 +1,56 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
   "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 123,
+  "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DAL Max Christie (SG) Day To Day (Ankle): Christie is Questionable for Saturday's (Nov. 14) game against the Cavaliers.",
-      "relevance_score": 0.226,
-      "captured_at": "2026-11-13"
-    },
-    {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Mikel Brown Jr. G Nov 14 Day-To-Day Nov 13: Brown (illness) is listed as questionable for Saturday's game against Memphis.",
-      "relevance_score": 0.2089,
-      "captured_at": "2026-11-14T13:49:25Z"
+      "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
+      "relevance_score": 0.267,
+      "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BKN Mikel Brown Jr. (PG) Day To Day (Illness): Brown Jr. is Questionable for Saturday's (Nov. 14) game against the Grizzlies.",
-      "relevance_score": 0.1978,
-      "captured_at": "2026-11-13"
+      "snippet": "WAS Alex Sarr (C) Day To Day (Illness): Sarr is Questionable for Sunday's (Nov. 14) game against the Rockets.",
+      "relevance_score": 0.2511,
+      "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Kingston Flemings (PG) Day To Day (Back): Flemings did not return to Friday's (Nov. 13) game against the Bulls.",
-      "relevance_score": 0.1783,
+      "snippet": "WAS Bub Carrington (PG) Day To Day (Chest): Carrington is Questionable for Sunday's (Nov. 14) game against the Rockets.",
+      "relevance_score": 0.2414,
+      "captured_at": "2026-11-14"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Sunday's (Nov. 15) game against the 76ers.",
+      "relevance_score": 0.2266,
+      "captured_at": "2026-11-14"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND Aaron Nesmith (SF) Day To Day (Hand): Nesmith is Questionable for Sunday's (Nov. 15) game against Philadelphia.",
+      "relevance_score": 0.225,
+      "captured_at": "2026-11-14"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "TOR Scottie Barnes (PF) Day To Day (Adductor): Barnes is Questionable for Sunday's (Nov. 14) game against New York.",
+      "relevance_score": 0.2211,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "UTA Jaxson Hayes (C) Day To Day (Knee): Hayes did not return to Friday's (Nov. 13) game against the Rockets.",
-      "relevance_score": 0.171,
+      "relevance_score": 0.2105,
       "captured_at": "2026-11-14"
-    },
-    {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Kingston Flemings G Nov 15 Day-To-Day Nov 13: Flemings (back tightness) will not return to Friday's game against the Bulls.",
-      "relevance_score": 0.1708,
-      "captured_at": "2026-11-14T13:49:25Z"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Luka Dončić (PG) Day To Day (Ankle): Doncic did not return to Wednesday's (Nov. 11) game versus the Bucks.",
-      "relevance_score": 0.1646,
-      "captured_at": "2026-11-11"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return to Wednesday's (Nov. 11) game against the Bucks.",
-      "relevance_score": 0.1597,
+      "relevance_score": 0.2063,
       "captured_at": "2026-11-12"
     }
   ],
