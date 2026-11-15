@@ -20,7 +20,7 @@ model:
   max_model_market_disagreement: 0.15 # Maximum allowable spread between model and sharp market consensus
   moneyline_model_weight: 0.30       # Market-specific ML anchor weight
   moneyline_max_disagreement: 0.15   # Market-specific ML max model-vs-market disagreement
-  moneyline_max_odds: 2.80           # Walk-forward validated ML decimal odds cap (mitigates underdog CLV/injury traps)
+  moneyline_max_odds: 2.80           # Policy ML decimal odds cap (mitigates longshot tail traps; not holdout-validated)
 
 risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
   virtual_bankroll_initial_pen: 100.00
@@ -78,6 +78,15 @@ risk_management:                     # AGENTS.md section 2 (paper_trading_manage
 
 sources:
   betting_allowed_source_types: ["OBSERVED"]
+  peru_scrapers_enabled: true
+  peru_scraper_policy: "PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS"
+  allowed_live_api_books: ["te_apuesto", "pinnacle", "betano"]
+
+evaluation:
+  development_seasons: ["2024-25", "2025-26"]
+  holdout_season: "2026-27"
+  trials_evaluated_count: 3
+  frozen_protocol_id: "V8_FROZEN_2026_11_15"
 
 sub_bankroll_combinadas:             # Sub-bankroll independiente para SGP y combinadas de alta probabilidad
   enabled: true

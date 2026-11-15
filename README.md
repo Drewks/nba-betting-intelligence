@@ -17,14 +17,14 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
 | Cuotas observadas (`ESPN` / `TheOddsAPI`) | ✅ | Toda escritura pasa por `DatabaseManager.insert_odds_snapshot` con `source_type='OBSERVED'` explícito. |
 | Apuestas solo con cuotas observadas | ✅ | El ciclo lee `v_observed_odds_snapshots` (excluye cuarentena, `DERIVED`/`SYNTHETIC` y proveedores autogenerados). |
 | Mercados pre-partido (`Moneyline`, `Total Points`, `Spread`) | ✅ | Soporte completo end-to-end (validación, consenso de-vig, calibración OOS por mercado, EV con push y liquidación). |
-| Historial inmutable + Manifiesto por ejecución | ✅ | Triggers SQLite, `audit_row_registry` y tabla append-only `run_manifests` (`commit_sha`, `config_hash`, versiones, calibradores y semillas). |
+| Historial inmutable + Manifiesto por ejecución | ✅ | Triggers SQLite, `audit_row_registry`, tabla append-only `run_manifests` (`commit_sha`, `config_hash`, versiones, calibradores, semillas) y `Shadow Signal Ledger` (`shadow_candidates`). |
 | Restauración del historial borrado el 2026-11-09 | ✅ | Migración `2026_11_09_003` (bundle con checksum en `data/recovery/`), cada acción en `audit_repairs`. |
 | Gestión de riesgo (`config/model_config.yaml`) | ✅ | Única fuente de verdad: **Kelly fraccional 25% (`kelly_fraction: 0.25`)**, **EV mínimo 2.0% (`min_ev_threshold: 0.02`)**, tope `S/ 10.00` (`max_stake_pen: 10.00`, máx. `10%` banca), mín. `S/ 1.00`, máx. `3` selecciones/jornada, máx. `30%` exposición. |
-| Métricas y gates | ✅ | Fail-closed; probabilidades separadas (`raw_model`, `calibrated_model`, `market_fair`, `market_anchored`) y benchmark estricto contra mercado sin margen (gate 10). |
-| CLV | ✅ | `100·(cuota × p_cierre_sin_margen − 1)`, cierre Pinnacle preferido; valores > 15% excluidos como anomalía de datos. |
+| Métricas, Holdout y Bonferroni | ✅ | Fail-closed; probabilidades separadas (`raw_model`, `calibrated_model`, `market_fair`, `market_anchored`), `holdout_season: 2026-27` intacto, corrección Bonferroni (`trials_evaluated_count: 3`) y estimador cronológico de cierre (`TotalsClosingEstimator`). |
+| CLV & Shadow Signal Ledger | ✅ | `100·(cuota × p_cierre_sin_margen − 1)`, cierre Pinnacle preferido; todas las señales `+EV` (incluidas bloqueadas por `min_ev` / `min_stake` / tope diario) quedan en `shadow_candidates` (1u hipotética) sin tocar la banca S/100. |
 | Injury Sniper | 🟡 | Ancla en el mercado; solo cambios de estado NUEVOS (vs. snapshot previo) mueven la probabilidad. Tabla de impacto aún sin calibrar. |
-| Casas peruanas (`Betano` & `RETAbet`) | 🟡 | Parcial/Desacoplado del scheduler cloud: `LivePeruOddsScraper` consulta APIs públicas/sharp y el cosechador local Playwright (`scripts/harvest_local_peru_odds.py`) está explícitamente omitido en scheduler automático por protección anti-bot Cloudflare/Shape. |
-| Player Props & Sub-Bankroll Combinadas | ⛔ | **Deshabilitado por configuración** (`allow_player_props_betting: false`, `allow_parlays: false` en `config/model_config.yaml`) — bloqueo fail-closed en motor, ledger y scheduler salvo habilitación explícita. |
+| Casas peruanas (`Betano` & `RETAbet`) | 🟡 | Política explícita `sources.peru_scraper_policy: PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS`: solo JSON endpoints públicos de lectura sin evasión antibot Cloudflare/Shape; Playwright local desacoplado de GitHub Actions. |
+| Player Props & Sub-Bankroll Combinadas | ⛔ | **Deshabilitado por configuración** (`allow_player_props_betting: false`, `allow_parlays: false` en `config/model_config.yaml`; módulo `src/prediction/props/` cuarentenado) — bloqueo fail-closed salvo habilitación explícita. |
 | Asignación Híbrida (`70% Totales / 30% Moneyline`) | ✅ | Configurada en `config/model_config.yaml` (`hybrid_allocation`: máx. `2` Totales y `1` Moneyline por jornada dentro del tope de `3`). |
 | Backtest con cuotas históricas reales | ✅ | `scripts/run_real_odds_backtest.py`: walk-forward cronológico del modelo contra el consenso real de apertura/cierre (datos gratuitos CC BY 4.0) y holdout OOS sin ajuste previo. |
 | Hiperparámetros optimizados | ⚪ | El estudio Optuna anterior tenía fuga del resultado (inválido). Se usan priors documentados en `config/model_config.yaml` hasta re-optimizar con holdout limpio. |
@@ -43,15 +43,21 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
    - Límites por apuesta y jornada: `min_stake_pen: 1.00`, `max_stake_pen: 10.00`, `max_stake_bankroll_fraction: 0.10`, `max_selections_per_matchday: 3`, `max_portfolio_exposure_pct: 0.30`.
    - `allow_player_props_betting`: `false` | `allow_parlays`: `false` (bloqueo fail-closed en código y DB).
 3. **Solo cuotas observadas**: ninguna cuota estimada, derivada o sintética puede generar una apuesta (`betting_allowed_source_types: ["OBSERVED"]`).
-4. **Historial inmutable**: la base de datos de producción solo se modifica mediante migraciones auditadas (`src/storage/migrations.py`) o por la automatización en nube. El CI falla si un Pull Request altera `data/nba_intelligence.sqlite3`.
+4. **Fuente única de verdad DB (`state-live` vs `main`) e inmutabilidad**:
+   - `origin/state-live:data/nba_intelligence.sqlite3` es la **única fuente de verdad viva de producción** (actualizada por `.github/workflows/nba_cloud_automation.yml`).
+   - `data/nba_intelligence.sqlite3` en `main` permanece congelada como línea base de CI (`.github/workflows/ci.yml` falla si un PR modifica ese archivo).
+   - Para extraer e inspeccionar la DB viva en local sin ensuciar `main`, ejecuta:
+     ```powershell
+     uv run python scripts/sync_state_live.py --apply-migrations
+     ```
 
 ---
 
 ## 🧪 Backtest con cuotas reales (gratis)
 
 ```powershell
-# Clonar la base a un archivo temporal antes de experimentar (nunca mutar data/nba_intelligence.sqlite3 en local)
-Copy-Item data/nba_intelligence.sqlite3 $env:TEMP/nba_audit_work.sqlite3
+# Clonar la base viva desde state-live a un archivo temporal antes de experimentar (nunca mutar main)
+uv run python scripts/sync_state_live.py --out $env:TEMP/nba_audit_work.sqlite3 --apply-migrations
 uv run python scripts/run_real_odds_backtest.py --db $env:TEMP/nba_audit_work.sqlite3 --sensitivity
 ```
 

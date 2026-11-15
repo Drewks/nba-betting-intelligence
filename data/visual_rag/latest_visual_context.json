@@ -1,57 +1,57 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)",
-  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 123,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID",
+  "indexed_documents_count": 34,
   "top_retrieved_context": [
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "DAL Max Christie (SG) Day To Day (Ankle): Christie is Questionable for Saturday's (Nov. 14) game against the Cavaliers.",
-      "relevance_score": 0.226,
-      "captured_at": "2026-11-13"
+      "source": "espn_nba_news_feed",
+      "snippet": "Cavaliers without starting five vs. Mavericks after flight delay. The Cavaliers were without their entire starting lineup Saturday against the Mavericks after four players were ruled out following travel difficulties.",
+      "relevance_score": 0.1727,
+      "captured_at": "2026-11-15T01:24:01Z"
     },
     {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Mikel Brown Jr. G Nov 14 Day-To-Day Nov 13: Brown (illness) is listed as questionable for Saturday's game against Memphis.",
-      "relevance_score": 0.2089,
-      "captured_at": "2026-11-14T13:49:25Z"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Nae'Qwan Tomlin F Nov 16 Out Oct 20: Tomlin is set to miss several weeks with a lower back stress reaction, Chris Fedor of The Cleveland Plain Dealer reports.",
+      "relevance_score": 0.0,
+      "captured_at": "2026-11-15T03:22:52Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "BKN Mikel Brown Jr. (PG) Day To Day (Illness): Brown Jr. is Questionable for Saturday's (Nov. 14) game against the Grizzlies.",
-      "relevance_score": 0.1978,
-      "captured_at": "2026-11-13"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Sam Merrill G Nov 16 Out Nov 10: Merrill (elbow) is listed as out for Wednesday's game against the Knicks.",
+      "relevance_score": 0.0,
+      "captured_at": "2026-11-15T03:22:52Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Kingston Flemings (PG) Day To Day (Back): Flemings did not return to Friday's (Nov. 13) game against the Bulls.",
-      "relevance_score": 0.1783,
-      "captured_at": "2026-11-14"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Evan Mobley C Nov 16 Out Nov 14: Mobley (toe) has been ruled out for Saturday's meeting with Dallas.",
+      "relevance_score": 0.0,
+      "captured_at": "2026-11-15T03:22:52Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "UTA Jaxson Hayes (C) Day To Day (Knee): Hayes did not return to Friday's (Nov. 13) game against the Rockets.",
-      "relevance_score": 0.171,
-      "captured_at": "2026-11-14"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Donovan Mitchell G Nov 16 Out Nov 14: Mitchell (knee) has been ruled out for Saturday's game against the Mavericks.",
+      "relevance_score": 0.0,
+      "captured_at": "2026-11-15T03:22:52Z"
     },
     {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Kingston Flemings G Nov 15 Day-To-Day Nov 13: Flemings (back tightness) will not return to Friday's game against the Bulls.",
-      "relevance_score": 0.1708,
-      "captured_at": "2026-11-14T13:49:25Z"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Jarrett Allen C Nov 16 Out Nov 14: Allen (knee) has been ruled out for Saturday's game against the Mavericks.",
+      "relevance_score": 0.0,
+      "captured_at": "2026-11-15T03:22:52Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Luka Dončić (PG) Day To Day (Ankle): Doncic did not return to Wednesday's (Nov. 11) game versus the Bucks.",
-      "relevance_score": 0.1646,
-      "captured_at": "2026-11-11"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Peyton Watson G Nov 16 Out Nov 14: Watson (hamstring) has been ruled out for Saturday's game against the Mavericks.",
+      "relevance_score": 0.0,
+      "captured_at": "2026-11-15T03:22:52Z"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return to Wednesday's (Nov. 11) game against the Bucks.",
-      "relevance_score": 0.1597,
-      "captured_at": "2026-11-12"
+      "source": "playwright_espn_injuries_table",
+      "snippet": "Caleb Wilson F Dec 13 Out Nov 12: Wilson (hand) is expected to miss four to six weeks, Shams Charania of ESPN reports.",
+      "relevance_score": 0.0,
+      "captured_at": "2026-11-15T03:22:52Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

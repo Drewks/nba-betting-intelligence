@@ -27,6 +27,7 @@ _PROTECTED_DIRS = (
     (PROJECT_ROOT / "reports").resolve(),
     (PROJECT_ROOT / "NBA").resolve(),
     (PROJECT_ROOT / "data" / "evaluation").resolve(),
+    (PROJECT_ROOT / "data" / "visual_rag").resolve(),
 )
 
 _PROD_DB_RESOLVED = (PROJECT_ROOT / "data" / "nba_intelligence.sqlite3").resolve()

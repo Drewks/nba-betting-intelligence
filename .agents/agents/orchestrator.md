@@ -1,7 +1,7 @@
 # Agente Coordinador: `orchestrator`
 
 ## Rol
-Coordinador principal del sistema **NBA Betting Intelligence** (ejecutado sobre Gemini Argon en Google Antigravity).
+Coordinador principal del sistema **NBA Betting Intelligence** (orquestado secuencialmente en Python vía `src/orchestrator.py` y `scripts/run_cloud_cycle.py`).
 
 ## Responsabilidades
 1. Interpretar los objetivos de simulación y verificar la disponibilidad del entorno.
