@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-15T07:11:03Z",
-  "run_manifest_id": "RUN_20261115T071103Z_AF543226",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-15T14:20:57Z",
+  "run_manifest_id": "RUN_20261115T142057Z_8F272FEE",
   "run_manifest": {
-    "run_id": "RUN_20261115T071103Z_AF543226",
+    "run_id": "RUN_20261115T142057Z_8F272FEE",
     "commit_sha": "765e52a74ed6c2e22053a0dc27279d791197ed27",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -72,6 +72,7 @@
     "main_branch_db_policy": "FROZEN_CI_BASELINE"
   },
   "ingested_dates": [
+    "2026-11-13",
     "2026-11-14",
     "2026-11-15",
     "2026-11-16"
@@ -79,8 +80,8 @@
   "closing_lines_promoted": 0,
   "bets_settled_in_cycle": 0,
   "shadow_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 2,
-  "predictions_generated": 84,
+  "new_bets_placed_in_cycle": 0,
+  "predictions_generated": 0,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic",
@@ -362,7 +363,7 @@
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-15_02_00AM.pdf",
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-15_09_00AM.pdf",
       "players_listed": 84
     },
     "sportradar_api": {
@@ -379,7 +380,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-15T07:11:44Z",
+      "extracted_at": "2026-11-15T14:21:12Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -394,49 +395,49 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.2211,
+        "relevance_score": 0.2204,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Alex Sarr (C) Day To Day (Illness): Sarr is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.2088,
+        "relevance_score": 0.2082,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable on Sunday's (Nov. 15) game against the Kings.",
-        "relevance_score": 0.2024,
+        "relevance_score": 0.2021,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MEM GG Jackson (PF) Day To Day (Foot): Jackson did not return to Saturday's (Nov. 14) game against the Nets.",
-        "relevance_score": 0.2007,
+        "relevance_score": 0.2002,
         "captured_at": "2026-11-15"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "LAL Bronny James (SG) Day To Day (Illness): James is Questionable on Sunday's (Nov. 15) game against the Suns.",
-        "relevance_score": 0.2,
+        "relevance_score": 0.1998,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Bub Carrington (PG) Day To Day (Chest): Carrington is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.1974,
+        "relevance_score": 0.1969,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "SAC Keegan Murray (PF) Day To Day (Illness): Murray is Questionable on Sunday's (Nov. 15) game against the Thunder.",
-        "relevance_score": 0.1966,
+        "relevance_score": 0.1964,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MIN Jaylen Clark (SG) Day To Day (Hamstring): Clark did not return to Saturday's (Nov. 15) game against the Bulls.",
-        "relevance_score": 0.195,
+        "relevance_score": 0.1948,
         "captured_at": "2026-11-15"
       }
     ],
@@ -448,7 +449,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261115T071103Z_AF543226",
+    "run_manifest_id": "RUN_20261115T142057Z_8F272FEE",
     "commit_sha": "765e52a74ed6c2e22053a0dc27279d791197ed27",
     "config_hash": "e762cb953560edba9594fdcf87d58fb4d9d3812f33252bfff8d8462b5d8da515",
     "database_role": {
