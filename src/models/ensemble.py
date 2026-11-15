@@ -1,5 +1,5 @@
 """
-Modelo F+G: V5 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid.
+Modelo F+G: V8 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid.
 Combines Elo, Point Margin, Total Points with Covariance, LightGBM, and Deep Monte Carlo
 via out-of-sample shrinkage-regularized log-odds Bayesian pooling with boxscore adjustments.
 """
@@ -25,7 +25,7 @@ from src.models.total_points import TotalPointsModel
 
 class EnsembleStackingModel:
     """
-    Modelo F+G (V5 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid):
+    Modelo F+G (V8 Syndicate Meta-Ensemble + 10,000-Game Monte Carlo Hybrid):
     Combines Dual-Speed MOV Elo (Model B), Residual-Anchored Point Margin (Model C),
     Pace-Decoupled Total Points with Covariance (Model D), Residual-Boosted LightGBM (Model E),
     and Deep Monte Carlo Possession Simulator (Model G) via strictly out-of-sample
@@ -34,14 +34,14 @@ class EnsembleStackingModel:
 
     model_family = "model_f_meta_ensemble"
 
-    def __init__(self, version_id: str = "model_f_ensemble_v5") -> None:
+    def __init__(self, version_id: str = "model_f_ensemble_v8") -> None:
         self.version_id = version_id
-        self.model_b = EloModel("model_b_elo_v5")
-        self.model_c = PointMarginModel("model_c_point_margin_v5")
-        self.model_d = TotalPointsModel("model_d_total_points_v5")
-        self.model_e = AdvancedGBMModel("model_e_lightgbm_v5")
+        self.model_b = EloModel("model_b_elo_v8")
+        self.model_c = PointMarginModel("model_c_point_margin_v8")
+        self.model_d = TotalPointsModel("model_d_total_points_v8")
+        self.model_e = AdvancedGBMModel("model_e_lightgbm_v8")
         self.model_g = DeepMonteCarloHybridModel(
-            "model_g_ml_montecarlo_v5",
+            "model_g_ml_montecarlo_v8",
             n_simulations=10000,
             shared_margin_model=self.model_c,
             shared_totals_model=self.model_d,
@@ -174,6 +174,33 @@ class EnsembleStackingModel:
         pooled_logit = sum(w * lg for w, lg in zip(weights, logits, strict=False))
         return float(np.clip(1.0 / (1.0 + math.exp(-pooled_logit)), 0.05, 0.95))
 
+    @staticmethod
+    def _pool_outcome_triples(
+        triples: list[tuple[float, float, float]],
+        weights: list[float],
+    ) -> tuple[float, float, float]:
+        """
+        Pools unconditional (p_win, p_loss, p_push) probability triples via conditional log-odds
+        on (win | win or loss) paired with weighted push probability so p_win + p_loss + p_push == 1.0.
+        """
+        w_sum = sum(weights) or 1.0
+        w_norm = [w / w_sum for w in weights]
+        p_push = sum(w * max(0.0, t[2]) for w, t in zip(w_norm, triples, strict=False))
+        p_push = max(0.0, min(0.5, float(p_push)))
+        cond_wins = []
+        for p_w, p_l, _p_p in triples:
+            denom = p_w + p_l
+            cond_wins.append(p_w / denom if denom > 1e-9 else 0.5)
+        eps = 1e-5
+        logits = [math.log(max(eps, min(1.0 - eps, p)) / (1.0 - max(eps, min(1.0 - eps, p)))) for p in cond_wins]
+        pooled_logit = sum(w * lg for w, lg in zip(w_norm, logits, strict=False))
+        p_cond = float(np.clip(1.0 / (1.0 + math.exp(-pooled_logit)), 1e-4, 1.0 - 1e-4))
+        non_push = max(0.0, 1.0 - p_push)
+        p_w_out = round(non_push * p_cond, 6)
+        p_p_out = round(p_push, 6)
+        p_l_out = round(max(0.0, 1.0 - p_w_out - p_p_out), 6)
+        return p_w_out, p_l_out, p_p_out
+
     def predict_moneyline(
         self,
         game: dict[str, Any],
@@ -209,9 +236,10 @@ class EnsembleStackingModel:
             "expected_margin": round(0.55 * c_res["expected_margin"] + 0.45 * mc_res["mc_expected_margin"] + bx_shift, 3),
             "ensemble_weights": self.ml_weights,
             "overtime_prob": mc_res["overtime_prob"],
+            "multi_overtime_prob": mc_res.get("multi_overtime_prob", 0.0),
             "blowout_prob": mc_res["blowout_prob"],
-            "conformal_q10_margin": mc_res["conformal_q10_margin"],
-            "conformal_q90_margin": mc_res["conformal_q90_margin"],
+            "simulation_q10_margin": mc_res["simulation_q10_margin"],
+            "simulation_q90_margin": mc_res["simulation_q90_margin"],
             "uncertainty_std": unc_std,
         }
 
@@ -232,21 +260,31 @@ class EnsembleStackingModel:
         )
         pg_over = mc_res["p_over_mc"]
 
-        p_over = self._pool_probs_log_odds([pd_res["p_over"], pe_res["p_over"], pg_over], self.tot_weights)
+        p_over, p_under, p_push = self._pool_outcome_triples(
+            [
+                (pd_res["p_over"], pd_res["p_under"], pd_res.get("p_push", pd_res.get("p_push_estimate", 0.0))),
+                (pe_res["p_over"], pe_res["p_under"], pe_res.get("p_push", pe_res.get("p_push_estimate", 0.0))),
+                (pg_over, mc_res["p_under_mc"], mc_res.get("p_push_mc", 0.0)),
+            ],
+            self.tot_weights,
+        )
         sub_std = float(np.std([pd_res["p_over"], pe_res["p_over"], pg_over]))
         unc_std = round(max(0.034, min(0.098, 0.038 + 0.45 * sub_std)), 4)
 
         return {
             "expected_total": round(0.60 * pd_res["expected_total"] + 0.25 * pe_res["expected_total"] + 0.15 * mc_res["mc_expected_total"], 2),
             "total_std_with_covariance": pd_res["total_std_with_covariance"],
-            "p_over": round(p_over, 6),
-            "p_under": round(1.0 - p_over, 6),
+            "p_over": p_over,
+            "p_under": p_under,
+            "p_push": p_push,
+            "p_push_estimate": p_push,
             "p_montecarlo_over": pg_over,
             "overtime_prob": mc_res["overtime_prob"],
+            "multi_overtime_prob": mc_res.get("multi_overtime_prob", 0.0),
             "blowout_prob": mc_res["blowout_prob"],
             "clutch_foul_prob": mc_res["clutch_foul_prob"],
-            "conformal_q10_total": mc_res["conformal_q10_total"],
-            "conformal_q90_total": mc_res["conformal_q90_total"],
+            "simulation_q10_total": mc_res["simulation_q10_total"],
+            "simulation_q90_total": mc_res["simulation_q90_total"],
             "uncertainty_std": unc_std,
         }
 
@@ -258,7 +296,7 @@ class EnsembleStackingModel:
     ) -> dict[str, float]:
         """
         Pools PointMarginModel, AdvancedGBMModel, and DeepMonteCarloHybridModel spread cover probabilities
-        for spread_line_home (e.g. -6.5 or +4.0).
+        for spread_line_home (e.g. -6.5 or +4.0) with unconditional push mass preservation.
         """
         c_sp = self.model_c.predict_spread(game, historical_games, spread_line_home)
         e_ml = self.model_e.predict_moneyline(game, historical_games)
@@ -268,25 +306,34 @@ class EnsembleStackingModel:
         e_mar = float(e_ml.get("expected_margin", c_sp["expected_margin"]))
         mc_mar = float(mc_res["mc_expected_margin"])
         scale = float(c_sp["margin_std"])
+        is_int_spread = abs(target_diff - round(target_diff)) < 1e-6
 
-        p_e_cover = float(np.clip(1.0 - norm.cdf(target_diff, loc=e_mar, scale=scale), 0.05, 0.95))
-        p_mc_cover = float(np.clip(1.0 - norm.cdf(target_diff, loc=mc_mar, scale=scale), 0.05, 0.95))
+        def _triple_from_normal(mu: float) -> tuple[float, float, float]:
+            if is_int_spread:
+                p_w = float(1.0 - norm.cdf(target_diff + 0.5, loc=mu, scale=scale))
+                p_l = float(norm.cdf(target_diff - 0.5, loc=mu, scale=scale))
+                p_p = max(0.0, 1.0 - p_w - p_l)
+                return p_w, p_l, p_p
+            p_w = float(np.clip(1.0 - norm.cdf(target_diff, loc=mu, scale=scale), 1e-4, 1.0 - 1e-4))
+            return p_w, 1.0 - p_w, 0.0
 
-        p_cover_home = self._pool_probs_log_odds(
-            [c_sp["p_cover_home"], p_e_cover, p_mc_cover],
-            [0.52, 0.24, 0.24],
-        )
-        sub_std = float(np.std([c_sp["p_cover_home"], p_e_cover, p_mc_cover]))
+        t_c = (c_sp["p_cover_home"], c_sp["p_cover_away"], c_sp.get("p_push", c_sp.get("p_push_estimate", 0.0)))
+        t_e = _triple_from_normal(e_mar)
+        t_mc = _triple_from_normal(mc_mar)
+
+        p_cover_home, p_cover_away, p_push = self._pool_outcome_triples([t_c, t_e, t_mc], [0.52, 0.24, 0.24])
+        sub_std = float(np.std([t_c[0], t_e[0], t_mc[0]]))
         unc_std = round(max(0.034, min(0.095, 0.038 + 0.45 * sub_std)), 4)
 
         return {
             "spread_line_home": float(spread_line_home),
             "expected_margin": round(0.55 * c_sp["expected_margin"] + 0.45 * mc_mar, 3),
             "margin_std": c_sp["margin_std"],
-            "p_cover_home": round(p_cover_home, 6),
-            "p_cover_away": round(1.0 - p_cover_home, 6),
-            "p_push_estimate": c_sp["p_push_estimate"],
-            "conformal_q10_margin": mc_res["conformal_q10_margin"],
-            "conformal_q90_margin": mc_res["conformal_q90_margin"],
+            "p_cover_home": p_cover_home,
+            "p_cover_away": p_cover_away,
+            "p_push": p_push,
+            "p_push_estimate": p_push,
+            "simulation_q10_margin": mc_res["simulation_q10_margin"],
+            "simulation_q90_margin": mc_res["simulation_q90_margin"],
             "uncertainty_std": unc_std,
         }

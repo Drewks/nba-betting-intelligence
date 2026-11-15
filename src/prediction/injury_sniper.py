@@ -248,6 +248,7 @@ class InjurySniperMonitor:
 
             opp = evaluate_market_opportunity(
                 estimated_prob=point_p,
+                raw_model_prob=point_p,
                 uncertainty_std=0.035,
                 odds_record=odds_rec,
                 game_start_time=game_start_time,

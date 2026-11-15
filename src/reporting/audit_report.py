@@ -22,17 +22,26 @@ def generate_audit_report(
     if not repro_note or "NOT_VERIFIED_IN_PRODUCTION_CYCLE" in str(repro_note):
         repro_note = "VERIFIED_DETERMINISTIC (max_prob_diff <= 1e-12)" if gate7_passed else (repro_note or "NO VERIFICADA")
 
+    run_manifest_id = str(environment_status.get("run_manifest_id") or "n/d")
+    commit_sha = str(environment_status.get("commit_sha") or "n/d")
+    config_hash = str(environment_status.get("config_hash") or "n/d")
+    active_model_ver = str(environment_status.get("model_version_id") or "model_f_ensemble_v8")
     lines = [
         "---",
         f"date_generated: {now_str}",
         "report_type: independent_audit_report",
         "auditor_agent: nba_auditor",
+        f"model_version_id: {active_model_ver}",
+        f"run_manifest_id: {run_manifest_id}",
+        f"commit_sha: {commit_sha}",
+        f"config_hash: {config_hash}",
         f"final_verdict: {gates_eval['recommendation']}",
         "---",
         "# Informe de Auditoría Independiente (`nba_auditor`)",
         "",
         "## 1. Dictamen Ejecutivo",
         f"- **Fecha de auditoría (UTC)**: `{now_str}`",
+        f"- **Run Manifest / Versión activa**: `{run_manifest_id}` (`{active_model_ver}`, commit `{commit_sha[:12]}`, config `{config_hash[:12]}`)",
         f"- **Dictamen sobre transición de fase**: **`{gates_eval['recommendation']}`**",
         f"- **Transición automática a dinero real**: `{gates_eval['auto_transition_to_real_money']}` (Deshabilitada permanentemente por diseño)",
         f"- **Integridad contable del bankroll virtual (S/100.00 PEN)**: `{'VERIFICADA' if audit_result['bankroll_reconciled'] else 'ERROR'}`{settled_bank_str}",

@@ -43,6 +43,7 @@ class ParlayTradingEngine:
         max_parlays_per_matchday: int = 2,
         min_compound_ev_pct: float = 6.0,
         max_stake_bankroll_fraction: float = 0.10,
+        allow_parlays: bool | None = None,
     ) -> None:
         self.db = db
         self.initial_bankroll_pen = float(initial_bankroll_pen)
@@ -52,6 +53,15 @@ class ParlayTradingEngine:
         self.max_parlays_per_matchday = int(max_parlays_per_matchday)
         self.min_compound_ev_pct = float(min_compound_ev_pct)
         self.max_stake_bankroll_fraction = float(max_stake_bankroll_fraction)
+        if allow_parlays is None:
+            try:
+                from src.config import load_config
+
+                self.allow_parlays = bool(load_config().risk.allow_parlays)
+            except Exception:
+                self.allow_parlays = False
+        else:
+            self.allow_parlays = bool(allow_parlays)
         self._ensure_initial_ledger()
 
     def _ensure_initial_ledger(self) -> None:
@@ -127,11 +137,20 @@ class ParlayTradingEngine:
 
         return final_stake if final_stake >= self.min_stake_pen else 0.0
 
-    def record_parlay_bet(self, parlay_dict: dict[str, Any]) -> dict[str, Any]:
+    def record_parlay_bet(
+        self,
+        parlay_dict: dict[str, Any],
+        allow_parlays: bool | None = None,
+    ) -> dict[str, Any]:
         """
         Places a multi-leg parlay or SGP bet in the sub-bankroll with PENDING status.
         Logs to parlay_bets and parlay_bankroll_ledger (BET_RESERVED).
         """
+        effective_allow = self.allow_parlays if allow_parlays is None else bool(allow_parlays)
+        if not effective_allow:
+            raise ParlayRiskLimitError(
+                "DISABLED_BY_CONFIG: Parlays/SGPs are disabled (allow_parlays=false in config/model_config.yaml)."
+            )
         state = self.get_bankroll_state()
         m_date = str(parlay_dict["matchday_date"])
         strategy_type = str(parlay_dict.get("strategy_type", "SGP_COPULA"))
@@ -365,13 +384,18 @@ class ParlayTradingEngine:
         self,
         candidates: list[dict[str, Any]],
         matchday_date: str,
+        allow_parlays: bool | None = None,
     ) -> list[dict[str, Any]]:
         """
         Evaluates candidate parlays / SGPs (e.g. from PlayerPropsEngine), formats them,
         and registers them transactionally into parlay_bets and parlay_bankroll_ledger.
-        Respects per-matchday limits and compound EV threshold.
+        Respects per-matchday limits, compound EV threshold, and fail-closed risk gates.
         """
         placed_parlays: list[dict[str, Any]] = []
+        effective_allow = self.allow_parlays if allow_parlays is None else bool(allow_parlays)
+        if not effective_allow:
+            logger.info("SKIPPED_PARLAYS: allow_parlays=false in config/model_config.yaml.")
+            return placed_parlays
         if not candidates:
             return placed_parlays
 

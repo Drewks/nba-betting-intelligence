@@ -55,11 +55,12 @@ def generate_daily_report(
     discarded_games = live_games_summary.get("discarded_games", []) if live_games_summary else []
     no_bets = [d for d in decisions if (d.get("decision_type") or d.get("decision")) == "NO_BET"]
 
+    _active_model_id = load_config().model.version_id
     lines = [
         "---",
         f"date_generated: {now_str}",
         "report_type: daily_report",
-        "model_versions: [model_c_point_margin_v1, model_d_total_points_v1]",
+        f"model_versions: [{_active_model_id}, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]",
         f"period_evaluated: {target_date}",
         f"predictions_count: {len(preds)}",
         f"observed_settled_bets: {observed_settled_count}",
@@ -71,7 +72,7 @@ def generate_daily_report(
         "## 1. Metadatos de Ejecución y Estado de Banca Observada",
         f"- **Fecha de generación (UTC)**: `{now_str}`",
         f"- **Jornada evaluada**: `{target_date}`",
-        "- **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)",
+        f"- **Versión de modelo activa**: `{_active_model_id}` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)",
         f"- **Bankroll virtual inicial**: `S/{initial_bankroll_pen:.2f} PEN`",
         f"- **Bankroll observado liquidado actual**: **`S/{observed_settled_bankroll:.2f} PEN`** (`S/{observed_net_profit:+.2f} PEN` en `{observed_settled_count}` apuestas observadas liquidadas)",
         f"- **Modo de apuesta activo**: `{staking_desc} | Máx. {max_sel} selecciones/jornada | EV >= {min_ev_pct:.1f}%`",

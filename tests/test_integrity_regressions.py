@@ -354,7 +354,7 @@ def test_production_engine_matches_config_and_props_exposure_is_capped(tmp_path:
     assert engine.staking_mode == "FRACTIONAL_KELLY"
     assert (engine.max_stake_pen, engine.kelly_fraction) == (risk.max_stake_pen, risk.kelly_fraction)
 
-    props = PlayerPropsEngine(db=db)
+    props = PlayerPropsEngine(db=db, allow_player_props=True)
     assert props._props_exposure_allows(0.0, 100.0) is False  # no edge -> never recorded
     assert props._props_exposure_allows(5.0, 100.0) is True
     _seed_game(db, game_id="G1", start="2030-01-01T00:00:00Z")
@@ -363,7 +363,7 @@ def test_production_engine_matches_config_and_props_exposure_is_capped(tmp_path:
             "prop_id": f"P{i}", "game_id": "G1", "matchday_date": "2030-01-01", "player_name": "LeBron James",
             "team": "NYK", "prop_category": "PTS", "line_value": 20.5, "selection": "OVER", "decimal_odds": 1.9,
             "model_prob": 0.6, "stake_pen": 5.0,
-        })
+        }, allow_player_props=True)
     assert props._props_exposure_allows(1.0, 100.0) is False
 
 
@@ -373,7 +373,7 @@ def test_props_recording_is_idempotent_and_capped_per_matchday(tmp_path: Path) -
 
     db = DatabaseManager(tmp_path / "t.sqlite3")
     _seed_game(db, game_id="G1", start="2030-01-01T00:00:00Z")
-    props = PlayerPropsEngine(db=db)
+    props = PlayerPropsEngine(db=db, allow_player_props=True)
 
     def pick(player: str, n: int) -> dict:
         return {

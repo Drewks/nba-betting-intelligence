@@ -103,28 +103,29 @@ def test_poisson_integer_line_push_probabilities() -> None:
     from src.prediction.player_props import PlayerPropsEngine
     engine = PlayerPropsEngine(db=MagicMock())
 
-    # Integer line (e.g. 2.0 assists with projection 2.0)
-    p_over, p_under = engine.compute_exceedance_probabilities(
+    # Integer line (e.g. 2.0 assists with projection 2.0) -> unconditional (p_over, p_under, p_push)
+    p_over, p_under, p_push = engine.compute_exceedance_probabilities(
         prop_category="assists",
         line_value=2.0,
         proj_mean=2.0,
         proj_std=1.2,
         dist_type="poisson",
     )
-    # Both probabilities must sum to 1.0 (conditional on non-push)
-    assert abs((p_over + p_under) - 1.0) < 1e-4
+    assert abs((p_over + p_under + p_push) - 1.0) < 1e-4
+    assert p_push > 0.0
     assert 0.0 < p_over < 1.0
     assert 0.0 < p_under < 1.0
 
     # Half integer line (e.g. 2.5 assists)
-    p_over_half, p_under_half = engine.compute_exceedance_probabilities(
+    p_over_half, p_under_half, p_push_half = engine.compute_exceedance_probabilities(
         prop_category="assists",
         line_value=2.5,
         proj_mean=2.0,
         proj_std=1.2,
         dist_type="poisson",
     )
-    assert abs((p_over_half + p_under_half) - 1.0) < 1e-4
+    assert p_push_half == 0.0
+    assert abs((p_over_half + p_under_half + p_push_half) - 1.0) < 1e-4
 
 
 def test_playwright_scraper_1x2_filtering_logic() -> None:
@@ -253,14 +254,14 @@ def test_config_path_resolution_across_working_dirs(tmp_path: Path, monkeypatch:
     # Change working directory to an arbitrary temporary folder
     monkeypatch.chdir(tmp_path)
     from src.features.team_ratings import get_player_on_off_synergy_profiles
+    from src.prediction.multivariate_copula import MultivariateStudentTCopula
     from src.prediction.player_props import get_fallback_rosters
-    from src.prediction.vine_copula import VineCopulaSGP
 
     profiles = get_player_on_off_synergy_profiles()
     assert len(profiles) >= 40
     rosters = get_fallback_rosters()
     assert len(rosters) == 30
-    copula = VineCopulaSGP()
+    copula = MultivariateStudentTCopula()
     assert len(copula.correlations) >= 10
 
 

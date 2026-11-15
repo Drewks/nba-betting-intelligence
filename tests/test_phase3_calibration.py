@@ -15,7 +15,7 @@ import numpy as np
 from scripts.calibrate_parameters import calibrate_all_and_save
 from src.config import load_config, CLVMetaLabelingConfig, CopulaCorrelationsConfig
 from src.prediction.ev_calculator import predict_clv_meta_label
-from src.prediction.vine_copula import VineCopulaSGP
+from src.prediction.multivariate_copula import MultivariateStudentTCopula
 
 
 def test_phase3_config_loading_and_dataclasses() -> None:
@@ -104,8 +104,8 @@ def test_phase3_predict_clv_meta_label_with_calibrated_weights() -> None:
     assert res_custom["p_positive_clv"] > 0.50
 
 
-def test_phase3_vine_copula_dynamic_correlations(tmp_path: Path) -> None:
-    """Tests VineCopulaSGP with calibrated correlations file."""
+def test_phase3_multivariate_copula_dynamic_correlations(tmp_path: Path) -> None:
+    """Tests MultivariateStudentTCopula with calibrated correlations file."""
     # Create custom weights JSON
     custom_json = tmp_path / "custom_weights.json"
     custom_data = {
@@ -118,7 +118,7 @@ def test_phase3_vine_copula_dynamic_correlations(tmp_path: Path) -> None:
     }
     custom_json.write_text(json.dumps(custom_data), encoding="utf-8")
 
-    copula = VineCopulaSGP(weights_path=custom_json)
+    copula = MultivariateStudentTCopula(weights_path=custom_json)
     assert copula.correlations[("PTS", "3PM")] == 0.52
     assert copula.correlations[("GAME_WIN", "PTS")] == 0.38
 

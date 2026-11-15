@@ -68,7 +68,7 @@ class DatabaseManager:
                         prediction_id TEXT NOT NULL UNIQUE,
                         game_id TEXT NOT NULL,
                         matchday_date TEXT NOT NULL,
-                        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points')),
+                        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
                         selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
                         line_value REAL,
                         decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),

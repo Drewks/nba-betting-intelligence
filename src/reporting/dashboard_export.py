@@ -11,10 +11,9 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-import numpy as np
-
 from src.config import load_config
 from src.evaluation.clv import compute_bet_clv, index_closing_rows
+from src.paper_trading.engine import compute_props_calibration_summary
 from src.reporting.dashboard_generator import generate_interactive_html_dashboard
 from src.reporting.notifier import evaluate_and_notify_readiness, select_and_dispatch_daily_top_pick
 from src.reporting.slate_intelligence import compute_upcoming_slate_intelligence
@@ -82,25 +81,7 @@ def _compute_clean_props_metrics(
     wl_count = len(won) + len(lost)
     win_rate = (len(won) / wl_count * 100.0) if wl_count > 0 else 0.0
     roi_pct = (net_profit / total_staked * 100.0) if total_staked > 0 else 0.0
-
-    squared_errors: list[float] = []
-    conformal_hits = 0
-    for p in settled_real:
-        if p["status"] in ("WON", "LOST"):
-            y_true = 1.0 if p["status"] == "WON" else 0.0
-            prob = float(p.get("model_prob") or 0.5)
-            squared_errors.append((prob - y_true) ** 2)
-            p_low = float(p.get("conformal_p_low") or 0.0)
-            p_high = float(p.get("conformal_p_high") or 1.0)
-            if (
-                p_low <= y_true <= p_high
-                or (p["status"] == "WON" and prob >= 0.5)
-                or (p["status"] == "LOST" and prob < 0.5)
-            ):
-                conformal_hits += 1
-
-    brier_score = float(np.mean(squared_errors)) if squared_errors else 0.0
-    conformal_coverage = (conformal_hits / wl_count * 100.0) if wl_count > 0 else 100.0
+    cal_summary = compute_props_calibration_summary(settled_real)
 
     running_props_bankroll = initial_bankroll_pen
     chronological_settled: list[dict[str, Any]] = []
@@ -162,8 +143,14 @@ def _compute_clean_props_metrics(
         "total_net_profit_pen": round(net_profit, 2),
         "current_props_bankroll_pen": round(current_bankroll, 2),
         "roi_pct": round(roi_pct, 2),
-        "brier_score": round(brier_score, 4),
-        "conformal_coverage_pct": round(conformal_coverage, 1),
+        "brier_score": cal_summary["brier_score"],
+        "log_loss": cal_summary["log_loss"],
+        "ece": cal_summary["ece"],
+        "accuracy_pct": cal_summary["accuracy_pct"],
+        "venn_abers_interval_width_mean": cal_summary["venn_abers_interval_width_mean"],
+        "venn_abers_calibrated_count": cal_summary["venn_abers_calibrated_count"],
+        "venn_abers_empirical_coverage_valid": cal_summary["venn_abers_empirical_coverage_valid"],
+        "conformal_coverage_pct": cal_summary["conformal_coverage_pct"],
         "category_breakdown": breakdown,
         "recent_settled": recent_settled[:20],
     }
@@ -509,7 +496,7 @@ def export_bets_and_tracking_dashboard(
                     f"- **Cuota Tomada vs Cuota Justa**: **`{bd['decimal_odds']:.3f}`** vs Cuota Justa **`{bd['fair_odds']:.3f}`** *(Ventaja Matemática EV: `+{bd['ev_pct']:.2f}%`)*",
                     f"- **Stake y Ganancia Potencial**: Stake **`S/{bd['stake_pen']:.2f} PEN`** → Ganancia neta potencial: **`+S/{bd['potential_profit_pen']:.2f} PEN`**",
                     f"- **Probabilidades**: Modelo Calibrado **`{bd['model_prob_pct']:.1f}%`**",
-                    f"- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `{proj['expected_margin']:+.1f} pts` | Total esperado **`{proj['expected_total']:.1f} pts`** *(Rango 80% Conformal: `{proj['conformal_q10_total']:.0f} – {proj['conformal_q90_total']:.0f} pts` | Prob. Prórroga: `{proj['overtime_prob_pct']:.1f}%` | Prob. Paliza: `{proj['blowout_prob_pct']:.1f}%`)*",
+                    f"- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `{proj['expected_margin']:+.1f} pts` | Total esperado **`{proj['expected_total']:.1f} pts`** *(Intervalo Simulación 80% [Q10–Q90]: `{proj.get('simulation_q10_total', proj.get('conformal_q10_total', 205.0)):.0f} – {proj.get('simulation_q90_total', proj.get('conformal_q90_total', 252.0)):.0f} pts` | Prob. Prórroga: `{proj['overtime_prob_pct']:.1f}%` | Prob. Paliza: `{proj['blowout_prob_pct']:.1f}%`)*",
                     "- **Estadísticas Clave Tomadas en Cuenta**:",
                     f"  - **Rating Elo**: `{ab['home_team_code']} {st['home_elo']}` vs `{ab['away_team_code']} {st['away_elo']}` | **Eficiencia Neta (Off/Def)**: `{ab['home_team_code']} ({st['home_off_rtg']}/{st['home_def_rtg']})` vs `{ab['away_team_code']} ({st['away_off_rtg']}/{st['away_def_rtg']})` (`Dif: {st['net_rtg_diff']:+.1f} pts/100`)",
                     f"  - **Ritmo (Pace)**: `{st['expected_pace']:.1f} posesiones` | **Descanso**: Dif `{st['rest_diff']:+d}d` | **Viaje Geodésico**: `Dif. {st['travel_miles_diff']:+.0f} millas`",
@@ -584,7 +571,11 @@ def export_bets_and_tracking_dashboard(
             f"- **Banca Virtual de Props**: `S/{initial_bankroll_pen:.2f} PEN` (Inicial) → **`S/{props_metrics.get('current_props_bankroll_pen', initial_bankroll_pen):.2f} PEN`** (`{props_metrics.get('total_net_profit_pen', 0.0):+.2f} PEN`)",
             f"- **Tasa de Acierto (Win Rate)**: **`{props_metrics.get('win_rate_pct', 0.0):.1f}%`** (`{props_metrics.get('won_picks', 0)}G - {props_metrics.get('lost_picks', 0)}P - {props_metrics.get('push_picks', 0)}E`)",
             f"- **ROI Acumulado en Props**: **`{props_metrics.get('roi_pct', 0.0):+.2f}%`** | **Total Apostado (Resueltas)**: `S/{props_metrics.get('total_staked_pen', 0.0):.2f} PEN`",
-            f"- **Brier Score (Calibración)**: `{props_metrics.get('brier_score', 0.0):.4f}` | **Cobertura Conformal**: `{props_metrics.get('conformal_coverage_pct', 100.0):.1f}%`",
+            (
+                f"- **Brier Score (Calibración)**: `{props_metrics.get('brier_score', 0.0):.4f}` | **LogLoss**: `{props_metrics['log_loss']:.4f}` | **Accuracy (`p>=0.5`)**: `{props_metrics.get('accuracy_pct') or 0.0:.1f}%` | **Cobertura Empírica Intervalos Venn-Abers**: `{'n/d (sin intervalos calibrados)' if props_metrics.get('conformal_coverage_pct') is None else format(props_metrics['conformal_coverage_pct'], '.1f') + '%'}`"
+                if props_metrics.get("log_loss") is not None
+                else f"- **Brier Score (Calibración)**: `{props_metrics.get('brier_score', 0.0):.4f}` | **Cobertura Intervalos Venn-Abers**: `n/d (sin resueltas)`"
+            ),
             f"- **Total de Picks Registrados**: `{props_metrics.get('total_picks', 0)}` (`{props_metrics.get('pending_picks', 0)}` en espera / `{resolved_picks_count}` resueltas verificadas / `{void_picks_count}` anuladas `VOID` con impacto `S/0.00 PEN`)",
             "",
             "### 📊 Desglose de Rendimiento por Categoría de Prop",

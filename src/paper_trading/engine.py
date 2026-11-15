@@ -13,6 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from datetime import datetime, timedelta, timezone
+import math
 import sqlite3
 from typing import Any
 import uuid
@@ -118,8 +119,8 @@ class PaperTradingEngine:
                     max_selections_per_matchday=self.max_selections_per_matchday,
                     min_ev_threshold=self.min_ev_threshold,
                     max_portfolio_exposure_pct=self.max_portfolio_exposure_pct,
-                    allow_parlays=True,
-                    allow_player_props_betting=True,
+                    allow_parlays=False,
+                    allow_player_props_betting=False,
                 )
         self._ensure_initial_ledger()
 
@@ -1161,20 +1162,61 @@ class PaperTradingEngine:
         prop_dict: dict[str, Any],
         enforce_scheduled_status: bool = False,
         allow_parlay: bool | None = None,
+        allow_player_props: bool | None = None,
     ) -> str:
         """
         Records a single player prop paper bet with PENDING status.
-        Enforces game existence, scheduled status, pre-tipoff timing, and official active roster verification.
-        Combined bets (SGP / parlays) are prohibited by AGENTS.md and rejected unless a research caller
-        opts in explicitly with allow_parlay=True.
+        Enforces fail-closed risk gates (`allow_player_props_betting`, `allow_parlays`),
+        game existence, scheduled status, pre-tipoff timing, and official active roster verification.
+        Any rejected attempt due to disabled risk config is recorded in `decision_log`.
         """
-        if allow_parlay is None:
-            allow_parlay = load_config().risk.allow_parlays
-        if str(prop_dict.get("prop_category", "")).upper() == "SGP" and not allow_parlay:
-            raise RiskLimitError("Combined bets (SGP/parlays) are disabled (risk_management.allow_parlays = false).")
         prop_id = prop_dict.get("prop_id") or f"PROP_{uuid.uuid4().hex[:10].upper()}"
         emitted_at = prop_dict.get("emitted_at") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        gid = prop_dict["game_id"]
+        gid = str(prop_dict.get("game_id") or "")
+        cat = str(prop_dict.get("prop_category", "")).upper()
+        matchday_date = str(prop_dict.get("matchday_date") or emitted_at[:10])
+        selection_label = f"{prop_dict.get('player_name', '')} {prop_dict.get('selection', '')}".strip() or "PROP"
+        ev_pct = float(prop_dict.get("ev_pct") or 0.0)
+
+        eff_allow_parlay = self.risk_config.allow_parlays if allow_parlay is None else bool(allow_parlay)
+        eff_allow_props = (
+            self.risk_config.allow_player_props_betting
+            if allow_player_props is None
+            else bool(allow_player_props)
+        )
+        is_parlay_pick = cat in ("SGP", "SGP_2LEG", "PARLAY")
+
+        if is_parlay_pick and not eff_allow_parlay:
+            reason = "Combined bets (SGP/parlays) are disabled (risk_management.allow_parlays = false)."
+            self._record_decision(
+                game_id=gid or f"MATCHDAY_{matchday_date}",
+                matchday_date=matchday_date,
+                market=cat or "SGP",
+                selection=selection_label,
+                decision_type="NO_BET",
+                reason_code="DISABLED_BY_CONFIG",
+                reason_detail=reason,
+                ev_pct=ev_pct,
+                emitted_at=emitted_at,
+                model_version_id=str(prop_dict.get("model_version_id") or "player_props_v8"),
+            )
+            raise RiskLimitError(reason)
+
+        if not eff_allow_props:
+            reason = "Player props betting is disabled (risk_management.allow_player_props_betting = false)."
+            self._record_decision(
+                game_id=gid or f"MATCHDAY_{matchday_date}",
+                matchday_date=matchday_date,
+                market=cat or "PLAYER_PROP",
+                selection=selection_label,
+                decision_type="NO_BET",
+                reason_code="DISABLED_BY_CONFIG",
+                reason_detail=reason,
+                ev_pct=ev_pct,
+                emitted_at=emitted_at,
+                model_version_id=str(prop_dict.get("model_version_id") or "player_props_v8"),
+            )
+            raise RiskLimitError(reason)
 
         # 1. Verify game exists and is SCHEDULED (when enforced)
         game = self.db.fetch_one("SELECT game_id, game_start_time, status, home_team, away_team FROM games WHERE game_id = ?", (gid,))
@@ -1437,20 +1479,7 @@ class PaperTradingEngine:
         win_rate = (len(won) / resolved_count * 100.0) if resolved_count > 0 else 0.0
         roi_pct = (net_profit / total_staked * 100.0) if total_staked > 0 else 0.0
 
-        squared_errors = []
-        conformal_hits = 0
-        for p in resolved:
-            if p["status"] in ("WON", "LOST"):
-                y_true = 1.0 if p["status"] == "WON" else 0.0
-                prob = float(p.get("model_prob") or 0.5)
-                squared_errors.append((prob - y_true) ** 2)
-                p_low = float(p.get("conformal_p_low") or 0.0)
-                p_high = float(p.get("conformal_p_high") or 1.0)
-                if p_low <= y_true <= p_high or (p["status"] == "WON" and prob >= 0.5) or (p["status"] == "LOST" and prob < 0.5):
-                    conformal_hits += 1
-
-        brier_score = float(np.mean(squared_errors)) if squared_errors else 0.0
-        conformal_coverage = (conformal_hits / resolved_count * 100.0) if resolved_count > 0 else 100.0
+        cal_summary = compute_props_calibration_summary(resolved)
 
         categories = ["PTS", "REB", "AST", "PRA", "3PM", "PR", "PA", "RA", "SGP"]
         breakdown: dict[str, dict[str, Any]] = {}
@@ -1491,11 +1520,115 @@ class PaperTradingEngine:
             "total_net_profit_pen": round(net_profit, 2),
             "current_props_bankroll_pen": round(current_bankroll, 2),
             "roi_pct": round(roi_pct, 2),
-            "brier_score": round(brier_score, 4),
-            "conformal_coverage_pct": round(conformal_coverage, 1),
+            "brier_score": cal_summary["brier_score"],
+            "log_loss": cal_summary["log_loss"],
+            "ece": cal_summary["ece"],
+            "accuracy_pct": cal_summary["accuracy_pct"],
+            "venn_abers_interval_width_mean": cal_summary["venn_abers_interval_width_mean"],
+            "venn_abers_calibrated_count": cal_summary["venn_abers_calibrated_count"],
+            "venn_abers_empirical_coverage_valid": cal_summary["venn_abers_empirical_coverage_valid"],
+            "conformal_coverage_pct": cal_summary["conformal_coverage_pct"],
             "category_breakdown": breakdown,
             "recent_settled": resolved[:15],
         }
+
+
+def compute_props_calibration_summary(resolved_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Computes strictly separated calibration and interval diagnostics on resolved WON/LOST props.
+    Does NOT inflate interval coverage using binary classifier accuracy `(WON and p >= 0.5)`
+    or check `p_low <= y_true <= p_high` on binary outcomes (which conflates probability bounds
+    with binary targets). Instead reports Brier Score, Log Loss, 10-bin ECE, binary accuracy
+    (`accuracy_pct`), mean Venn-Abers probability interval width, and binned empirical
+    probability interval validity across non-trivial calibrated intervals (`0 < p_low or p_high < 1`).
+    """
+    squared_errors: list[float] = []
+    log_losses: list[float] = []
+    probs: list[float] = []
+    outcomes: list[float] = []
+    accuracy_hits = 0
+    calibrated_samples: list[tuple[float, float, float, float]] = []  # (prob, p_low, p_high, y_true)
+
+    for p in resolved_rows:
+        status = p.get("status")
+        if status not in ("WON", "LOST"):
+            continue
+        y_true = 1.0 if status == "WON" else 0.0
+        raw_mp = p.get("model_prob")
+        prob = max(1e-6, min(1.0 - 1e-6, float(raw_mp) if raw_mp is not None else 0.5))
+        squared_errors.append((prob - y_true) ** 2)
+        log_losses.append(-(y_true * math.log(prob) + (1.0 - y_true) * math.log(1.0 - prob)))
+        probs.append(prob)
+        outcomes.append(y_true)
+        if (status == "WON" and prob >= 0.5) or (status == "LOST" and prob < 0.5):
+            accuracy_hits += 1
+
+        raw_low = p.get("conformal_p_low")
+        raw_high = p.get("conformal_p_high")
+        if raw_low is not None and raw_high is not None:
+            p_low = float(raw_low)
+            p_high = float(raw_high)
+            if 0.0 <= p_low <= p_high <= 1.0 and (p_low > 0.0 or p_high < 1.0):
+                calibrated_samples.append((prob, p_low, p_high, y_true))
+
+    wl_count = len(outcomes)
+    if wl_count == 0:
+        return {
+            "brier_score": 0.0,
+            "log_loss": None,
+            "ece": None,
+            "accuracy_pct": None,
+            "venn_abers_interval_width_mean": None,
+            "venn_abers_calibrated_count": 0,
+            "venn_abers_empirical_coverage_valid": None,
+            "conformal_coverage_pct": None,
+        }
+
+    # 10-bin Expected Calibration Error (ECE)
+    ece_total = 0.0
+    for b in range(10):
+        lo = b * 0.1
+        hi = (b + 1) * 0.1
+        idxs = [i for i, pr in enumerate(probs) if (lo <= pr < hi) or (b == 9 and pr == 1.0)]
+        if idxs:
+            conf_bin = sum(probs[i] for i in idxs) / len(idxs)
+            acc_bin = sum(outcomes[i] for i in idxs) / len(idxs)
+            ece_total += (len(idxs) / wl_count) * abs(acc_bin - conf_bin)
+
+    cal_n = len(calibrated_samples)
+    width_mean: float | None = None
+    emp_cov_valid: bool | None = None
+    conformal_cov_pct: float | None = None
+    if cal_n > 0:
+        width_mean = round(float(np.mean([s[2] - s[1] for s in calibrated_samples])), 4)
+        # Binned probability-interval check: partition calibrated predictions by predicted prob into bins of >=5
+        sorted_cal = sorted(calibrated_samples, key=lambda x: x[0])
+        n_bins = max(1, min(5, cal_n // 5))
+        bin_size = math.ceil(cal_n / n_bins)
+        covered_n = 0
+        for start in range(0, cal_n, bin_size):
+            chunk = sorted_cal[start : start + bin_size]
+            mean_low = float(np.mean([c[1] for c in chunk]))
+            mean_high = float(np.mean([c[2] for c in chunk]))
+            emp_rate = float(np.mean([c[3] for c in chunk]))
+            if mean_low - 1e-6 <= emp_rate <= mean_high + 1e-6:
+                covered_n += len(chunk)
+        conformal_cov_pct = round(covered_n / cal_n * 100.0, 1)
+        overall_low = float(np.mean([c[1] for c in calibrated_samples]))
+        overall_high = float(np.mean([c[2] for c in calibrated_samples]))
+        overall_rate = float(np.mean([c[3] for c in calibrated_samples]))
+        emp_cov_valid = bool(overall_low - 1e-6 <= overall_rate <= overall_high + 1e-6)
+
+    return {
+        "brier_score": round(float(np.mean(squared_errors)), 4),
+        "log_loss": round(float(np.mean(log_losses)), 4),
+        "ece": round(ece_total, 4),
+        "accuracy_pct": round(accuracy_hits / wl_count * 100.0, 2),
+        "venn_abers_interval_width_mean": width_mean,
+        "venn_abers_calibrated_count": cal_n,
+        "venn_abers_empirical_coverage_valid": emp_cov_valid,
+        "conformal_coverage_pct": conformal_cov_pct,
+    }
 
 
 def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
@@ -1531,5 +1664,6 @@ __all__ = [
     "build_production_engine",
     "calculate_settlement_outcome",
     "compute_cppi_multiplier",
+    "compute_props_calibration_summary",
 ]
 

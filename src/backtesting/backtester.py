@@ -14,6 +14,7 @@ import json
 from typing import Any
 import numpy as np
 
+from src.config import load_config
 from src.evaluation.clv import summarize_clv
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
@@ -355,12 +356,18 @@ class WalkForwardBacktester:
         model_c = PointMarginModel("model_c_point_margin_v1")
         model_d = TotalPointsModel("model_d_total_points_v1")
         model_e = AdvancedGBMModel("model_e_lightgbm_v1")
-        model_f = EnsembleStackingModel("model_f_ensemble_v2")
+        try:
+            active_ensemble_id = load_config().model.version_id
+        except Exception:
+            active_ensemble_id = "model_f_ensemble_v8"
+        model_f = EnsembleStackingModel(active_ensemble_id)
 
         ml_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
         tot_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
+        sp_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
         ml_va = VennAbersConformalInterval(window=1200, min_samples=25)
         tot_va = VennAbersConformalInterval(window=1200, min_samples=25)
+        sp_va = VennAbersConformalInterval(window=1200, min_samples=25)
 
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         for m_id, m_fam, mkt in [
@@ -393,6 +400,7 @@ class WalkForwardBacktester:
 
         resolved_ml_cal_records: list[dict[str, Any]] = []
         resolved_tot_cal_records: list[dict[str, Any]] = []
+        resolved_sp_cal_records: list[dict[str, Any]] = []
         model_comparison_records: list[dict[str, Any]] = []
 
         for day_idx, m_date in enumerate(matchdays):
@@ -423,6 +431,9 @@ class WalkForwardBacktester:
                 if len(resolved_tot_cal_records) >= 25:
                     tot_calibrator.fit(resolved_tot_cal_records, cutoff_ts)
                     tot_va.fit(resolved_tot_cal_records, cutoff_ts)
+                if len(resolved_sp_cal_records) >= 25:
+                    sp_calibrator.fit(resolved_sp_cal_records, cutoff_ts)
+                    sp_va.fit(resolved_sp_cal_records, cutoff_ts)
 
             matchday_candidates: list[dict[str, Any]] = []
 
@@ -456,24 +467,66 @@ class WalkForwardBacktester:
                 cal_p_away = round(1.0 - cal_p_home, 6)
                 va_home_int = ml_va.predict_interval(raw_p_home)
 
-                tot_line_odds = [o for o in game_odds if o["market"] == "total_points"]
-                line_val = float(tot_line_odds[0]["line_value"]) if tot_line_odds else 228.5
+                tot_line_odds = [o for o in game_odds if o["market"] == "total_points" and o.get("line_value") is not None]
+                has_obs_total = len(tot_line_odds) > 0
+                line_val = float(tot_line_odds[0]["line_value"]) if has_obs_total else None
 
-                pred_a_tot = model_a.predict_total_points(g, prior_final_games, line_val)
-                pred_e_tot = model_e.predict_total_points(g, prior_final_games, line_val)
-                pred_f_tot = model_f.predict_total_points(g, prior_final_games, line_val)
+                pred_a_tot = model_a.predict_total_points(g, prior_final_games, line_val) if line_val is not None else None
+                pred_e_tot = model_e.predict_total_points(g, prior_final_games, line_val) if line_val is not None else None
+                pred_f_tot = model_f.predict_total_points(g, prior_final_games, line_val) if line_val is not None else None
 
-                raw_p_over = pred_f_tot["p_over"]
-                cal_p_over = tot_calibrator.transform_single(raw_p_over)
-                cal_p_under = round(1.0 - cal_p_over, 6)
-                va_over_int = tot_va.predict_interval(raw_p_over)
+                raw_p_over = float(pred_f_tot["p_over"]) if pred_f_tot is not None else None
+                cal_p_over = float(tot_calibrator.transform_single(raw_p_over)) if raw_p_over is not None else None
+
+                tot_eval_cache: dict[float, dict[str, Any]] = {}
+                for o in tot_line_odds:
+                    lv_k = round(float(o["line_value"]), 2)
+                    if lv_k not in tot_eval_cache:
+                        p_tot_k = model_f.predict_total_points(g, prior_final_games, lv_k)
+                        r_over_k = float(p_tot_k["p_over"])
+                        p_push_k = float(p_tot_k.get("p_push", 0.0))
+                        c_over_k = float(tot_calibrator.transform_single(r_over_k))
+                        if p_push_k > 0.0:
+                            c_over_k = min(c_over_k, 1.0 - p_push_k)
+                        tot_eval_cache[lv_k] = {
+                            "pred": p_tot_k,
+                            "raw_over": r_over_k,
+                            "cal_over": c_over_k,
+                            "p_push": p_push_k,
+                            "va": tot_va.predict_interval(r_over_k),
+                        }
+
+                sp_odds = [o for o in game_odds if o["market"] == "spread" and o.get("line_value") is not None]
+                sp_eval_cache: dict[float, dict[str, Any]] = {}
+                for o in sp_odds:
+                    h_line_k = round(float(o["line_value"]) if o["selection"] == "HOME" else -float(o["line_value"]), 2)
+                    if h_line_k not in sp_eval_cache:
+                        p_sp_k = model_f.predict_spread(g, prior_final_games, h_line_k)
+                        r_sp_home = float(p_sp_k["p_cover_home"])
+                        p_push_sp = float(p_sp_k.get("p_push", 0.0))
+                        c_sp_home = float(sp_calibrator.transform_single(r_sp_home))
+                        if p_push_sp > 0.0:
+                            c_sp_home = min(c_sp_home, 1.0 - p_push_sp)
+                        sp_eval_cache[h_line_k] = {
+                            "pred": p_sp_k,
+                            "raw_home": r_sp_home,
+                            "cal_home": c_sp_home,
+                            "p_push": p_push_sp,
+                            "va": sp_va.predict_interval(r_sp_home),
+                        }
 
                 market_p_home: float | None = None
+                anchored_p_home: float | None = None
                 market_p_over: float | None = None
+                anchored_p_over: float | None = None
+                market_p_sp_home: float | None = None
+                anchored_p_sp_home: float | None = None
+                first_sp_line: float | None = round(float(sp_odds[0]["line_value"]) if sp_odds[0]["selection"] == "HOME" else -float(sp_odds[0]["line_value"]), 2) if sp_odds else None
                 for o in game_odds:
                     validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
                     mkt = o["market"]
                     sel = o["selection"]
+                    row_p_push = 0.0
 
                     if mkt == "moneyline":
                         raw_p = raw_p_home if sel == "HOME" else round(1.0 - raw_p_home, 6)
@@ -486,26 +539,47 @@ class WalkForwardBacktester:
                             "p_va": round(1.0 - va_home_int["p_va"], 6),
                             "width": va_home_int["width"],
                         }
-                    else:
-                        raw_p = raw_p_over if sel == "OVER" else round(1.0 - raw_p_over, 6)
-                        cal_p = cal_p_over if sel == "OVER" else cal_p_under
-                        unc = pred_f_tot["uncertainty_std"]
+                    elif mkt == "total_points":
+                        lv_k = round(float(o["line_value"]), 2)
+                        te = tot_eval_cache[lv_k]
+                        row_p_push = float(te["p_push"])
+                        raw_p = float(te["raw_over"]) if sel == "OVER" else round(max(0.0, 1.0 - float(te["raw_over"]) - row_p_push), 6)
+                        cal_p = float(te["cal_over"]) if sel == "OVER" else round(max(0.0, 1.0 - float(te["cal_over"]) - row_p_push), 6)
+                        unc = te["pred"]["uncertainty_std"]
                         m_ver = model_f.version_id
-                        conf_int = va_over_int if sel == "OVER" else {
-                            "p0": round(1.0 - va_over_int["p1"], 6),
-                            "p1": round(1.0 - va_over_int["p0"], 6),
-                            "p_va": round(1.0 - va_over_int["p_va"], 6),
-                            "width": va_over_int["width"],
+                        va_o = te["va"]
+                        conf_int = va_o if sel == "OVER" else {
+                            "p0": round(1.0 - va_o["p1"], 6),
+                            "p1": round(1.0 - va_o["p0"], 6),
+                            "p_va": round(1.0 - va_o["p_va"], 6),
+                            "width": va_o["width"],
+                        }
+                    else:  # spread
+                        h_line_k = round(float(o["line_value"]) if sel == "HOME" else -float(o["line_value"]), 2)
+                        se = sp_eval_cache[h_line_k]
+                        row_p_push = float(se["p_push"])
+                        raw_p = float(se["raw_home"]) if sel == "HOME" else round(max(0.0, 1.0 - float(se["raw_home"]) - row_p_push), 6)
+                        cal_p = float(se["cal_home"]) if sel == "HOME" else round(max(0.0, 1.0 - float(se["cal_home"]) - row_p_push), 6)
+                        unc = se["pred"]["uncertainty_std"]
+                        m_ver = model_f.version_id
+                        va_s = se["va"]
+                        conf_int = va_s if sel == "HOME" else {
+                            "p0": round(1.0 - va_s["p1"], 6),
+                            "p1": round(1.0 - va_s["p0"], 6),
+                            "p_va": round(1.0 - va_s["p_va"], 6),
+                            "width": va_s["width"],
                         }
 
                     opp = evaluate_market_opportunity(
                         estimated_prob=cal_p,
+                        raw_model_prob=raw_p,
                         uncertainty_std=unc,
                         odds_record=o,
                         game_start_time=g["game_start_time"],
                         model_version_id=m_ver,
                         simulated_prediction_time=pred_ts,
                         conformal_interval=conf_int,
+                        p_push=row_p_push,
                     )
 
                     pred_id = f"PRED_{m_ver}_{o['odds_id']}"
@@ -514,10 +588,12 @@ class WalkForwardBacktester:
                         INSERT OR IGNORE INTO predictions (
                             prediction_id, game_id, market, selection, line_value,
                             model_version_id, raw_probability, calibrated_probability,
+                            raw_model_probability, calibrated_model_probability,
+                            market_fair_probability, market_anchored_probability,
                             uncertainty_std, implied_prob_gross, implied_prob_fair,
                             bookmaker_overround, decimal_odds_used, odds_provider,
                             odds_captured_at, ev_unit, ev_pct, emitted_at, features_snapshot_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             pred_id,
@@ -527,7 +603,11 @@ class WalkForwardBacktester:
                             o.get("line_value"),
                             m_ver,
                             raw_p,
-                            cal_p,
+                            opp["market_anchored_probability"],
+                            opp["raw_model_probability"],
+                            opp["calibrated_model_probability"],
+                            opp["market_fair_probability"],
+                            opp["market_anchored_probability"],
                             unc,
                             opp["implied_prob_gross"],
                             opp["implied_prob_fair"],
@@ -544,18 +624,26 @@ class WalkForwardBacktester:
 
                     opp["prediction_id"] = pred_id
                     opp["raw_probability"] = raw_p
-                    opp["calibrated_probability"] = cal_p
+                    opp["calibrated_probability"] = opp["market_anchored_probability"]
                     opp["emitted_at"] = pred_ts
                     matchday_candidates.append(opp)
                     if mkt == "moneyline" and sel == "HOME" and opp.get("implied_prob_fair") is not None:
                         market_p_home = float(opp["implied_prob_fair"])
+                        anchored_p_home = float(opp["market_anchored_probability"])
                     elif mkt == "total_points" and sel == "OVER" and opp.get("implied_prob_fair") is not None:
                         market_p_over = float(opp["implied_prob_fair"])
+                        anchored_p_over = float(opp["market_anchored_probability"])
+                    elif mkt == "spread" and sel == "HOME" and opp.get("implied_prob_fair") is not None:
+                        market_p_sp_home = float(opp["implied_prob_fair"])
+                        anchored_p_sp_home = float(opp["market_anchored_probability"])
 
                 # If game finished, record outcome for subsequent matchday training/calibration
                 if g["status"] == "FINAL" and g["home_score"] is not None and g["away_score"] is not None:
                     home_won = 1 if g["home_score"] > g["away_score"] else 0
-                    over_hit = 1 if (g["home_score"] + g["away_score"]) > line_val else 0
+                    total_pts = int(g["home_score"]) + int(g["away_score"])
+                    over_hit: int | None = None
+                    if line_val is not None and abs(total_pts - line_val) > 1e-9:
+                        over_hit = 1 if total_pts > line_val else 0
 
                     resolved_ml_cal_records.append(
                         {
@@ -568,33 +656,67 @@ class WalkForwardBacktester:
                             "outcome": home_won,
                         }
                     )
-                    resolved_tot_cal_records.append(
-                        {
-                            "game_id": g["game_id"],
-                            "game_start_time": g["game_start_time"],
-                            "result_recorded_at": g.get("result_recorded_at"),
-                            "raw_probability": raw_p_over,
-                            "calibrated_probability": cal_p_over,
-                            "baseline_probability": pred_a_tot["p_over"],
-                            "outcome": over_hit,
-                        }
-                    )
+                    if over_hit is not None and raw_p_over is not None and cal_p_over is not None and pred_a_tot is not None:
+                        resolved_tot_cal_records.append(
+                            {
+                                "game_id": g["game_id"],
+                                "game_start_time": g["game_start_time"],
+                                "result_recorded_at": g.get("result_recorded_at"),
+                                "raw_probability": raw_p_over,
+                                "calibrated_probability": cal_p_over,
+                                "baseline_probability": pred_a_tot["p_over"],
+                                "line_value": line_val,
+                                "outcome": over_hit,
+                            }
+                        )
+                    spread_hit: int | None = None
+                    sp_raw_rec = sp_cal_rec = None
+                    if first_sp_line is not None:
+                        adj_sp = (int(g["home_score"]) - int(g["away_score"])) + first_sp_line
+                        se_first = sp_eval_cache[first_sp_line]
+                        sp_raw_rec = se_first["raw_home"]
+                        sp_cal_rec = se_first["cal_home"]
+                        if abs(adj_sp) > 1e-9:
+                            spread_hit = 1 if adj_sp > 0.0 else 0
+                            resolved_sp_cal_records.append(
+                                {
+                                    "game_id": g["game_id"],
+                                    "game_start_time": g["game_start_time"],
+                                    "result_recorded_at": g.get("result_recorded_at"),
+                                    "raw_probability": sp_raw_rec,
+                                    "calibrated_probability": sp_cal_rec,
+                                    "line_value": first_sp_line,
+                                    "outcome": spread_hit,
+                                }
+                            )
                     model_comparison_records.append(
                         {
                             "game_id": g["game_id"],
                             "season": g["season"],
                             "matchday_date": g["matchday_date"],
                             "home_won": home_won,
-                            "over_hit": over_hit,
+                            "over_hit": over_hit if over_hit is not None else (1 if total_pts > (line_val or 228.5) else 0),
+                            "has_observed_tot_line": over_hit is not None,
+                            "spread_hit": spread_hit,
                             "model_a_ml": pred_a_ml["p_home"],
                             "model_b_ml": pred_b_ml["p_home"],
+                            "model_raw_ml": raw_p_home,
+                            "model_cal_ml": cal_p_home,
                             "model_c_ml": cal_p_home,
+                            "model_anchored_ml": anchored_p_home,
                             "model_e_ml": pred_e_ml["p_home"],
-                            "model_a_tot": pred_a_tot["p_over"],
+                            "model_a_tot": pred_a_tot["p_over"] if pred_a_tot else None,
+                            "model_raw_tot": raw_p_over,
+                            "model_cal_tot": cal_p_over,
                             "model_d_tot": cal_p_over,
-                            "model_e_tot": pred_e_tot["p_over"],
+                            "model_anchored_tot": anchored_p_over,
+                            "model_e_tot": pred_e_tot["p_over"] if pred_e_tot else None,
                             "market_ml": market_p_home,
                             "market_tot": market_p_over,
+                            "model_raw_sp": sp_raw_rec,
+                            "model_cal_sp": sp_cal_rec,
+                            "market_sp": market_p_sp_home,
+                            "model_anchored_sp": anchored_p_sp_home,
                         }
                     )
 
@@ -628,9 +750,9 @@ class WalkForwardBacktester:
     def _reconstruct_comparison_records_from_db(self) -> list[dict[str, Any]]:
         """
         One record per real FINAL game using the LATEST observed pre-tip prediction of each market.
-        Fields: naive baseline, calibrated ensemble probability (as stored), raw ensemble probability and
-        the de-vigged market probability of the same odds snapshot. Nothing is synthesized: when a value
-        is missing it stays None and the corresponding metric is not computed.
+        Explicitly separates raw model probability, calibrated model probability, fair de-vigged market
+        probability, and market-anchored probability (F-008). Pre-m012 legacy rows leave
+        calibrated_model_probability as None so market anchoring is never conflated with model calibration.
         """
         rows = self.db.fetch_all(
             """
@@ -641,9 +763,13 @@ class WalkForwardBacktester:
                 FROM v_observed_predictions p
                 WHERE (p.market = 'moneyline' AND p.selection = 'HOME')
                    OR (p.market = 'total_points' AND p.selection = 'OVER')
+                   OR (p.market = 'spread' AND p.selection = 'HOME')
             )
-            SELECT l.game_id, l.market, l.raw_probability, l.calibrated_probability, l.implied_prob_fair,
-                   l.line_value, g.season, g.matchday_date, g.game_start_time, g.home_score, g.away_score
+            SELECT l.game_id, l.market, l.raw_probability, l.calibrated_probability,
+                   l.raw_model_probability, l.calibrated_model_probability,
+                   l.market_fair_probability, l.market_anchored_probability,
+                   l.implied_prob_fair, l.line_value,
+                   g.season, g.matchday_date, g.game_start_time, g.home_score, g.away_score
             FROM latest l JOIN games g ON g.game_id = l.game_id
             WHERE l.rn = 1 AND g.status = 'FINAL' AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
               AND l.game_id NOT LIKE 'SYN%'
@@ -661,6 +787,7 @@ class WalkForwardBacktester:
         for gid, mk in sorted(by_game.items(), key=lambda kv: str(next(iter(kv[1].values()))["game_start_time"])):
             ml = mk.get("moneyline")
             tot = mk.get("total_points")
+            sp = mk.get("spread")
             if not ml or not tot or tot.get("line_value") is None:
                 continue
             g_full = games_idx.get(gid)
@@ -673,6 +800,29 @@ class WalkForwardBacktester:
             total_pts = int(g_full["home_score"]) + int(g_full["away_score"])
             if abs(total_pts - line_v) < 1e-9:
                 continue  # pushes carry no binary outcome
+
+            spread_hit: int | None = None
+            sp_raw = sp_cal = sp_mkt = sp_anch = None
+            if sp and sp.get("line_value") is not None:
+                sp_line = float(sp["line_value"])
+                adj_sp = (int(g_full["home_score"]) - int(g_full["away_score"])) + sp_line
+                if abs(adj_sp) > 1e-9:
+                    spread_hit = 1 if adj_sp > 0.0 else 0
+                    sp_raw = float(sp["raw_model_probability"] if sp.get("raw_model_probability") is not None else sp["raw_probability"])
+                    sp_cal = float(sp["calibrated_model_probability"]) if sp.get("calibrated_model_probability") is not None else None
+                    sp_mkt = float(sp["market_fair_probability"] if sp.get("market_fair_probability") is not None else sp["implied_prob_fair"]) if (sp.get("market_fair_probability") is not None or sp.get("implied_prob_fair") is not None) else None
+                    sp_anch = float(sp["market_anchored_probability"] if sp.get("market_anchored_probability") is not None else sp["calibrated_probability"])
+
+            ml_raw = float(ml["raw_model_probability"] if ml.get("raw_model_probability") is not None else ml["raw_probability"])
+            ml_cal = float(ml["calibrated_model_probability"]) if ml.get("calibrated_model_probability") is not None else None
+            ml_mkt = float(ml["market_fair_probability"] if ml.get("market_fair_probability") is not None else ml["implied_prob_fair"]) if (ml.get("market_fair_probability") is not None or ml.get("implied_prob_fair") is not None) else None
+            ml_anch = float(ml["market_anchored_probability"] if ml.get("market_anchored_probability") is not None else ml["calibrated_probability"])
+
+            tot_raw = float(tot["raw_model_probability"] if tot.get("raw_model_probability") is not None else tot["raw_probability"])
+            tot_cal = float(tot["calibrated_model_probability"]) if tot.get("calibrated_model_probability") is not None else None
+            tot_mkt = float(tot["market_fair_probability"] if tot.get("market_fair_probability") is not None else tot["implied_prob_fair"]) if (tot.get("market_fair_probability") is not None or tot.get("implied_prob_fair") is not None) else None
+            tot_anch = float(tot["market_anchored_probability"] if tot.get("market_anchored_probability") is not None else tot["calibrated_probability"])
+
             out.append(
                 {
                     "game_id": gid,
@@ -680,13 +830,24 @@ class WalkForwardBacktester:
                     "matchday_date": ml["matchday_date"],
                     "home_won": 1 if int(g_full["home_score"]) > int(g_full["away_score"]) else 0,
                     "over_hit": 1 if total_pts > line_v else 0,
+                    "has_observed_tot_line": True,
+                    "spread_hit": spread_hit,
                     "model_a_ml": base_model.predict_moneyline(g_full, prior_g)["p_home"],
-                    "model_raw_ml": float(ml["raw_probability"]),
-                    "model_c_ml": float(ml["calibrated_probability"]),
-                    "market_ml": float(ml["implied_prob_fair"]) if ml.get("implied_prob_fair") is not None else None,
+                    "model_raw_ml": ml_raw,
+                    "model_cal_ml": ml_cal,
+                    "model_c_ml": ml_cal if ml_cal is not None else ml_anch,
+                    "model_anchored_ml": ml_anch,
+                    "market_ml": ml_mkt,
                     "model_a_tot": base_model.predict_total_points(g_full, prior_g, line_v)["p_over"],
-                    "model_d_tot": float(tot["calibrated_probability"]),
-                    "market_tot": float(tot["implied_prob_fair"]) if tot.get("implied_prob_fair") is not None else None,
+                    "model_raw_tot": tot_raw,
+                    "model_cal_tot": tot_cal,
+                    "model_d_tot": tot_cal if tot_cal is not None else tot_anch,
+                    "model_anchored_tot": tot_anch,
+                    "market_tot": tot_mkt,
+                    "model_raw_sp": sp_raw,
+                    "model_cal_sp": sp_cal,
+                    "market_sp": sp_mkt,
+                    "model_anchored_sp": sp_anch,
                 }
             )
         return out
@@ -774,7 +935,7 @@ class WalkForwardBacktester:
         clv = summarize_clv([b for b in settled_bets if b["status"] != "VOID"], closing_rows, bet_providers)
 
         by_market: dict[str, dict[str, Any]] = {}
-        for mkt in ("moneyline", "total_points"):
+        for mkt in ("moneyline", "total_points", "spread"):
             m_bets = [b for b in settled_bets if b["market"] == mkt]
             m_prof = round(sum(float(b["net_profit_pen"] or 0.0) for b in m_bets), 4)
             m_stakes = round(sum(float(b["stake_pen"]) for b in m_bets if b["status"] != "VOID"), 4)
@@ -805,47 +966,92 @@ class WalkForwardBacktester:
         recs = model_comparison_records
         if recs:
             y_ml = [int(r["home_won"]) for r in recs]
-            y_tot = [int(r["over_hit"]) for r in recs]
+            tot_recs = [r for r in recs if r.get("has_observed_tot_line", True) and r.get("model_d_tot") is not None and r.get("model_a_tot") is not None]
+            y_tot = [int(r["over_hit"]) for r in tot_recs]
             model_metrics["baseline_naive_ml"] = self._score([r["model_a_ml"] for r in recs], y_ml)
             model_metrics["ensemble_calibrated_ml"] = self._score([r["model_c_ml"] for r in recs], y_ml, with_curve=True)
-            model_metrics["baseline_naive_totals"] = self._score([r["model_a_tot"] for r in recs], y_tot)
-            model_metrics["ensemble_calibrated_totals"] = self._score([r["model_d_tot"] for r in recs], y_tot, with_curve=True)
-            for field, key, ys in (
-                ("model_raw_ml", "ensemble_raw_ml", y_ml),
-                ("model_b_ml", "elo_ml", y_ml),
-                ("model_e_ml", "lightgbm_ml", y_ml),
-                ("model_e_tot", "lightgbm_totals", y_tot),
+            if tot_recs:
+                model_metrics["baseline_naive_totals"] = self._score([r["model_a_tot"] for r in tot_recs], y_tot)
+                model_metrics["ensemble_calibrated_totals"] = self._score([r["model_d_tot"] for r in tot_recs], y_tot, with_curve=True)
+            for field, key, subset, y_key in (
+                ("model_raw_ml", "ensemble_raw_ml", recs, "home_won"),
+                ("model_cal_ml", "ensemble_calibrated_model_ml", recs, "home_won"),
+                ("model_anchored_ml", "ensemble_market_anchored_ml", recs, "home_won"),
+                ("model_b_ml", "elo_ml", recs, "home_won"),
+                ("model_e_ml", "lightgbm_ml", recs, "home_won"),
+                ("model_raw_tot", "ensemble_raw_totals", tot_recs, "over_hit"),
+                ("model_cal_tot", "ensemble_calibrated_model_totals", tot_recs, "over_hit"),
+                ("model_anchored_tot", "ensemble_market_anchored_totals", tot_recs, "over_hit"),
+                ("model_e_tot", "lightgbm_totals", tot_recs, "over_hit"),
+                ("model_raw_sp", "ensemble_raw_spread", recs, "spread_hit"),
+                ("model_cal_sp", "ensemble_calibrated_model_spread", recs, "spread_hit"),
+                ("market_sp", "market_devig_spread", recs, "spread_hit"),
+                ("model_anchored_sp", "ensemble_market_anchored_spread", recs, "spread_hit"),
             ):
-                if all(r.get(field) is not None for r in recs):
-                    model_metrics[key] = self._score([float(r[field]) for r in recs], ys)
+                valid = [r for r in subset if r.get(field) is not None and r.get(y_key) is not None]
+                if valid:
+                    model_metrics[key] = self._score(
+                        [float(r[field]) for r in valid],
+                        [int(r[y_key]) for r in valid],
+                        with_curve=(key in (
+                            "ensemble_raw_ml",
+                            "ensemble_calibrated_model_ml",
+                            "ensemble_market_anchored_ml",
+                            "ensemble_raw_totals",
+                            "ensemble_calibrated_model_totals",
+                            "ensemble_market_anchored_totals",
+                        )),
+                    )
 
-            sub = [r for r in recs if r.get("market_ml") is not None and r.get("market_tot") is not None]
+            sub = [
+                r for r in recs
+                if r.get("market_ml") is not None
+                and r.get("market_tot") is not None
+                and r.get("has_observed_tot_line", True)
+                and r.get("model_d_tot") is not None
+            ]
             market_subset_n = len(sub)
             if sub:
                 ys_ml = [int(r["home_won"]) for r in sub]
                 ys_tot = [int(r["over_hit"]) for r in sub]
-                m_ml = self._score([float(r["market_ml"]) for r in sub], ys_ml)
-                m_tot = self._score([float(r["market_tot"]) for r in sub], ys_tot)
-                e_ml = self._score([float(r["model_c_ml"]) for r in sub], ys_ml)
-                e_tot = self._score([float(r["model_d_tot"]) for r in sub], ys_tot)
+                m_ml = self._score([float(r["market_ml"]) for r in sub], ys_ml, with_curve=True)
+                m_tot = self._score([float(r["market_tot"]) for r in sub], ys_tot, with_curve=True)
+                e_ml = self._score([float(r["model_c_ml"]) for r in sub], ys_ml, with_curve=True)
+                e_tot = self._score([float(r["model_d_tot"]) for r in sub], ys_tot, with_curve=True)
                 model_metrics["market_devig_ml"] = m_ml
                 model_metrics["market_devig_totals"] = m_tot
+                if all(r.get("model_raw_ml") is not None and r.get("model_raw_tot") is not None for r in sub):
+                    model_metrics["common_subset_raw_ml"] = self._score([float(r["model_raw_ml"]) for r in sub], ys_ml, with_curve=True)
+                    model_metrics["common_subset_raw_totals"] = self._score([float(r["model_raw_tot"]) for r in sub], ys_tot, with_curve=True)
+                if all(r.get("model_cal_ml") is not None and r.get("model_cal_tot") is not None for r in sub):
+                    model_metrics["common_subset_calibrated_model_ml"] = self._score([float(r["model_cal_ml"]) for r in sub], ys_ml, with_curve=True)
+                    model_metrics["common_subset_calibrated_model_totals"] = self._score([float(r["model_cal_tot"]) for r in sub], ys_tot, with_curve=True)
+                if all(r.get("model_anchored_ml") is not None and r.get("model_anchored_tot") is not None for r in sub):
+                    model_metrics["common_subset_market_anchored_ml"] = self._score([float(r["model_anchored_ml"]) for r in sub], ys_ml, with_curve=True)
+                    model_metrics["common_subset_market_anchored_totals"] = self._score([float(r["model_anchored_tot"]) for r in sub], ys_tot, with_curve=True)
                 market_brier = round(0.5 * (m_ml["brier_score"] + m_tot["brier_score"]), 6)
                 market_ll = round(0.5 * (m_ml["log_loss"] + m_tot["log_loss"]), 6)
                 model_brier_mkt_subset = round(0.5 * (e_ml["brier_score"] + e_tot["brier_score"]), 6)
                 model_ll_mkt_subset = round(0.5 * (e_ml["log_loss"] + e_tot["log_loss"]), 6)
 
             ens_ml = model_metrics["ensemble_calibrated_ml"]
-            ens_tot = model_metrics["ensemble_calibrated_totals"]
-            overall_brier = round(0.5 * (ens_ml["brier_score"] + ens_tot["brier_score"]), 6)
-            baseline_brier = round(
-                0.5 * (model_metrics["baseline_naive_ml"]["brier_score"] + model_metrics["baseline_naive_totals"]["brier_score"]), 6
-            )
-            overall_ll = round(0.5 * (ens_ml["log_loss"] + ens_tot["log_loss"]), 6)
-            baseline_ll = round(
-                0.5 * (model_metrics["baseline_naive_ml"]["log_loss"] + model_metrics["baseline_naive_totals"]["log_loss"]), 6
-            )
-            overall_ece = round(0.5 * (ens_ml["ece"] + ens_tot["ece"]), 6)
+            ens_tot = model_metrics.get("ensemble_calibrated_totals")
+            if ens_tot is not None:
+                overall_brier = round(0.5 * (ens_ml["brier_score"] + ens_tot["brier_score"]), 6)
+                baseline_brier = round(
+                    0.5 * (model_metrics["baseline_naive_ml"]["brier_score"] + model_metrics["baseline_naive_totals"]["brier_score"]), 6
+                )
+                overall_ll = round(0.5 * (ens_ml["log_loss"] + ens_tot["log_loss"]), 6)
+                baseline_ll = round(
+                    0.5 * (model_metrics["baseline_naive_ml"]["log_loss"] + model_metrics["baseline_naive_totals"]["log_loss"]), 6
+                )
+                overall_ece = round(0.5 * (ens_ml["ece"] + ens_tot["ece"]), 6)
+            else:
+                overall_brier = round(ens_ml["brier_score"], 6)
+                baseline_brier = round(model_metrics["baseline_naive_ml"]["brier_score"], 6)
+                overall_ll = round(ens_ml["log_loss"], 6)
+                baseline_ll = round(model_metrics["baseline_naive_ml"]["log_loss"], 6)
+                overall_ece = round(ens_ml["ece"], 6)
         oos_seasons = len({r["season"] for r in recs}) if recs else 0
 
         live_settled_list = [b for b in settled_chrono if str(b["game_id"]).startswith("ESPN_")]

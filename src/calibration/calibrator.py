@@ -269,21 +269,43 @@ class VennAbersConformalInterval:
         iso.fit(x, y)
         return float(iso.predict([score])[0])
 
-    def predict_interval(self, raw_probability: float) -> dict[str, float]:
+    def predict_interval(self, raw_probability: float) -> dict[str, Any]:
         """
-        Returns {p0, p1, p_va (merged point), width}. When not fitted (insufficient history),
-        returns a deliberately wide non-informative interval around the raw score.
+        Returns {p0, p1, p_va (merged point), width, is_fitted, is_conformal, calibration_method,
+        sample_size, cutoff_utc}. When not fitted (insufficient history), returns an explicit
+        unfitted heuristic interval fallback that MUST NOT be treated as conformal.
         """
         s = float(np.clip(raw_probability, 1e-4, 1.0 - 1e-4))
+        n_samples = int(len(self.scores))
         if not self.is_fitted:
             p0, p1 = max(0.0, s - 0.15), min(1.0, s + 0.15)
-            return {"p0": round(p0, 6), "p1": round(p1, 6), "p_va": round(s, 6), "width": round(p1 - p0, 6)}
+            return {
+                "p0": round(p0, 6),
+                "p1": round(p1, 6),
+                "p_va": round(s, 6),
+                "width": round(p1 - p0, 6),
+                "is_fitted": False,
+                "is_conformal": False,
+                "calibration_method": "unfitted_heuristic_fallback",
+                "sample_size": n_samples,
+                "cutoff_utc": self.cutoff_time_str,
+            }
         p0 = self._iso_at(s, 0)
         p1 = self._iso_at(s, 1)
         lo, hi = min(p0, p1), max(p0, p1)
         # Log-loss optimal merge of the Venn-Abers pair
         p_va = hi / (1.0 - lo + hi) if (1.0 - lo + hi) > 0 else s
-        return {"p0": round(lo, 6), "p1": round(hi, 6), "p_va": round(p_va, 6), "width": round(hi - lo, 6)}
+        return {
+            "p0": round(lo, 6),
+            "p1": round(hi, 6),
+            "p_va": round(p_va, 6),
+            "width": round(hi - lo, 6),
+            "is_fitted": True,
+            "is_conformal": True,
+            "calibration_method": "venn_abers",
+            "sample_size": n_samples,
+            "cutoff_utc": self.cutoff_time_str,
+        }
 
 
 def conformal_lower_bound_ev(
@@ -292,18 +314,22 @@ def conformal_lower_bound_ev(
     market_prob: float | None,
     model_weight: float,
     decimal_odds: float,
+    p_push: float = 0.0,
 ) -> dict[str, float]:
     """
     Pessimistic (lower-bound) EV: replaces the model probability with the conservative edge of its
-    Venn-Abers interval (never above the point estimate) before applying the same market anchoring:
-        p_low_final = w * min(p_low, p_point) + (1 - w) * p_market
-        EV_low = p_low_final * O - 1
+    Venn-Abers interval (never above the point estimate) before applying market anchoring and push mass.
     """
+    p_p = max(0.0, min(0.5, float(p_push or 0.0)))
+    non_push = max(1e-9, 1.0 - p_p)
     p_low_model = min(float(interval_low), float(point_prob))
+    p_low_cond = min(1.0, max(0.0, p_low_model / non_push)) if p_p > 0.0 else p_low_model
     w = max(0.0, min(1.0, float(model_weight)))
-    p_low_final = p_low_model if market_prob is None else w * p_low_model + (1.0 - w) * float(market_prob)
-    ev_low = p_low_final * float(decimal_odds) - 1.0
-    return {"p_low_final": round(p_low_final, 6), "ev_lower_bound": round(ev_low, 6)}
+    p_low_cond_final = p_low_cond if market_prob is None else w * p_low_cond + (1.0 - w) * float(market_prob)
+    p_low_win = non_push * p_low_cond_final if p_p > 0.0 else p_low_cond_final
+    p_low_loss = non_push * (1.0 - p_low_cond_final) if p_p > 0.0 else (1.0 - p_low_win)
+    ev_low = p_low_win * (float(decimal_odds) - 1.0) - p_low_loss
+    return {"p_low_final": round(p_low_win, 6), "ev_lower_bound": round(ev_low, 6)}
 
 
 def evaluate_version_promotion(

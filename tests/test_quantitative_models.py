@@ -44,7 +44,7 @@ def test_19_deep_montecarlo_hybrid_model() -> None:
     assert sim_1["n_simulations"] == 10000
     assert 0.00 <= sim_1["overtime_prob"] <= 0.25
     assert 0.00 <= sim_1["blowout_prob"] <= 0.65
-    assert sim_1["conformal_q10_total"] < sim_1["mc_expected_total"] < sim_1["conformal_q90_total"]
+    assert sim_1["simulation_q10_total"] < sim_1["mc_expected_total"] < sim_1["simulation_q90_total"]
 
     ens = EnsembleStackingModel("model_f_test")
     ens.fit(hist, target_game["game_start_time"])
@@ -52,7 +52,7 @@ def test_19_deep_montecarlo_hybrid_model() -> None:
     tot_out = ens.predict_total_points(target_game, hist, 228.5)
     assert "p_montecarlo" in ml_out
     assert "overtime_prob" in tot_out
-    assert "conformal_q10_total" in tot_out
+    assert "simulation_q10_total" in tot_out
 
 
 # 20. Prioridad 0: Anclaje al Mercado Eficiente, Ratings Anti-Fuga y Filtro de Datos Reales
@@ -244,7 +244,7 @@ def test_26_v5_geodesic_travel_altitude_acclimation_and_moment_matched_mc() -> N
     sim_out = mc_model.simulate_matchup(target_bos_home, hist_road_return, line_value=226.5)
     assert 0.05 <= sim_out["p_home_mc"] <= 0.95
     assert 0.05 <= sim_out["p_over_mc"] <= 0.95
-    assert sim_out["conformal_q10_total"] < sim_out["mc_expected_total"] < sim_out["conformal_q90_total"]
+    assert sim_out["simulation_q10_total"] < sim_out["mc_expected_total"] < sim_out["simulation_q90_total"]
 
 
 def test_27_v6_steam_moves_spread_predictions_referees_and_injury_decay(tmp_path: Path) -> None:
@@ -819,20 +819,20 @@ def test_43_hurdle_minutes_model() -> None:
     assert player_proj["hurdle_minutes"]["blowout_risk"] > 0.40
 
 
-# 44. V9 Fase 2: Multivariate Vine Copula Engine for 3 to 5-Leg Same Game Parlays (SGP)
-def test_44_vine_copula_multivariate_sgp() -> None:
+# 44. V9 Fase 2: Multivariate Student-t Copula Engine for 3 to 5-Leg Same Game Parlays (SGP)
+def test_44_multivariate_copula_sgp() -> None:
     """
     Test 44 (V9 Phase 2 Verification):
-    1. Multi-dimensional Vine Copula Simulator for 3-leg and 4-leg Same Game Parlays (SGP).
+    1. Multi-dimensional Student-t & Gaussian Copula Simulator for 3-leg and 4-leg Same Game Parlays (SGP).
     2. Student-t heavy tail dependence vs Gaussian copula.
     3. Positive correlation matrix ensures joint probability exceeds independent product.
     4. Fractional Kelly staking and EV pricing for Peruvian retail books (RETAbet, Betsson).
-    5. Integration into PlayerPropsEngine.simulate_multi_leg_sgp_vine_copula.
+    5. Integration into PlayerPropsEngine.simulate_multi_leg_sgp_copula.
     """
-    from src.prediction.vine_copula import VineCopulaSGP, nearest_positive_definite
+    from src.prediction.multivariate_copula import MultivariateStudentTCopula, nearest_positive_definite
     from src.prediction.player_props import PlayerPropsEngine
 
-    copula = VineCopulaSGP()
+    copula = MultivariateStudentTCopula()
 
     # 1. 3-Leg SGP definition
     legs = [
@@ -881,7 +881,7 @@ def test_44_vine_copula_multivariate_sgp() -> None:
 
     # 4. Integration with PlayerPropsEngine
     props_engine = PlayerPropsEngine()
-    sgp_res = props_engine.simulate_multi_leg_sgp_vine_copula(
+    sgp_res = props_engine.simulate_multi_leg_sgp_copula(
         legs=legs,
         offered_sgp_odds=5.80,
         bankroll_pen=100.0,

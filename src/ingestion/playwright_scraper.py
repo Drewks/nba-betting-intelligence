@@ -604,7 +604,7 @@ class PeruPlaywrightScraper:
         for q in quotes:
             sel = str(q["selection"]).upper()
             mkt = str(q["market"])
-            if mkt not in ("moneyline", "total_points", "player_prop"):
+            if mkt not in ("moneyline", "total_points", "spread", "player_prop"):
                 continue
             lv = q.get("line_value")
             gid = game_map.get((q["home_team"], q["away_team"]))

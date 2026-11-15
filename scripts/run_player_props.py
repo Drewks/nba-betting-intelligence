@@ -102,7 +102,11 @@ def main() -> None:
     print(f"Banca Props Actual : S/ {pt_metrics['current_props_bankroll_pen']:.2f} PEN (P&L: {pt_metrics['total_net_profit_pen']:+.2f} PEN)")
     print(f"Tasa de Acierto    : {pt_metrics['win_rate_pct']:.1f}% ({pt_metrics['won_picks']} Ganadas / {pt_metrics['lost_picks']} Perdidas / {pt_metrics['push_picks']} Empates)")
     print(f"ROI Acumulado      : {pt_metrics['roi_pct']:+.2f}% | Total Apostado: S/ {pt_metrics['total_staked_pen']:.2f} PEN")
-    print(f"Calibración Brier  : {pt_metrics['brier_score']:.4f} | Cobertura Conformal: {pt_metrics['conformal_coverage_pct']:.1f}%")
+    cov_val = pt_metrics.get("conformal_coverage_pct")
+    cov_txt = "n/d (sin intervalos calibrados)" if cov_val is None else f"{cov_val:.1f}%"
+    acc_val = pt_metrics.get("accuracy_pct")
+    acc_txt = "n/d" if acc_val is None else f"{acc_val:.1f}%"
+    print(f"Calibración Brier  : {pt_metrics['brier_score']:.4f} | Accuracy (p>=0.5): {acc_txt} | Cobertura Venn-Abers: {cov_txt}")
     print(f"Picks Totales      : {pt_metrics['total_picks']} ({pt_metrics['pending_picks']} en espera / {pt_metrics['settled_picks']} liquidados)")
     print("=" * 80)
 
