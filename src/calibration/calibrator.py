@@ -372,3 +372,46 @@ def evaluate_version_promotion(
         "recommend_promotion": promote,
         "selection_basis": "OOS_BRIER_AND_LOG_LOSS_AND_CALIBRATION (never ROI alone)",
     }
+
+
+def calibrate_binary_with_push(
+    raw_prob: float,
+    p_push: float = 0.0,
+    calibrator: ProbabilityCalibrator | None = None,
+    va_calibrator: VennAbersConformalInterval | None = None,
+) -> dict[str, Any]:
+    """
+    Calibrates a binary win probability while preserving discrete push mass (`p_push`).
+    When `p_push > 0`, maps `raw_prob` into conditional decisive space `P(win | not push)`
+    before applying the binary calibrator and conformal Venn-Abers interval, then scales back
+    by `(1 - p_push)` so `cal_prob + cal_complement + p_push` remains coherent.
+    """
+    p_p = max(0.0, min(0.5, float(p_push or 0.0)))
+    non_push = max(1e-9, 1.0 - p_p)
+    raw_clipped = float(np.clip(float(raw_prob), 1e-4, 1.0 - 1e-4))
+    raw_cond = float(np.clip(raw_clipped / non_push, 1e-4, 1.0 - 1e-4)) if p_p > 0.0 else raw_clipped
+    cal_cond = float(calibrator.transform_single(raw_cond)) if calibrator is not None else raw_cond
+    cal_prob = cal_cond * non_push if p_p > 0.0 else cal_cond
+
+    va_scaled: dict[str, Any] | None = None
+    if va_calibrator is not None:
+        va_raw = va_calibrator.predict_interval(raw_cond)
+        if p_p > 0.0:
+            va_scaled = {
+                **va_raw,
+                "p0": round(non_push * float(va_raw["p0"]), 6),
+                "p1": round(non_push * float(va_raw["p1"]), 6),
+                "p_va": round(non_push * float(va_raw["p_va"]), 6),
+                "width": round(non_push * float(va_raw["width"]), 6),
+            }
+        else:
+            va_scaled = dict(va_raw)
+
+    return {
+        "cal_prob": cal_prob,
+        "cal_cond": cal_cond,
+        "raw_cond": raw_cond,
+        "p_push": p_p,
+        "non_push": non_push,
+        "va_interval": va_scaled,
+    }

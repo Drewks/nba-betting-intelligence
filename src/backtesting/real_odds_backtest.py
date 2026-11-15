@@ -43,6 +43,7 @@ from src.backtesting.backtester import compute_block_bootstrap_roi_ci, compute_d
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
     VennAbersConformalInterval,
+    calibrate_binary_with_push,
     compute_brier_score,
     compute_log_loss,
 )
@@ -327,13 +328,17 @@ def run_real_odds_backtest(
                 tot_pred = model.predict_total_points(g, history, float(line))
                 raw_over = float(tot_pred["p_over"])
                 p_push_tot = float(tot_pred.get("p_push", 0.0))
-                cal_over = float(tot_cal.transform_single(raw_over))
-                if p_push_tot > 0.0:
-                    cal_over = min(cal_over, 1.0 - p_push_tot)
-                va_over = tot_va.predict_interval(raw_over)
+                cal_res = calibrate_binary_with_push(
+                    raw_over,
+                    p_push=p_push_tot,
+                    calibrator=tot_cal,
+                    va_calibrator=tot_va,
+                )
+                cal_over = float(cal_res["cal_prob"])
+                va_over = cal_res["va_interval"] or tot_va.predict_interval(raw_over)
                 p_close_over = _close_over_prob_at_line(m.get("close_total"), m.get("close_over_prob"), float(line))
-                non_push_tot = max(1e-9, 1.0 - p_push_tot)
-                anchored_over = non_push_tot * (model_weight * (cal_over / non_push_tot if p_push_tot > 0.0 else cal_over) + (1.0 - model_weight) * 0.5)
+                non_push_tot = float(cal_res["non_push"])
+                anchored_over = non_push_tot * (model_weight * float(cal_res["cal_cond"]) + (1.0 - model_weight) * 0.5)
                 rec.update({
                     "total_line": float(line), "total_result": tot_result,
                     "raw_over": raw_over, "cal_over": cal_over,

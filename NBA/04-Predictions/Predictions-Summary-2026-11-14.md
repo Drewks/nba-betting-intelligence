@@ -1,6 +1,6 @@
 ---
-date_generated: 2026-11-14T14:49:30Z
-model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
+date_generated: 2026-11-15T02:13:54Z
+model_versions: [model_f_ensemble_v8, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
 ---
 # Historial Auditable de Predicciones
 

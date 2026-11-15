@@ -5,7 +5,17 @@ Generates the independent audit report for exit gates and system integrity verif
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as pkg_version
 from typing import Any
+
+from src.config import load_config
+
+
+def _detect_playwright_status() -> str:
+    try:
+        return f"Paquete instalado v{pkg_version('playwright')}"
+    except PackageNotFoundError:
+        return "No instalado en entorno actual"
 
 
 def generate_audit_report(
@@ -25,7 +35,7 @@ def generate_audit_report(
     run_manifest_id = str(environment_status.get("run_manifest_id") or "n/d")
     commit_sha = str(environment_status.get("commit_sha") or "n/d")
     config_hash = str(environment_status.get("config_hash") or "n/d")
-    active_model_ver = str(environment_status.get("model_version_id") or "model_f_ensemble_v8")
+    active_model_ver = str(environment_status.get("model_version_id") or load_config().model.version_id)
     lines = [
         "---",
         f"date_generated: {now_str}",
@@ -67,20 +77,37 @@ def generate_audit_report(
             f"| `{g_name}` | **{status_badge}** | `{g_data['observed']}` | `{g_data['required']}` |"
         )
 
+    gate3_passed = bool((gates_eval.get("gates") or {}).get("gate_3_calibration_non_inferior_to_baseline", {}).get("passed"))
+    gate10_passed = bool((gates_eval.get("gates") or {}).get("gate_10_non_inferior_to_devigged_market", {}).get("passed"))
+    if gate3_passed and gate10_passed:
+        cal_conclusion = (
+            "Aunque el motor calibrado supera al modelo Baseline (`Modelo A`) y es no-inferior al mercado sin margen "
+            "en la muestra común observada (`gate_3` y `gate_10` aprobadas)"
+        )
+    elif gate3_passed:
+        cal_conclusion = (
+            "Aunque el motor supera al modelo Baseline (`Modelo A`), aún no cumple `gate_10` frente al mercado sin margen"
+        )
+    else:
+        cal_conclusion = (
+            "Con las predicciones calibradas actualmente registradas, el sistema aún no supera simultáneamente "
+            "las puertas estadísticas de calibración (`gate_3` / `gate_10`)"
+        )
+
     lines.extend([
         "",
         "## 3. Estado Real de Herramientas y Fuentes Inspeccionadas",
-        "- **Coordinador**: `Gemini Argon` en Google Antigravity (Ejecución secuencial verificada)",
+        f"- **Coordinador**: `{environment_status.get('coordinator_id', 'Orchestrator Local (Ejecución secuencial verificada)')}`",
         f"- **Python & Entorno Virtual**: `{environment_status.get('python_version', 'Python 3.12 via uv')}`",
         "- **Fuente Primaria Activa sin Credenciales**: `ESPNPublicAdapter` (`site.api.espn.com` — Calendario, marcadores, estadísticas y cuotas pre-partido DraftKings)",
         f"- **Sportradar (`SportradarAdapter`)**: `{environment_status.get('sportradar_status', 'Adaptador implementado; requiere SPORTRADAR_API_KEY')}`",
         f"- **NBA.com/stats (`NBAStatsAdapter`)**: `{environment_status.get('nba_stats_status', 'Adaptador implementado; filtrado por Akamai TLS sin sesión navegador; no incluye cuotas históricas')}`",
-        f"- **Playwright (`PlaywrightAuthorizedScraper`)**: `{environment_status.get('playwright_status', 'Paquete instalado v1.64.1')}`",
-        f"- **PixelRAG (`visual_researcher`)**: `{environment_status.get('pixelrag_status', 'No instalado en MCP local; documentado y operando con pipeline estructurado')}`",
+        f"- **Playwright (`PlaywrightAuthorizedScraper`)**: `{environment_status.get('playwright_status') or _detect_playwright_status()}`",
+        f"- **PixelRAG (`visual_researcher`)**: `{environment_status.get('pixelrag_status', 'Pipeline tabular/RAG local (verificar estado en runtime)')}`",
         f"- **Obsidian Vault (`NBA/`)**: `Operativo en {environment_status.get('obsidian_vault_path', 'NBA/')}`",
         "",
         "## 4. Conclusión Estadística del Auditor",
-        "- Aunque el motor cuantitativo supera al modelo Baseline (`Modelo A`) en `Brier Score` y `Log Loss` fuera de muestra y mantiene trazabilidad contable exacta sobre el bankroll virtual de **S/100.00 PEN**, el sistema **DEBE PERMANECER EN PAPER TRADING** hasta acumular al menos **500 selecciones liquidadas** fuera de muestra y confirmar que el límite inferior del intervalo de confianza (Block Bootstrap 95%) excluya el 0%.",
+        f"- {cal_conclusion}; manteniendo trazabilidad contable del bankroll virtual de **S/100.00 PEN**, el sistema **`{gates_eval['recommendation']}`** hasta superar las 10 puertas estadísticas (incluyendo >= **500 selecciones liquidadas** e IC 95% Block Bootstrap > 0%).",
     ])
 
     return "\n".join(lines) + "\n"

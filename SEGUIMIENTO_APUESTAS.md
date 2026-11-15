@@ -1,8 +1,8 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-14 09:49 (Hora Perú UTC-5)` (`2026-11-14T14:49:28Z`)
+- **Última actualización**: `2026-11-14 21:13 (Hora Perú UTC-5)` (`2026-11-15T02:13:53Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/93.47 PEN`** (`-6.53 PEN`)
-- **ROI Actual**: `-17.21%` | **Yield Actual**: `-17.21%` | **CLV (vs cierre sin margen)**: `-2.17%` (N=13) | **Max Drawdown**: `9.87%` | **Apuestas en espera**: `0` (`S/0.00 PEN` reservados)
+- **ROI Actual**: `-17.21%` | **Yield Actual**: `-17.21%` | **CLV (vs cierre sin margen)**: `-2.17%` (N=13) | **Max Drawdown**: `9.00%` | **Apuestas en espera**: `0` (`S/0.00 PEN` reservados)
 - **Motor Predictivo Activo**: `Ensemble (Elo + Ridge + LightGBM + Monte Carlo) anclado 70% al mercado sin margen`. Sin ventaja demostrada frente al mercado.
 - **Modo de Apuesta Activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%` | Solo cuotas observadas (nunca estimadas).
 - **Alcance de métricas**: solo apuestas hechas con cuotas observadas en un mercado real (`v_observed_simulated_bets`).
@@ -23,10 +23,10 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 | :-: | :--- | :---: | :--- | :--- | :--- |
 | 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `28 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
 | 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `28 liquidadas (0 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
-| 3 | **No peor que el Mercado sin margen ni que el Baseline (Brier & LogLoss)** | 🔴 PENDIENTE | `Modelo 0.2183 vs Mercado 0.2153 (N=96) | Baseline 0.2506` | **Modelo <= Mercado** | **Modelo <= Mercado** |
-| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.1085 (10.85%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
+| 3 | **No peor que el Mercado sin margen ni que el Baseline (Brier & LogLoss)** | 🔴 PENDIENTE | `Sin comparación con mercado (faltan cuotas observadas) | Baseline 0.2506` | **Modelo <= Mercado** | **Modelo <= Mercado** |
+| 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE n/d` | **ECE <= 5.0%** | **ECE <= 3.5%** |
 | 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -17.21% / Yield -17.21%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
-| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 9.87% (En vivo: 9.87%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
+| 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 9.00% (En vivo: 9.00%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
 | 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-49.2%, +19.1%] / IC95 [-55.1%, +25.3%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal, historial íntegro y ledger reconciliado** | ✅ VERDE | `Sin violaciones` | **0 violaciones** | **0 violaciones** |
 
@@ -77,11 +77,11 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 | Hora (UTC) | Partido | Cuotas Ganador (`Local / Visita`) | Proyección Modelo (`Margen / Total`) | Estadísticas Clave (`Elo`, `NetRtg`, `Descanso`) | ¿Qué Hace el Bot y Por Qué? |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `2026-11-15T00:00:00Z` | **New Orleans Pelicans @ Denver Nuggets (NOP @ DEN)** | ⏳ *Sin cuotas publicadas* | **Margen -8.0 pts** (Local `25.4%`) · Total **233.3 pts** | Elo `1368.3/1574.2` · Net `-8.9` · Pace `99.7` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-15T00:30:00Z` | **Cleveland Cavaliers @ Dallas Mavericks (CLE @ DAL)** | ⏳ *Sin cuotas publicadas* | **Margen +3.4 pts** (Local `65.0%`) · Total **229.8 pts** | Elo `1555.3/1433.9` · Net `+2.9` · Pace `99.7` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T00:00:00Z` | **New Orleans Pelicans @ Denver Nuggets (NOP @ DEN)** | ⏳ *Sin cuotas publicadas* | **Margen -8.0 pts** (Local `25.3%`) · Total **233.3 pts** | Elo `1368.3/1574.2` · Net `-8.9` · Pace `99.7` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T00:30:00Z` | **Cleveland Cavaliers @ Dallas Mavericks (CLE @ DAL)** | ⏳ *Sin cuotas publicadas* | **Margen +3.4 pts** (Local `64.9%`) · Total **229.7 pts** | Elo `1555.3/1433.9` · Net `+2.9` · Pace `99.7` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
 | `2026-11-15T01:00:00Z` | **Miami Heat @ Detroit Pistons (MIA @ DET)** | ⏳ *Sin cuotas publicadas* | **Margen -5.0 pts** (Local `33.0%`) · Total **229.2 pts** | Elo `1494.8/1645.3` · Net `-5.0` · Pace `99.9` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-15T01:00:00Z` | **Memphis Grizzlies @ Brooklyn Nets (MEM @ BKN)** | ⏳ *Sin cuotas publicadas* | **Margen +5.2 pts** (Local `68.8%`) · Total **224.8 pts** | Elo `1447.7/1338.2` · Net `+5.1` · Pace `99.0` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-15T01:00:00Z` | **Minnesota Timberwolves @ Chicago Bulls (MIN @ CHI)** | ⏳ *Sin cuotas publicadas* | **Margen +15.1 pts** (Local `89.1%`) · Total **232.8 pts** | Elo `1628.9/1367.5` · Net `+13.1` · Pace `100.3` · Desc `+1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T01:00:00Z` | **Memphis Grizzlies @ Brooklyn Nets (MEM @ BKN)** | ⏳ *Sin cuotas publicadas* | **Margen +5.2 pts** (Local `68.7%`) · Total **224.8 pts** | Elo `1447.7/1338.2` · Net `+5.1` · Pace `99.0` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-15T01:00:00Z` | **Minnesota Timberwolves @ Chicago Bulls (MIN @ CHI)** | ⏳ *Sin cuotas publicadas* | **Margen +15.2 pts** (Local `89.1%`) · Total **232.8 pts** | Elo `1628.9/1367.5` · Net `+13.1` · Pace `100.3` · Desc `+1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
 
 ---
 
@@ -117,7 +117,7 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 - **Banca Virtual de Props**: `S/100.00 PEN` (Inicial) → **`S/86.35 PEN`** (`-13.65 PEN`)
 - **Tasa de Acierto (Win Rate)**: **`42.9%`** (`9G - 12P - 0E`)
 - **ROI Acumulado en Props**: **`-18.57%`** | **Total Apostado (Resueltas)**: `S/73.50 PEN`
-- **Brier Score (Calibración)**: `0.2766` | **Cobertura Conformal**: `42.9%`
+- **Brier Score (Calibración)**: `0.2766` | **LogLoss**: `0.7475` | **Accuracy (`p>=0.5`)**: `42.9%` | **Cobertura Empírica Intervalos Venn-Abers**: `28.6%`
 - **Total de Picks Registrados**: `345` (`0` en espera / `21` resueltas verificadas / `324` anuladas `VOID` con impacto `S/0.00 PEN`)
 
 ### 📊 Desglose de Rendimiento por Categoría de Prop

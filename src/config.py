@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "model_config.yaml"
 

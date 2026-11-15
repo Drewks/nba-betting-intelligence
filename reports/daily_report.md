@@ -1,7 +1,7 @@
 ---
-date_generated: 2026-11-14T14:49:28Z
+date_generated: 2026-11-15T02:13:53Z
 report_type: daily_report
-model_versions: [model_c_point_margin_v1, model_d_total_points_v1]
+model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
 period_evaluated: 2026-11-14
 predictions_count: 36
 observed_settled_bets: 28
@@ -11,9 +11,9 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-14
 
 ## 1. Metadatos de Ejecución y Estado de Banca Observada
-- **Fecha de generación (UTC)**: `2026-11-14T14:49:28Z`
+- **Fecha de generación (UTC)**: `2026-11-15T02:13:53Z`
 - **Jornada evaluada**: `2026-11-14`
-- **Versiones de modelos activas**: `model_c_point_margin_v1` (Moneyline), `model_d_total_points_v1` (Total Points)
+- **Versión de modelo activa**: `model_f_ensemble_v8` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll observado liquidado actual**: **`S/93.47 PEN`** (`S/-6.53 PEN` en `28` apuestas observadas liquidadas)
 - **Modo de apuesta activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%`

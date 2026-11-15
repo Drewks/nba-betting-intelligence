@@ -43,6 +43,7 @@ from src.config import load_config
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
     VennAbersConformalInterval,
+    calibrate_binary_with_push,
     compute_reliability_curve,
 )
 from src.features.boxscore_features import compute_boxscore_features
@@ -772,23 +773,16 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                 if lv_key not in tot_preds_by_line:
                     pred_tot_lv = model_f.predict_total_points(g, all_final_games, lv_key)
                     p_push_tot = float(pred_tot_lv.get("p_push", 0.0))
-                    non_push_tot = max(1e-9, 1.0 - p_push_tot)
                     raw_over_lv = float(pred_tot_lv["p_over"])
-                    cond_raw_over = (
-                        min(1.0, max(0.0, raw_over_lv / non_push_tot))
-                        if p_push_tot > 0.0
-                        else raw_over_lv
+                    cal_tot_res = calibrate_binary_with_push(
+                        raw_over_lv,
+                        p_push=p_push_tot,
+                        calibrator=tot_cal,
+                        va_calibrator=tot_va,
                     )
-                    cal_cond_over = tot_cal.transform_single(cond_raw_over)
-                    cal_over_lv = round(non_push_tot * cal_cond_over, 6)
-                    va_raw = tot_va.predict_interval(cond_raw_over)
-                    va_over_lv = {
-                        **va_raw,
-                        "p0": round(non_push_tot * float(va_raw["p0"]), 6),
-                        "p1": round(non_push_tot * float(va_raw["p1"]), 6),
-                        "p_va": round(non_push_tot * float(va_raw["p_va"]), 6),
-                        "width": round(non_push_tot * float(va_raw["width"]), 6),
-                    }
+                    non_push_tot = float(cal_tot_res["non_push"])
+                    cal_over_lv = round(float(cal_tot_res["cal_prob"]), 6)
+                    va_over_lv = cal_tot_res["va_interval"]
                     tot_preds_by_line[lv_key] = {
                         "pred_f_tot": pred_tot_lv,
                         "raw_p_over": raw_over_lv,
@@ -810,23 +804,16 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                 if canon_home_sp not in sp_preds_by_line:
                     pred_sp_lv = model_f.predict_spread(g, all_final_games, canon_home_sp)
                     p_push_sp = float(pred_sp_lv.get("p_push", 0.0))
-                    non_push_sp = max(1e-9, 1.0 - p_push_sp)
                     raw_cover_home = float(pred_sp_lv["p_cover_home"])
-                    cond_raw_sp = (
-                        min(1.0, max(0.0, raw_cover_home / non_push_sp))
-                        if p_push_sp > 0.0
-                        else raw_cover_home
+                    cal_sp_res = calibrate_binary_with_push(
+                        raw_cover_home,
+                        p_push=p_push_sp,
+                        calibrator=sp_cal,
+                        va_calibrator=sp_va,
                     )
-                    cal_cond_sp = sp_cal.transform_single(cond_raw_sp)
-                    cal_cover_home = round(non_push_sp * cal_cond_sp, 6)
-                    va_raw_sp = sp_va.predict_interval(cond_raw_sp)
-                    va_sp_lv = {
-                        **va_raw_sp,
-                        "p0": round(non_push_sp * float(va_raw_sp["p0"]), 6),
-                        "p1": round(non_push_sp * float(va_raw_sp["p1"]), 6),
-                        "p_va": round(non_push_sp * float(va_raw_sp["p_va"]), 6),
-                        "width": round(non_push_sp * float(va_raw_sp["width"]), 6),
-                    }
+                    non_push_sp = float(cal_sp_res["non_push"])
+                    cal_cover_home = round(float(cal_sp_res["cal_prob"]), 6)
+                    va_sp_lv = cal_sp_res["va_interval"]
                     sp_preds_by_line[canon_home_sp] = {
                         "pred_f_sp": pred_sp_lv,
                         "raw_p_home": raw_cover_home,
@@ -867,11 +854,21 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                 if structural_fallback is not None:
                     target_total_line = round(float(structural_fallback) * 2.0) / 2.0
                     pred_f_tot = model_f.predict_total_points(g, all_final_games, target_total_line)
-                    va_over_int_default = tot_va.predict_interval(pred_f_tot["p_over"])
+                    va_over_int_default = calibrate_binary_with_push(
+                        float(pred_f_tot["p_over"]),
+                        p_push=float(pred_f_tot.get("p_push", 0.0)),
+                        calibrator=tot_cal,
+                        va_calibrator=tot_va,
+                    )["va_interval"]
                 elif hist_totals:
                     target_total_line = round((sum(hist_totals) / len(hist_totals)) * 2.0) / 2.0
                     pred_f_tot = model_f.predict_total_points(g, all_final_games, target_total_line)
-                    va_over_int_default = tot_va.predict_interval(pred_f_tot["p_over"])
+                    va_over_int_default = calibrate_binary_with_push(
+                        float(pred_f_tot["p_over"]),
+                        p_push=float(pred_f_tot.get("p_push", 0.0)),
+                        calibrator=tot_cal,
+                        va_calibrator=tot_va,
+                    )["va_interval"]
                 else:
                     pred_f_tot = {"overtime_prob": 0.05, "blowout_prob": 0.12}
                     va_over_int_default = va_home_int
