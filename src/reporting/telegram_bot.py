@@ -494,16 +494,27 @@ def format_injury_sniper_alert(alert: dict[str, Any]) -> str:
     )
 
 
+def resolve_default_min_ev_pct() -> float:
+    """Returns configured risk.min_ev_threshold as an EV percentage (e.g. 2.0 for 0.02)."""
+    try:
+        from src.config import load_config
+
+        return round(float(load_config().risk.min_ev_threshold) * 100.0, 6)
+    except Exception:
+        return 2.0
+
+
 def dispatch_pending_bet_alerts(
     bot: TelegramAlertBot,
     db: Any,
     *,
-    min_ev: float = 5.0,
+    min_ev: float | None = None,
     max_alerts: int = 5,
     state_path: Path = DEFAULT_ALERT_STATE_PATH,
     dry_run: bool = False,
 ) -> int:
     """Dispatches newly created PENDING +EV simulated bets without duplicating sent bet_ids."""
+    effective_min_ev = resolve_default_min_ev_pct() if min_ev is None else float(min_ev)
     pending_bets = db.fetch_all(
         """
         SELECT b.bet_id, b.game_id, b.matchday_date, b.market, b.selection, b.line_value,
@@ -516,7 +527,7 @@ def dispatch_pending_bet_alerts(
         ORDER BY b.emitted_at DESC
         LIMIT ?
         """,
-        (float(min_ev), int(max_alerts)),
+        (effective_min_ev, int(max_alerts)),
     )
     sent_keys = load_dispatched_alert_keys(state_path)
     dispatched = 0

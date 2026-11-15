@@ -1,11 +1,11 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-15T03:30:21Z",
-  "run_manifest_id": "RUN_20261115T033021Z_CCB4A639",
+  "timestamp_utc": "2026-11-15T03:52:54Z",
+  "run_manifest_id": "RUN_20261115T035254Z_2A97133D",
   "run_manifest": {
-    "run_id": "RUN_20261115T033021Z_CCB4A639",
-    "commit_sha": "defc49dd95395139e1be8fb0b3ed85c1c5604290",
+    "run_id": "RUN_20261115T035254Z_2A97133D",
+    "commit_sha": "a789adc357c222c40060aafa93e1ada84866611c",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
     "submodel_versions": {
@@ -34,26 +34,26 @@
           "<=215.0": {
             "sample_size": 3,
             "empirical_over_rate": 0.0,
-            "mean_raw_prob": 0.6115,
-            "brier_score": 0.37403
+            "mean_raw_prob": 0.6118,
+            "brier_score": 0.37434
           },
           "215.5-225.0": {
             "sample_size": 41,
             "empirical_over_rate": 0.4634,
-            "mean_raw_prob": 0.4921,
-            "brier_score": 0.25771
+            "mean_raw_prob": 0.492,
+            "brier_score": 0.25773
           },
           "225.5-235.0": {
             "sample_size": 33,
-            "empirical_over_rate": 0.4545,
-            "mean_raw_prob": 0.4532,
-            "brier_score": 0.27223
+            "empirical_over_rate": 0.4848,
+            "mean_raw_prob": 0.4507,
+            "brier_score": 0.27124
           },
           ">235.0": {
             "sample_size": 9,
             "empirical_over_rate": 0.5556,
-            "mean_raw_prob": 0.3971,
-            "brier_score": 0.29225
+            "mean_raw_prob": 0.3967,
+            "brier_score": 0.29212
           }
         }
       },
@@ -80,7 +80,7 @@
   "bets_settled_in_cycle": 0,
   "shadow_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
-  "predictions_generated": 52,
+  "predictions_generated": 54,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic",
@@ -93,26 +93,26 @@
       "<=215.0": {
         "sample_size": 3,
         "empirical_over_rate": 0.0,
-        "mean_raw_prob": 0.6115,
-        "brier_score": 0.37403
+        "mean_raw_prob": 0.6118,
+        "brier_score": 0.37434
       },
       "215.5-225.0": {
         "sample_size": 41,
         "empirical_over_rate": 0.4634,
-        "mean_raw_prob": 0.4921,
-        "brier_score": 0.25771
+        "mean_raw_prob": 0.492,
+        "brier_score": 0.25773
       },
       "225.5-235.0": {
         "sample_size": 33,
-        "empirical_over_rate": 0.4545,
-        "mean_raw_prob": 0.4532,
-        "brier_score": 0.27223
+        "empirical_over_rate": 0.4848,
+        "mean_raw_prob": 0.4507,
+        "brier_score": 0.27124
       },
       ">235.0": {
         "sample_size": 9,
         "empirical_over_rate": 0.5556,
-        "mean_raw_prob": 0.3971,
-        "brier_score": 0.29225
+        "mean_raw_prob": 0.3967,
+        "brier_score": 0.29212
       }
     }
   },
@@ -123,8 +123,8 @@
     "placed_parlays_count": 0
   },
   "shadow_ledger": {
-    "total_candidates": 4,
-    "pending": 4,
+    "total_candidates": 7,
+    "pending": 7,
     "settled": 0,
     "won": 0,
     "lost": 0,
@@ -136,14 +136,14 @@
     "clv_sample_size": 0,
     "by_rejection_reason": {
       "KELLY_STAKE_BELOW_MINIMUM": {
-        "total": 2,
+        "total": 3,
         "settled": 0,
         "won": 0,
         "lost": 0,
         "unit_profit": 0.0
       },
       "EV_BELOW_THRESHOLD": {
-        "total": 2,
+        "total": 4,
         "settled": 0,
         "won": 0,
         "lost": 0,
@@ -188,10 +188,10 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 264,
+        "predictions_count": 304,
         "final_game_predictions": 164,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 100,
+        "m012_cal_probs_count": 140,
         "final_with_m012_cal_probs_count": 0,
         "settled_bets_count": 3,
         "first_emitted_at": "2026-11-07T23:20:56Z",
@@ -234,11 +234,11 @@
         "last_emitted_at": "2026-10-29T22:41:49Z"
       }
     },
-    "overall_brier_score": 0.236499,
-    "baseline_brier_score": 0.254273,
-    "overall_log_loss": 0.663108,
+    "overall_brier_score": 0.237151,
+    "baseline_brier_score": 0.254142,
+    "overall_log_loss": 0.664634,
     "market_brier_score": 0.206825,
-    "model_brier_on_market_subset": 0.219222,
+    "model_brier_on_market_subset": 0.219381,
     "market_comparison_sample_size": 49,
     "history_integrity": {
       "missing_rows_total": 0,
@@ -253,7 +253,7 @@
       },
       "examples": {}
     },
-    "baseline_log_loss": 0.703642,
+    "baseline_log_loss": 0.703356,
     "mean_clv_pct": -3.6844,
     "clv_governor_factor": 1.0,
     "by_market": {
@@ -283,8 +283,8 @@
       }
     },
     "shadow_ledger": {
-      "total_candidates": 4,
-      "pending": 4,
+      "total_candidates": 7,
+      "pending": 7,
       "settled": 0,
       "won": 0,
       "lost": 0,
@@ -296,14 +296,14 @@
       "clv_sample_size": 0,
       "by_rejection_reason": {
         "KELLY_STAKE_BELOW_MINIMUM": {
-          "total": 2,
+          "total": 3,
           "settled": 0,
           "won": 0,
           "lost": 0,
           "unit_profit": 0.0
         },
         "EV_BELOW_THRESHOLD": {
-          "total": 2,
+          "total": 4,
           "settled": 0,
           "won": 0,
           "lost": 0,
@@ -337,7 +337,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-15T03:30:32Z",
+      "extracted_at": "2026-11-15T03:53:26Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -352,50 +352,50 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.267,
+        "relevance_score": 0.2616,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Alex Sarr (C) Day To Day (Illness): Sarr is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.2511,
+        "relevance_score": 0.2484,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "WAS Bub Carrington (PG) Day To Day (Chest): Carrington is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.2415,
+        "relevance_score": 0.2362,
+        "captured_at": "2026-11-14"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "LAL Bronny James (SG) Day To Day (Illness): James is Questionable on Sunday's (Nov. 15) game against the Suns.",
+        "relevance_score": 0.2322,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Sunday's (Nov. 15) game against the 76ers.",
-        "relevance_score": 0.2266,
+        "relevance_score": 0.2228,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "IND Aaron Nesmith (SF) Day To Day (Hand): Nesmith is Questionable for Sunday's (Nov. 15) game against Philadelphia.",
-        "relevance_score": 0.2253,
+        "relevance_score": 0.2215,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "TOR Scottie Barnes (PF) Day To Day (Adductor): Barnes is Questionable for Sunday's (Nov. 14) game against New York.",
-        "relevance_score": 0.2214,
+        "relevance_score": 0.2155,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "UTA Jaxson Hayes (C) Day To Day (Knee): Hayes did not return to Friday's (Nov. 13) game against the Rockets.",
-        "relevance_score": 0.2105,
+        "relevance_score": 0.2089,
         "captured_at": "2026-11-14"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "LAL Austin Reaves (SG) Day To Day (Heel): Reaves did not return to Wednesday's (Nov. 11) game against the Bucks.",
-        "relevance_score": 0.2065,
-        "captured_at": "2026-11-12"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -406,8 +406,8 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261115T033021Z_CCB4A639",
-    "commit_sha": "defc49dd95395139e1be8fb0b3ed85c1c5604290",
+    "run_manifest_id": "RUN_20261115T035254Z_2A97133D",
+    "commit_sha": "a789adc357c222c40060aafa93e1ada84866611c",
     "config_hash": "e762cb953560edba9594fdcf87d58fb4d9d3812f33252bfff8d8462b5d8da515",
     "database_role": {
       "active_role": "PRODUCTION_STATE_LIVE",

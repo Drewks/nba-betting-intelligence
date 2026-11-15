@@ -23,15 +23,20 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import logging
+import os
 from pathlib import Path
 import sys
+import tempfile
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.run_cloud_cycle import run_incremental_cloud_cycle
+from scripts.sync_state_live import extract_state_live_db
 from src.ingestion.playwright_scraper import PeruPlaywrightScraper
+from src.reporting.telegram_bot import TelegramAlertBot, dispatch_pending_bet_alerts
 from src.storage.db import DatabaseManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -72,12 +77,31 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Extrae y muestra cuotas reales sin modificar la base de datos",
     )
+    parser.add_argument(
+        "--sync-state-live",
+        action="store_true",
+        help="Extrae origin/state-live a una copia temporal antes de cosechar (no modifica el baseline congelado en main)",
+    )
+    parser.add_argument(
+        "--run-cycle",
+        action="store_true",
+        help="Ejecuta el ciclo pregame (+EV / Paper Trading) y despacha alertas Telegram tras persistir cuotas",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    default_db_path = (PROJECT_ROOT / "data" / "nba_intelligence.sqlite3").resolve()
     db_path = Path(args.db)
+    if args.sync_state_live:
+        if db_path.resolve() == default_db_path:
+            db_path = Path(os.environ.get("TEMP") or tempfile.gettempdir()) / "nba_state_live_local.sqlite3"
+        extract_info = extract_state_live_db(db_path, fetch=True)
+        print(
+            f"🔄 [STATE-LIVE] Sincronizado {extract_info.get('source_ref', 'origin/state-live')} "
+            f"-> {db_path} ({extract_info.get('size_bytes', 0)} bytes)"
+        )
     if not db_path.exists():
         logger.error("Base de datos no encontrada en %s", db_path)
         sys.exit(1)
@@ -197,6 +221,18 @@ def main() -> None:
         print("💡 Si necesitas inspección local asistida con navegador, ejecuta:")
         print("   uv run python scripts/harvest_local_peru_odds.py --site retabet --headed")
 
+    if args.run_cycle:
+        if args.dry_run:
+            print("\n🧪 [DRY-RUN] Ciclo pregame (+EV / Paper Trading) y alertas omitidos.")
+        else:
+            db.checkpoint(truncate=True)
+            print("\n⚙️ Ejecutando ciclo pregame (+EV / Paper Trading) sobre la BD cosechada...")
+            cycle_res = run_incremental_cloud_cycle(mode="pregame", db_path=db_path)
+            bot = TelegramAlertBot()
+            alerts_sent = 0
+            if bot.is_live:
+                alerts_sent = dispatch_pending_bet_alerts(bot, db, min_ev=None, max_alerts=10)
+            print(f"  📈 Ciclo pregame finalizado | alertas Telegram enviadas={alerts_sent} | res={cycle_res}")
 
     print("\n" + "=" * 78)
     print("✅ Proceso de Cosecha Asistida Finalizado.")
