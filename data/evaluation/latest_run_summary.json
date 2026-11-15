@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "settle_and_calibrate",
-  "timestamp_utc": "2026-11-15T14:20:57Z",
-  "run_manifest_id": "RUN_20261115T142057Z_8F272FEE",
+  "mode": "pregame",
+  "timestamp_utc": "2026-11-15T20:23:51Z",
+  "run_manifest_id": "RUN_20261115T202351Z_4939FEA7",
   "run_manifest": {
-    "run_id": "RUN_20261115T142057Z_8F272FEE",
+    "run_id": "RUN_20261115T202351Z_4939FEA7",
     "commit_sha": "765e52a74ed6c2e22053a0dc27279d791197ed27",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -72,16 +72,15 @@
     "main_branch_db_policy": "FROZEN_CI_BASELINE"
   },
   "ingested_dates": [
-    "2026-11-13",
     "2026-11-14",
     "2026-11-15",
     "2026-11-16"
   ],
-  "closing_lines_promoted": 0,
+  "closing_lines_promoted": 109,
   "bets_settled_in_cycle": 0,
   "shadow_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 0,
-  "predictions_generated": 0,
+  "new_bets_placed_in_cycle": 1,
+  "predictions_generated": 86,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic",
@@ -124,8 +123,8 @@
     "placed_parlays_count": 0
   },
   "shadow_ledger": {
-    "total_candidates": 23,
-    "pending": 23,
+    "total_candidates": 37,
+    "pending": 37,
     "settled": 0,
     "won": 0,
     "lost": 0,
@@ -136,8 +135,15 @@
     "clv_beat_close_rate": null,
     "clv_sample_size": 0,
     "by_rejection_reason": {
+      "EV_BELOW_THRESHOLD": {
+        "total": 21,
+        "settled": 0,
+        "won": 0,
+        "lost": 0,
+        "unit_profit": 0.0
+      },
       "KELLY_STAKE_BELOW_MINIMUM": {
-        "total": 8,
+        "total": 11,
         "settled": 0,
         "won": 0,
         "lost": 0,
@@ -151,14 +157,7 @@
         "unit_profit": 0.0
       },
       "QUALIFIED_POSITIVE_EV": {
-        "total": 2,
-        "settled": 0,
-        "won": 0,
-        "lost": 0,
-        "unit_profit": 0.0
-      },
-      "EV_BELOW_THRESHOLD": {
-        "total": 11,
+        "total": 3,
         "settled": 0,
         "won": 0,
         "lost": 0,
@@ -177,10 +176,10 @@
     "initial_bankroll_pen": 100.0,
     "settled_bankroll_pen": 93.4692,
     "cumulative_net_profit_pen": -6.5308,
-    "pending_exposure_pen": 2.48,
-    "available_balance_pen": 90.9892,
+    "pending_exposure_pen": 4.08,
+    "available_balance_pen": 89.3892,
     "settled_bets_count": 28,
-    "pending_bets_count": 2
+    "pending_bets_count": 3
   },
   "sub_bankroll_state": {
     "initial_bankroll_pen": 50.0,
@@ -198,7 +197,7 @@
     "current_settled_bankroll_pen": 93.4692,
     "net_profit_pen": -6.5308,
     "roi_pct": -17.209,
-    "yield_pct": -16.1534,
+    "yield_pct": -15.5384,
     "settled_bets_count": 28,
     "won_count": 12,
     "lost_count": 16,
@@ -210,10 +209,10 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 428,
+        "predictions_count": 502,
         "final_game_predictions": 164,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 264,
+        "m012_cal_probs_count": 338,
         "final_with_m012_cal_probs_count": 0,
         "settled_bets_count": 3,
         "first_emitted_at": "2026-11-07T23:20:56Z",
@@ -305,8 +304,8 @@
       }
     },
     "shadow_ledger": {
-      "total_candidates": 23,
-      "pending": 23,
+      "total_candidates": 37,
+      "pending": 37,
       "settled": 0,
       "won": 0,
       "lost": 0,
@@ -317,8 +316,15 @@
       "clv_beat_close_rate": null,
       "clv_sample_size": 0,
       "by_rejection_reason": {
+        "EV_BELOW_THRESHOLD": {
+          "total": 21,
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "unit_profit": 0.0
+        },
         "KELLY_STAKE_BELOW_MINIMUM": {
-          "total": 8,
+          "total": 11,
           "settled": 0,
           "won": 0,
           "lost": 0,
@@ -332,14 +338,7 @@
           "unit_profit": 0.0
         },
         "QUALIFIED_POSITIVE_EV": {
-          "total": 2,
-          "settled": 0,
-          "won": 0,
-          "lost": 0,
-          "unit_profit": 0.0
-        },
-        "EV_BELOW_THRESHOLD": {
-          "total": 11,
+          "total": 3,
           "settled": 0,
           "won": 0,
           "lost": 0,
@@ -358,13 +357,13 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 5,
+      "events_found_today": 9,
       "includes_draftkings_pregame_odds": true
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-15_09_00AM.pdf",
-      "players_listed": 84
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-15_03_00PM.pdf",
+      "players_listed": 100
     },
     "sportradar_api": {
       "credentials_configured": true,
@@ -380,7 +379,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-15T14:21:12Z",
+      "extracted_at": "2026-11-15T20:24:31Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -388,56 +387,56 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)",
     "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-    "indexed_documents_count": 124,
+    "indexed_documents_count": 125,
     "top_retrieved_context": [
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.2204,
-        "captured_at": "2026-11-14"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "WAS Alex Sarr (C) Day To Day (Illness): Sarr is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.2082,
-        "captured_at": "2026-11-14"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable on Sunday's (Nov. 15) game against the Kings.",
-        "relevance_score": 0.2021,
-        "captured_at": "2026-11-14"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MEM GG Jackson (PF) Day To Day (Foot): Jackson did not return to Saturday's (Nov. 14) game against the Nets.",
-        "relevance_score": 0.2002,
+        "snippet": "DET Duncan Robinson (SF) Day To Day (Thigh): Robinson exited Saturday's (Nov. 14) win over Detroit due to a thigh injury and was unable to return.",
+        "relevance_score": 0.2458,
         "captured_at": "2026-11-15"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "LAL Bronny James (SG) Day To Day (Illness): James is Questionable on Sunday's (Nov. 15) game against the Suns.",
-        "relevance_score": 0.1998,
+        "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
+        "relevance_score": 0.2454,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "WAS Bub Carrington (PG) Day To Day (Chest): Carrington is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-        "relevance_score": 0.1969,
+        "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale is Questionable for Sunday's (Nov. 15) game against the Bucks.",
+        "relevance_score": 0.2303,
+        "captured_at": "2026-11-15"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable on Sunday's (Nov. 15) game against the Kings.",
+        "relevance_score": 0.2298,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "SAC Keegan Murray (PF) Day To Day (Illness): Murray is Questionable on Sunday's (Nov. 15) game against the Thunder.",
-        "relevance_score": 0.1964,
+        "snippet": "SAS De'Aaron Fox (PG) Day To Day (Hip): Fox is Questionable on Sunday's (Nov. 15) game against the Jazz.",
+        "relevance_score": 0.2174,
+        "captured_at": "2026-11-15"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa is Questionable on Sunday's (Nov. 15) game against the Thunder.",
+        "relevance_score": 0.2174,
         "captured_at": "2026-11-14"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIN Jaylen Clark (SG) Day To Day (Hamstring): Clark did not return to Saturday's (Nov. 15) game against the Bulls.",
-        "relevance_score": 0.1948,
+        "snippet": "MIL Ryan Rollins (PG) Day To Day (Illness): Rollins is Questionable on Sunday's (Nov. 15) game against the Hawks.",
+        "relevance_score": 0.214,
+        "captured_at": "2026-11-15"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MEM GG Jackson (PF) Day To Day (Foot): Jackson did not return to Saturday's (Nov. 14) game against the Nets.",
+        "relevance_score": 0.2138,
         "captured_at": "2026-11-15"
       }
     ],
@@ -449,7 +448,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261115T142057Z_8F272FEE",
+    "run_manifest_id": "RUN_20261115T202351Z_4939FEA7",
     "commit_sha": "765e52a74ed6c2e22053a0dc27279d791197ed27",
     "config_hash": "e762cb953560edba9594fdcf87d58fb4d9d3812f33252bfff8d8462b5d8da515",
     "database_role": {
@@ -462,7 +461,7 @@
     "sportradar_status": "CONFIGURED_RATE_LIMITED",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)",
     "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }

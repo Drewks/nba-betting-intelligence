@@ -1,56 +1,56 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 125 docs indexed)",
   "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 124,
+  "indexed_documents_count": 125,
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-      "relevance_score": 0.2204,
-      "captured_at": "2026-11-14"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Alex Sarr (C) Day To Day (Illness): Sarr is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-      "relevance_score": 0.2082,
-      "captured_at": "2026-11-14"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable on Sunday's (Nov. 15) game against the Kings.",
-      "relevance_score": 0.2021,
-      "captured_at": "2026-11-14"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM GG Jackson (PF) Day To Day (Foot): Jackson did not return to Saturday's (Nov. 14) game against the Nets.",
-      "relevance_score": 0.2002,
+      "snippet": "DET Duncan Robinson (SF) Day To Day (Thigh): Robinson exited Saturday's (Nov. 14) win over Detroit due to a thigh injury and was unable to return.",
+      "relevance_score": 0.2458,
       "captured_at": "2026-11-15"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Bronny James (SG) Day To Day (Illness): James is Questionable on Sunday's (Nov. 15) game against the Suns.",
-      "relevance_score": 0.1998,
+      "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
+      "relevance_score": 0.2454,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Bub Carrington (PG) Day To Day (Chest): Carrington is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-      "relevance_score": 0.1969,
+      "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale is Questionable for Sunday's (Nov. 15) game against the Bucks.",
+      "relevance_score": 0.2303,
+      "captured_at": "2026-11-15"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable on Sunday's (Nov. 15) game against the Kings.",
+      "relevance_score": 0.2298,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAC Keegan Murray (PF) Day To Day (Illness): Murray is Questionable on Sunday's (Nov. 15) game against the Thunder.",
-      "relevance_score": 0.1964,
+      "snippet": "SAS De'Aaron Fox (PG) Day To Day (Hip): Fox is Questionable on Sunday's (Nov. 15) game against the Jazz.",
+      "relevance_score": 0.2174,
+      "captured_at": "2026-11-15"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa is Questionable on Sunday's (Nov. 15) game against the Thunder.",
+      "relevance_score": 0.2174,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIN Jaylen Clark (SG) Day To Day (Hamstring): Clark did not return to Saturday's (Nov. 15) game against the Bulls.",
-      "relevance_score": 0.1948,
+      "snippet": "MIL Ryan Rollins (PG) Day To Day (Illness): Rollins is Questionable on Sunday's (Nov. 15) game against the Hawks.",
+      "relevance_score": 0.214,
+      "captured_at": "2026-11-15"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MEM GG Jackson (PF) Day To Day (Foot): Jackson did not return to Saturday's (Nov. 14) game against the Nets.",
+      "relevance_score": 0.2138,
       "captured_at": "2026-11-15"
     }
   ],
