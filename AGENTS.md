@@ -1,6 +1,6 @@
 # NBA Betting Intelligence — Multi-Agent Governance & Rules (`AGENTS.md`)
 
-Este repositorio implementa un sistema cuantitativo multiagente de predicción, calibración y **paper trading exclusivo** para la NBA, coordinado secuencialmente por **Gemini Argon** en **Google Antigravity**.
+Este repositorio implementa un sistema cuantitativo multiagente de predicción, calibración y **paper trading exclusivo** para la NBA, coordinado secuencialmente por un **Orquestador Multiagente Python** (`src/orchestrator.py` / `scripts/run_cloud_cycle.py`) con trazabilidad auditable y ejecución continua en GitHub Actions.
 
 ## 1. Principios Inquebrantables de Operación
 
@@ -25,6 +25,6 @@ Este repositorio implementa un sistema cuantitativo multiagente de predicción, 
 - [`nba_data_scout`](.agents/agents/nba_data_scout.md): Ingestión mediante adaptadores intercambiables, normalización y validación temporal/estructural.
 - [`visual_researcher`](.agents/agents/visual_researcher.md): Inspección documental/visual (con verificación de estado de PixelRAG/Playwright) y registro de confianza.
 - [`nba_quant`](.agents/agents/nba_quant.md): Modelos estadísticos A–E (`Baseline`, `Elo`, `PointMargin`, `TotalPoints` con covarianza, `LightGBM`), de-vigging y cálculo de EV.
-- [`paper_trading_manager`](.agents/agents/paper_trading_manager.md): Gestión del bankroll virtual de S/100 PEN con stakes de alta convicción (Kelly fraccional 50% sobre la probabilidad calibrada del modelo; S/1.00–S/10.00 y máx. 10% de la banca por selección; stake 0 si EV ≤ 5%; máx. 3 selecciones/jornada; exposición pendiente ≤ 30%). Incluye combinadas/SGP y player props en un ledger propio con líneas ESTIMADAS y etiquetadas (no observadas), separadas de las métricas con cuotas observadas; liquidación auditable.
+- [`paper_trading_manager`](.agents/agents/paper_trading_manager.md): Gestión del bankroll virtual de S/100 PEN con sizing conservador calibrado en [`config/model_config.yaml`](config/model_config.yaml) (Kelly fraccional activo **25%**, con techo duro normativo de **50%**; S/1.00–S/10.00 y máx. 10% de la banca por selección; stake 0 si EV < **2.0%**; máx. 3 selecciones/jornada; exposición pendiente ≤ 30%). Combinadas/SGP y player props están **deshabilitados** por política operativa (`allow_parlays: false`, `allow_player_props_betting: false`, solo cuotas `OBSERVED`); existe además un **Shadow Signal Ledger** (`shadow_candidates`, 1u sin piso de Kelly ni tope diario) para medir CLV y EV real potencial sin contaminar métricas ni bankroll oficial. La rama `origin/state-live` es la única fuente viva de producción (`data/nba_intelligence.sqlite3` en `main` es el fixture base congelado para CI).
 - [`model_calibrator`](.agents/agents/model_calibrator.md): Seguimiento de Brier Score, Log Loss, calibración logística/isotónica y promoción walk-forward.
 - [`nba_auditor`](.agents/agents/nba_auditor.md): Auditoría independiente de fugas temporales, reconciliación contable, intervalos de confianza y puertas de validación (500 apuestas mínimas).

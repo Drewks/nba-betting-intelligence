@@ -4,9 +4,12 @@ Pure settlement outcome calculation for paper trading bets and player props.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+import sqlite3
 from typing import Any
 
-from src.validation.validator import DataValidationError
+from src.paper_trading.exceptions import DoubleSettlementError, RiskLimitError
+from src.validation.validator import DataValidationError, TemporalLeakageError, parse_iso_utc
 
 
 def calculate_settlement_outcome(
@@ -148,3 +151,156 @@ def calculate_prop_settlement_outcome(
         raise DataValidationError(f"Unsupported prop selection: {sel}")
 
     return outcome_status, net_profit, stat_recorded, summary
+
+
+def settle_simulated_bet(
+    db: Any,
+    get_bankroll_state_fn: Any,
+    bet_id: str,
+    game_status: str,
+    home_score: int | None,
+    away_score: int | None,
+    settled_at: str | None = None,
+) -> dict[str, Any]:
+    """
+    Settles a single PENDING simulated bet after verifying temporal order and preventing double settlement.
+    """
+    bet = db.fetch_one("SELECT * FROM simulated_bets WHERE bet_id = ?", (bet_id,))
+    if not bet:
+        raise DataValidationError(f"Bet ID {bet_id!r} does not exist")
+    if bet["status"] != "PENDING":
+        raise DoubleSettlementError(
+            f"Bet {bet_id} has already been settled with status '{bet['status']}' and cannot be settled twice."
+        )
+    game = db.fetch_one("SELECT * FROM games WHERE game_id = ?", (bet["game_id"],))
+    if not game:
+        raise DataValidationError(f"Associated game {bet['game_id']} not found")
+
+    settlement_ts = settled_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if parse_iso_utc(settlement_ts) <= parse_iso_utc(game["game_start_time"]):
+        raise TemporalLeakageError(
+            f"Cannot settle bet {bet_id} at {settlement_ts} before or at game_start_time ({game['game_start_time']})"
+        )
+
+    outcome_status, net_profit, result_summary = calculate_settlement_outcome(
+        market=bet["market"],
+        selection=bet["selection"],
+        line_value=bet["line_value"],
+        decimal_odds=float(bet["decimal_odds"]),
+        stake_pen=float(bet["stake_pen"]),
+        game_status=game_status,
+        home_score=home_score,
+        away_score=away_score,
+    )
+
+    pre_state = get_bankroll_state_fn()
+    new_settled_bankroll = round(pre_state["settled_bankroll_pen"] + net_profit, 4)
+    if new_settled_bankroll < 0.0:
+        raise RiskLimitError(f"Negative bankroll violation detected: S/{new_settled_bankroll:.2f}")
+
+    new_pending_exposure = round(max(0.0, pre_state["pending_exposure_pen"] - float(bet["stake_pen"])), 4)
+    new_available = round(new_settled_bankroll - new_pending_exposure, 4)
+
+    try:
+        with db.connect() as conn:
+            conn.execute(
+                """
+                UPDATE simulated_bets
+                SET status = ?, net_profit_pen = ?, bankroll_after_pen = ?,
+                    actual_result_summary = ?, settled_at = ?
+                WHERE bet_id = ?
+                """,
+                (outcome_status, net_profit, new_settled_bankroll, result_summary, settlement_ts, bet_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO bankroll_ledger (
+                    timestamp, event_type, reference_bet_id, amount_delta_pen,
+                    settled_bankroll_pen, pending_exposure_pen, available_balance_pen
+                ) VALUES (?, 'BET_SETTLED', ?, ?, ?, ?, ?)
+                """,
+                (settlement_ts, bet_id, net_profit, new_settled_bankroll, new_pending_exposure, new_available),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise DoubleSettlementError(f"Database trigger blocked settlement on {bet_id}: {exc}") from exc
+
+    return {
+        "bet_id": bet_id,
+        "status": outcome_status,
+        "net_profit_pen": net_profit,
+        "bankroll_after_pen": new_settled_bankroll,
+        "actual_result_summary": result_summary,
+        "settled_at": settlement_ts,
+    }
+
+
+
+def persist_closing_lines_for_games(db: Any, as_of_utc: str | None = None) -> int:
+    """
+    Promotes the latest pre-tipoff OBSERVED odds capture to a formal closing line
+    (is_closing_line = 1) for real games that are FINAL or within 45 minutes of tip-off.
+    """
+    now_dt = parse_iso_utc(as_of_utc) if as_of_utc else datetime.now(timezone.utc)
+    cutoff_str = (now_dt + timedelta(minutes=45)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    games_needing_close = db.fetch_all(
+        """
+        SELECT g.game_id, g.game_start_time, g.status
+        FROM games g
+        WHERE g.game_id NOT LIKE 'SYN%'
+          AND (g.status IN ('FINAL', 'POSTPONED', 'CANCELLED') OR datetime(g.game_start_time) <= datetime(?))
+          AND EXISTS (
+              SELECT 1 FROM v_observed_odds_snapshots o
+              WHERE o.game_id = g.game_id
+                AND o.is_closing_line = 0
+                AND datetime(o.captured_at) <= datetime(g.game_start_time)
+          )
+        """,
+        (cutoff_str,),
+    )
+    inserted_count = 0
+    with db.connect() as conn:
+        for g in games_needing_close:
+            gid = g["game_id"]
+            start_ts = g["game_start_time"]
+            snapshots = conn.execute(
+                """
+                SELECT *
+                FROM (
+                    SELECT o.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY o.provider, o.market, o.selection, COALESCE(o.line_value, -9999)
+                               ORDER BY datetime(o.captured_at) DESC, o.captured_at DESC
+                           ) AS rn
+                    FROM v_observed_odds_snapshots o
+                    WHERE o.game_id = ?
+                      AND o.is_closing_line = 0
+                      AND datetime(o.captured_at) <= datetime(?)
+                )
+                WHERE rn = 1
+                """,
+                (gid, start_ts),
+            ).fetchall()
+
+            for s in snapshots:
+                close_id = f"{s['odds_id']}_CLOSE"
+                existing_close = conn.execute("SELECT 1 FROM odds_snapshots WHERE odds_id = ?", (close_id,)).fetchone()
+                if existing_close:
+                    continue
+                inserted = db.insert_odds_snapshot(
+                    {
+                        "odds_id": close_id,
+                        "game_id": s["game_id"],
+                        "provider": s["provider"],
+                        "market": s["market"],
+                        "selection": s["selection"],
+                        "line_value": s["line_value"],
+                        "decimal_odds": s["decimal_odds"],
+                        "counterpart_decimal_odds": s["counterpart_decimal_odds"],
+                        "captured_at": s["captured_at"],
+                        "is_closing_line": 1,
+                        "source_type": s["source_type"],
+                    },
+                    conn=conn,
+                )
+                inserted_count += int(inserted)
+    return inserted_count

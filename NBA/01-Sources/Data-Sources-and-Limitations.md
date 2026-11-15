@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-15T02:13:54Z
+date_generated: 2026-11-15T03:30:37Z
 component: nba_data_scout
 ---
 # Evaluación de Fuentes de Estadísticas y Cuotas NBA
@@ -16,5 +16,5 @@ component: nba_data_scout
 - Escanea en tiempo real hasta 25+ casas de apuestas (`Pinnacle`, `DraftKings`, `FanDuel`, `BetMGM`, `Coolbet`, `Matchbook`, `GTbets`, etc.) para elegir siempre la cuota máxima disponible.
 
 ## 4. Playwright + PixelRAG (`visual_researcher`)
-- Playwright: `Paquete instalado v1.64.1`.
-- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)`.
+- Playwright: `OPERATIONAL`.
+- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)`.

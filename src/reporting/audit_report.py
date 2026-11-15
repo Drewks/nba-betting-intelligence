@@ -35,7 +35,23 @@ def generate_audit_report(
     run_manifest_id = str(environment_status.get("run_manifest_id") or "n/d")
     commit_sha = str(environment_status.get("commit_sha") or "n/d")
     config_hash = str(environment_status.get("config_hash") or "n/d")
-    active_model_ver = str(environment_status.get("model_version_id") or load_config().model.version_id)
+    cfg = load_config()
+    active_model_ver = str(environment_status.get("model_version_id") or cfg.model.version_id)
+    scraper_policy = str(environment_status.get("peru_scraper_policy") or cfg.sources.peru_scraper_policy)
+    db_role = environment_status.get("database_role") or {}
+    db_provenance = (
+        f"{db_role.get('active_role')} (`live: {db_role.get('live_source_of_truth')}` | `main: {db_role.get('main_branch_db_policy')}`)"
+        if isinstance(db_role, dict) and db_role.get("active_role")
+        else "`origin/state-live:data/nba_intelligence.sqlite3` (viva) | `main` congelada para CI"
+    )
+    shadow_info = audit_result.get("shadow_ledger") or {}
+    shadow_txt = (
+        f"Total `{shadow_info.get('total_candidates', 0)}` señales +EV registradas "
+        f"(liquidadas `{shadow_info.get('settled', 0)}`, ROI 1u `{shadow_info.get('unit_roi_pct', 0.0)}%`, "
+        f"CLV medio `{shadow_info.get('mean_clv_pct')}%`; cero impacto en banca S/100)"
+        if shadow_info
+        else "Tabla inmutable `shadow_candidates` aislada del bankroll oficial S/100.00 PEN"
+    )
     lines = [
         "---",
         f"date_generated: {now_str}",
@@ -52,6 +68,8 @@ def generate_audit_report(
         "## 1. Dictamen Ejecutivo",
         f"- **Fecha de auditoría (UTC)**: `{now_str}`",
         f"- **Run Manifest / Versión activa**: `{run_manifest_id}` (`{active_model_ver}`, commit `{commit_sha[:12]}`, config `{config_hash[:12]}`)",
+        f"- **Origen de Base de Datos (`DB Provenance`)**: {db_provenance}",
+        f"- **Shadow Signal Ledger**: {shadow_txt}",
         f"- **Dictamen sobre transición de fase**: **`{gates_eval['recommendation']}`**",
         f"- **Transición automática a dinero real**: `{gates_eval['auto_transition_to_real_money']}` (Deshabilitada permanentemente por diseño)",
         f"- **Integridad contable del bankroll virtual (S/100.00 PEN)**: `{'VERIFICADA' if audit_result['bankroll_reconciled'] else 'ERROR'}`{settled_bank_str}",
@@ -103,6 +121,7 @@ def generate_audit_report(
         f"- **Sportradar (`SportradarAdapter`)**: `{environment_status.get('sportradar_status', 'Adaptador implementado; requiere SPORTRADAR_API_KEY')}`",
         f"- **NBA.com/stats (`NBAStatsAdapter`)**: `{environment_status.get('nba_stats_status', 'Adaptador implementado; filtrado por Akamai TLS sin sesión navegador; no incluye cuotas históricas')}`",
         f"- **Playwright (`PlaywrightAuthorizedScraper`)**: `{environment_status.get('playwright_status') or _detect_playwright_status()}`",
+        f"- **Política Scrapers Perú (`sources.peru_scraper_policy`)**: `{scraper_policy}`",
         f"- **PixelRAG (`visual_researcher`)**: `{environment_status.get('pixelrag_status', 'Pipeline tabular/RAG local (verificar estado en runtime)')}`",
         f"- **Obsidian Vault (`NBA/`)**: `Operativo en {environment_status.get('obsidian_vault_path', 'NBA/')}`",
         "",

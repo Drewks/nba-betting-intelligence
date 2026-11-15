@@ -99,3 +99,72 @@ def summarize_clv(
         "clv_definition": "100*(bet_odds * p_close_fair - 1), p_close_fair = Shin de-vigged closing (Pinnacle preferred)",
         "per_bet": per_bet,
     }
+
+
+def get_recent_clv_governor_factor(
+    db: Any,
+    risk_config: Any = None,
+    scope_predicate_sql: str = "b.game_id NOT LIKE 'SYN%'",
+    lookback: int | None = None,
+) -> tuple[float, float | None]:
+    """
+    Active Risk Governor based on Closing Line Value (CLV).
+    Returns `(scaling_factor, mean_clv_pct)`.
+    """
+    gov_cfg = getattr(risk_config, "clv_governor", None) if risk_config is not None else None
+    effective_lookback = lookback if lookback is not None else (gov_cfg.lookback_bets if gov_cfg else 25)
+    min_sample = gov_cfg.min_sample_size if gov_cfg else 4
+
+    rows = db.fetch_all(
+        f"""
+        SELECT b.bet_id, b.decimal_odds,
+               (
+                   SELECT o.decimal_odds
+                   FROM v_observed_odds_snapshots o
+                   WHERE o.game_id = b.game_id
+                     AND o.market = b.market
+                     AND o.selection = b.selection
+                     AND COALESCE(o.line_value, -9999) = COALESCE(b.line_value, -9999)
+                     AND o.is_closing_line = 1
+                   ORDER BY (CASE WHEN o.provider LIKE '%Pinnacle%' THEN 1 ELSE 0 END) DESC,
+                            o.captured_at DESC
+                   LIMIT 1
+               ) AS closing_odds
+        FROM v_observed_simulated_bets b
+        WHERE b.status IN ('WON', 'LOST', 'PUSH')
+          AND {scope_predicate_sql}
+          AND closing_odds IS NOT NULL
+        ORDER BY b.settled_at DESC
+        LIMIT ?
+        """,
+        (effective_lookback,),
+    )
+    if len(rows) < min_sample:
+        return 1.0, None
+    clvs = [
+        ((float(r["decimal_odds"]) / float(r["closing_odds"])) - 1.0) * 100.0
+        for r in rows
+        if float(r["closing_odds"]) > 1.0
+    ]
+    if not clvs:
+        return 1.0, None
+    mean_clv = float(np.mean(clvs))
+    if gov_cfg:
+        if mean_clv < gov_cfg.severe_negative_threshold:
+            factor = gov_cfg.severe_negative_factor
+        elif mean_clv < gov_cfg.moderate_negative_threshold:
+            factor = gov_cfg.moderate_negative_factor
+        elif mean_clv >= gov_cfg.positive_alpha_threshold:
+            factor = gov_cfg.positive_alpha_factor
+        else:
+            factor = gov_cfg.neutral_factor
+    else:
+        if mean_clv < -2.0:
+            factor = 0.50
+        elif mean_clv < 0.0:
+            factor = 0.75
+        elif mean_clv >= 2.0:
+            factor = 1.10
+        else:
+            factor = 1.00
+    return factor, round(mean_clv, 2)

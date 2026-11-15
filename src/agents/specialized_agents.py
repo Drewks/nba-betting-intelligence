@@ -333,16 +333,15 @@ class VisualResearcherAgent:
             ),
         }
 
-        if not os.environ.get("PYTEST_CURRENT_TEST"):
-            try:
-                out_dir = Path(__file__).resolve().parent.parent.parent / "data" / "visual_rag"
-                out_dir.mkdir(parents=True, exist_ok=True)
-                (out_dir / "latest_visual_context.json").write_text(
-                    json.dumps(result_payload, indent=2, ensure_ascii=False) + "\n",
-                    encoding="utf-8",
-                )
-            except Exception as exc:
-                logger.debug(f"Failed to persist visual context: {exc}")
+        try:
+            out_dir = Path(__file__).resolve().parent.parent.parent / "data" / "visual_rag"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "latest_visual_context.json").write_text(
+                json.dumps(result_payload, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            logger.debug(f"Failed to persist visual context: {exc}")
 
         return result_payload
 

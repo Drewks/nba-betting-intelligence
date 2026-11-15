@@ -84,9 +84,7 @@ class TelegramAlertBot:
             return False
 
     def _persist_alert_log(self, record: dict[str, Any]) -> None:
-        """Appends alert to local inspection ledger (skipped for repo default path during pytest)."""
-        if os.environ.get("PYTEST_CURRENT_TEST") and self.alerts_log_path == Path("data/evaluation/latest_telegram_alerts.json"):
-            return
+        """Appends alert to local inspection ledger (redirected cleanly during tests)."""
         try:
             self.alerts_log_path.parent.mkdir(parents=True, exist_ok=True)
             existing = []
@@ -420,8 +418,6 @@ def save_dispatched_alert_keys(
     max_entries: int = 500,
 ) -> None:
     """Persists bounded set of dispatched Telegram alert keys."""
-    if os.environ.get("PYTEST_CURRENT_TEST") and state_path == DEFAULT_ALERT_STATE_PATH:
-        return
     try:
         ordered = sorted(keys)[-max_entries:]
         state_path.parent.mkdir(parents=True, exist_ok=True)

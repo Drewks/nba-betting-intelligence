@@ -118,6 +118,13 @@ class ProbabilityCalibrator:
         self.cutoff_time_str: str | None = None
         self.train_sample_size: int = 0
 
+    @property
+    def is_fitted(self) -> bool:
+        """True once a logistic or isotonic calibrator has been fitted (not identity fallback)."""
+        return self.active_method != "identity" and (
+            self.logistic_model is not None or self.isotonic_model is not None
+        )
+
     def fit(
         self,
         calibration_records: list[dict[str, Any]],

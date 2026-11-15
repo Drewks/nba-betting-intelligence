@@ -425,6 +425,7 @@ def test_48_live_peru_odds_scraper_and_arbitrage_alerts(tmp_path: Path) -> None:
         min_clv_pct=4.0,
         min_arb_margin_pct=1.0,
         bankroll_pen=100.0,
+        enable_live_network=False,
     )
 
     # 1. Collect slate odds

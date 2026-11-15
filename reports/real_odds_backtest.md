@@ -1,6 +1,6 @@
 # Backtest con cuotas reales (consenso de apertura/cierre, sin margen)
 
-- Generado: `2026-11-15T02:03:10Z`
+- Generado: `2026-11-15T03:17:04Z`
 - Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).
 - Periodo de prueba desde `2025-01-01` | partidos con mercado emparejado: `2301`
 - Reentrenamiento cada `7` días | margen supuesto `4.5%` | peso del modelo `0.3` | EV mínimo `2%` | tope cuota Moneyline `2.8`
@@ -59,7 +59,14 @@ Correlación entre la discrepancia del modelo con la apertura y el movimiento ap
 | ALL | moneyline | 2274 | +0.135 [+0.075, +0.194] | 54.8% |
 | ALL | totals | 2053 | +0.260 [+0.218, +0.298] | 57.3% |
 
+## 5. Holdout Congelado, Corrección Múltiple y Pistas Shadow
+
+- Protocolo congelado: `V8_FROZEN_2026_11_15` | Desarrollo (`2024-25,2025-26`): `2155` juegos, `97` bets, ROI `4.81%`, CLV `1.19%` | Holdout intacto (`2026-27`): `146` juegos, `5` bets, ROI `-50.83%`
+- Pruebas múltiples (`trials=3`, Bonferroni): ROI p-raw=`0.417425`, p-bonf=`1.0` | CLV p-raw=`0.145141`, p-bonf=`0.435423`
+- **Uncapped Shadow (1u sin mínimos ni tope diario)**: `925` señales, ROI 1u `-0.75%`, CLV medio `-0.781%`
+- **Totals CLV-Targeted (1u anticipación cierre, sin holdout en fit)**: `1631` bets, ROI 1u `1.03%`, CLV `-0.921%`, pendiente final `7.73249` (`n=2155`)
+
 ## Supuestos
 - Precio apostable = cuota justa de apertura / (1 + margen). La fuente publica probabilidades sin margen, no precios de casas.
 - Totales: la línea principal de apertura es la más cercana a 50/50 (p=0.50); el cierre a esa línea se aproxima con un modelo normal (σ=18).
-- Las features usan solo partidos que empezaron antes del primer partido de la jornada; los calibradores solo predicciones previas.
+- Las features usan solo partidos que empezaron antes del primer partido de la jornada; los calibradores y el estimador de cierre solo observaciones previas en desarrollo.
