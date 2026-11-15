@@ -78,7 +78,11 @@ class TheOddsAPIAdapter:
             )
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 events = json.loads(resp.read().decode("utf-8"))
-        except Exception:
+        except Exception as exc:
+            sanitized = str(exc)
+            if self.api_key:
+                sanitized = sanitized.replace(self.api_key, "***")
+            logger.warning("TheOddsAPI request failed: %s", sanitized)
             return {}
 
         by_matchup: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)

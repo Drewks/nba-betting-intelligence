@@ -25,6 +25,7 @@ from src.reporting.telegram_bot import (
     TelegramAlertBot,
     dispatch_pending_bet_alerts,
     load_dispatched_alert_keys,
+    resolve_default_min_ev_pct,
     save_dispatched_alert_keys,
 )
 from src.storage.db import DatabaseManager
@@ -33,7 +34,12 @@ from src.storage.db import DatabaseManager
 def main() -> None:
     parser = argparse.ArgumentParser(description="Dispatch Telegram alerts for +EV bets and SGPs.")
     parser.add_argument("--dry-run", action="store_true", help="Force dry-run simulation mode")
-    parser.add_argument("--min-ev", type=float, default=5.0, help="Minimum EV percentage (default: 5.0)")
+    parser.add_argument(
+        "--min-ev",
+        type=float,
+        default=None,
+        help="Minimum EV percentage (defaults to risk.min_ev_threshold from config/model_config.yaml)",
+    )
     parser.add_argument(
         "--db",
         default=str(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"),
@@ -54,11 +60,12 @@ def main() -> None:
     if args.dry_run:
         bot.is_live = False
 
+    effective_min_ev = resolve_default_min_ev_pct() if args.min_ev is None else float(args.min_ev)
     print("=" * 80)
     print("📲 NBA BETTING INTELLIGENCE V9 - DISPATCHER DE ALERTAS TELEGRAM")
     print("=" * 80)
     print(f"Modo de Operación: {'EN VIVO (TELEGRAM BOT API)' if bot.is_live else 'SIMULACIÓN (DRY-RUN / LOCAL LOG)'}")
-    print(f"Filtro Mínimo EV : >= {args.min_ev:.1f}%")
+    print(f"Filtro Mínimo EV : >= {effective_min_ev:.1f}%")
     print("-" * 80)
 
     dispatched_count = 0
@@ -72,7 +79,7 @@ def main() -> None:
             props = json.loads(props_file.read_text(encoding="utf-8"))
             for p in props:
                 ev = float(p.get("ev_pct") or 0.0)
-                if ev < args.min_ev:
+                if ev < effective_min_ev:
                     continue
 
                 prop_id = (
@@ -107,7 +114,7 @@ def main() -> None:
     dispatched_count += dispatch_pending_bet_alerts(
         bot,
         db,
-        min_ev=args.min_ev,
+        min_ev=effective_min_ev,
         max_alerts=10,
         state_path=state_path,
         dry_run=args.dry_run,
