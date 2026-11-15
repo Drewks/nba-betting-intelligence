@@ -677,3 +677,68 @@ def test_harvest_local_peru_odds_sync_state_live_and_run_cycle(
     expected_local_db = temp_dir / "nba_state_live_local.sqlite3"
     assert extracted_targets == [expected_local_db]
     assert cycle_calls == [("pregame", expected_local_db)]
+
+
+def test_telegram_markdown_escaping_and_http_400_plain_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`[LIVE_API]` provider names render safely in backticks and HTTP 400 degrades to plain text."""
+    import email.message
+    import io
+    import json as json_mod
+    import urllib.error
+    import urllib.request
+    from src.reporting.telegram_bot import TelegramAlertBot
+
+    bot = TelegramAlertBot(
+        bot_token="fake_token_123",
+        chat_id="555",
+        alerts_log_path=tmp_path / "alerts.json",
+    )
+    msg = bot.format_single_bet_alert(
+        {
+            "game_id": "ESPN_401909985_2026-11-15_IND_AT_PHI",
+            "market": "moneyline",
+            "selection": "HOME",
+            "odds_provider": "Betano Perú [LIVE_API]",
+            "decimal_odds": 1.39,
+            "calibrated_probability": 0.746,
+            "ev_pct": 3.76,
+            "stake_pen": 2.25,
+        }
+    )
+    assert "*Betano Perú [LIVE_API]*" not in msg
+    assert "`Betano Perú [LIVE_API]`" in msg
+    assert "_Registra este pick revisando la cuota vigente en_ `Betano Perú [LIVE_API]`" in msg
+
+    payloads_sent: list[dict[str, object]] = []
+
+    class _FakeResp:
+        status = 200
+
+        def __enter__(self) -> "_FakeResp":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int = 10) -> _FakeResp:
+        assert timeout == 10
+        body = json_mod.loads((req.data or b"{}").decode("utf-8"))
+        payloads_sent.append(body)
+        if body.get("parse_mode") == "Markdown":
+            raise urllib.error.HTTPError(
+                req.full_url,
+                400,
+                "Bad Request",
+                email.message.Message(),
+                io.BytesIO(b'{"ok":false,"description":"Bad Request: can\'t parse entities"}'),
+            )
+        return _FakeResp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    ok = bot.send_raw_message("Ticket con _mal_markdown [LIVE_API]")
+    assert ok is True
+    assert len(payloads_sent) == 2
+    assert payloads_sent[0].get("parse_mode") == "Markdown"
+    assert "parse_mode" not in payloads_sent[1]
