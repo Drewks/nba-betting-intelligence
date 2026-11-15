@@ -8,50 +8,50 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-      "relevance_score": 0.2704,
+      "relevance_score": 0.2211,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Alex Sarr (C) Day To Day (Illness): Sarr is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-      "relevance_score": 0.2568,
+      "relevance_score": 0.2088,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable on Sunday's (Nov. 15) game against the Kings.",
+      "relevance_score": 0.2024,
+      "captured_at": "2026-11-14"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MEM GG Jackson (PF) Day To Day (Foot): Jackson did not return to Saturday's (Nov. 14) game against the Nets.",
+      "relevance_score": 0.2007,
+      "captured_at": "2026-11-15"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "LAL Bronny James (SG) Day To Day (Illness): James is Questionable on Sunday's (Nov. 15) game against the Suns.",
-      "relevance_score": 0.2449,
+      "relevance_score": 0.2,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "WAS Bub Carrington (PG) Day To Day (Chest): Carrington is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-      "relevance_score": 0.2436,
+      "relevance_score": 0.1974,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Adou Thiero (SF) Day To Day (Ankle): Thiero is Questionable on Sunday's (Nov. 15) game against the Suns.",
-      "relevance_score": 0.2374,
+      "snippet": "SAC Keegan Murray (PF) Day To Day (Illness): Murray is Questionable on Sunday's (Nov. 15) game against the Thunder.",
+      "relevance_score": 0.1966,
       "captured_at": "2026-11-14"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "LAL Collin Sexton (SG) Day To Day (Head): Sexton is Questionable on Sunday's (Nov. 15) game against the Suns.",
-      "relevance_score": 0.2372,
-      "captured_at": "2026-11-14"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Sunday's (Nov. 15) game against the 76ers.",
-      "relevance_score": 0.2343,
-      "captured_at": "2026-11-14"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND Aaron Nesmith (SF) Day To Day (Hand): Nesmith is Questionable for Sunday's (Nov. 15) game against Philadelphia.",
-      "relevance_score": 0.2322,
-      "captured_at": "2026-11-14"
+      "snippet": "MIN Jaylen Clark (SG) Day To Day (Hamstring): Clark did not return to Saturday's (Nov. 15) game against the Bulls.",
+      "relevance_score": 0.195,
+      "captured_at": "2026-11-15"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

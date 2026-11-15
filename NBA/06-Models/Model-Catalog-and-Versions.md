@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-15T04:04:28Z
+date_generated: 2026-11-15T07:12:10Z
 ---
 # Catálogo de Modelos Cuantitativos (Modelos A–G)
 

@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-11-15T04:04:16Z",
+  "updated_at_utc": "2026-11-15T07:11:49Z",
   "graduation_level": "FASE_0_SIMULACION_Y_CALIBRACION",
   "is_ready_for_real_money": false,
   "is_tier1_micro_bankroll_ready": false,
@@ -17,10 +17,10 @@
   "missing_live_bets_tier1": 172,
   "progress_pct": 5.6,
   "progress_live_pct": 14.0,
-  "pending_bets_count": 0,
+  "pending_bets_count": 2,
   "bankroll_pen": 93.47,
   "roi_pct": -17.21,
-  "yield_pct": -17.21,
+  "yield_pct": -16.15,
   "max_drawdown_pct": 9.0,
   "brier_score": 0.2372,
   "baseline_brier_score": 0.2541,
@@ -42,7 +42,7 @@
     "c8_zero_leakage_and_reconciled": true
   },
   "headline": "🚦 Estado del Modelo: EN CALIBRACIÓN (2/8 Criterios Nivel 1 en VERDE — No usar dinero real aún)",
-  "detail_message": "Muestra Total: 28/500 (5.6%) | Muestra 100% En Vivo: 28/200 (14.0%, 0 en espera hoy) | Bankroll: S/93.47 PEN (ROI -17.21%, MaxDD 9.00%) | Brier: 0.2372 (ECE 0.0911). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
+  "detail_message": "Muestra Total: 28/500 (5.6%) | Muestra 100% En Vivo: 28/200 (14.0%, 2 en espera hoy) | Bankroll: S/93.47 PEN (ROI -17.21%, MaxDD 9.00%) | Brier: 0.2372 (ECE 0.0911). Recibirás un correo automático al desbloquear Nivel 1 y Nivel 2.",
   "tier1_notification_sent_at": null,
   "tier2_notification_sent_at": null,
   "last_daily_pick_sent_date": "2026-11-15",
