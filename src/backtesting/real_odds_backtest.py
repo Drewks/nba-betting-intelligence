@@ -15,21 +15,15 @@ Protocol (mirrors production as closely as the data allows):
      (`evaluate_market_opportunity` with market anchoring, EV threshold, model/market disagreement
      guard, long-shot guard, conformal-width guard, CLV meta-label, one bet per game, top-3 per day).
   4. Bets are graded with the real result; CLV is measured against the CLOSING no-vig consensus.
-
-Assumptions (stated, not hidden):
-  - The data has no-vig probabilities, not bookmaker prices. A bettable price is reconstructed as
-    fair_price / (1 + vig) with a proportional margin `vig` (default 4.5%, a typical single retail book;
-    line shopping across books usually does better, see the sensitivity run).
-  - Totals: the opening main line is the line quoted closest to 50/50, so its opening over probability
-    is taken as 0.50. The closing fair probability at the OPENING line is approximated with a normal
-    margin model: Phi(Phi^-1(close_over_prob) + (close_total - open_line) / TOTAL_SIGMA).
+  5. Evaluates `development` vs untouched `holdout_season` (`2026-27`), Bonferroni multiple-testing
+     p-values, full-slate signal, `uncapped_shadow`, and chronological `totals_clv_targeted`.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 import csv
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import io
 import math
 from pathlib import Path
@@ -39,13 +33,14 @@ import urllib.request
 import numpy as np
 from scipy.stats import norm
 
-from src.backtesting.backtester import compute_block_bootstrap_roi_ci, compute_drawdown_series
+from src.backtesting.real_odds_metrics import (
+    render_markdown,
+    summarize_backtest_results,
+)
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
     VennAbersConformalInterval,
     calibrate_binary_with_push,
-    compute_brier_score,
-    compute_log_loss,
 )
 from src.config import load_config
 from src.features.boxscore_features import attach_boxscore_features
@@ -54,7 +49,20 @@ from src.ingestion.normalizer import normalize_team_code
 from src.models.statistical_models import EnsembleStackingModel
 from src.paper_trading.staking import fractional_kelly_stake
 from src.prediction.ev_calculator import evaluate_market_opportunity
+from src.prediction.totals_closing import TotalsClosingEstimator, fit_totals_closing_estimator
 from src.validation.validator import parse_iso_utc
+
+__all__ = [
+    "DATA_ATTRIBUTION",
+    "DATA_SOURCES",
+    "MATCH_TOLERANCE_HOURS",
+    "TOTAL_SIGMA",
+    "download_market_csvs",
+    "load_market_rows",
+    "match_market_to_games",
+    "render_markdown",
+    "run_real_odds_backtest",
+]
 
 DATA_SOURCES: dict[str, str] = {
     "2024-25": "https://huggingface.co/datasets/minmaxxxer/nba-closing-lines-ats-2024-25/resolve/main/nba_2024_25_closing_lines_ats.csv",
@@ -68,10 +76,6 @@ DATA_ATTRIBUTION = (
 TOTAL_SIGMA = 18.0
 MATCH_TOLERANCE_HOURS = 12.0
 
-
-# ------------------------------------------------------------------------------------------------
-# Data loading
-# ------------------------------------------------------------------------------------------------
 
 def download_market_csvs(dest_dir: Path, seasons: list[str] | None = None, timeout: int = 60) -> list[Path]:
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -151,10 +155,6 @@ def match_market_to_games(
     return out
 
 
-# ------------------------------------------------------------------------------------------------
-# Backtest
-# ------------------------------------------------------------------------------------------------
-
 def _price(fair_prob: float, vig: float) -> float:
     return round(1.0 / (max(1e-6, fair_prob) * (1.0 + vig)), 4)
 
@@ -171,10 +171,26 @@ def _with_current_ratings(games: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for g in games:
         r = ratings.get(g["game_id"])
-        out.append({**g, **{k: r[k] for k in (
-            "home_off_rtg", "home_def_rtg", "home_pace", "away_off_rtg", "away_def_rtg", "away_pace",
-            "home_rest_days", "away_rest_days",
-        )}} if r else dict(g))
+        out.append(
+            {
+                **g,
+                **{
+                    k: r[k]
+                    for k in (
+                        "home_off_rtg",
+                        "home_def_rtg",
+                        "home_pace",
+                        "away_off_rtg",
+                        "away_def_rtg",
+                        "away_pace",
+                        "home_rest_days",
+                        "away_rest_days",
+                    )
+                },
+            }
+            if r
+            else dict(g)
+        )
     return out
 
 
@@ -182,13 +198,15 @@ _RATING_FIELDS = ("off_rtg", "def_rtg", "pace")
 
 
 def _team_rating_history(games: list[dict[str, Any]]) -> dict[str, list[tuple[str, dict[str, float]]]]:
-    """Per team, chronological (game_start_time, pre-game ratings of that team) pairs."""
+    """Per team, chronological `(game_start_time, pre-game ratings of that team)` pairs."""
     hist: dict[str, list[tuple[str, dict[str, float]]]] = defaultdict(list)
     for g in games:
         for side in ("home", "away"):
             vals = {f: g.get(f"{side}_{f}") for f in _RATING_FIELDS}
             if all(v is not None for v in vals.values()):
-                hist[g[f"{side}_team"]].append((str(g["game_start_time"]), {k: float(v) for k, v in vals.items() if v is not None}))
+                hist[g[f"{side}_team"]].append(
+                    (str(g["game_start_time"]), {k: float(v) for k, v in vals.items() if v is not None})
+                )
     for team in hist:
         hist[team].sort(key=lambda t: t[0])
     return hist
@@ -197,11 +215,7 @@ def _team_rating_history(games: list[dict[str, Any]]) -> dict[str, list[tuple[st
 def _lagged_team_ratings(
     g: dict[str, Any], hist: dict[str, list[tuple[str, dict[str, float]]]], info_cutoff: str
 ) -> dict[str, float]:
-    """
-    Ratings as known at `info_cutoff`: the pre-game ratings of each team's last game that started before
-    the cutoff (this excludes that game's own result, so it is conservative: never more information).
-    Rest days stay as scheduled (the schedule is public in advance).
-    """
+    """Ratings as known at `info_cutoff` using each team's last earlier game pre-game state."""
     out: dict[str, float] = {}
     for side in ("home", "away"):
         prior = [vals for ts, vals in hist.get(g[f"{side}_team"], []) if ts < info_cutoff]
@@ -233,12 +247,20 @@ def run_real_odds_backtest(
     moneyline_model_weight: float | None = None,
     moneyline_max_disagreement: float | None = None,
     moneyline_max_odds: float | None = None,
+    development_seasons: tuple[str, ...] | None = None,
+    holdout_season: str | None = None,
+    trials_evaluated_count: int | None = None,
+    frozen_protocol_id: str | None = None,
 ) -> dict[str, Any]:
-    """
-    `history_lag_days` > 0 drops the most recent days of results from the model's information set, as a
-    robustness check: the "opening" line may be posted a day or more before the matchday, before the
-    previous night's games finished. A signal that survives the lag is not an artifact of that timing.
-    """
+    """Walk-forward backtest against consensus opening/closing lines with zero lookahead leakage."""
+    app_cfg = load_config()
+    eval_cfg = app_cfg.evaluation
+    eff_dev_seasons = tuple(development_seasons) if development_seasons is not None else tuple(eval_cfg.development_seasons)
+    eff_holdout = str(holdout_season) if holdout_season is not None else str(eval_cfg.holdout_season)
+    eff_trials = int(trials_evaluated_count) if trials_evaluated_count is not None else int(eval_cfg.trials_evaluated_count)
+    eff_protocol = str(frozen_protocol_id) if frozen_protocol_id is not None else str(eval_cfg.frozen_protocol_id)
+    active_model_version = app_cfg.model.version_id
+
     real = [g for g in games if not is_synthetic_game_id(g.get("game_id"))]
     real.sort(key=lambda g: (str(g["game_start_time"]), str(g["game_id"])))
     real = _with_current_ratings(real)
@@ -249,7 +271,8 @@ def run_real_odds_backtest(
     market_by_game = match_market_to_games(market_rows, final_games)
 
     test_games = [
-        g for g in final_games
+        g
+        for g in final_games
         if g["game_id"] in market_by_game
         and str(g["game_start_time"])[:10] >= start_date
         and (end_date is None or str(g["game_start_time"])[:10] <= end_date)
@@ -263,10 +286,15 @@ def run_real_odds_backtest(
     tot_cal = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
     ml_va = VennAbersConformalInterval(window=1200, min_samples=60)
     tot_va = VennAbersConformalInterval(window=1200, min_samples=60)
+    tot_closing_est = TotalsClosingEstimator()
+
     oos_ml: list[dict[str, Any]] = []
     oos_tot: list[dict[str, Any]] = []
+    oos_tot_closing: list[dict[str, Any]] = []
     eval_rows: list[dict[str, Any]] = []
     bets: list[dict[str, Any]] = []
+    uncapped_shadow_bets: list[dict[str, Any]] = []
+    totals_clv_bets: list[dict[str, Any]] = []
     kelly_bankroll = initial_bankroll
     last_train: datetime | None = None
 
@@ -282,12 +310,18 @@ def run_real_odds_backtest(
             model.fit(history, info_cutoff)
             past_ml = [r for r in oos_ml if r["game_start_time"] < info_cutoff]
             past_tot = [r for r in oos_tot if r["game_start_time"] < info_cutoff]
+            past_tot_close = [
+                r
+                for r in oos_tot_closing
+                if r["game_start_time"] < info_cutoff and str(r.get("season")) != eff_holdout
+            ]
             if len(past_ml) >= 25:
                 ml_cal.fit(past_ml, info_cutoff)
                 ml_va.fit(past_ml, info_cutoff)
             if len(past_tot) >= 25:
                 tot_cal.fit(past_tot, info_cutoff)
                 tot_va.fit(past_tot, info_cutoff)
+            tot_closing_est = fit_totals_closing_estimator(past_tot_close)
             last_train = cutoff_dt
 
         candidates: list[dict[str, Any]] = []
@@ -296,6 +330,7 @@ def run_real_odds_backtest(
             if history_lag_days > 0:
                 g = {**g, **_lagged_team_ratings(g, team_rating_hist, info_cutoff)}
             m = market_by_game[g["game_id"]]
+            season_val = str(m["season"])
             start_dt = parse_iso_utc(g["game_start_time"])
             decision_ts = (start_dt - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
             p_open_home = float(np.clip(m["open_home_win_prob"], 0.01, 0.99))
@@ -308,18 +343,42 @@ def run_real_odds_backtest(
 
             ml_mw = moneyline_model_weight if moneyline_model_weight is not None else model_weight
             rec: dict[str, Any] = {
-                "game_id": g["game_id"], "season": m["season"], "matchday_date": day,
-                "home_won": home_won, "raw_home": raw_home, "cal_home": cal_home,
+                "game_id": g["game_id"],
+                "season": season_val,
+                "matchday_date": day,
+                "home_won": home_won,
+                "raw_home": raw_home,
+                "cal_home": cal_home,
                 "anchored_home": ml_mw * cal_home + (1.0 - ml_mw) * p_open_home,
-                "open_home": p_open_home, "close_home": p_close_home,
+                "open_home": p_open_home,
+                "close_home": p_close_home,
             }
 
             sides: list[tuple[str, str, float | None, float, float, float, dict[str, Any], str, float, float]] = [
-                ("moneyline", "HOME", None, cal_home, p_open_home, p_close_home, va_home,
-                 "WON" if home_won == 1 else "LOST", 0.0, raw_home),
-                ("moneyline", "AWAY", None, 1.0 - cal_home, 1.0 - p_open_home, 1.0 - p_close_home,
-                 {"p0": 1.0 - va_home["p1"], "p1": 1.0 - va_home["p0"], "width": va_home["width"]},
-                 "WON" if home_won == 0 else "LOST", 0.0, 1.0 - raw_home),
+                (
+                    "moneyline",
+                    "HOME",
+                    None,
+                    cal_home,
+                    p_open_home,
+                    p_close_home,
+                    va_home,
+                    "WON" if home_won == 1 else "LOST",
+                    0.0,
+                    raw_home,
+                ),
+                (
+                    "moneyline",
+                    "AWAY",
+                    None,
+                    1.0 - cal_home,
+                    1.0 - p_open_home,
+                    1.0 - p_close_home,
+                    {"p0": 1.0 - va_home["p1"], "p1": 1.0 - va_home["p0"], "width": va_home["width"]},
+                    "WON" if home_won == 0 else "LOST",
+                    0.0,
+                    1.0 - raw_home,
+                ),
             ]
 
             line = m.get("open_total")
@@ -339,42 +398,79 @@ def run_real_odds_backtest(
                 p_close_over = _close_over_prob_at_line(m.get("close_total"), m.get("close_over_prob"), float(line))
                 non_push_tot = float(cal_res["non_push"])
                 anchored_over = non_push_tot * (model_weight * float(cal_res["cal_cond"]) + (1.0 - model_weight) * 0.5)
-                rec.update({
-                    "total_line": float(line), "total_result": tot_result,
-                    "raw_over": raw_over, "cal_over": cal_over,
-                    "anchored_over": anchored_over,
-                    "p_push_tot": p_push_tot,
-                    "close_over_at_open_line": p_close_over,
-                    "close_total_line": m.get("close_total"),
-                })
+                rec.update(
+                    {
+                        "total_line": float(line),
+                        "total_result": tot_result,
+                        "raw_over": raw_over,
+                        "cal_over": cal_over,
+                        "anchored_over": anchored_over,
+                        "p_push_tot": p_push_tot,
+                        "close_over_at_open_line": p_close_over,
+                        "close_total_line": m.get("close_total"),
+                    }
+                )
                 if p_close_over is not None:
                     over_res = "PUSH" if tot_result == "push" else ("WON" if tot_result == "over" else "LOST")
                     under_res = "PUSH" if tot_result == "push" else ("WON" if tot_result == "under" else "LOST")
                     cal_under = max(0.0, 1.0 - cal_over - p_push_tot)
                     raw_under = max(0.0, 1.0 - raw_over - p_push_tot)
                     sides.append(("total_points", "OVER", float(line), cal_over, 0.5, p_close_over, va_over, over_res, p_push_tot, raw_over))
-                    sides.append(("total_points", "UNDER", float(line), cal_under, 0.5, 1.0 - p_close_over,
-                                  {"p0": 1.0 - va_over["p1"], "p1": 1.0 - va_over["p0"], "width": va_over["width"]},
-                                  under_res, p_push_tot, raw_under))
+                    sides.append(
+                        (
+                            "total_points",
+                            "UNDER",
+                            float(line),
+                            cal_under,
+                            0.5,
+                            1.0 - p_close_over,
+                            {"p0": 1.0 - va_over["p1"], "p1": 1.0 - va_over["p0"], "width": va_over["width"]},
+                            under_res,
+                            p_push_tot,
+                            raw_under,
+                        )
+                    )
+                    clv_sig = tot_closing_est.predict(cal_over)
+                    if clv_sig["qualifies"] and clv_sig["predicted_side"] in ("OVER", "UNDER"):
+                        p_side = str(clv_sig["predicted_side"])
+                        t_price = _price(0.5, vig)
+                        t_res = over_res if p_side == "OVER" else under_res
+                        t_close = p_close_over if p_side == "OVER" else (1.0 - p_close_over)
+                        t_mult = (t_price - 1.0) if t_res == "WON" else (-1.0 if t_res == "LOST" else 0.0)
+                        totals_clv_bets.append(
+                            {
+                                "game_id": g["game_id"],
+                                "matchday_date": day,
+                                "season": season_val,
+                                "market": "total_points",
+                                "selection": p_side,
+                                "line_value": float(line),
+                                "decimal_odds": t_price,
+                                "stake_pen": flat_stake,
+                                "net_profit_pen": round(flat_stake * t_mult, 4),
+                                "status": t_res,
+                                "clv_ev_pct": round(100.0 * (t_price * t_close - 1.0), 4),
+                                "expected_move_pts": clv_sig["expected_move_pts"],
+                            }
+                        )
             day_records.append((g, rec))
 
+            best_shadow_by_mkt: dict[str, dict[str, Any]] = {}
             for market, sel, ln, cal_p, p_open, p_close, conf, result, p_push_s, raw_s in sides:
                 price = _price(p_open, vig)
                 counter = _price(1.0 - p_open, vig)
-                eff_mw = (
-                    moneyline_model_weight
-                    if (market == "moneyline" and moneyline_model_weight is not None)
-                    else model_weight
-                )
-                eff_md = (
-                    moneyline_max_disagreement
-                    if (market == "moneyline" and moneyline_max_disagreement is not None)
-                    else max_disagreement
-                )
+                eff_mw = moneyline_model_weight if (market == "moneyline" and moneyline_model_weight is not None) else model_weight
+                eff_md = moneyline_max_disagreement if (market == "moneyline" and moneyline_max_disagreement is not None) else max_disagreement
                 odds_record = {
-                    "odds_id": f"BT_{g['game_id']}_{market}_{sel}", "game_id": g["game_id"],
-                    "provider": "consensus_open", "market": market, "selection": sel, "line_value": ln,
-                    "decimal_odds": price, "counterpart_decimal_odds": counter, "captured_at": decision_ts,
+                    "odds_id": f"BT_{g['game_id']}_{market}_{sel}",
+                    "game_id": g["game_id"],
+                    "provider": "consensus_open",
+                    "market": market,
+                    "selection": sel,
+                    "line_value": ln,
+                    "decimal_odds": price,
+                    "counterpart_decimal_odds": counter,
+                    "captured_at": decision_ts,
                 }
                 opp = evaluate_market_opportunity(
                     estimated_prob=float(np.clip(cal_p, 0.001, 0.999)),
@@ -382,7 +478,7 @@ def run_real_odds_backtest(
                     uncertainty_std=0.05,
                     odds_record=odds_record,
                     game_start_time=g["game_start_time"],
-                    model_version_id=load_config().model.version_id,
+                    model_version_id=active_model_version,
                     simulated_prediction_time=decision_ts,
                     market_consensus_prob=p_open,
                     model_weight=eff_mw,
@@ -391,42 +487,73 @@ def run_real_odds_backtest(
                     p_push=p_push_s,
                 )
                 ev = float(opp["ev_unit"])
+                hard_block = (
+                    abs(float(opp.get("model_market_disagreement") or 0.0)) > eff_md
+                    or ev > 0.45
+                    or (market == "moneyline" and moneyline_max_odds is not None and price > moneyline_max_odds)
+                    or (price > 3.50 and ev < 0.15)
+                    or (conf.get("width") is not None and float(conf["width"]) > 0.22)
+                )
+                if ev > 0.0 and not hard_block:
+                    sh_mult = (price - 1.0) if result == "WON" else (-1.0 if result == "LOST" else 0.0)
+                    sh_row = {
+                        "game_id": g["game_id"],
+                        "matchday_date": day,
+                        "season": season_val,
+                        "market": market,
+                        "selection": sel,
+                        "line_value": ln,
+                        "decimal_odds": price,
+                        "ev_unit": ev,
+                        "stake_pen": flat_stake,
+                        "net_profit_pen": round(flat_stake * sh_mult, 4),
+                        "status": result,
+                        "clv_ev_pct": round(100.0 * (price * p_close - 1.0), 4),
+                    }
+                    prev_sh = best_shadow_by_mkt.get(market)
+                    if prev_sh is None or ev > prev_sh["ev_unit"]:
+                        best_shadow_by_mkt[market] = sh_row
+
                 reason = None
                 if ev <= min_ev:
                     reason = "EV_BELOW_THRESHOLD"
-                elif abs(float(opp.get("model_market_disagreement") or 0.0)) > eff_md:
-                    reason = "MODEL_MARKET_DISAGREEMENT"
-                elif ev > 0.45:
-                    reason = "UNVERIFIED_INJURY_OR_LINEUP_OUTLIER"
-                elif market == "moneyline" and moneyline_max_odds is not None and price > moneyline_max_odds:
-                    reason = "EXCESSIVE_LONGSHOT_VARIANCE"
-                elif price > 3.50 and ev < 0.15:
-                    reason = "EXCESSIVE_LONGSHOT_VARIANCE"
-                elif conf.get("width") is not None and float(conf["width"]) > 0.22:
-                    reason = "CONFORMAL_UNCERTAINTY_TOO_WIDE"
+                elif hard_block:
+                    reason = "RISK_OR_MODEL_GUARD"
                 elif opp.get("meta_label_pass") is False:
                     reason = "NEGATIVE_EXPECTED_CLV"
                 if reason is None:
-                    candidates.append({
-                        "game_id": g["game_id"], "matchday_date": day, "season": m["season"],
-                        "market": market, "selection": sel, "line_value": ln, "decimal_odds": price,
-                        "anchored_prob": float(opp["estimated_probability"]), "ev_unit": ev,
-                        "p_open": p_open, "p_close": p_close, "result": result,
-                    })
+                    candidates.append(
+                        {
+                            "game_id": g["game_id"],
+                            "matchday_date": day,
+                            "season": season_val,
+                            "market": market,
+                            "selection": sel,
+                            "line_value": ln,
+                            "decimal_odds": price,
+                            "anchored_prob": float(opp["estimated_probability"]),
+                            "ev_unit": ev,
+                            "p_open": p_open,
+                            "p_close": p_close,
+                            "result": result,
+                        }
+                    )
+            uncapped_shadow_bets.extend(best_shadow_by_mkt.values())
 
-        # Selection: best EV first, one bet per game, at most `max_bets_per_day`
         chosen: list[dict[str, Any]] = []
         seen_games: set[str] = set()
-        # Size every candidate first: one whose Kelly stake falls below the minimum is not a bet in
-        # production, so it must not consume a slot of the daily cap either.
         start_kelly_bankroll = kelly_bankroll
         for c in sorted(candidates, key=lambda c: c["ev_unit"], reverse=True):
             if c["game_id"] in seen_games or len(chosen) >= max_bets_per_day:
                 continue
             k_stake = fractional_kelly_stake(
-                prob=c["anchored_prob"], decimal_odds=c["decimal_odds"], bankroll_pen=start_kelly_bankroll,
-                kelly_fraction=kelly_fraction, min_stake_pen=kelly_min_stake,
-                max_stake_pen=kelly_max_stake, max_bankroll_fraction=kelly_max_fraction,
+                prob=c["anchored_prob"],
+                decimal_odds=c["decimal_odds"],
+                bankroll_pen=start_kelly_bankroll,
+                kelly_fraction=kelly_fraction,
+                min_stake_pen=kelly_min_stake,
+                max_stake_pen=kelly_max_stake,
+                max_bankroll_fraction=kelly_max_fraction,
             )
             if k_stake <= 0.0:
                 continue
@@ -438,272 +565,87 @@ def run_real_odds_backtest(
             mult = (odds - 1.0) if c["result"] == "WON" else (-1.0 if c["result"] == "LOST" else 0.0)
             clv_pct = 100.0 * (odds * c["p_close"] - 1.0)
             kelly_bankroll += k_stake * mult
-            bets.append({
-                **c,
-                "stake_pen": flat_stake,
-                "net_profit_pen": round(flat_stake * mult, 4),
-                "kelly_stake_pen": k_stake,
-                "kelly_net_profit_pen": round(k_stake * mult, 4),
-                "status": c["result"],
-                "clv_ev_pct": round(clv_pct, 4),
-            })
+            bets.append(
+                {
+                    **c,
+                    "stake_pen": flat_stake,
+                    "net_profit_pen": round(flat_stake * mult, 4),
+                    "kelly_stake_pen": k_stake,
+                    "kelly_net_profit_pen": round(k_stake * mult, 4),
+                    "status": c["result"],
+                    "clv_ev_pct": round(clv_pct, 4),
+                }
+            )
 
-        # Outcomes become available only after the matchday: record OOS predictions afterwards
         for g, rec in day_records:
             eval_rows.append(rec)
             oos_ml.append({"game_start_time": g["game_start_time"], "raw_probability": rec["raw_home"], "outcome": rec["home_won"]})
             if rec.get("total_result") in ("over", "under"):
-                oos_tot.append({"game_start_time": g["game_start_time"], "raw_probability": rec["raw_over"],
-                                "outcome": 1 if rec["total_result"] == "over" else 0})
-
-    return _summarize(eval_rows, bets, initial_bankroll, kelly_bankroll, {
-        "start_date": start_date, "end_date": end_date, "retrain_every_days": retrain_every_days,
-        "vig_assumption": vig, "model_weight": model_weight, "min_ev": min_ev, "history_lag_days": history_lag_days,
-        "max_disagreement": max_disagreement, "max_bets_per_day": max_bets_per_day,
-        "moneyline_model_weight": moneyline_model_weight,
-        "moneyline_max_disagreement": moneyline_max_disagreement,
-        "moneyline_max_odds": moneyline_max_odds,
-        "kelly": {"fraction": kelly_fraction, "min_stake": kelly_min_stake, "max_stake": kelly_max_stake,
-                  "max_bankroll_fraction": kelly_max_fraction},
-        "market_rows": len(market_rows), "matched_games": len(market_by_game), "test_games": len(test_games),
-        "boxscore_features": bool(boxscores),
-    })
-
-
-def _score(probs: list[float], ys: list[int]) -> dict[str, float]:
-    return {"n": len(ys), "brier": compute_brier_score(probs, ys), "log_loss": compute_log_loss(probs, ys)}
-
-
-def _summarize(
-    eval_rows: list[dict[str, Any]],
-    bets: list[dict[str, Any]],
-    initial_bankroll: float,
-    kelly_bankroll: float,
-    config: dict[str, Any],
-) -> dict[str, Any]:
-    out: dict[str, Any] = {"config": config, "data_attribution": DATA_ATTRIBUTION,
-                           "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-    if eval_rows:
-        y = [r["home_won"] for r in eval_rows]
-        out["moneyline_quality"] = {
-            k: _score([r[f] for r in eval_rows], y)
-            for k, f in (("model_raw", "raw_home"), ("model_calibrated", "cal_home"),
-                         ("model_anchored_30_70", "anchored_home"), ("market_open", "open_home"),
-                         ("market_close", "close_home"))
-        }
-        tot = [r for r in eval_rows if r.get("total_result") in ("over", "under") and r.get("close_over_at_open_line") is not None]
-        if tot:
-            yt = [1 if r["total_result"] == "over" else 0 for r in tot]
-            out["totals_quality_at_open_line"] = {
-                "model_raw": _score([r["raw_over"] for r in tot], yt),
-                "model_calibrated": _score([r["cal_over"] for r in tot], yt),
-                "model_anchored_30_70": _score([r["anchored_over"] for r in tot], yt),
-                "market_open_assumed_0.5": _score([0.5] * len(tot), yt),
-                "market_close_normal_approx": _score([r["close_over_at_open_line"] for r in tot], yt),
-            }
-
-    out["line_movement_signal"] = _line_movement_signal(eval_rows)
-
-    settled = [b for b in bets if b["status"] in ("WON", "LOST")]
-    staked = sum(b["stake_pen"] for b in settled)
-    profit = sum(b["net_profit_pen"] for b in bets)
-    k_staked = sum(b["kelly_stake_pen"] for b in settled)
-    clvs = [b["clv_ev_pct"] for b in bets]
-    clv_blocks = compute_block_bootstrap_roi_ci(
-        [{"matchday_date": b["matchday_date"], "net_profit_pen": b["clv_ev_pct"] / 100.0, "stake_pen": 1.0} for b in bets]
-    ) if bets else {}
-
-    def _group(key: str) -> dict[str, Any]:
-        groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for b in bets:
-            groups[str(b[key])].append(b)
-        res = {}
-        for k, items in sorted(groups.items()):
-            s = [b for b in items if b["status"] in ("WON", "LOST")]
-            st = sum(b["stake_pen"] for b in s)
-            roi_ci = compute_block_bootstrap_roi_ci(items)
-            clv_ci = compute_block_bootstrap_roi_ci(
-                [{"matchday_date": b["matchday_date"], "net_profit_pen": b["clv_ev_pct"] / 100.0, "stake_pen": 1.0} for b in items]
-            )
-            res[k] = {
-                "bets": len(items),
-                "won": sum(1 for b in s if b["status"] == "WON"),
-                "roi_flat_pct": round(100.0 * sum(b["net_profit_pen"] for b in items) / st, 2) if st else None,
-                "roi_ci95": [roi_ci.get("roi_ci_lower_95_pct"), roi_ci.get("roi_ci_upper_95_pct")],
-                "mean_clv_pct": round(float(np.mean([b["clv_ev_pct"] for b in items])), 3) if items else None,
-                "clv_ci95": [clv_ci.get("roi_ci_lower_95_pct"), clv_ci.get("roi_ci_upper_95_pct")],
-            }
-        return res
-
-    out["betting"] = {
-        "bets": len(bets),
-        "settled": len(settled),
-        "won": sum(1 for b in settled if b["status"] == "WON"),
-        "push_or_void": len(bets) - len(settled),
-        "flat_stake": {
-            "net_profit_pen": round(profit, 2),
-            "roi_pct": round(100.0 * profit / staked, 2) if staked else None,
-            "bootstrap_95": compute_block_bootstrap_roi_ci(bets) if bets else {},
-            "drawdown": compute_drawdown_series(initial_bankroll, bets),
-        },
-        "kelly_stake": {
-            "final_bankroll_pen": round(kelly_bankroll, 2),
-            "net_profit_pen": round(kelly_bankroll - initial_bankroll, 2),
-            "total_staked_pen": round(k_staked, 2),
-            "roi_pct": round(100.0 * (kelly_bankroll - initial_bankroll) / k_staked, 2) if k_staked else None,
-            "mean_stake_pen": round(float(np.mean([b["kelly_stake_pen"] for b in bets])), 2) if bets else None,
-            "drawdown": compute_drawdown_series(
-                initial_bankroll, [{"net_profit_pen": b["kelly_net_profit_pen"]} for b in bets]
-            ),
-        },
-        "clv": {
-            "mean_clv_ev_pct": round(float(np.mean(clvs)), 3) if clvs else None,
-            "beat_close_rate": round(float(np.mean([c > 0 for c in clvs])), 4) if clvs else None,
-            "bootstrap_95_pct": {
-                "lower": clv_blocks.get("roi_ci_lower_95_pct"), "upper": clv_blocks.get("roi_ci_upper_95_pct"),
-            } if clv_blocks else {},
-        },
-        "by_market": _group("market"),
-        "by_season": _group("season"),
-    }
-    out["bets_sample"] = bets[:20]
-    out["bets"] = bets
-    return out
-
-
-def _line_movement_signal(eval_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    Rule-free test of whether the model anticipates the market: across ALL games, does the model's
-    disagreement with the opening line predict the direction of the move from open to close?
-      - moneyline: x = calibrated p_home - open p_home, y = close p_home - open p_home
-      - totals:    x = calibrated p_over - 0.5 (at the opening line), y = close total - open total
-    Reports Pearson correlation, a 95% bootstrap CI (resampling matchdays) and the directional hit rate.
-    """
-    def _stats(rows: list[tuple[str, float, float]]) -> dict[str, Any]:
-        moved = [(d, x, y) for d, x, y in rows if abs(y) > 1e-9 and abs(x) > 1e-9]
-        if len(moved) < 30:
-            return {"n": len(moved)}
-        xs = np.asarray([x for _, x, _ in moved])
-        ys = np.asarray([y for _, _, y in moved])
-        corr = float(np.corrcoef(xs, ys)[0, 1])
-        by_day: dict[str, list[int]] = defaultdict(list)
-        for i, (d, _, _) in enumerate(moved):
-            by_day[d].append(i)
-        keys = sorted(by_day)
-        rng = np.random.default_rng(42)
-        boots = []
-        for _ in range(500):
-            idx = [i for k in rng.choice(len(keys), size=len(keys)) for i in by_day[keys[int(k)]]]
-            if len(idx) > 2:
-                boots.append(float(np.corrcoef(xs[idx], ys[idx])[0, 1]))
-        return {
-            "n": len(moved),
-            "correlation": round(corr, 4),
-            "correlation_ci95": [round(float(np.percentile(boots, 2.5)), 4), round(float(np.percentile(boots, 97.5)), 4)],
-            "directional_hit_rate": round(float(np.mean(np.sign(xs) == np.sign(ys))), 4),
-        }
-
-    out: dict[str, Any] = {}
-    for season in sorted({str(r["season"]) for r in eval_rows}) + ["ALL"]:
-        rows = [r for r in eval_rows if season == "ALL" or str(r["season"]) == season]
-        out[season] = {
-            "moneyline": _stats([(r["matchday_date"], r["cal_home"] - r["open_home"], r["close_home"] - r["open_home"]) for r in rows]),
-            "totals": _stats([
-                (r["matchday_date"], r["cal_over"] - 0.5, float(r["close_total_line"]) - float(r["total_line"]))
-                for r in rows if r.get("cal_over") is not None and r.get("close_total_line") is not None
-            ]),
-        }
-    return out
-
-
-def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None = None) -> str:
-    cfg = result["config"]
-    ml_cap_txt = (
-        f" | tope cuota Moneyline `{cfg['moneyline_max_odds']}`"
-        if cfg.get("moneyline_max_odds") is not None
-        else ""
-    )
-    lines = [
-        "# Backtest con cuotas reales (consenso de apertura/cierre, sin margen)",
-        "",
-        f"- Generado: `{result['generated_at_utc']}`",
-        f"- {result['data_attribution']}",
-        f"- Periodo de prueba desde `{cfg['start_date']}` | partidos con mercado emparejado: `{cfg['test_games']}`",
-        f"- Reentrenamiento cada `{cfg['retrain_every_days']}` días | margen supuesto `{cfg['vig_assumption'] * 100:.1f}%` | "
-        f"peso del modelo `{cfg['model_weight']}` | EV mínimo `{cfg['min_ev'] * 100:.0f}%`{ml_cap_txt}",
-        "",
-        "## 1. Calidad probabilística fuera de muestra (todos los partidos)",
-        "",
-        "| Serie | Mercado | N | Brier | LogLoss |",
-        "| :--- | :--- | ---: | ---: | ---: |",
-    ]
-    for name, sc in (result.get("moneyline_quality") or {}).items():
-        lines.append(f"| `{name}` | moneyline | {sc['n']} | {sc['brier']:.5f} | {sc['log_loss']:.5f} |")
-    for name, sc in (result.get("totals_quality_at_open_line") or {}).items():
-        lines.append(f"| `{name}` | totals (línea de apertura) | {sc['n']} | {sc['brier']:.5f} | {sc['log_loss']:.5f} |")
-    b = result["betting"]
-    fs, ks, clv = b["flat_stake"], b["kelly_stake"], b["clv"]
-    boot = fs.get("bootstrap_95") or {}
-    lines += [
-        "",
-        "## 2. Apuestas simuladas (reglas de producción, precio de apertura)",
-        "",
-        f"- Apuestas: `{b['bets']}` (ganadas `{b['won']}` / liquidadas `{b['settled']}`, push `{b['push_or_void']}`)",
-        f"- **Stake fijo S/1**: neto `S/{fs['net_profit_pen']:+.2f}` | ROI `{fs['roi_pct']}%` | "
-        f"IC95 bootstrap `[{boot.get('roi_ci_lower_95_pct')}%, {boot.get('roi_ci_upper_95_pct')}%]` | "
-        f"MaxDD `{fs['drawdown']['max_drawdown_pct']:.2f}%`",
-        f"- **Stake Kelly {cfg['kelly']['fraction'] * 100:.0f}%** (S/{cfg['kelly']['min_stake']:.2f}–S/{cfg['kelly']['max_stake']:.2f}): banca final "
-        f"`S/{ks['final_bankroll_pen']:.2f}` | ROI `{ks['roi_pct']}%` | stake medio `S/{ks['mean_stake_pen']}` | "
-        f"MaxDD `{ks['drawdown']['max_drawdown_pct']:.2f}%`",
-        f"- **CLV vs cierre sin margen**: media `{clv['mean_clv_ev_pct']}%` | gana al cierre `{clv['beat_close_rate']}` | "
-        f"IC95 `[{(clv.get('bootstrap_95_pct') or {}).get('lower')}%, {(clv.get('bootstrap_95_pct') or {}).get('upper')}%]`",
-        "",
-        "| Grupo | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |",
-        "| :--- | ---: | ---: | ---: | ---: |",
-    ]
-
-    def _ci(v: list[Any] | None) -> str:
-        return f"[{v[0]:.1f}, {v[1]:.1f}]" if v and v[0] is not None and v[1] is not None else "[n/d]"
-
-    for label, grp in (("mercado", b["by_market"]), ("temporada", b["by_season"])):
-        for k, v in grp.items():
-            lines.append(
-                f"| {label}: `{k}` | {v['bets']} | {v['won']} | {v['roi_flat_pct']}% {_ci(v.get('roi_ci95'))} | "
-                f"{v['mean_clv_pct']}% {_ci(v.get('clv_ci95'))} |"
-            )
-    if sensitivity:
-        lines += ["", "## 3. Sensibilidad al margen supuesto", "",
-                  "| Margen | Mercado | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |",
-                  "| ---: | :--- | ---: | ---: | ---: | ---: |"]
-        for vig_label, res in sensitivity.items():
-            for mk, v in res["betting"]["by_market"].items():
-                lines.append(
-                    f"| {vig_label} | `{mk}` | {v['bets']} | {v['won']} | {v['roi_flat_pct']}% {_ci(v.get('roi_ci95'))} | "
-                    f"{v['mean_clv_pct']}% {_ci(v.get('clv_ci95'))} |"
+                oos_tot.append(
+                    {
+                        "game_start_time": g["game_start_time"],
+                        "raw_probability": rec["raw_over"],
+                        "outcome": 1 if rec["total_result"] == "over" else 0,
+                    }
                 )
-    sig = result.get("line_movement_signal") or {}
-    if sig:
-        lines += [
-            "",
-            "## 4. ¿El modelo anticipa el movimiento de línea? (todos los partidos, sin reglas de apuesta)",
-            "",
-            "Correlación entre la discrepancia del modelo con la apertura y el movimiento apertura→cierre.",
-            "",
-            "| Temporada | Mercado | N | Correlación [IC95] | Acierto de dirección |",
-            "| :--- | :--- | ---: | ---: | ---: |",
-        ]
-        for season, mk in sig.items():
-            for market_name, st in mk.items():
-                if "correlation" in st:
-                    lines.append(
-                        f"| {season} | {market_name} | {st['n']} | {st['correlation']:+.3f} "
-                        f"[{st['correlation_ci95'][0]:+.3f}, {st['correlation_ci95'][1]:+.3f}] | {st['directional_hit_rate']:.1%} |"
-                    )
-    lines += [
-        "",
-        "## Supuestos",
-        "- Precio apostable = cuota justa de apertura / (1 + margen). La fuente publica probabilidades sin margen, no precios de casas.",
-        "- Totales: la línea principal de apertura es la más cercana a 50/50 (p=0.50); el cierre a esa línea se aproxima con un modelo normal (σ=18).",
-        "- Las features usan solo partidos que empezaron antes del primer partido de la jornada; los calibradores solo predicciones previas.",
-    ]
-    return "\n".join(lines) + "\n"
+            if rec.get("total_line") is not None and rec.get("close_total_line") is not None:
+                oos_tot_closing.append(
+                    {
+                        "game_start_time": g["game_start_time"],
+                        "season": rec["season"],
+                        "p_over": rec["cal_over"],
+                        "tot_open_line": rec["total_line"],
+                        "tot_close_line": rec["close_total_line"],
+                    }
+                )
+
+    return summarize_backtest_results(
+        eval_rows,
+        bets,
+        initial_bankroll,
+        kelly_bankroll,
+        {
+            "start_date": start_date,
+            "end_date": end_date,
+            "retrain_every_days": retrain_every_days,
+            "vig_assumption": vig,
+            "model_weight": model_weight,
+            "min_ev": min_ev,
+            "history_lag_days": history_lag_days,
+            "max_disagreement": max_disagreement,
+            "max_bets_per_day": max_bets_per_day,
+            "moneyline_model_weight": moneyline_model_weight,
+            "moneyline_max_disagreement": moneyline_max_disagreement,
+            "moneyline_max_odds": moneyline_max_odds,
+            "kelly": {
+                "fraction": kelly_fraction,
+                "min_stake": kelly_min_stake,
+                "max_stake": kelly_max_stake,
+                "max_bankroll_fraction": kelly_max_fraction,
+            },
+            "market_rows": len(market_rows),
+            "matched_games": len(market_by_game),
+            "test_games": len(test_games),
+            "boxscore_features": bool(boxscores),
+            "evaluation": {
+                "development_seasons": list(eff_dev_seasons),
+                "holdout_season": eff_holdout,
+                "trials_evaluated_count": eff_trials,
+                "frozen_protocol_id": eff_protocol,
+            },
+        },
+        DATA_ATTRIBUTION,
+        uncapped_shadow_bets=uncapped_shadow_bets,
+        totals_clv_bets=totals_clv_bets,
+        totals_estimator_meta={
+            "intercept": tot_closing_est.intercept,
+            "slope": tot_closing_est.slope,
+            "sample_size": tot_closing_est.sample_size,
+            "is_active": tot_closing_est.is_active,
+            "holdout_excluded_from_fit": True,
+        },
+        development_seasons=eff_dev_seasons,
+        holdout_season=eff_holdout,
+        trials_evaluated_count=eff_trials,
+        frozen_protocol_id=eff_protocol,
+    )

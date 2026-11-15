@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-15T02:13:54Z
+date_generated: 2026-11-15T03:23:04Z
 component: nba_data_scout
 ---
 # Evaluación de Fuentes de Estadísticas y Cuotas NBA
@@ -9,12 +9,12 @@ component: nba_data_scout
 - Limitación histórica: en partidos históricos finalizados, `pickcenter` refleja la línea archivada sin historial tick-a-tick; por ello el sistema exige `captured_at < game_start_time` para toda captura en vivo.
 
 ## 2. Sportradar NBA API v8 & Synergy Basketball NBA API (`SportradarAdapter`)
-- Estado: `CONFIGURED_RATE_LIMITED`.
+- Estado: `READY_IF_KEY_PROVIDED`.
 - Sincroniza el parte médico oficial de la liga (`league/injuries.json`), los splits tácticos de los 30 equipos (`seasons/2026/REG/standings.json`) y la telemetría de posesiones y jugadas de **Synergy Basketball NBA API** (`/synergy/basketball/nba/games` y `/events`) usando `SPORTRADAR_API_KEY`.
 
 ## 3. TheOddsAPI Multi-Bookmaker Line Shopping (`TheOddsAPIAdapter`)
 - Escanea en tiempo real hasta 25+ casas de apuestas (`Pinnacle`, `DraftKings`, `FanDuel`, `BetMGM`, `Coolbet`, `Matchbook`, `GTbets`, etc.) para elegir siempre la cuota máxima disponible.
 
 ## 4. Playwright + PixelRAG (`visual_researcher`)
-- Playwright: `Paquete instalado v1.64.1`.
-- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)`.
+- Playwright: `OPERATIONAL`.
+- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_LOCAL_PLAYWRIGHT_HYBRID, 34 docs indexed)`.

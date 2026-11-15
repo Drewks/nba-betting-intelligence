@@ -276,6 +276,22 @@ class LineupSynergyConfig:
 
 
 @dataclass(frozen=True)
+class SourcesConfig:
+    betting_allowed_source_types: tuple[str, ...] = ("OBSERVED",)
+    peru_scrapers_enabled: bool = True
+    peru_scraper_policy: str = "PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS"
+    allowed_live_api_books: tuple[str, ...] = ("te_apuesto", "pinnacle", "betano")
+
+
+@dataclass(frozen=True)
+class EvaluationConfig:
+    development_seasons: tuple[str, ...] = ("2024-25", "2025-26")
+    holdout_season: str = "2026-27"
+    trials_evaluated_count: int = 3
+    frozen_protocol_id: str = "V8_FROZEN_2026_11_15"
+
+
+@dataclass(frozen=True)
 class AppConfig:
     model: ModelConfig
     risk: RiskConfig
@@ -286,6 +302,8 @@ class AppConfig:
     copula_correlations: CopulaCorrelationsConfig = field(default_factory=CopulaCorrelationsConfig)
     situational_factors: SituationalFactorsConfig = field(default_factory=SituationalFactorsConfig)
     lineup_synergy: LineupSynergyConfig = field(default_factory=LineupSynergyConfig)
+    sources: SourcesConfig = field(default_factory=SourcesConfig)
+    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
 
 
 def _require(section: dict[str, Any], key: str, section_name: str) -> Any:
@@ -483,6 +501,29 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     allowed = tuple(str(x) for x in (src.get("betting_allowed_source_types") or ["OBSERVED"]))
     if allowed != ("OBSERVED",):
         raise ConfigError("Only OBSERVED odds may be used for betting decisions")
+    peru_scrapers_enabled = bool(src.get("peru_scrapers_enabled", True))
+    peru_scraper_policy = str(src.get("peru_scraper_policy", "PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS"))
+    allowed_live_api_books = tuple(
+        str(b).strip().lower() for b in (src.get("allowed_live_api_books") or ["te_apuesto", "pinnacle", "betano"])
+    )
+    sources_cfg = SourcesConfig(
+        betting_allowed_source_types=allowed,
+        peru_scrapers_enabled=peru_scrapers_enabled,
+        peru_scraper_policy=peru_scraper_policy,
+        allowed_live_api_books=allowed_live_api_books,
+    )
+
+    ev_raw = raw.get("evaluation") or {}
+    dev_seasons = tuple(str(s) for s in (ev_raw.get("development_seasons") or ["2024-25", "2025-26"]))
+    holdout_season = str(ev_raw.get("holdout_season", "2026-27"))
+    trials_evaluated_count = max(1, int(ev_raw.get("trials_evaluated_count", 3)))
+    frozen_protocol_id = str(ev_raw.get("frozen_protocol_id", "V8_FROZEN_2026_11_15"))
+    evaluation_cfg = EvaluationConfig(
+        development_seasons=dev_seasons,
+        holdout_season=holdout_season,
+        trials_evaluated_count=trials_evaluated_count,
+        frozen_protocol_id=frozen_protocol_id,
+    )
 
     # Optional sub_bankroll section
     sub_raw = raw.get("sub_bankroll_combinadas")
@@ -586,6 +627,8 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         copula_correlations=copula_correlations,
         situational_factors=situational_factors,
         lineup_synergy=lineup_synergy,
+        sources=sources_cfg,
+        evaluation=evaluation_cfg,
     )
 
 

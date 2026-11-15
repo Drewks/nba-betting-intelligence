@@ -229,6 +229,10 @@ def main() -> None:
         "moneyline_model_weight": cfg.model.moneyline_model_weight,
         "moneyline_max_disagreement": cfg.model.moneyline_max_disagreement,
         "moneyline_max_odds": cfg.model.moneyline_max_odds,
+        "development_seasons": cfg.evaluation.development_seasons,
+        "holdout_season": cfg.evaluation.holdout_season,
+        "trials_evaluated_count": cfg.evaluation.trials_evaluated_count,
+        "frozen_protocol_id": cfg.evaluation.frozen_protocol_id,
     }
     result = run_real_odds_backtest(games, market_rows, vig=args.vig, **common)
     zero_lookahead = verify_zero_lookahead_leakage(
