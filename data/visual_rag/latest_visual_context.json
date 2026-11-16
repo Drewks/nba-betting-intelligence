@@ -8,50 +8,50 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DET Duncan Robinson (SF) Day To Day (Thigh): Robinson exited Saturday's (Nov. 14) win over Detroit due to a thigh injury and was unable to return.",
-      "relevance_score": 0.2458,
+      "relevance_score": 0.2566,
       "captured_at": "2026-11-15"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "WAS Tre Johnson (SG) Day To Day (Back): Johnson is Questionable for Sunday's (Nov. 14) game against the Rockets.",
-      "relevance_score": 0.2454,
-      "captured_at": "2026-11-14"
+      "snippet": "MEM Zach Edey (C) Day To Day (Ankle): Edey is Questionable for Monday's (Nov. 16) game against Washington.",
+      "relevance_score": 0.2407,
+      "captured_at": "2026-11-15"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale is Questionable for Sunday's (Nov. 15) game against the Bucks.",
-      "relevance_score": 0.2303,
+      "snippet": "CLE Jaylon Tyson (SG) Day To Day (Ankle): Tyson is Questionable for Monday's (Nov. 16) game against Chicago.",
+      "relevance_score": 0.2404,
+      "captured_at": "2026-11-15"
+    },
+    {
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Jaylon Tyson G Nov 16 Day-To-Day Nov 15: Tyson (ankle) is questionable for Monday's game against the Bulls.",
+      "relevance_score": 0.2401,
+      "captured_at": "2026-11-16T02:00:45Z"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Jalen Smith (C) Day To Day (Finger): Smith is Questionable for Monday's (Nov. 16) game against Cleveland.",
+      "relevance_score": 0.239,
+      "captured_at": "2026-11-15"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Peyton Watson (SF) Day To Day (Hamstring): Watson is Questionable for Monday's (Nov. 16) game against Chicago.",
+      "relevance_score": 0.2373,
+      "captured_at": "2026-11-15"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MEM Isaiah Stewart (C) Day To Day (Illness): Stewart.is Questionable for Monday's (Nov. 16) game against Washington.",
+      "relevance_score": 0.2372,
       "captured_at": "2026-11-15"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Ajay Mitchell (SG) Day To Day (Ankle): Mitchell is Questionable on Sunday's (Nov. 15) game against the Kings.",
-      "relevance_score": 0.2298,
+      "relevance_score": 0.2357,
       "captured_at": "2026-11-14"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAS De'Aaron Fox (PG) Day To Day (Hip): Fox is Questionable on Sunday's (Nov. 15) game against the Jazz.",
-      "relevance_score": 0.2174,
-      "captured_at": "2026-11-15"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa is Questionable on Sunday's (Nov. 15) game against the Thunder.",
-      "relevance_score": 0.2174,
-      "captured_at": "2026-11-14"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIL Ryan Rollins (PG) Day To Day (Illness): Rollins is Questionable on Sunday's (Nov. 15) game against the Hawks.",
-      "relevance_score": 0.214,
-      "captured_at": "2026-11-15"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM GG Jackson (PF) Day To Day (Foot): Jackson did not return to Saturday's (Nov. 14) game against the Nets.",
-      "relevance_score": 0.2138,
-      "captured_at": "2026-11-15"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
