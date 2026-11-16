@@ -578,7 +578,7 @@ def run_real_odds_backtest(
             )
 
         for g, rec in day_records:
-            eval_rows.append(rec)
+            eval_rows.append({**rec, "game_start_time": g["game_start_time"]})
             oos_ml.append({"game_start_time": g["game_start_time"], "raw_probability": rec["raw_home"], "outcome": rec["home_won"]})
             if rec.get("total_result") in ("over", "under"):
                 oos_tot.append(
@@ -632,6 +632,8 @@ def run_real_odds_backtest(
                 "holdout_season": eff_holdout,
                 "trials_evaluated_count": eff_trials,
                 "frozen_protocol_id": eff_protocol,
+                "season_holdout_contaminated": eval_cfg.season_holdout_contaminated,
+                "forward_holdout_start_utc": eval_cfg.forward_holdout_start_utc,
             },
         },
         DATA_ATTRIBUTION,
@@ -648,4 +650,6 @@ def run_real_odds_backtest(
         holdout_season=eff_holdout,
         trials_evaluated_count=eff_trials,
         frozen_protocol_id=eff_protocol,
+        season_holdout_contaminated=eval_cfg.season_holdout_contaminated,
+        forward_holdout_start_utc=eval_cfg.forward_holdout_start_utc,
     )
