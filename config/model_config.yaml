@@ -85,8 +85,18 @@ sources:
 evaluation:
   development_seasons: ["2024-25", "2025-26"]
   holdout_season: "2026-27"
-  trials_evaluated_count: 3
+  # Lower bound: 9 distinct backtest reports were published before the freeze (EV 5% / 2%, ML odds cap,
+  # EWMA re-tunes, margin and box-score variants). Using 3 understated the multiple-testing correction.
+  trials_evaluated_count: 9
   frozen_protocol_id: "V8_FROZEN_2026_11_15"
+  # 2026-27 was visible in every published report before the freeze, so it is NOT an untouched holdout.
+  season_holdout_contaminated: true
+  # Genuine out-of-sample evidence: only games that start after the protocol freeze.
+  forward_holdout_start_utc: "2026-11-15T00:00:00Z"
+
+execution:                           # Which observed quotes count as a price that could have been taken
+  max_quote_age_hours: 6.0           # older quotes at decision time are not used for bets
+  excluded_provider_markers: ["(Best of"]  # cross-book aggregates (best price of one book + another's counterpart)
 
 sub_bankroll_combinadas:             # Sub-bankroll independiente para SGP y combinadas de alta probabilidad
   enabled: true

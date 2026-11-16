@@ -7,6 +7,7 @@ risk. Risk limits are additionally checked against the hard caps from AGENTS.md.
 
 from __future__ import annotations
 
+from datetime import datetime
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -289,6 +290,21 @@ class EvaluationConfig:
     holdout_season: str = "2026-27"
     trials_evaluated_count: int = 3
     frozen_protocol_id: str = "V8_FROZEN_2026_11_15"
+    # The 2026-27 games were part of every backtest published before the freeze (EV threshold, odds cap
+    # and EWMA rates were chosen while looking at them), so they are not an untouched holdout.
+    season_holdout_contaminated: bool = True
+    # Only games that start after the protocol freeze are a genuine out-of-sample holdout.
+    forward_holdout_start_utc: str = "2026-11-15T00:00:00Z"
+
+
+@dataclass(frozen=True)
+class ExecutionConfig:
+    """Which observed quotes count as a price the system could actually have taken."""
+
+    # A quote older than this at decision time is not used for a bet (lines move; old prices are gone).
+    max_quote_age_hours: float = 6.0
+    # Provider labels that are cross-book aggregates, not one book's two-way market.
+    excluded_provider_markers: tuple[str, ...] = ("(Best of",)
 
 
 @dataclass(frozen=True)
@@ -304,6 +320,7 @@ class AppConfig:
     lineup_synergy: LineupSynergyConfig = field(default_factory=LineupSynergyConfig)
     sources: SourcesConfig = field(default_factory=SourcesConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
 
 
 def _require(section: dict[str, Any], key: str, section_name: str) -> Any:
@@ -518,11 +535,28 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     holdout_season = str(ev_raw.get("holdout_season", "2026-27"))
     trials_evaluated_count = max(1, int(ev_raw.get("trials_evaluated_count", 3)))
     frozen_protocol_id = str(ev_raw.get("frozen_protocol_id", "V8_FROZEN_2026_11_15"))
+    forward_start = str(ev_raw.get("forward_holdout_start_utc", "2026-11-15T00:00:00Z"))
+    try:
+        datetime.fromisoformat(forward_start.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ConfigError(f"evaluation.forward_holdout_start_utc is not an ISO timestamp: {forward_start!r}") from exc
     evaluation_cfg = EvaluationConfig(
         development_seasons=dev_seasons,
         holdout_season=holdout_season,
         trials_evaluated_count=trials_evaluated_count,
         frozen_protocol_id=frozen_protocol_id,
+        season_holdout_contaminated=bool(ev_raw.get("season_holdout_contaminated", True)),
+        forward_holdout_start_utc=forward_start,
+    )
+
+    ex_raw = raw.get("execution") or {}
+    execution_cfg = ExecutionConfig(
+        max_quote_age_hours=_in_range(
+            "execution.max_quote_age_hours", ex_raw.get("max_quote_age_hours", 6.0), 0.25, 72.0
+        ),
+        excluded_provider_markers=tuple(
+            str(m) for m in (ex_raw.get("excluded_provider_markers") or ["(Best of"])
+        ),
     )
 
     # Optional sub_bankroll section
@@ -629,6 +663,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         lineup_synergy=lineup_synergy,
         sources=sources_cfg,
         evaluation=evaluation_cfg,
+        execution=execution_cfg,
     )
 
 
