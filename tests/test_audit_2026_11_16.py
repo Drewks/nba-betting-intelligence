@@ -236,3 +236,38 @@ def test_espn_upcoming_games_use_ingestion_time_as_feature_availability() -> Non
     helpers = (PROJECT_ROOT / "scripts" / "cloud_cycle_helpers.py").read_text(encoding="utf-8")
     assert "pred_dt = max(avail_dt, latest_odds_dt)" not in helpers
     assert "pred_ts = decision_ts" in helpers
+
+
+def test_espn_provider_aliases_are_canonical() -> None:
+    from src.ingestion.espn import canonical_provider_name
+
+    assert canonical_provider_name("Draft Kings") == "DraftKings"
+    assert canonical_provider_name("draft  kings") == "DraftKings"
+    assert canonical_provider_name("DraftKings") == "DraftKings"
+    assert canonical_provider_name("ESPN BET") == "ESPN BET"
+
+
+def test_clv_evidence_verdicts() -> None:
+    from src.paper_trading.shadow_ledger import clv_evidence
+
+    assert clv_evidence([])["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert clv_evidence([1.0, 2.0, 3.0])["verdict"] == "INSUFFICIENT_SAMPLE"
+    neg = clv_evidence([-3.0 + 0.1 * (i % 5) for i in range(40)])
+    assert neg["verdict"] == "NO_EDGE" and neg["ci95_pct"][1] < 0
+    pos = clv_evidence([2.0 + 0.1 * (i % 5) for i in range(40)])
+    assert pos["verdict"] == "EDGE_SUPPORTED"
+    mixed = clv_evidence([(-1.0) ** i * 4.0 for i in range(40)])
+    assert mixed["verdict"] == "INCONCLUSIVE"
+    assert mixed["signals_needed_for_target"] > 40
+
+
+def test_clv_evidence_groups_signals_by_game() -> None:
+    from src.paper_trading.shadow_ledger import clv_evidence
+
+    clvs = [-3.0, -3.1, -2.9, -3.0] * 3 + [1.0, 1.2]
+    games = ["A", "A", "A", "A", "B", "B", "B", "B", "C", "C", "C", "C", "D", "D"]
+    ev = clv_evidence(clvs, groups=games)
+    assert ev["n"] == 4 and ev["n_signals"] == 14 and ev["independent_unit"] == "game"
+    ungrouped = clv_evidence(clvs)
+    width = ev["ci95_pct"][1] - ev["ci95_pct"][0]
+    assert width > ungrouped["ci95_pct"][1] - ungrouped["ci95_pct"][0]

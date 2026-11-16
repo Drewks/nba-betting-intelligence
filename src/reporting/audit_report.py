@@ -11,6 +11,23 @@ from typing import Any
 from src.config import load_config
 
 
+def _clv_evidence_text(ev: dict[str, Any]) -> str:
+    """One line on what the shadow-ledger CLV sample supports (edge / no edge / inconclusive)."""
+    if not ev or ev.get("verdict") == "INSUFFICIENT_SAMPLE" or ev.get("ci95_pct") is None:
+        return (
+            f" — evidencia de CLV: `INSUFFICIENT_SAMPLE` (n=`{ev.get('n', 0)}` partidos / `{ev.get('n_signals', 0)}` señales)"
+            if ev
+            else ""
+        )
+    lo, hi = ev["ci95_pct"]
+    return (
+        f" — evidencia de CLV: `{ev['verdict']}` (n=`{ev['n']}` partidos / `{ev.get('n_signals', ev['n'])}` señales, "
+        f"IC95 `[{lo}%, {hi}%]`; "
+        f"para detectar +{ev['target_clv_pct']}% hacen falta ~`{ev['signals_needed_for_target']}` "
+        f"{'partidos' if ev.get('independent_unit') == 'game' else 'señales'})"
+    )
+
+
 def _detect_playwright_status() -> str:
     try:
         return f"Paquete instalado v{pkg_version('playwright')}"
@@ -49,6 +66,7 @@ def generate_audit_report(
         f"Total `{shadow_info.get('total_candidates', 0)}` señales +EV registradas "
         f"(liquidadas `{shadow_info.get('settled', 0)}`, ROI 1u `{shadow_info.get('unit_roi_pct', 0.0)}%`, "
         f"CLV medio `{shadow_info.get('mean_clv_pct')}%`; cero impacto en banca S/100)"
+        + _clv_evidence_text(shadow_info.get("clv_evidence") or {})
         if shadow_info
         else "Tabla inmutable `shadow_candidates` aislada del bankroll oficial S/100.00 PEN"
     )
