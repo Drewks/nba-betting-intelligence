@@ -208,6 +208,7 @@ def _pair_valid_pretip_quotes(
     decision_dt: datetime | None = None,
     max_quote_age_hours: float | None = None,
     excluded_provider_markers: tuple[str, ...] = (),
+    max_overround: float | None = None,
 ) -> list[dict[str, Any]]:
     """
     Extracts complete two-sided pre-tipoff observed pairs grouped by `(provider, market, canonical_line)`.
@@ -215,7 +216,8 @@ def _pair_valid_pretip_quotes(
     For live decisions (`decision_dt` set) only quotes that existed at the decision time and are at most
     `max_quote_age_hours` old are used, and providers whose label contains an excluded marker (e.g.
     "(Best of" aggregates that pair the best price of one book with another book's counterpart) are
-    skipped: those prices are not a quote any single book offered.
+    skipped: those prices are not a quote any single book offered. Two-way markets whose overround
+    exceeds `max_overround` are dropped: at a ~10% margin no realistic edge survives.
     """
     latest_by_key: dict[tuple[str, str, float | None, str], tuple[datetime, dict[str, Any]]] = {}
     for o in raw_game_odds:
@@ -272,6 +274,10 @@ def _pair_valid_pretip_quotes(
             if not entry_a or not entry_b:
                 continue
             row_a, row_b = entry_a[1], entry_b[1]
+            if max_overround is not None:
+                overround = 1.0 / float(row_a["decimal_odds"]) + 1.0 / float(row_b["decimal_odds"]) - 1.0
+                if overround > max_overround:
+                    continue
             paired.append({**row_a, "counterpart_decimal_odds": float(row_b["decimal_odds"])})
             paired.append({**row_b, "counterpart_decimal_odds": float(row_a["decimal_odds"])})
     return paired
@@ -693,6 +699,7 @@ def evaluate_scheduled_slate_candidates(
             decision_dt=decision_dt,
             max_quote_age_hours=execution_cfg.max_quote_age_hours,
             excluded_provider_markers=execution_cfg.excluded_provider_markers,
+            max_overround=execution_cfg.max_bookmaker_overround,
         )
         if not game_odds:
             continue

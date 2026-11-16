@@ -169,6 +169,19 @@ def test_pairing_excludes_best_of_aggregates_stale_and_future_quotes() -> None:
     assert len(_pair_valid_pretip_quotes(raw, start)) == 8
 
 
+def test_pairing_drops_high_margin_markets() -> None:
+    start = _utc("2026-11-17T01:00:00Z")
+    raw = [
+        _quote("Pinnacle [LIVE_API]", "OVER", 1.91, "2026-11-16T22:50:00Z"),
+        _quote("Pinnacle [LIVE_API]", "UNDER", 1.98, "2026-11-16T22:50:00Z"),  # ~2.9% margin
+        _quote("Te Apuesto Perú [LIVE_API]", "OVER", 1.79, "2026-11-16T22:50:00Z"),
+        _quote("Te Apuesto Perú [LIVE_API]", "UNDER", 1.84, "2026-11-16T22:50:00Z"),  # ~10.2% margin
+    ]
+    paired = _pair_valid_pretip_quotes(raw, start, max_overround=0.06)
+    assert {p["provider"] for p in paired} == {"Pinnacle [LIVE_API]"}
+    assert load_config().execution.max_bookmaker_overround == 0.06
+
+
 # 5. Honest evaluation protocol
 def test_config_declares_contaminated_season_holdout_and_forward_holdout() -> None:
     cfg = load_config()

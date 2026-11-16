@@ -97,6 +97,9 @@ evaluation:
 execution:                           # Which observed quotes count as a price that could have been taken
   max_quote_age_hours: 6.0           # older quotes at decision time are not used for bets
   excluded_provider_markers: ["(Best of"]  # cross-book aggregates (best price of one book + another's counterpart)
+  # No bets into markets with a larger margin: in 378 simultaneous snapshots Te Apuesto (median 9.9%)
+  # never beat Pinnacle's no-vig fair price (Pinnacle median 3.2%).
+  max_bookmaker_overround: 0.06
 
 sub_bankroll_combinadas:             # Sub-bankroll independiente para SGP y combinadas de alta probabilidad
   enabled: true

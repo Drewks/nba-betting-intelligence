@@ -305,6 +305,8 @@ class ExecutionConfig:
     max_quote_age_hours: float = 6.0
     # Provider labels that are cross-book aggregates, not one book's two-way market.
     excluded_provider_markers: tuple[str, ...] = ("(Best of",)
+    # Two-way markets with a larger margin are not bet (Te Apuesto ~9.9% vs Pinnacle ~3.2% observed).
+    max_bookmaker_overround: float = 0.06
 
 
 @dataclass(frozen=True)
@@ -556,6 +558,9 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         ),
         excluded_provider_markers=tuple(
             str(m) for m in (ex_raw.get("excluded_provider_markers") or ["(Best of"])
+        ),
+        max_bookmaker_overround=_in_range(
+            "execution.max_bookmaker_overround", ex_raw.get("max_bookmaker_overround", 0.06), 0.0, 0.25
         ),
     )
 
