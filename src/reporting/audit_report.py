@@ -11,6 +11,20 @@ from typing import Any
 from src.config import load_config
 
 
+def _odds_integrity_line(oi: dict[str, Any]) -> str:
+    """Copied cross-game quotes still usable and decisions stamped after their own run."""
+    if not oi:
+        return "- **Integridad de cuotas y timestamps de decisión**: `n/d`"
+    ts = oi.get("decision_timestamp_violations") or {}
+    ok = oi.get("unquarantined_copied_quotes", 0) == 0 and ts.get("post_fix", 0) == 0
+    return (
+        f"- **Integridad de cuotas y timestamps de decisión**: `{'ÍNTEGRO' if ok else 'VIOLACIÓN'}` — "
+        f"cuotas copiadas entre partidos sin cuarentena: `{oi.get('unquarantined_copied_quotes', 0)}` "
+        f"(detectadas `{oi.get('copied_live_quotes', 0)}`); decisiones fechadas después de su ciclo: "
+        f"`{ts.get('post_fix', 0)}` (heredadas previas al arreglo: `{ts.get('legacy', 0)}`)"
+    )
+
+
 def _clv_evidence_text(ev: dict[str, Any]) -> str:
     """One line on what the shadow-ledger CLV sample supports (edge / no edge / inconclusive)."""
     if not ev or ev.get("verdict") == "INSUFFICIENT_SAMPLE" or ev.get("ci95_pct") is None:
@@ -98,6 +112,7 @@ def generate_audit_report(
             f"`{'ÍNTEGRO' if (audit_result.get('history_integrity') or {}).get('missing_rows_total', 1) == 0 else 'VIOLACIÓN: faltan filas registradas'}`"
             f" — faltantes por tabla: `{(audit_result.get('history_integrity') or {}).get('missing_rows_by_table', {})}`"
         ),
+        _odds_integrity_line(audit_result.get("odds_and_decision_integrity") or {}),
         f"- **Inconsistencias del ledger**: `{audit_result.get('ledger_issues_count', 'n/d')}`",
         f"- **Reproducibilidad**: `{repro_note}`",
         "",

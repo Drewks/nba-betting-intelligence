@@ -86,8 +86,9 @@ evaluation:
   development_seasons: ["2024-25", "2025-26"]
   holdout_season: "2026-27"
   # Lower bound: 9 distinct backtest reports were published before the freeze (EV 5% / 2%, ML odds cap,
-  # EWMA re-tunes, margin and box-score variants). Using 3 understated the multiple-testing correction.
-  trials_evaluated_count: 9
+  # EWMA re-tunes, margin and box-score variants); +1 for the 2026-11-17 Pinnacle-margin (3.2%) run.
+  # Using 3 understated the multiple-testing correction.
+  trials_evaluated_count: 10
   frozen_protocol_id: "V8_FROZEN_2026_11_15"
   # 2026-27 was visible in every published report before the freeze, so it is NOT an untouched holdout.
   season_holdout_contaminated: true
