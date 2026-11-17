@@ -93,14 +93,21 @@ def _seed_game(db: DatabaseManager, game_id: str, start: str, home: str = "MIN",
     )
 
 
-def _insert_quote(db: DatabaseManager, odds_id: str, game_id: str, odds: float, captured: str = "2026-11-16T23:06:28Z") -> None:
+def _insert_quote(
+    db: DatabaseManager,
+    odds_id: str,
+    game_id: str,
+    odds: float,
+    captured: str = "2026-11-16T23:06:28Z",
+    line: float = 227.5,
+) -> None:
     db.insert_odds_snapshot({
         "odds_id": odds_id,
         "game_id": game_id,
         "provider": "Pinnacle [LIVE_API]",
         "market": "total_points",
         "selection": "UNDER",
-        "line_value": 227.5,
+        "line_value": line,
         "decimal_odds": odds,
         "counterpart_decimal_odds": 1.9091,
         "captured_at": captured,
@@ -113,10 +120,15 @@ def test_migration_014_quarantines_quotes_copied_onto_both_games(tmp_path: Path)
     _seed_game(db, "G_DAY1", "2026-11-17T01:00:00Z")
     _seed_game(db, "G_DAY2", "2026-11-18T01:00:00Z")
     _seed_game(db, "G_OTHER", "2026-11-17T02:00:00Z", home="BOS", away="NYK")
-    _insert_quote(db, "Q_DAY1", "G_DAY1", 1.9804)
-    _insert_quote(db, "Q_DAY2", "G_DAY2", 1.9804)  # the copy
+    # A copied slate entry: three identical quotes of one capture on both games
+    for i, odds in enumerate((1.9804, 1.9091, 2.16)):
+        _insert_quote(db, f"Q_DAY1_{i}", "G_DAY1", odds, line=227.5 + i)
+        _insert_quote(db, f"Q_DAY2_{i}", "G_DAY2", odds, line=227.5 + i)  # the copies
     _insert_quote(db, "Q_OTHER", "G_OTHER", 1.9804)  # same price, different teams: legitimate
     _insert_quote(db, "Q_DAY1_LATER", "G_DAY1", 1.95, captured="2026-11-16T23:30:00Z")  # unique: kept
+    # A single coincidental equal price on both games of the same teams (another capture): kept
+    _insert_quote(db, "Q_COINC_1", "G_DAY1", 1.87, captured="2026-11-16T20:00:00Z")
+    _insert_quote(db, "Q_COINC_2", "G_DAY2", 1.87, captured="2026-11-16T20:00:00Z")
 
     conn = sqlite3.connect(tmp_path / "m014.sqlite3")
     try:
@@ -126,10 +138,11 @@ def test_migration_014_quarantines_quotes_copied_onto_both_games(tmp_path: Path)
         visible = {r[0] for r in conn.execute("SELECT odds_id FROM v_observed_odds_snapshots")}
     finally:
         conn.close()
-    assert details["quarantined_quotes"] == 2
-    assert quarantined == {"Q_DAY1", "Q_DAY2"}
-    assert {"Q_OTHER", "Q_DAY1_LATER"} <= visible
-    assert not ({"Q_DAY1", "Q_DAY2"} & visible)
+    copies = {f"Q_DAY{d}_{i}" for d in (1, 2) for i in range(3)}
+    assert details["quarantined_quotes"] == 6
+    assert quarantined == copies
+    assert {"Q_OTHER", "Q_DAY1_LATER", "Q_COINC_1", "Q_COINC_2"} <= visible
+    assert not (copies & visible)
 
 
 # 4. Executable prices only
@@ -271,3 +284,19 @@ def test_clv_evidence_groups_signals_by_game() -> None:
     ungrouped = clv_evidence(clvs)
     width = ev["ci95_pct"][1] - ev["ci95_pct"][0]
     assert width > ungrouped["ci95_pct"][1] - ungrouped["ci95_pct"][0]
+
+
+def test_clv_evidence_uses_student_t_for_small_samples() -> None:
+    import math
+    import statistics
+
+    from src.paper_trading.shadow_ledger import clv_evidence
+
+    # Ten games with t ~ 2.1: a normal 1.96 interval would exclude zero, the Student-t interval
+    # (df=9, 2.262) does not, so no edge is claimed.
+    vals = [1.7, -0.3] * 5
+    mean, sd = statistics.mean(vals), statistics.stdev(vals)
+    assert mean - 1.96 * sd / math.sqrt(10) > 0
+    ev = clv_evidence(vals)
+    assert ev["ci95_pct"][0] < 0 < ev["ci95_pct"][1]
+    assert ev["verdict"] == "INCONCLUSIVE"

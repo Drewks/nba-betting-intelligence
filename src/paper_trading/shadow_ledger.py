@@ -17,6 +17,7 @@ import math
 from typing import Any
 
 import numpy as np
+from scipy.stats import t as student_t
 
 from src.evaluation.clv import compute_bet_clv, index_closing_rows
 from src.paper_trading.settlement import calculate_settlement_outcome
@@ -243,7 +244,7 @@ def clv_evidence(
     Signals on the same game are correlated (same result, same line move), so when `groups` (game ids)
     are given the interval is computed over per-game mean CLVs: one independent observation per game.
 
-    - `verdict`: EDGE_SUPPORTED if the 95% CI of the mean CLV is above zero, NO_EDGE if it is below
+    - `verdict`: EDGE_SUPPORTED if the 95% Student-t CI of the mean CLV is above zero, NO_EDGE if it is below
       zero, INCONCLUSIVE otherwise (INSUFFICIENT_SAMPLE under 10 signals).
     - `signals_needed_for_target`: number of independent units (games when grouped) that would detect a
       true mean CLV of `target_clv_pct` with 80% power at 5% two-sided significance, given the
@@ -262,7 +263,9 @@ def clv_evidence(
     arr = np.asarray(values, dtype=float)
     mean = float(arr.mean())
     sd = float(arr.std(ddof=1))
-    half = 1.96 * sd / math.sqrt(n)
+    # Student-t quantile: with ~10 independent games a normal 1.96 interval is too narrow.
+    t_crit = float(student_t.ppf(0.975, df=n - 1))
+    half = t_crit * sd / math.sqrt(n)
     lower, upper = mean - half, mean + half
     if n < 10:
         verdict = "INSUFFICIENT_SAMPLE"
