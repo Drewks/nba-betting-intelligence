@@ -89,3 +89,23 @@ def test_walk_forward_replay_is_not_scaled_by_future_evidence(tmp_path: Path) ->
     assert engine._evidence_kelly_multiplier("total_points") == (0.5, "NO_EDGE")
     engine.is_backtest = True  # what WalkForwardBacktester.run_walk_forward sets during a replay
     assert engine._evidence_kelly_multiplier("total_points") == (1.0, None)
+
+
+def test_daily_report_shows_evidence_and_forward_holdout(tmp_path: Path) -> None:
+    import json
+
+    from src.reporting.daily_report import _evidence_section
+
+    db = DatabaseManager(tmp_path / "evidence_report.sqlite3")
+    _seed(db, 12, "total_points", clv=-3.0)
+    bt = tmp_path / "bt.json"
+    bt.write_text(json.dumps({"main": {
+        "generated_at_utc": "2026-11-16T23:38:07Z",
+        "holdout_partition": {"forward_holdout": {
+            "start_utc": "2026-11-15T00:00:00Z", "games": 11, "bets": 0, "roi_flat_pct": None, "mean_clv_pct": None,
+        }},
+    }}), encoding="utf-8")
+    text = "\n".join(_evidence_section(db, bt))
+    assert "`total_points` | 12 (12)" in text and "`NO_EDGE` | ×0.50" in text
+    assert "`11` partidos, `0` apuestas" in text
+    assert "sin backtest disponible" in "\n".join(_evidence_section(db, tmp_path / "missing.json"))

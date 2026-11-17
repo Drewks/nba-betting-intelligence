@@ -5,10 +5,69 @@ Generates the daily performance and prediction report for NBA operations.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
+from pathlib import Path
 from typing import Any
 
 from src.config import load_config
 from src.storage.db import DatabaseManager
+
+BACKTEST_JSON_PATH = Path(__file__).resolve().parents[2] / "data" / "evaluation" / "real_odds_backtest.json"
+
+
+def _pct(value: Any) -> str:
+    return "n/d" if value is None else f"{float(value):+.2f}%"
+
+
+def _evidence_section(db: DatabaseManager, backtest_json_path: Path | None = None) -> list[str]:
+    """
+    What the data says about an edge today: per-market shadow-ledger CLV verdict (and the Kelly
+    multiplier it implies) plus the forward holdout of the latest real-odds backtest.
+    """
+    from src.paper_trading.shadow_ledger import clv_evidence_by_market
+
+    cfg = load_config()
+    lines = [
+        "",
+        "## 6. Evidencia de Ventaja (CLV y Holdout hacia Adelante)",
+        "",
+        "| Mercado | Partidos (señales) | CLV medio | IC95 (t, por partido) | Veredicto | Kelly aplicado |",
+        "| :--- | ---: | ---: | :--- | :--- | ---: |",
+    ]
+    evidence = clv_evidence_by_market(db)
+    if not evidence:
+        lines.append("| — | 0 | n/d | n/d | `INSUFFICIENT_SAMPLE` | ×1.00 |")
+    for market in sorted(evidence):
+        ev = evidence[market]
+        ci = ev.get("ci95_pct")
+        ci_txt = f"[{ci[0]:+.2f}%, {ci[1]:+.2f}%]" if ci else "n/d"
+        mean_txt = f"{ev['mean_clv_pct']:+.2f}%" if ev.get("mean_clv_pct") is not None else "n/d"
+        mult = cfg.evidence_staking.multiplier(ev.get("verdict"))
+        lines.append(
+            f"| `{market}` | {ev.get('n', 0)} ({ev.get('n_signals', ev.get('n', 0))}) | {mean_txt} | {ci_txt} | "
+            f"`{ev.get('verdict')}` | ×{mult:.2f} |"
+        )
+
+    path = backtest_json_path or BACKTEST_JSON_PATH
+    forward: dict[str, Any] | None = None
+    generated = None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        result = payload.get("main") or payload.get("result") or payload
+        forward = (result.get("holdout_partition") or {}).get("forward_holdout")
+        generated = result.get("generated_at_utc")
+    except (OSError, ValueError, AttributeError):
+        forward = None
+    lines.append("")
+    if forward:
+        lines.append(
+            f"- **Holdout hacia adelante** (partidos desde `{forward.get('start_utc')}`, backtest `{generated}`): "
+            f"`{forward.get('games')}` partidos, `{forward.get('bets')}` apuestas, ROI `{_pct(forward.get('roi_flat_pct'))}`, "
+            f"CLV `{_pct(forward.get('mean_clv_pct'))}`. Es la única evidencia fuera de muestra real."
+        )
+    else:
+        lines.append("- **Holdout hacia adelante**: sin backtest disponible todavía (se regenera cada lunes).")
+    return lines
 
 
 def generate_daily_report(
@@ -138,9 +197,11 @@ def generate_daily_report(
             f"- `{nb['game_id']}` (`{nb['market']}` - `{nb['selection']}`): **NO_BET** [{nb['reason_code']}] — {detail}"
         )
 
+    lines.extend(_evidence_section(db))
+
     lines.extend([
         "",
-        "## 6. Limitaciones Documentadas",
+        "## 7. Limitaciones Documentadas",
         f"- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual inicial de **S/{initial_bankroll_pen:.2f} PEN** (bankroll observado liquidado actual: **S/{observed_settled_bankroll:.2f} PEN** en **{observed_settled_count}** apuestas observadas).",
         "- Cuando una fuente externa no proporciona cuota verificable antes del inicio del partido (`captured_at < game_start_time`), el sistema bloquea el cálculo de EV y registra `NO_BET`.",
     ])
