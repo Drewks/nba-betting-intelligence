@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
 from typing import Any
 
-from src.config import RiskConfig, load_config
+from src.config import EvidenceStakingConfig, RiskConfig, load_config
 from src.evaluation.clv import get_recent_clv_governor_factor as _get_clv_governor
 from src.paper_trading.cppi import compute_cppi_multiplier
 from src.paper_trading.exceptions import DoubleSettlementError, RiskLimitError
@@ -99,6 +99,9 @@ class PaperTradingEngine:
         self.dynamic_conviction_staking = bool(dynamic_conviction_staking)
         self.enable_cppi_shield = bool(enable_cppi_shield)
         self.staking_mode = str(staking_mode)
+        # Set by build_production_engine; None keeps Kelly unscaled (tests, research engines).
+        self.evidence_staking: EvidenceStakingConfig | None = None
+        self._evidence_cache: dict[str, dict[str, Any]] | None = None
         # When True, bankroll / metrics only count bets on REAL games (synthetic SYN_* fixtures are archived benchmarks)
         self.exclude_synthetic = bool(exclude_synthetic)
         # Anti-correlation: limit maximum exposure to at most 1 active bet per game across all markets
@@ -147,6 +150,20 @@ class PaperTradingEngine:
     def persist_closing_lines_for_games(self, as_of_utc: str | None = None) -> int:
         """Promotes latest pre-tipoff OBSERVED odds captures to closing lines (`is_closing_line = 1`)."""
         return _persist_closing_lines(self.db, as_of_utc=as_of_utc)
+
+    def _evidence_kelly_multiplier(self, market: str) -> tuple[float, str | None]:
+        """Kelly multiplier for `market` from its shadow-ledger CLV verdict (1.0 when disabled)."""
+        cfg = self.evidence_staking
+        if cfg is None or not cfg.enabled:
+            return 1.0, None
+        cache = self._evidence_cache
+        if cache is None:
+            from src.paper_trading.shadow_ledger import clv_evidence_by_market
+
+            cache = clv_evidence_by_market(self.db)
+            self._evidence_cache = cache
+        verdict = (cache.get(market) or {}).get("verdict")
+        return cfg.multiplier(verdict), verdict
 
     def compute_contextual_stake_pen(
         self,
@@ -391,11 +408,13 @@ class PaperTradingEngine:
                 bet_stake = stake
             elif self.staking_mode == "FRACTIONAL_KELLY":
                 # Stake grows with the calibrated, market-anchored probability for this price; 0 = no edge.
+                # The fraction is scaled by the market's shadow-ledger CLV evidence (roadmap phase 3).
+                evidence_mult, evidence_verdict = self._evidence_kelly_multiplier(market)
                 bet_stake = fractional_kelly_stake(
                     prob=cal_prob_val,
                     decimal_odds=dec_odds,
                     bankroll_pen=state["settled_bankroll_pen"],
-                    kelly_fraction=self.kelly_fraction,
+                    kelly_fraction=self.kelly_fraction * evidence_mult,
                     min_stake_pen=self.min_stake_pen,
                     max_stake_pen=self.max_stake_pen,
                     max_bankroll_fraction=self.max_stake_bankroll_fraction,
@@ -405,7 +424,12 @@ class PaperTradingEngine:
                         self._record_decision(
                             game_id, matchday_date, market, selection, "NO_BET",
                             "KELLY_STAKE_BELOW_MINIMUM",
-                            f"Fractional Kelly stake below S/{self.min_stake_pen:.2f} (no material edge at {dec_odds:.3f}).",
+                            f"Fractional Kelly stake below S/{self.min_stake_pen:.2f} (no material edge at {dec_odds:.3f})"
+                            + (
+                                f"; Kelly x{evidence_mult:.2f} by {market} CLV evidence {evidence_verdict}."
+                                if evidence_mult < 1.0
+                                else "."
+                            ),
                             ev_pct, emitted_at, model_version_id
                         )
                     )
@@ -653,7 +677,7 @@ def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
     cfg = load_config()
     risk = cfg.risk
     hyb = cfg.hybrid_allocation
-    return PaperTradingEngine(
+    engine = PaperTradingEngine(
         db=db,
         initial_bankroll_pen=risk.virtual_bankroll_initial_pen,
         base_stake_pen=risk.base_stake_pen,
@@ -672,6 +696,8 @@ def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
         max_totals_per_matchday=hyb.max_totals_per_matchday,
         max_moneyline_per_matchday=hyb.max_moneyline_per_matchday,
     )
+    engine.evidence_staking = cfg.evidence_staking
+    return engine
 
 
 __all__ = [
