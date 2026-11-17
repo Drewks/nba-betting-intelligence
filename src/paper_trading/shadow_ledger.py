@@ -289,6 +289,25 @@ def clv_evidence(
     }
 
 
+def clv_evidence_by_market(db: Any) -> dict[str, dict[str, Any]]:
+    """CLV evidence of the settled shadow signals of each market, one independent unit per game."""
+    has_table = db.fetch_one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'shadow_candidates'")
+    if not has_table:
+        return {}
+    rows = db.fetch_all(
+        """
+        SELECT market, game_id, clv_pct FROM shadow_candidates
+        WHERE status IN ('WON', 'LOST', 'PUSH') AND clv_pct IS NOT NULL
+        """
+    )
+    by_market: dict[str, tuple[list[float], list[str]]] = defaultdict(lambda: ([], []))
+    for r in rows:
+        clvs, games = by_market[str(r["market"])]
+        clvs.append(float(r["clv_pct"]))
+        games.append(str(r["game_id"]))
+    return {m: clv_evidence(c, groups=g) for m, (c, g) in by_market.items()}
+
+
 def summarize_shadow_ledger(db: Any, model_version_id: str | None = None) -> dict[str, Any]:
     """Returns audit-ready summary of all shadow candidates separated from the official bankroll."""
     has_table = db.fetch_one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'shadow_candidates'")

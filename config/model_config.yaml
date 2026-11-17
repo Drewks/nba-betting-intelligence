@@ -94,6 +94,18 @@ evaluation:
   # Genuine out-of-sample evidence: only games that start after the protocol freeze.
   forward_holdout_start_utc: "2026-11-15T00:00:00Z"
 
+evidence_staking:                    # Roadmap phase 3: stake size follows the shadow-ledger CLV evidence per market
+  enabled: true
+  # Verdicts come from the per-game Student-t CI of the market's shadow CLV (see shadow_ledger.clv_evidence).
+  # Multipliers can only shrink the Kelly fraction (0.0-1.0). With the S/1.00 floor, 0.5 on NO_EDGE in
+  # practice stops official bets in a market that loses to the close; the shadow ledger keeps measuring
+  # it and full size returns automatically when the evidence changes.
+  multipliers:
+    EDGE_SUPPORTED: 1.0
+    INCONCLUSIVE: 1.0
+    INSUFFICIENT_SAMPLE: 1.0
+    NO_EDGE: 0.5
+
 execution:                           # Which observed quotes count as a price that could have been taken
   max_quote_age_hours: 6.0           # older quotes at decision time are not used for bets
   excluded_provider_markers: ["(Best of"]  # cross-book aggregates (best price of one book + another's counterpart)

@@ -1,0 +1,80 @@
+name: NBA Closing-Line Capture (CLV measurement)
+
+# CLV is measured against the closing line. The regular cycles end at 23:35 UTC, up to 3.5 h before
+# late tip-offs, so the "close" was taken while the line was still moving. This light job captures the
+# observed quotes of games starting in the next 45 minutes and promotes them to closing lines.
+on:
+  schedule:
+    # Every 15 minutes during the NBA tip-off window (17:00-03:59 UTC = 12:00-22:59 Peru), at minutes
+    # that never coincide with the main cycle (:15 and :35), so a pending main run is not displaced.
+    - cron: "8,23,38,53 17-23 * * *"
+    - cron: "8,23,38,53 0-3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Same group as the main cycle: never two writers of state-live at the same time.
+concurrency:
+  group: nba-pipeline-execution
+  cancel-in-progress: false
+
+jobs:
+  capture-closing-lines:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - name: 1. Clonar código de main y la base viva de state-live
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin main
+          git checkout -B main origin/main
+          if ! git ls-remote --exit-code --heads origin state-live >/dev/null 2>&1; then
+            echo "state-live no existe todavía; nada que capturar."
+            echo "SKIP_CAPTURE=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          git fetch --depth=1 origin state-live
+          STATE_BASE_SHA="$(git rev-parse origin/state-live)"
+          git checkout "${STATE_BASE_SHA}" -- data/nba_intelligence.sqlite3
+          echo "STATE_BASE_SHA=${STATE_BASE_SHA}" >> "$GITHUB_ENV"
+
+      - name: 2. Instalar uv y dependencias
+        if: env.SKIP_CAPTURE != '1'
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          "$HOME/.local/bin/uv" sync --python 3.12
+
+      - name: 3. Capturar cuotas observadas y promover líneas de cierre
+        if: env.SKIP_CAPTURE != '1'
+        run: |
+          uv run python scripts/capture_closing_odds.py --window 45
+          uv run python -c "from src.storage.db import DatabaseManager; DatabaseManager('data/nba_intelligence.sqlite3').checkpoint(truncate=True)"
+
+      - name: 4. Guardar solo la base en state-live (resto del árbol de state-live intacto)
+        if: env.SKIP_CAPTURE != '1'
+        run: |
+          git config user.name "nba-intelligence-bot"
+          git config user.email "nba-intelligence-bot@users.noreply.github.com"
+          if git diff --quiet "${STATE_BASE_SHA}" -- data/nba_intelligence.sqlite3; then
+            echo "Sin partidos en la ventana de cierre o sin cuotas nuevas."
+            exit 0
+          fi
+          # Start from the state-live tree and replace only the database, so reports and dashboards
+          # that the main cycle wrote to state-live are not overwritten with main's copies.
+          git read-tree "${STATE_BASE_SHA}"
+          git add -f data/nba_intelligence.sqlite3
+          TREE_SHA="$(git write-tree)"
+          git fetch --depth=1 origin state-live
+          if [ "$(git rev-parse origin/state-live)" != "${STATE_BASE_SHA}" ]; then
+            echo "::error::state-live changed during the capture; refusing to overwrite the audit database."
+            exit 1
+          fi
+          NEW_COMMIT="$(git commit-tree "$TREE_SHA" -p "$STATE_BASE_SHA" -m 'chore(closing-capture): líneas de cierre pre-tipoff [skip ci]')"
+          git push origin "${NEW_COMMIT}:refs/heads/state-live"

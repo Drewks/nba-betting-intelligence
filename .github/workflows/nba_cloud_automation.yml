@@ -67,6 +67,8 @@ jobs:
         run: |
           # Tests run first against main's frozen baseline: live values (bankroll, bet counts) change
           # with every settlement, so running the suite on the live DB made production fail on a winning bet.
+          # The weekly backtest report lives in state-live too; restoring it keeps step 7 from replacing it
+          # with main's older copy.
           STATE_BASE_SHA=""
           if git ls-remote --exit-code --heads origin state-live >/dev/null 2>&1; then
             git fetch --depth=1 origin state-live
@@ -75,7 +77,9 @@ jobs:
               data/nba_intelligence.sqlite3 \
               data/evaluation/dispatched_telegram_alerts.json \
               data/evaluation/telegram_last_update_id.txt \
-              data/visual_rag/latest_visual_context.json; do
+              data/visual_rag/latest_visual_context.json \
+              reports/real_odds_backtest.md \
+              data/evaluation/real_odds_backtest.json; do
               if git cat-file -e "${STATE_BASE_SHA}:${state_path}" 2>/dev/null; then
                 git checkout "${STATE_BASE_SHA}" -- "${state_path}"
               fi
