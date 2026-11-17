@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-17T16:31:39Z
+date_generated: 2026-11-17T22:53:08Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 model_version_id: model_f_ensemble_v8
-run_manifest_id: RUN_20261117T163125Z_78C48938
+run_manifest_id: RUN_20261117T225258Z_F0B3DBA8
 commit_sha: ff9821783712d3607b1ac650cd67933acb62be8f
 config_hash: f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -11,10 +11,10 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-17T16:31:39Z`
-- **Run Manifest / Versión activa**: `RUN_20261117T163125Z_78C48938` (`model_f_ensemble_v8`, commit `ff9821783712`, config `f886c6d71a3e`)
+- **Fecha de auditoría (UTC)**: `2026-11-17T22:53:08Z`
+- **Run Manifest / Versión activa**: `RUN_20261117T225258Z_F0B3DBA8` (`model_f_ensemble_v8`, commit `ff9821783712`, config `f886c6d71a3e`)
 - **Origen de Base de Datos (`DB Provenance`)**: PRODUCTION_STATE_LIVE (`live: origin/state-live:data/nba_intelligence.sqlite3` | `main: FROZEN_CI_BASELINE`)
-- **Shadow Signal Ledger**: Total `57` señales +EV registradas (liquidadas `47`, ROI 1u `21.08%`, CLV medio `-3.156%`; cero impacto en banca S/100) — evidencia de CLV: `NO_EDGE` (n=`14` partidos / `47` señales, IC95 `[-3.934%, -1.619%]`; para detectar +1.0% hacen falta ~`32` partidos)
+- **Shadow Signal Ledger**: Total `66` señales +EV registradas (liquidadas `47`, ROI 1u `21.08%`, CLV medio `-3.156%`; cero impacto en banca S/100) — evidencia de CLV: `NO_EDGE` (n=`14` partidos / `47` señales, IC95 `[-3.934%, -1.619%]`; para detectar +1.0% hacen falta ~`32` partidos)
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/97.91 PEN`
@@ -48,7 +48,7 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **NBA.com/stats (`NBAStatsAdapter`)**: `FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION`
 - **Playwright (`PlaywrightAuthorizedScraper`)**: `OPERATIONAL`
 - **Política Scrapers Perú (`sources.peru_scraper_policy`)**: `PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS`
-- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)`
+- **PixelRAG (`visual_researcher`)**: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)`
 - **Obsidian Vault (`NBA/`)**: `Operativo en /home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA`
 
 ## 4. Conclusión Estadística del Auditor
