@@ -45,6 +45,7 @@ from src.agents.specialized_agents import (
 from src.backtesting.backtester import WalkForwardBacktester
 from src.config import load_config
 from src.features.boxscore_features import compute_boxscore_features
+from src.features.official_availability import build_official_availability_overrides
 from src.features.team_ratings import apply_pregame_team_ratings
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
 from src.ingestion.boxscores import backfill_boxscores, load_boxscores
@@ -287,9 +288,22 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
         logger.info("Box score backfill: %s", backfill_boxscores(db, limit=BOXSCORE_BACKFILL_PER_CYCLE))
     except Exception as exc:
         logger.warning("Box score backfill failed: %s", exc)
+    # Official NBA injury report (fetched now, at decision time) replaces the "missed last game" proxy
+    # in the availability features of the upcoming games it covers; on any failure the proxy stays.
+    availability_overrides: dict[str, dict[str, frozenset[str]]] = {}
+    if mode != "settle_and_calibrate":
+        try:
+            from src.ingestion.nba_injury_report import NBAOfficialInjuryFeed
+
+            availability_overrides = build_official_availability_overrides(
+                db, NBAOfficialInjuryFeed().fetch_latest_report(), datetime.now(timezone.utc)
+            )
+        except Exception as exc:
+            logger.warning("Official injury report not applied (proxy kept): %s", exc)
     bx_features = compute_boxscore_features(
         db.fetch_all("SELECT * FROM v_observed_games ORDER BY game_start_time ASC"),
         load_boxscores(db),
+        availability_overrides=availability_overrides,
     )
     all_final_games = [{**g, **bx_features.get(g["game_id"], {})} for g in all_final_games]
 
@@ -571,6 +585,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
         "database_role": db_role,
         "ingested_dates": ingested_dates,
         "closing_lines_promoted": new_closing_lines,
+        "official_injury_report_games": len(availability_overrides),
         "bets_settled_in_cycle": len(settled_now),
         "shadow_settled_in_cycle": len(shadow_settled_now),
         "new_bets_placed_in_cycle": new_bets_placed,

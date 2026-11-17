@@ -16,6 +16,7 @@ What this adds over score-only ratings:
 from __future__ import annotations
 
 from collections import deque
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -39,6 +40,11 @@ FEATURE_NAMES: tuple[str, ...] = (
 )
 
 
+def player_name_key(name: str) -> str:
+    """Lower-case alphanumeric key used to match box-score names with injury-report names."""
+    return re.sub(r"[^a-z0-9]", "", str(name or "").lower())
+
+
 def possessions(t: dict[str, float]) -> float:
     return t["fga"] + 0.44 * t["fta"] - t["orb"] + t["tov"]
 
@@ -54,6 +60,24 @@ class _Team:
         # name -> [avg_min, avg_pts, games_played, last_team_game_index_played]
         self.players: dict[str, list[float]] = {}
         self.recent_played: deque[set[str]] = deque(maxlen=4)
+
+    def availability_from_out_list(self, out_keys: frozenset[str]) -> tuple[float, float, float]:
+        """
+        Same quantities as `availability`, but with the official injury report's OUT list instead of
+        the "did not play the last game" proxy: rotation minutes/points of players ruled out, and the
+        points of those among them who did play the last game (newly absent).
+        """
+        last = self.recent_played[-1] if self.recent_played else set()
+        miss_min = miss_pts = new_pts = 0.0
+        for name, (avg_min, avg_pts, gp, last_idx) in self.players.items():
+            if gp < 3 or avg_min < ROTATION_MIN_MINUTES or (self.games - last_idx) > ROSTER_WINDOW_GAMES:
+                continue
+            if player_name_key(name) in out_keys:
+                miss_min += avg_min
+                miss_pts += avg_pts
+                if name in last:
+                    new_pts += avg_pts
+        return miss_min, miss_pts, new_pts
 
     def availability(self) -> tuple[float, float, float]:
         """(missing_minutes, missing_points, newly_missing_points) relative to the last game played."""
@@ -86,8 +110,16 @@ def compute_boxscore_features(
     games: list[dict[str, Any]],
     boxscores: dict[str, dict[str, Any]],
     info_lag_days: int = 0,
+    availability_overrides: dict[str, dict[str, frozenset[str]]] | None = None,
 ) -> dict[str, dict[str, float]]:
-    """Returns {game_id: features}. `games` may include SCHEDULED games (they only read state)."""
+    """
+    Returns {game_id: features}. `games` may include SCHEDULED games (they only read state).
+
+    `availability_overrides` ({game_id: {team: player name keys ruled OUT}}) replaces the availability
+    proxy with the official injury report for upcoming games; it must only hold information available
+    at decision time (the report fetched when the decision is made).
+    """
+    overrides = availability_overrides or {}
     ordered = sorted(games, key=lambda g: (str(g["game_start_time"]), str(g["game_id"])))
     teams: dict[str, _Team] = {}
     league_ppp, league_pace = LEAGUE_PPP, LEAGUE_PACE
@@ -160,8 +192,11 @@ def compute_boxscore_features(
         pace = h.pace + a.pace - league_pace
         h_ppp = h.off + a.deff - league_ppp + HCA_PPP
         a_ppp = a.off + h.deff - league_ppp - HCA_PPP
-        hm_min, hm_pts, hn_pts = h.availability()
-        am_min, am_pts, an_pts = a.availability()
+        game_overrides = overrides.get(g["game_id"]) or {}
+        h_out = game_overrides.get(g["home_team"])
+        a_out = game_overrides.get(g["away_team"])
+        hm_min, hm_pts, hn_pts = h.availability_from_out_list(h_out) if h_out is not None else h.availability()
+        am_min, am_pts, an_pts = a.availability_from_out_list(a_out) if a_out is not None else a.availability()
         out[g["game_id"]] = {
             "bx_exp_margin": round(pace * (h_ppp - a_ppp), 3),
             "bx_exp_total": round(pace * (h_ppp + a_ppp), 3),
