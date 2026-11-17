@@ -68,3 +68,21 @@ def test_decision_timestamp_violations_split_post_fix_and_legacy() -> None:
         """
     )
     assert count_decision_timestamp_violations(conn) == {"post_fix": 1, "legacy": 1}
+
+
+def test_copied_quotes_are_quarantined_before_decisions(tmp_path: Path) -> None:
+    from src.validation.odds_integrity import quarantine_copied_live_quotes
+
+    db = DatabaseManager(tmp_path / "oi2.sqlite3")
+    _seed_game(db, "G1", "2026-11-17T01:00:00Z")
+    _seed_game(db, "G2", "2026-11-18T01:00:00Z")
+    for i, odds in enumerate((1.98, 1.91, 2.05)):
+        _quote(db, f"A{i}", "G1", odds, 227.5 + i)
+        _quote(db, f"B{i}", "G2", odds, 227.5 + i)
+    with db.connect() as conn:
+        assert quarantine_copied_live_quotes(conn, "2026-11-17T00:40:00Z") == 6
+        assert quarantine_copied_live_quotes(conn, "2026-11-17T00:41:00Z") == 0  # idempotent
+    visible = db.fetch_all("SELECT odds_id FROM v_observed_odds_snapshots WHERE game_id IN ('G1', 'G2')")
+    assert visible == []
+    cycle_src = (Path(__file__).resolve().parent.parent / "scripts" / "run_cloud_cycle.py").read_text(encoding="utf-8")
+    assert cycle_src.index("quarantine_copied_live_quotes(integrity_conn") < cycle_src.index("evaluate_scheduled_slate_candidates(")

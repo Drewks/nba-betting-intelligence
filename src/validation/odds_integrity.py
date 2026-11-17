@@ -90,3 +90,24 @@ def count_decision_timestamp_violations(conn: sqlite3.Connection) -> dict[str, i
     for post_fix, n in rows:
         out["post_fix" if post_fix else "legacy"] += int(n)
     return out
+
+
+QUARANTINE_REASON_COPIED = "MISATTRIBUTED_SAME_TEAM_PAIR_GAME"
+
+
+def quarantine_copied_live_quotes(conn: sqlite3.Connection, quarantined_at: str) -> int:
+    """
+    Quarantines copied cross-game live quotes not yet quarantined, so they never reach a decision.
+    Run before candidate generation; quotes are never edited or deleted. Returns how many were added.
+    """
+    already = {str(r[0]) for r in conn.execute("SELECT odds_id FROM quarantined_odds").fetchall()}
+    added = 0
+    for odds_id in find_copied_live_quotes(conn):
+        if odds_id in already:
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO quarantined_odds (odds_id, reason, quarantined_at) VALUES (?, ?, ?)",
+            (odds_id, QUARANTINE_REASON_COPIED, quarantined_at),
+        )
+        added += 1
+    return added

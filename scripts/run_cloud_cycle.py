@@ -63,6 +63,7 @@ from src.reporting.reporter import (
     sync_obsidian_vault,
 )
 from src.storage.db import DatabaseManager
+from src.validation.odds_integrity import quarantine_copied_live_quotes
 from src.validation.validator import parse_iso_utc
 
 # Model identity and market-anchor weight come from config/model_config.yaml (single source of truth).
@@ -406,6 +407,12 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
     # 4. Evaluate upcoming SCHEDULED games across the slate
     new_bets_placed = 0
     candidates_by_matchday: dict[str, list[dict[str, Any]]] = {}
+    # Defense in depth: a live quote copied onto another game of the same teams must never reach a
+    # decision, even if a feed regresses; the auditor reports any that slipped past this point.
+    with db.connect() as integrity_conn:
+        copied_quotes_quarantined = quarantine_copied_live_quotes(integrity_conn, now_str)
+    if copied_quotes_quarantined:
+        logging.warning("Quarantined %d copied cross-game live quotes before evaluation", copied_quotes_quarantined)
     if mode != "settle_and_calibrate":
         candidates_by_matchday = evaluate_scheduled_slate_candidates(
             db,
