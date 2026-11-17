@@ -101,3 +101,15 @@ def test_closing_workflow_avoids_main_cycle_minutes_and_shares_concurrency() -> 
     steps_text = "\n".join(str(s.get("run", "")) for s in next(iter(wf["jobs"].values()))["steps"])
     assert 'git read-tree "${STATE_BASE_SHA}"' in steps_text
     assert "checkpoint(truncate=True)" in steps_text
+
+
+def test_weekly_backtest_report_survives_the_main_cycle() -> None:
+    weekly = yaml.safe_load((PROJECT_ROOT / ".github" / "workflows" / "weekly_backtest.yml").read_text(encoding="utf-8"))
+    main_raw = (PROJECT_ROOT / ".github" / "workflows" / "nba_cloud_automation.yml").read_text(encoding="utf-8")
+    weekly_steps = "\n".join(str(s.get("run", "")) for s in next(iter(weekly["jobs"].values()))["steps"])
+    assert "--refresh-season" in weekly_steps
+    assert '--db "$RUNNER_TEMP/backtest.sqlite3"' in weekly_steps  # never writes the audit database
+    assert 'git read-tree "${STATE_BASE_SHA}"' in weekly_steps
+    # The main cycle restores the weekly report from state-live before rebuilding the state tree
+    assert "reports/real_odds_backtest.md" in main_raw.split("4b. Restaurar estado vivo")[1].split("- name: 5.")[0]
+    assert weekly["concurrency"]["group"] == yaml.safe_load(main_raw)["concurrency"]["group"]
