@@ -1,0 +1,112 @@
+name: NBA Closing-Line Capture (CLV measurement)
+
+# CLV is measured against the closing line. The regular cycles end at 23:35 UTC, up to 3.5 h before
+# late tip-offs, so the "close" was taken while the line was still moving. This job captures the
+# observed quotes of games starting in the next 45 minutes and promotes them to closing lines.
+#
+# GitHub's high-frequency cron did not fire for this workflow after it was created, so the job is also
+# started when a main cycle finishes (workflow_run, event-driven) and loops every 10 minutes while games
+# start within the next 4 hours. The cron entries stay as extra coverage.
+on:
+  schedule:
+    - cron: "8,23,38,53 17-23 * * *"
+    - cron: "8,23,38,53 0-3 * * *"
+  workflow_run:
+    workflows: ["NBA Betting Intelligence — Cloud Auto-Trading & Calibration (S/100 Virtual)"]
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# A separate group: a capture loop lasts hours and must not hold up the main cycle. Writes to
+# state-live are serialised instead by waiting for any running state-live writer (main cycle, weekly
+# backtest) before each capture and again before each push.
+concurrency:
+  group: nba-closing-capture
+  cancel-in-progress: false
+
+jobs:
+  capture-closing-lines:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Every other workflow that writes state-live: the loop never captures or pushes while one runs.
+      STATE_WRITER_WORKFLOWS: "nba_cloud_automation.yml weekly_backtest.yml"
+      LOOP_INTERVAL_SECONDS: "600"
+      HORIZON_MINUTES: "240"
+      MAX_RUNTIME_SECONDS: "18900"
+    steps:
+      - name: 1. Clonar código de main
+        run: |
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin main
+          git checkout -B main origin/main
+          git config user.name "nba-intelligence-bot"
+          git config user.email "nba-intelligence-bot@users.noreply.github.com"
+
+      - name: 2. Instalar uv y dependencias
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          "$HOME/.local/bin/uv" sync --python 3.12
+
+      - name: 3. Capturar cierres en bucle mientras haya partidos próximos
+        run: |
+          main_cycle_busy() {
+            busy=0
+            for wf in $STATE_WRITER_WORKFLOWS; do
+              n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --limit 5 \
+                --json status --jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length')
+              busy=$((busy + ${n:-0}))
+            done
+            echo "$busy"
+          }
+          wait_for_main_cycle() {
+            for _ in $(seq 1 30); do
+              if [ "$(main_cycle_busy)" = "0" ]; then return 0; fi
+              echo "Otro escritor de state-live en curso (ciclo principal o backtest semanal); espero 60 s."
+              sleep 60
+            done
+            return 1
+          }
+          START=$(date +%s)
+          while :; do
+            if ! git ls-remote --exit-code --heads origin state-live >/dev/null 2>&1; then
+              echo "state-live no existe todavía; nada que capturar."; exit 0
+            fi
+            wait_for_main_cycle || { echo "El ciclo principal no termina; salto esta iteración."; sleep 60; continue; }
+            git fetch --depth=1 origin state-live
+            BASE="$(git rev-parse origin/state-live)"
+            git checkout "${BASE}" -- data/nba_intelligence.sqlite3
+            UPCOMING="$(uv run python scripts/capture_closing_odds.py --count-upcoming "$HORIZON_MINUTES" | tail -n 1)"
+            echo "Partidos que empiezan en los próximos ${HORIZON_MINUTES} min: ${UPCOMING}"
+            if [ "${UPCOMING}" = "0" ]; then
+              echo "Sin partidos próximos; fin del bucle."; exit 0
+            fi
+            uv run python scripts/capture_closing_odds.py --window 45
+            uv run python -c "from src.storage.db import DatabaseManager; DatabaseManager('data/nba_intelligence.sqlite3').checkpoint(truncate=True)"
+            if ! git diff --quiet "${BASE}" -- data/nba_intelligence.sqlite3; then
+              # Replace only the database in state-live's own tree, and never push over a main cycle.
+              git read-tree "${BASE}"
+              git add -f data/nba_intelligence.sqlite3
+              TREE_SHA="$(git write-tree)"
+              git fetch --depth=1 origin state-live
+              if [ "$(git rev-parse origin/state-live)" = "${BASE}" ] && [ "$(main_cycle_busy)" = "0" ]; then
+                NEW_COMMIT="$(git commit-tree "$TREE_SHA" -p "$BASE" -m 'chore(closing-capture): líneas de cierre pre-tipoff [skip ci]')"
+                git push origin "${NEW_COMMIT}:refs/heads/state-live" || echo "Push rechazado; se reintenta en la próxima iteración."
+              else
+                echo "state-live cambió o hay un ciclo principal en curso; se descarta esta captura."
+              fi
+              git read-tree HEAD
+            fi
+            if [ $(( $(date +%s) - START )) -gt "$MAX_RUNTIME_SECONDS" ]; then
+              echo "Tiempo máximo alcanzado; fin del bucle."; exit 0
+            fi
+            sleep "$LOOP_INTERVAL_SECONDS"
+          done

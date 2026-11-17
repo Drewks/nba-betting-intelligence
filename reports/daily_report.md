@@ -1,28 +1,28 @@
 ---
-date_generated: 2026-11-17T00:16:27Z
+date_generated: 2026-11-17T04:30:05Z
 report_type: daily_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
 period_evaluated: 2026-11-17
 predictions_count: 48
-observed_settled_bets: 31
-observed_bankroll_pen: 96.03
+observed_settled_bets: 33
+observed_bankroll_pen: 97.91
 simulation_only: true
 ---
 # Informe Diario NBA Betting Intelligence — 2026-11-17
 
 ## 1. Metadatos de Ejecución y Estado de Banca Observada
-- **Fecha de generación (UTC)**: `2026-11-17T00:16:27Z`
+- **Fecha de generación (UTC)**: `2026-11-17T04:30:05Z`
 - **Jornada evaluada**: `2026-11-17`
 - **Versión de modelo activa**: `model_f_ensemble_v8` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)
 - **Bankroll virtual inicial**: `S/100.00 PEN`
-- **Bankroll observado liquidado actual**: **`S/96.03 PEN`** (`S/-3.97 PEN` en `31` apuestas observadas liquidadas)
+- **Bankroll observado liquidado actual**: **`S/97.91 PEN`** (`S/-2.09 PEN` en `33` apuestas observadas liquidadas)
 - **Modo de apuesta activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%`
 - **Partidos evaluados**: `8`
 - **Partidos descartados por falta de datos/cuotas**: `0`
 - **Predicciones emitidas**: `48`
 - **Apuestas simuladas registradas en la jornada**: `2` (límite diario: 3, Kelly Fraccional (25%), EV >= 2.0%)
 - **Decisiones NO_BET registradas**: `46`
-- **Resultados pendientes globales**: `2`
+- **Resultados pendientes globales**: `0`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -42,12 +42,12 @@ simulation_only: true
 | `HOU @ MIA` | `total_points` | **UNDER** | 233.0 | 1.980 | 0.5049 | 0.4999 | +1.09% | `Pinnacle [LIVE_API]` |
 | `POR @ MIN` | `spread` | **HOME** | -2.0 | 1.935 | 0.5169 | 0.5066 | +0.64% | `Pinnacle [LIVE_API]` |
 
-## 4. Apuestas Simuladas (Paper Trading — Banca Observada S/96.03 PEN en 31 Apuestas Liquidadas)
+## 4. Apuestas Simuladas (Paper Trading — Banca Observada S/97.91 PEN en 33 Apuestas Liquidadas)
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| `BET_20261117_4680E990` | `ESPN_401909999_2026-11-17_POR_AT_MIN` | `total_points` | **UNDER** | 1.962 | 0.5330 | +4.56% | S/1.14 | `PENDING` | PENDIENTE |
-| `BET_20261117_00CA0272` | `ESPN_401909997_2026-11-17_PHI_AT_BKN` | `moneyline` | **AWAY** | 1.442 | 0.7160 | +3.29% | S/1.78 | `PENDING` | PENDIENTE |
+| `BET_20261117_4680E990` | `ESPN_401909999_2026-11-17_POR_AT_MIN` | `total_points` | **UNDER** | 1.962 | 0.5330 | +4.56% | S/1.14 | `WON` | S/+1.10 |
+| `BET_20261117_00CA0272` | `ESPN_401909997_2026-11-17_PHI_AT_BKN` | `moneyline` | **AWAY** | 1.442 | 0.7160 | +3.29% | S/1.78 | `WON` | S/+0.79 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
 - `ESPN_401909994_2026-11-17_ORL_AT_BOS` (`moneyline` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -3.60% <= threshold 2.00%
@@ -59,6 +59,16 @@ simulation_only: true
 - `ESPN_401909999_2026-11-17_POR_AT_MIN` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -2.09% <= threshold 2.00%
 - `ESPN_401910000_2026-11-17_GSW_AT_NOP` (`moneyline` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -2.33% <= threshold 2.00%
 
-## 6. Limitaciones Documentadas
-- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual inicial de **S/100.00 PEN** (bankroll observado liquidado actual: **S/96.03 PEN** en **31** apuestas observadas).
+## 6. Evidencia de Ventaja (CLV y Holdout hacia Adelante)
+
+| Mercado | Partidos (señales) | CLV medio | IC95 (t, por partido) | Veredicto | Kelly aplicado |
+| :--- | ---: | ---: | :--- | :--- | ---: |
+| `moneyline` | 10 (12) | -2.70% | [-5.32%, -0.08%] | `NO_EDGE` | ×0.50 |
+| `spread` | 6 (6) | -2.71% | [-3.05%, -2.37%] | `INSUFFICIENT_SAMPLE` | ×1.00 |
+| `total_points` | 10 (29) | -3.25% | [-3.57%, -2.94%] | `NO_EDGE` | ×0.50 |
+
+- **Holdout hacia adelante** (partidos desde `2026-11-15T00:00:00Z`, backtest `2026-11-16T23:38:07Z`): `11` partidos, `0` apuestas, ROI `n/d`, CLV `n/d`. Es la única evidencia fuera de muestra real.
+
+## 7. Limitaciones Documentadas
+- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual inicial de **S/100.00 PEN** (bankroll observado liquidado actual: **S/97.91 PEN** en **33** apuestas observadas).
 - Cuando una fuente externa no proporciona cuota verificable antes del inicio del partido (`captured_at < game_start_time`), el sistema bloquea el cálculo de EV y registra `NO_BET`.

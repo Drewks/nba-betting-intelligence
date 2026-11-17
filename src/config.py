@@ -298,6 +298,27 @@ class EvaluationConfig:
 
 
 @dataclass(frozen=True)
+class EvidenceStakingConfig:
+    """
+    Scales the Kelly fraction of a market by what its shadow-ledger CLV evidence supports.
+    A market whose signals demonstrably lose to the close is not bet at full size.
+    """
+
+    enabled: bool = False
+    multipliers: tuple[tuple[str, float], ...] = (
+        ("EDGE_SUPPORTED", 1.0),
+        ("INCONCLUSIVE", 1.0),
+        ("INSUFFICIENT_SAMPLE", 1.0),
+        ("NO_EDGE", 0.5),
+    )
+
+    def multiplier(self, verdict: str | None) -> float:
+        if not self.enabled or verdict is None:
+            return 1.0
+        return dict(self.multipliers).get(verdict, 1.0)
+
+
+@dataclass(frozen=True)
 class ExecutionConfig:
     """Which observed quotes count as a price the system could actually have taken."""
 
@@ -323,6 +344,7 @@ class AppConfig:
     sources: SourcesConfig = field(default_factory=SourcesConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
+    evidence_staking: EvidenceStakingConfig = field(default_factory=EvidenceStakingConfig)
 
 
 def _require(section: dict[str, Any], key: str, section_name: str) -> Any:
@@ -551,6 +573,19 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         forward_holdout_start_utc=forward_start,
     )
 
+    es_raw = raw.get("evidence_staking") or {}
+    es_mult_raw = es_raw.get("multipliers") or {}
+    default_es = EvidenceStakingConfig()
+    es_mult = dict(default_es.multipliers)
+    for verdict, value in es_mult_raw.items():
+        if str(verdict) not in es_mult:
+            raise ConfigError(f"evidence_staking.multipliers has unknown verdict {verdict!r}")
+        es_mult[str(verdict)] = _in_range(f"evidence_staking.multipliers.{verdict}", value, 0.0, 1.0)
+    evidence_staking_cfg = EvidenceStakingConfig(
+        enabled=bool(es_raw.get("enabled", False)),
+        multipliers=tuple(es_mult.items()),
+    )
+
     ex_raw = raw.get("execution") or {}
     execution_cfg = ExecutionConfig(
         max_quote_age_hours=_in_range(
@@ -669,6 +704,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         sources=sources_cfg,
         evaluation=evaluation_cfg,
         execution=execution_cfg,
+        evidence_staking=evidence_staking_cfg,
     )
 
 

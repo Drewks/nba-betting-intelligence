@@ -471,7 +471,15 @@ class NBAAuditorAgent:
         history = self._verify_and_register_history()
         history_intact = history["missing_rows_total"] == 0
 
-        integrity_errors = 0 if (bankroll_reconciled and immutability_verified and history_intact) else 1
+        # 5. Odds/decision integrity: no live quote copied onto another game of the same teams may stay
+        #    usable, and no decision of a post-fix run may be stamped after its own run.
+        odds_integrity = self._verify_odds_and_decision_integrity()
+        odds_intact = (
+            odds_integrity["unquarantined_copied_quotes"] == 0
+            and odds_integrity["decision_timestamp_violations"]["post_fix"] == 0
+        )
+
+        integrity_errors = 0 if (bankroll_reconciled and immutability_verified and history_intact and odds_intact) else 1
         # 5. Deterministic reproducibility verification:
         #    verifies bit-identical model probabilities (within 1e-12) across two independent runs
         #    with identical inputs/seeds and checks calibrated_weights.json + schema.sql hashes.
@@ -501,6 +509,7 @@ class NBAAuditorAgent:
             "ledger_issues": ledger_issues[:50],
             "ledger_issues_count": len(ledger_issues),
             "history_integrity": history,
+            "odds_and_decision_integrity": odds_integrity,
             "reproducibility_verified": reproducibility_verified,
             "reproducibility_diagnostic": repro_check,
             "reproducibility_note": repro_check["note"],
@@ -653,6 +662,25 @@ class NBAAuditorAgent:
         "bankroll_ledger": "entry_id",
         "sniper_alerts": "alert_id",
     }
+
+    def _verify_odds_and_decision_integrity(self) -> dict[str, Any]:
+        """Copied cross-game live quotes still visible to decisions, and future-stamped decisions."""
+        from src.validation.odds_integrity import count_decision_timestamp_violations, find_copied_live_quotes
+
+        with self.db.connect() as conn:
+            copied = find_copied_live_quotes(conn)
+            quarantined = {str(r[0]) for r in conn.execute("SELECT odds_id FROM quarantined_odds").fetchall()}
+            has_manifests = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'run_manifests'"
+            ).fetchone()
+            ts = count_decision_timestamp_violations(conn) if has_manifests else {"post_fix": 0, "legacy": 0}
+        visible = [oid for oid in copied if oid not in quarantined]
+        return {
+            "copied_live_quotes": len(copied),
+            "unquarantined_copied_quotes": len(visible),
+            "unquarantined_examples": visible[:10],
+            "decision_timestamp_violations": ts,
+        }
 
     def _verify_and_register_history(self) -> dict[str, Any]:
         """

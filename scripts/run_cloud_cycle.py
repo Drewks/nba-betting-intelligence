@@ -45,6 +45,7 @@ from src.agents.specialized_agents import (
 from src.backtesting.backtester import WalkForwardBacktester
 from src.config import load_config
 from src.features.boxscore_features import compute_boxscore_features
+from src.features.official_availability import build_official_availability_overrides
 from src.features.team_ratings import apply_pregame_team_ratings
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
 from src.ingestion.boxscores import backfill_boxscores, load_boxscores
@@ -63,6 +64,7 @@ from src.reporting.reporter import (
     sync_obsidian_vault,
 )
 from src.storage.db import DatabaseManager
+from src.validation.odds_integrity import quarantine_copied_live_quotes
 from src.validation.validator import parse_iso_utc
 
 # Model identity and market-anchor weight come from config/model_config.yaml (single source of truth).
@@ -286,9 +288,22 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
         logger.info("Box score backfill: %s", backfill_boxscores(db, limit=BOXSCORE_BACKFILL_PER_CYCLE))
     except Exception as exc:
         logger.warning("Box score backfill failed: %s", exc)
+    # Official NBA injury report (fetched now, at decision time) replaces the "missed last game" proxy
+    # in the availability features of the upcoming games it covers; on any failure the proxy stays.
+    availability_overrides: dict[str, dict[str, frozenset[str]]] = {}
+    if mode != "settle_and_calibrate":
+        try:
+            from src.ingestion.nba_injury_report import NBAOfficialInjuryFeed
+
+            availability_overrides = build_official_availability_overrides(
+                db, NBAOfficialInjuryFeed().fetch_latest_report(), datetime.now(timezone.utc)
+            )
+        except Exception as exc:
+            logger.warning("Official injury report not applied (proxy kept): %s", exc)
     bx_features = compute_boxscore_features(
         db.fetch_all("SELECT * FROM v_observed_games ORDER BY game_start_time ASC"),
         load_boxscores(db),
+        availability_overrides=availability_overrides,
     )
     all_final_games = [{**g, **bx_features.get(g["game_id"], {})} for g in all_final_games]
 
@@ -406,6 +421,12 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
     # 4. Evaluate upcoming SCHEDULED games across the slate
     new_bets_placed = 0
     candidates_by_matchday: dict[str, list[dict[str, Any]]] = {}
+    # Defense in depth: a live quote copied onto another game of the same teams must never reach a
+    # decision, even if a feed regresses; the auditor reports any that slipped past this point.
+    with db.connect() as integrity_conn:
+        copied_quotes_quarantined = quarantine_copied_live_quotes(integrity_conn, now_str)
+    if copied_quotes_quarantined:
+        logging.warning("Quarantined %d copied cross-game live quotes before evaluation", copied_quotes_quarantined)
     if mode != "settle_and_calibrate":
         candidates_by_matchday = evaluate_scheduled_slate_candidates(
             db,
@@ -564,6 +585,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
         "database_role": db_role,
         "ingested_dates": ingested_dates,
         "closing_lines_promoted": new_closing_lines,
+        "official_injury_report_games": len(availability_overrides),
         "bets_settled_in_cycle": len(settled_now),
         "shadow_settled_in_cycle": len(shadow_settled_now),
         "new_bets_placed_in_cycle": new_bets_placed,

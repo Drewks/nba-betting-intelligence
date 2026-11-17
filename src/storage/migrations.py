@@ -18,6 +18,7 @@ import logging
 import sqlite3
 from typing import Any
 
+from src.validation.odds_integrity import find_copied_live_quotes
 from src.storage.migrations_v1 import (
     RECOVERY_BUNDLE_PATH,
     RESTORE_PROBE_GAME_ID,
@@ -729,54 +730,7 @@ def m014_quarantine_misattributed_same_pair_quotes(
     cannot be told afterwards which game a quote really belonged to, so every copy is quarantined.
     Quotes are never deleted or edited; predictions that used them stay in history and are counted.
     """
-    # Only the affected feed path (live book APIs, provider label "[LIVE_API]") and only captures where a
-    # whole slate entry was copied: at least MIN_COPIED_QUOTES identical quotes of the same capture on
-    # both games. A single coincidental equal price between two real games is left untouched.
-    min_copied_quotes = 3
-    pairs = conn.execute(
-        """
-        SELECT o1.game_id AS g1, o2.game_id AS g2, o1.provider AS provider, o1.captured_at AS captured_at,
-               COUNT(*) AS n
-        FROM odds_snapshots o1
-        JOIN odds_snapshots o2
-          ON o1.provider = o2.provider
-         AND o1.captured_at = o2.captured_at
-         AND o1.market = o2.market
-         AND o1.selection = o2.selection
-         AND COALESCE(o1.line_value, -9999) = COALESCE(o2.line_value, -9999)
-         AND o1.decimal_odds = o2.decimal_odds
-         AND o1.game_id < o2.game_id
-        JOIN games g1 ON g1.game_id = o1.game_id
-        JOIN games g2 ON g2.game_id = o2.game_id
-        WHERE o1.provider LIKE '%[LIVE_API]%'
-          AND (
-            (g1.home_team = g2.home_team AND g1.away_team = g2.away_team)
-            OR (g1.home_team = g2.away_team AND g1.away_team = g2.home_team)
-          )
-        GROUP BY o1.game_id, o2.game_id, o1.provider, o1.captured_at
-        HAVING COUNT(*) >= ?
-        """,
-        (min_copied_quotes,),
-    ).fetchall()
-    rows: list[tuple[str]] = []
-    for g1, g2, provider, captured_at, _n in pairs:
-        rows.extend(
-            conn.execute(
-                """
-                SELECT o.odds_id FROM odds_snapshots o
-                WHERE o.game_id IN (?, ?) AND o.provider = ? AND o.captured_at = ?
-                  AND EXISTS (
-                    SELECT 1 FROM odds_snapshots c
-                    WHERE c.game_id IN (?, ?) AND c.game_id <> o.game_id
-                      AND c.provider = o.provider AND c.captured_at = o.captured_at
-                      AND c.market = o.market AND c.selection = o.selection
-                      AND COALESCE(c.line_value, -9999) = COALESCE(o.line_value, -9999)
-                      AND c.decimal_odds = o.decimal_odds
-                  )
-                """,
-                (g1, g2, provider, captured_at, g1, g2),
-            ).fetchall()
-        )
+    rows = [(odds_id,) for odds_id in find_copied_live_quotes(conn)]
     already = {str(r[0]) for r in conn.execute("SELECT odds_id FROM quarantined_odds").fetchall()}
     now = _now()
     quarantined = 0
