@@ -171,8 +171,16 @@ def summarize_holdout_partition(
     holdout_season: str,
     frozen_protocol_id: str,
     trials_evaluated_count: int,
+    season_holdout_contaminated: bool = True,
+    forward_holdout_start_utc: str | None = None,
 ) -> dict[str, Any]:
-    """Partitions backtest performance cleanly into frozen development vs untouched holdout season."""
+    """
+    Partitions backtest performance into development, the season holdout and the forward holdout.
+
+    The season holdout is only "untouched" if it was never looked at while choosing the policy; the
+    flag `season_holdout_contaminated` records that it was. The forward holdout (games starting after
+    the protocol freeze) is the only partition that is out-of-sample by construction.
+    """
     dev_set = set(development_seasons)
 
     def _partition_summary(p_rows: list[dict[str, Any]], p_bets: list[dict[str, Any]]) -> dict[str, Any]:
@@ -199,12 +207,21 @@ def summarize_holdout_partition(
     hold_rows = [r for r in eval_rows if str(r.get("season")) == holdout_season]
     hold_bets = [b for b in bets if str(b.get("season")) == holdout_season]
 
+    forward: dict[str, Any] | None = None
+    if forward_holdout_start_utc:
+        start_by_game = {str(r.get("game_id")): str(r.get("game_start_time") or "") for r in eval_rows}
+        fwd_rows = [r for r in eval_rows if str(r.get("game_start_time") or "") >= forward_holdout_start_utc]
+        fwd_bets = [b for b in bets if start_by_game.get(str(b.get("game_id")), "") >= forward_holdout_start_utc]
+        forward = {"start_utc": forward_holdout_start_utc, **_partition_summary(fwd_rows, fwd_bets)}
+
     return {
         "frozen_protocol_id": frozen_protocol_id,
         "development_seasons": list(development_seasons),
         "holdout_season": holdout_season,
+        "season_holdout_contaminated": bool(season_holdout_contaminated),
         "development": _partition_summary(dev_rows, dev_bets),
         "untouched_holdout": _partition_summary(hold_rows, hold_bets),
+        "forward_holdout": forward,
     }
 
 
@@ -223,6 +240,8 @@ def summarize_backtest_results(
     holdout_season: str = "2026-27",
     trials_evaluated_count: int = 3,
     frozen_protocol_id: str = "V8_FROZEN_2026_11_15",
+    season_holdout_contaminated: bool = True,
+    forward_holdout_start_utc: str | None = None,
 ) -> dict[str, Any]:
     """Builds complete backtest result dict preserving `betting`, `bets_sample`, and new evaluation sections."""
     out: dict[str, Any] = {
@@ -340,6 +359,8 @@ def summarize_backtest_results(
         holdout_season=holdout_season,
         frozen_protocol_id=frozen_protocol_id,
         trials_evaluated_count=trials_evaluated_count,
+        season_holdout_contaminated=season_holdout_contaminated,
+        forward_holdout_start_utc=forward_holdout_start_utc,
     )
     out["uncapped_shadow"] = summarize_unit_track(uncapped_shadow_bets or [], trials_evaluated_count)
     totals_track = summarize_unit_track(totals_clv_bets or [], trials_evaluated_count)
@@ -452,11 +473,22 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         if hp:
             dev = hp.get("development") or {}
             hld = hp.get("untouched_holdout") or {}
+            hold_label = (
+                "Holdout de temporada CONTAMINADO (visto en reportes previos al freeze)"
+                if hp.get("season_holdout_contaminated", True)
+                else "Holdout intacto"
+            )
             lines.append(
                 f"- Protocolo congelado: `{hp.get('frozen_protocol_id')}` | "
                 f"Desarrollo (`{','.join(hp.get('development_seasons') or [])}`): `{dev.get('games')}` juegos, `{dev.get('bets')}` bets, ROI `{dev.get('roi_flat_pct')}%`, CLV `{dev.get('mean_clv_pct')}%` | "
-                f"Holdout intacto (`{hp.get('holdout_season')}`): `{hld.get('games')}` juegos, `{hld.get('bets')}` bets, ROI `{hld.get('roi_flat_pct')}%`"
+                f"{hold_label} (`{hp.get('holdout_season')}`): `{hld.get('games')}` juegos, `{hld.get('bets')}` bets, ROI `{hld.get('roi_flat_pct')}%`"
             )
+            fwd = hp.get("forward_holdout") or {}
+            if fwd:
+                lines.append(
+                    f"- **Holdout hacia adelante** (partidos desde `{fwd.get('start_utc')}`, único fuera de muestra real): "
+                    f"`{fwd.get('games')}` juegos, `{fwd.get('bets')}` bets, ROI `{fwd.get('roi_flat_pct')}%`, CLV `{fwd.get('mean_clv_pct')}%`"
+                )
         if mt:
             roi_mt = mt.get("roi") or {}
             clv_mt = mt.get("clv") or {}

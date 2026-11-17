@@ -371,10 +371,12 @@ def test_parse_teapuesto_and_pinnacle_live_json_and_persist(tmp_path: Path) -> N
     )
 
     # Boost Te Apuesto CHA price to simulate stale retail line vs Pinnacle (3.45 vs Pinnacle 3.08 -> +12% CLV)
-    ta_stale = {**ta, "team_odds": {"PHX": 1.36, "CHA": 3.45}, "away_odds": 3.45}
+    # Book events must start when the seeded game starts (quotes are matched to games by start time).
+    ta_stale = {**ta, "team_odds": {"PHX": 1.36, "CHA": 3.45}, "away_odds": 3.45, "start_time": "2099-11-13 02:00:00"}
+    pin_future = {**pin, "start_time": "2099-11-13T02:00:00Z"}
     scraper = LivePeruOddsScraper(db=db, min_clv_pct=4.0, enable_live_network=False)
     scraper._fetch_teapuesto_slate = lambda force_refresh=False: [ta_stale]  # type: ignore[method-assign]
-    scraper._fetch_pinnacle_slate = lambda force_refresh=False: [pin]  # type: ignore[method-assign]
+    scraper._fetch_pinnacle_slate = lambda force_refresh=False: [pin_future]  # type: ignore[method-assign]
 
     scan_res = scraper.scan_and_alert_entire_slate(notify_telegram=False, force_all=False)
     assert len(scan_res) == 1
@@ -664,6 +666,11 @@ def test_parse_betano_and_crossbook_collect_and_monitor(tmp_path: Path) -> None:
         """
     )
 
+    # The parsed event starts in 2026; the seeded game is kept in the future (2099), so the book event
+    # is moved to the same start time (quotes are matched to games by start time).
+    assert b_row["start_time"].startswith("2026-11-15")
+    rows = [{**r, "start_time": "2099-11-15T22:00:00Z"} for r in rows]
+    b_row = rows[0]
     scraper = LivePeruOddsScraper(db=db, enable_live_network=False)
     scraper._fetch_betano_slate = lambda force_refresh=False: rows  # type: ignore[method-assign]
     scraper._fetch_teapuesto_slate = lambda force_refresh=False: [  # type: ignore[method-assign]

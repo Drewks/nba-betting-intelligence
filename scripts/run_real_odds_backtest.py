@@ -196,6 +196,12 @@ def main() -> None:
     parser.add_argument("--history-lag-days", type=int, default=0, help="Robustness: hide the last N days of results")
     parser.add_argument("--no-boxscores", action="store_true", help="Ablation: ignore box-score features")
     parser.add_argument("--sensitivity", action="store_true", help="Also run with 2.5%% and 6%% margins")
+    parser.add_argument(
+        "--refresh-season",
+        action="append",
+        default=[],
+        help="Re-download this season's market CSV (e.g. the in-progress season for the forward holdout)",
+    )
     parser.add_argument("--out-json", default=str(PROJECT_ROOT / "data" / "evaluation" / "real_odds_backtest.json"))
     parser.add_argument("--out-md", default=str(PROJECT_ROOT / "reports" / "real_odds_backtest.md"))
     args = parser.parse_args()
@@ -210,7 +216,7 @@ def main() -> None:
         if loaded_boxes
         else None
     )
-    market_rows = load_market_rows(download_market_csvs(Path(args.data_dir)))
+    market_rows = load_market_rows(download_market_csvs(Path(args.data_dir), refresh_seasons=args.refresh_season))
     common = {
         "start_date": args.start,
         "end_date": args.end,

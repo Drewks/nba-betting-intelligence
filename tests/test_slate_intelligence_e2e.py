@@ -190,8 +190,15 @@ def test_e2e_production_cycle_and_bankroll_reconciliation(tmp_path: Path) -> Non
     assert bankroll_state["settled_bets_count"] == metrics["settled_bets_count"]
     assert bankroll_state["settled_bets_count"] == fin_metrics["settled_bets_count"]
     assert round(bankroll_state["cumulative_net_profit_pen"], 2) == round(metrics["net_profit_pen"], 2)
-    assert round(metrics["current_settled_bankroll_pen"], 2) == 93.47
-    assert metrics["settled_bets_count"] == 28
+    # The live bankroll changes every time a bet settles, so it is reconciled against the ledger
+    # (independent recomputation from v_observed_simulated_bets) instead of a hard-coded value.
+    ledger_row = db.fetch_one(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(net_profit_pen), 0.0) AS pnl FROM v_observed_simulated_bets "
+        "WHERE status IN ('WON', 'LOST', 'PUSH', 'VOID')"
+    )
+    expected_bankroll = round(engine.initial_bankroll_pen + float(ledger_row["pnl"]), 2)
+    assert round(metrics["current_settled_bankroll_pen"], 2) == expected_bankroll
+    assert metrics["settled_bets_count"] == int(ledger_row["n"])
 
     # (a) Slate Intelligence on realistic production DB + upcoming scheduled game
     db.execute_insert(
@@ -279,9 +286,9 @@ def test_e2e_production_cycle_and_bankroll_reconciliation(tmp_path: Path) -> Non
     # (d) Bet Tracking Markdown (SEGUIMIENTO_APUESTAS.md): zero VOID rows in settled props table & Section 3 bankroll matches header
     assert panopticon_generate_bet_tracking_markdown is generate_bet_tracking_markdown
     md_text = panopticon_generate_bet_tracking_markdown(db, metrics)
-    assert "**Bankroll Liquidado Actual**: **`S/93.47 PEN`**" in md_text
+    assert f"**Bankroll Liquidado Actual**: **`S/{expected_bankroll:.2f} PEN`**" in md_text
 
-    # Extract Section 3 table rows and verify latest settled bet's Bankroll Post. matches header S/93.47
+    # Extract Section 3 table rows and verify latest settled bet's Bankroll Post. matches the header bankroll
     sec3_match = re.search(
         r"## 📊 3\. Últimas 20 Apuestas Liquidadas.*?\n((?:\|.*?\n)+)",
         md_text,
@@ -294,7 +301,9 @@ def test_e2e_production_cycle_and_bankroll_reconciliation(tmp_path: Path) -> Non
         if line.strip().startswith("| `BET_")
     ]
     assert len(sec3_rows) >= 1
-    assert "`S/93.47`" in sec3_rows[0], f"Expected latest Section 3 row to end with `S/93.47`, got: {sec3_rows[0]}"
+    assert f"`S/{expected_bankroll:.2f}`" in sec3_rows[0], (
+        f"Expected latest Section 3 row to end with `S/{expected_bankroll:.2f}`, got: {sec3_rows[0]}"
+    )
 
     # Extract Section 4 settled props table and verify NO VOID rows appear
     if "### 📜 Últimas Apuestas de Props Liquidadas" in md_text:

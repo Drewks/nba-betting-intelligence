@@ -34,6 +34,7 @@ from src.ingestion.peru_book_parsers import (
     parse_betano_nba_events,
     parse_pinnacle_nba_events,
     parse_teapuesto_nba_events,
+    select_slate_row_by_start_time,
 )
 from src.ingestion.stale_line_hunter import StaleLineHunter
 from src.reporting.telegram_bot import TelegramAlertBot
@@ -250,13 +251,16 @@ class LivePeruOddsScraper:
         rows: list[dict[str, Any]],
         home_team: str,
         away_team: str,
+        game_start_time: str | None = None,
     ) -> LiveGameOddsQuote | None:
         h_code = _resolve_team_code(home_team) or home_team.upper()
         a_code = _resolve_team_code(away_team) or away_team.upper()
         target_pair = frozenset({h_code, a_code})
-        for row in rows:
-            if row.get("team_pair") != target_pair:
-                continue
+        candidates = [row for row in rows if row.get("team_pair") == target_pair]
+        # The same two teams often meet on consecutive days (NBA mini-series). Matching on the team
+        # pair alone attached one game's quotes to both games, so the event start time must agree.
+        row = select_slate_row_by_start_time(candidates, game_start_time)
+        if row is not None:
             team_odds = row.get("team_odds") or {}
             h_odds = float(team_odds.get(h_code) or 0.0)
             a_odds = float(team_odds.get(a_code) or 0.0)
@@ -289,17 +293,23 @@ class LivePeruOddsScraper:
             )
         return None
 
-    def fetch_live_teapuesto_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
+    def fetch_live_teapuesto_odds(
+        self, home_team: str, away_team: str, game_start_time: str | None = None
+    ) -> LiveGameOddsQuote | None:
         """Extracts live pre-game NBA odds from Te Apuesto Perú (public API)."""
-        return self._match_slate_row(self._fetch_teapuesto_slate(), home_team, away_team)
+        return self._match_slate_row(self._fetch_teapuesto_slate(), home_team, away_team, game_start_time)
 
-    def fetch_live_betano_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
+    def fetch_live_betano_odds(
+        self, home_team: str, away_team: str, game_start_time: str | None = None
+    ) -> LiveGameOddsQuote | None:
         """Extracts live pre-game NBA odds from Betano Perú (public JSON API)."""
-        return self._match_slate_row(self._fetch_betano_slate(), home_team, away_team)
+        return self._match_slate_row(self._fetch_betano_slate(), home_team, away_team, game_start_time)
 
-    def fetch_live_pinnacle_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
+    def fetch_live_pinnacle_odds(
+        self, home_team: str, away_team: str, game_start_time: str | None = None
+    ) -> LiveGameOddsQuote | None:
         """Extracts live pre-game NBA sharp odds from Pinnacle Arcadia guest API."""
-        return self._match_slate_row(self._fetch_pinnacle_slate(), home_team, away_team)
+        return self._match_slate_row(self._fetch_pinnacle_slate(), home_team, away_team, game_start_time)
 
     def fetch_live_retabet_odds(self, home_team: str, away_team: str) -> LiveGameOddsQuote | None:
         """
@@ -457,15 +467,15 @@ class LivePeruOddsScraper:
             )
 
         # 2. Genuine live quotes fetched from accessible retail & sharp feeds.
-        live_ta = self.fetch_live_teapuesto_odds(home_team, away_team)
+        live_ta = self.fetch_live_teapuesto_odds(home_team, away_team, game_start_time)
         if live_ta:
             quotes_by_book["teapuesto_pe"] = live_ta
 
-        live_betano = self.fetch_live_betano_odds(home_team, away_team)
+        live_betano = self.fetch_live_betano_odds(home_team, away_team, game_start_time)
         if live_betano:
             quotes_by_book["betano_pe"] = live_betano
 
-        live_pin = self.fetch_live_pinnacle_odds(home_team, away_team)
+        live_pin = self.fetch_live_pinnacle_odds(home_team, away_team, game_start_time)
         if live_pin and sharp_quote is None and live_pin.home_odds > 1.0 and live_pin.away_odds > 1.0:
             sharp_quote = LiveGameOddsQuote(
                 book_id="sharp_benchmark",

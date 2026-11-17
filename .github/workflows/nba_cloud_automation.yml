@@ -36,7 +36,7 @@ jobs:
       contents: write
 
     steps:
-      - name: 1. Clonar código de main y restaurar estado vivo desde state-live
+      - name: 1. Clonar código de main (la base congelada de main es la línea base de los tests)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -44,6 +44,29 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git fetch --depth=1 origin main
           git checkout -B main origin/main
+
+      - name: 2. Instalar uv y configurar Python 3.12 (Nativo sin Node.js)
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 3. Instalar dependencias del proyecto y motor Chromium para Playwright
+        run: |
+          uv sync --extra dev --python 3.12
+          uv run playwright install chromium
+
+      - name: 4. Ejecutar lint, type check y suite de pruebas (sobre la base congelada de main, antes de restaurar el estado vivo)
+        run: |
+          uv run ruff check src/ scripts/ tests/
+          uv run mypy src/
+          uv run pytest
+
+      - name: 4b. Restaurar estado vivo desde state-live
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Tests run first against main's frozen baseline: live values (bankroll, bet counts) change
+          # with every settlement, so running the suite on the live DB made production fail on a winning bet.
           STATE_BASE_SHA=""
           if git ls-remote --exit-code --heads origin state-live >/dev/null 2>&1; then
             git fetch --depth=1 origin state-live
@@ -59,22 +82,6 @@ jobs:
             done
           fi
           echo "STATE_BASE_SHA=${STATE_BASE_SHA}" >> "$GITHUB_ENV"
-
-      - name: 2. Instalar uv y configurar Python 3.12 (Nativo sin Node.js)
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: 3. Instalar dependencias del proyecto y motor Chromium para Playwright
-        run: |
-          uv sync --extra dev --python 3.12
-          uv run playwright install chromium
-
-      - name: 4. Ejecutar lint, type check y suite de pruebas
-        run: |
-          uv run ruff check src/ scripts/ tests/
-          uv run mypy src/
-          uv run pytest
 
       - name: 5. Ejecutar Ciclo de Inteligencia, Modelos y Despacho a Telegram
         env:

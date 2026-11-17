@@ -1,48 +1,48 @@
 # Backtest con cuotas reales (consenso de apertura/cierre, sin margen)
 
-- Generado: `2026-11-15T03:17:04Z`
+- Generado: `2026-11-16T23:38:07Z`
 - Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).
-- Periodo de prueba desde `2025-01-01` | partidos con mercado emparejado: `2301`
+- Periodo de prueba desde `2025-01-01` | partidos con mercado emparejado: `2349`
 - Reentrenamiento cada `7` días | margen supuesto `4.5%` | peso del modelo `0.3` | EV mínimo `2%` | tope cuota Moneyline `2.8`
 
 ## 1. Calidad probabilística fuera de muestra (todos los partidos)
 
 | Serie | Mercado | N | Brier | LogLoss |
 | :--- | :--- | ---: | ---: | ---: |
-| `model_raw` | moneyline | 2301 | 0.20579 | 0.59814 |
-| `model_calibrated` | moneyline | 2301 | 0.20533 | 0.59628 |
-| `model_anchored_30_70` | moneyline | 2301 | 0.20071 | 0.58521 |
-| `market_open` | moneyline | 2301 | 0.20108 | 0.58598 |
-| `market_close` | moneyline | 2301 | 0.19684 | 0.57566 |
-| `model_raw` | totals (línea de apertura) | 2301 | 0.25511 | 0.70447 |
-| `model_calibrated` | totals (línea de apertura) | 2301 | 0.25314 | 0.70019 |
-| `model_anchored_30_70` | totals (línea de apertura) | 2301 | 0.24919 | 0.69152 |
-| `market_open_assumed_0.5` | totals (línea de apertura) | 2301 | 0.25000 | 0.69315 |
-| `market_close_normal_approx` | totals (línea de apertura) | 2301 | 0.24324 | 0.67943 |
+| `model_raw` | moneyline | 2349 | 0.20548 | 0.59752 |
+| `model_calibrated` | moneyline | 2349 | 0.20505 | 0.59574 |
+| `model_anchored_30_70` | moneyline | 2349 | 0.20032 | 0.58438 |
+| `market_open` | moneyline | 2349 | 0.20065 | 0.58506 |
+| `market_close` | moneyline | 2349 | 0.19659 | 0.57520 |
+| `model_raw` | totals (línea de apertura) | 2349 | 0.25537 | 0.70498 |
+| `model_calibrated` | totals (línea de apertura) | 2349 | 0.25332 | 0.70054 |
+| `model_anchored_30_70` | totals (línea de apertura) | 2349 | 0.24927 | 0.69168 |
+| `market_open_assumed_0.5` | totals (línea de apertura) | 2349 | 0.25000 | 0.69315 |
+| `market_close_normal_approx` | totals (línea de apertura) | 2349 | 0.24348 | 0.67993 |
 
 ## 2. Apuestas simuladas (reglas de producción, precio de apertura)
 
-- Apuestas: `102` (ganadas `53` / liquidadas `102`, push `0`)
-- **Stake fijo S/1**: neto `S/+2.12` | ROI `2.08%` | IC95 bootstrap `[-17.243%, 21.0443%]` | MaxDD `6.35%`
-- **Stake Kelly 25%** (S/1.00–S/10.00): banca final `S/101.32` | ROI `1.17%` | stake medio `S/1.11` | MaxDD `7.09%`
-- **CLV vs cierre sin margen**: media `1.399%` | gana al cierre `0.4804` | IC95 `[-0.9977%, 3.8902%]`
+- Apuestas: `103` (ganadas `54` / liquidadas `103`, push `0`)
+- **Stake fijo S/1**: neto `S/+2.73` | ROI `2.65%` | IC95 bootstrap `[-16.7483%, 22.3276%]` | MaxDD `6.35%`
+- **Stake Kelly 25%** (S/1.00–S/10.00): banca final `S/101.93` | ROI `1.69%` | stake medio `S/1.11` | MaxDD `7.09%`
+- **CLV vs cierre sin margen**: media `1.342%` | gana al cierre `0.4757` | IC95 `[-0.9982%, 3.8315%]`
 
 | Grupo | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |
 | :--- | ---: | ---: | ---: | ---: |
-| mercado: `moneyline` | 45 | 27 | 20.8% [-10.4, 51.4] | 0.215% [-3.3, 3.6] |
+| mercado: `moneyline` | 46 | 28 | 21.67% [-7.9, 52.3] | 0.112% [-3.2, 3.5] |
 | mercado: `total_points` | 57 | 26 | -12.7% [-36.2, 14.2] | 2.333% [-1.3, 6.1] |
 | temporada: `2024-25` | 34 | 19 | 11.76% [-24.2, 47.5] | 4.928% [0.3, 9.9] |
 | temporada: `2025-26` | 63 | 33 | 1.05% [-24.6, 25.2] | -0.827% [-3.7, 1.9] |
-| temporada: `2026-27` | 5 | 1 | -50.83% [-100.0, 84.4] | 5.443% [-3.7, 25.7] |
+| temporada: `2026-27` | 6 | 2 | -32.27% [-100.0, 79.6] | 3.784% [-4.0, 20.0] |
 
 ## 3. Sensibilidad al margen supuesto
 
 | Margen | Mercado | Apuestas | Ganadas | ROI stake fijo [IC95] | CLV medio [IC95] |
 | ---: | :--- | ---: | ---: | ---: | ---: |
-| 4.5% | `moneyline` | 45 | 27 | 20.8% [-10.4, 51.4] | 0.215% [-3.3, 3.6] |
+| 4.5% | `moneyline` | 46 | 28 | 21.67% [-7.9, 52.3] | 0.112% [-3.2, 3.5] |
 | 4.5% | `total_points` | 57 | 26 | -12.7% [-36.2, 14.2] | 2.333% [-1.3, 6.1] |
-| 2.5% | `moneyline` | 188 | 106 | 7.81% [-7.9, 22.3] | 0.619% [-1.1, 2.3] |
-| 2.5% | `total_points` | 253 | 132 | 1.8% [-10.4, 13.6] | 2.684% [1.0, 4.4] |
+| 2.5% | `moneyline` | 195 | 110 | 7.02% [-8.9, 21.4] | 0.721% [-0.9, 2.4] |
+| 2.5% | `total_points` | 256 | 133 | 1.37% [-10.6, 13.0] | 2.692% [1.1, 4.4] |
 
 ## 4. ¿El modelo anticipa el movimiento de línea? (todos los partidos, sin reglas de apuesta)
 
@@ -54,17 +54,18 @@ Correlación entre la discrepancia del modelo con la apertura y el movimiento ap
 | 2024-25 | totals | 758 | +0.288 [+0.222, +0.349] | 58.3% |
 | 2025-26 | moneyline | 1301 | +0.163 [+0.079, +0.259] | 56.2% |
 | 2025-26 | totals | 1166 | +0.217 [+0.157, +0.277] | 55.9% |
-| 2026-27 | moneyline | 143 | +0.412 [+0.269, +0.539] | 65.0% |
-| 2026-27 | totals | 129 | +0.325 [+0.194, +0.468] | 63.6% |
-| ALL | moneyline | 2274 | +0.135 [+0.075, +0.194] | 54.8% |
-| ALL | totals | 2053 | +0.260 [+0.218, +0.298] | 57.3% |
+| 2026-27 | moneyline | 191 | +0.329 [+0.172, +0.484] | 62.3% |
+| 2026-27 | totals | 175 | +0.347 [+0.230, +0.451] | 62.3% |
+| ALL | moneyline | 2322 | +0.134 [+0.065, +0.198] | 54.7% |
+| ALL | totals | 2099 | +0.261 [+0.219, +0.303] | 57.3% |
 
 ## 5. Holdout Congelado, Corrección Múltiple y Pistas Shadow
 
-- Protocolo congelado: `V8_FROZEN_2026_11_15` | Desarrollo (`2024-25,2025-26`): `2155` juegos, `97` bets, ROI `4.81%`, CLV `1.19%` | Holdout intacto (`2026-27`): `146` juegos, `5` bets, ROI `-50.83%`
-- Pruebas múltiples (`trials=3`, Bonferroni): ROI p-raw=`0.417425`, p-bonf=`1.0` | CLV p-raw=`0.145141`, p-bonf=`0.435423`
-- **Uncapped Shadow (1u sin mínimos ni tope diario)**: `925` señales, ROI 1u `-0.75%`, CLV medio `-0.781%`
-- **Totals CLV-Targeted (1u anticipación cierre, sin holdout en fit)**: `1631` bets, ROI 1u `1.03%`, CLV `-0.921%`, pendiente final `7.73249` (`n=2155`)
+- Protocolo congelado: `V8_FROZEN_2026_11_15` | Desarrollo (`2024-25,2025-26`): `2155` juegos, `97` bets, ROI `4.81%`, CLV `1.19%` | Holdout de temporada CONTAMINADO (visto en reportes previos al freeze) (`2026-27`): `194` juegos, `6` bets, ROI `-32.27%`
+- **Holdout hacia adelante** (partidos desde `2026-11-15T00:00:00Z`, único fuera de muestra real): `11` juegos, `0` bets, ROI `None%`, CLV `None%`
+- Pruebas múltiples (`trials=9`, Bonferroni): ROI p-raw=`0.394547`, p-bonf=`1.0` | CLV p-raw=`0.153072`, p-bonf=`1.0`
+- **Uncapped Shadow (1u sin mínimos ni tope diario)**: `945` señales, ROI 1u `-1.45%`, CLV medio `-0.74%`
+- **Totals CLV-Targeted (1u anticipación cierre, sin holdout en fit)**: `1657` bets, ROI 1u `1.07%`, CLV `-0.927%`, pendiente final `7.73249` (`n=2155`)
 
 ## Supuestos
 - Precio apostable = cuota justa de apertura / (1 + margen). La fuente publica probabilidades sin margen, no precios de casas.

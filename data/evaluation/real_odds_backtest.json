@@ -19,9 +19,9 @@
         "max_stake": 10.0,
         "max_bankroll_fraction": 0.1
       },
-      "market_rows": 2775,
-      "matched_games": 2775,
-      "test_games": 2301,
+      "market_rows": 2826,
+      "matched_games": 2823,
+      "test_games": 2349,
       "boxscore_features": true,
       "evaluation": {
         "development_seasons": [
@@ -29,66 +29,68 @@
           "2025-26"
         ],
         "holdout_season": "2026-27",
-        "trials_evaluated_count": 3,
-        "frozen_protocol_id": "V8_FROZEN_2026_11_15"
+        "trials_evaluated_count": 9,
+        "frozen_protocol_id": "V8_FROZEN_2026_11_15",
+        "season_holdout_contaminated": true,
+        "forward_holdout_start_utc": "2026-11-15T00:00:00Z"
       },
-      "boxscores_games_loaded": 2822,
+      "boxscores_games_loaded": 2833,
       "zero_lookahead_verified": true
     },
     "data_attribution": "Market data: minmaxxxer, 'NBA closing lines and ATS results' (HuggingFace), CC BY 4.0 — consensus no-vig opening/closing lines (median across bookmakers).",
-    "generated_at_utc": "2026-11-15T03:17:04Z",
+    "generated_at_utc": "2026-11-16T23:38:07Z",
     "moneyline_quality": {
       "model_raw": {
-        "n": 2301,
-        "brier": 0.205794,
-        "log_loss": 0.598137
+        "n": 2349,
+        "brier": 0.205476,
+        "log_loss": 0.597522
       },
       "model_calibrated": {
-        "n": 2301,
-        "brier": 0.205331,
-        "log_loss": 0.596277
+        "n": 2349,
+        "brier": 0.205045,
+        "log_loss": 0.595735
       },
       "model_anchored_30_70": {
-        "n": 2301,
-        "brier": 0.200706,
-        "log_loss": 0.585208
+        "n": 2349,
+        "brier": 0.200323,
+        "log_loss": 0.584378
       },
       "market_open": {
-        "n": 2301,
-        "brier": 0.201079,
-        "log_loss": 0.585978
+        "n": 2349,
+        "brier": 0.200652,
+        "log_loss": 0.585059
       },
       "market_close": {
-        "n": 2301,
-        "brier": 0.196837,
-        "log_loss": 0.575664
+        "n": 2349,
+        "brier": 0.196595,
+        "log_loss": 0.575196
       }
     },
     "totals_quality_at_open_line": {
       "model_raw": {
-        "n": 2301,
-        "brier": 0.25511,
-        "log_loss": 0.704468
+        "n": 2349,
+        "brier": 0.255366,
+        "log_loss": 0.704976
       },
       "model_calibrated": {
-        "n": 2301,
-        "brier": 0.253136,
-        "log_loss": 0.700186
+        "n": 2349,
+        "brier": 0.253319,
+        "log_loss": 0.700545
       },
       "model_anchored_30_70": {
-        "n": 2301,
-        "brier": 0.249189,
-        "log_loss": 0.69152
+        "n": 2349,
+        "brier": 0.249267,
+        "log_loss": 0.691677
       },
       "market_open_assumed_0.5": {
-        "n": 2301,
+        "n": 2349,
         "brier": 0.25,
         "log_loss": 0.693147
       },
       "market_close_normal_approx": {
-        "n": 2301,
-        "brier": 0.24324,
-        "log_loss": 0.679434
+        "n": 2349,
+        "brier": 0.243482,
+        "log_loss": 0.679927
       }
     },
     "line_movement_signal": {
@@ -134,99 +136,99 @@
       },
       "2026-27": {
         "moneyline": {
-          "n": 143,
-          "correlation": 0.412,
+          "n": 191,
+          "correlation": 0.329,
           "correlation_ci95": [
-            0.2687,
-            0.539
+            0.1717,
+            0.4844
           ],
-          "directional_hit_rate": 0.6503
+          "directional_hit_rate": 0.623
         },
         "totals": {
-          "n": 129,
-          "correlation": 0.3252,
+          "n": 175,
+          "correlation": 0.3467,
           "correlation_ci95": [
-            0.1941,
-            0.4682
+            0.2298,
+            0.4511
           ],
-          "directional_hit_rate": 0.6357
+          "directional_hit_rate": 0.6229
         }
       },
       "ALL": {
         "moneyline": {
-          "n": 2274,
-          "correlation": 0.1353,
+          "n": 2322,
+          "correlation": 0.1341,
           "correlation_ci95": [
-            0.0749,
-            0.1944
+            0.0651,
+            0.1984
           ],
-          "directional_hit_rate": 0.5475
+          "directional_hit_rate": 0.5474
         },
         "totals": {
-          "n": 2053,
-          "correlation": 0.2603,
+          "n": 2099,
+          "correlation": 0.2605,
           "correlation_ci95": [
-            0.2177,
-            0.2979
+            0.2187,
+            0.3027
           ],
-          "directional_hit_rate": 0.5728
+          "directional_hit_rate": 0.5731
         }
       }
     },
     "full_slate_evaluation": {
-      "games_count": 2301,
+      "games_count": 2349,
       "moneyline_quality": {
         "model_raw": {
-          "n": 2301,
-          "brier": 0.205794,
-          "log_loss": 0.598137
+          "n": 2349,
+          "brier": 0.205476,
+          "log_loss": 0.597522
         },
         "model_calibrated": {
-          "n": 2301,
-          "brier": 0.205331,
-          "log_loss": 0.596277
+          "n": 2349,
+          "brier": 0.205045,
+          "log_loss": 0.595735
         },
         "model_anchored_30_70": {
-          "n": 2301,
-          "brier": 0.200706,
-          "log_loss": 0.585208
+          "n": 2349,
+          "brier": 0.200323,
+          "log_loss": 0.584378
         },
         "market_open": {
-          "n": 2301,
-          "brier": 0.201079,
-          "log_loss": 0.585978
+          "n": 2349,
+          "brier": 0.200652,
+          "log_loss": 0.585059
         },
         "market_close": {
-          "n": 2301,
-          "brier": 0.196837,
-          "log_loss": 0.575664
+          "n": 2349,
+          "brier": 0.196595,
+          "log_loss": 0.575196
         }
       },
       "totals_quality_at_open_line": {
         "model_raw": {
-          "n": 2301,
-          "brier": 0.25511,
-          "log_loss": 0.704468
+          "n": 2349,
+          "brier": 0.255366,
+          "log_loss": 0.704976
         },
         "model_calibrated": {
-          "n": 2301,
-          "brier": 0.253136,
-          "log_loss": 0.700186
+          "n": 2349,
+          "brier": 0.253319,
+          "log_loss": 0.700545
         },
         "model_anchored_30_70": {
-          "n": 2301,
-          "brier": 0.249189,
-          "log_loss": 0.69152
+          "n": 2349,
+          "brier": 0.249267,
+          "log_loss": 0.691677
         },
         "market_open_assumed_0.5": {
-          "n": 2301,
+          "n": 2349,
           "brier": 0.25,
           "log_loss": 0.693147
         },
         "market_close_normal_approx": {
-          "n": 2301,
-          "brier": 0.24324,
-          "log_loss": 0.679434
+          "n": 2349,
+          "brier": 0.243482,
+          "log_loss": 0.679927
         }
       },
       "line_movement_signal": {
@@ -272,61 +274,61 @@
         },
         "2026-27": {
           "moneyline": {
-            "n": 143,
-            "correlation": 0.412,
+            "n": 191,
+            "correlation": 0.329,
             "correlation_ci95": [
-              0.2687,
-              0.539
+              0.1717,
+              0.4844
             ],
-            "directional_hit_rate": 0.6503
+            "directional_hit_rate": 0.623
           },
           "totals": {
-            "n": 129,
-            "correlation": 0.3252,
+            "n": 175,
+            "correlation": 0.3467,
             "correlation_ci95": [
-              0.1941,
-              0.4682
+              0.2298,
+              0.4511
             ],
-            "directional_hit_rate": 0.6357
+            "directional_hit_rate": 0.6229
           }
         },
         "ALL": {
           "moneyline": {
-            "n": 2274,
-            "correlation": 0.1353,
+            "n": 2322,
+            "correlation": 0.1341,
             "correlation_ci95": [
-              0.0749,
-              0.1944
+              0.0651,
+              0.1984
             ],
-            "directional_hit_rate": 0.5475
+            "directional_hit_rate": 0.5474
           },
           "totals": {
-            "n": 2053,
-            "correlation": 0.2603,
+            "n": 2099,
+            "correlation": 0.2605,
             "correlation_ci95": [
-              0.2177,
-              0.2979
+              0.2187,
+              0.3027
             ],
-            "directional_hit_rate": 0.5728
+            "directional_hit_rate": 0.5731
           }
         }
       }
     },
     "betting": {
-      "bets": 102,
-      "settled": 102,
-      "won": 53,
+      "bets": 103,
+      "settled": 103,
+      "won": 54,
       "push_or_void": 0,
       "flat_stake": {
-        "net_profit_pen": 2.12,
-        "roi_pct": 2.08,
+        "net_profit_pen": 2.73,
+        "roi_pct": 2.65,
         "bootstrap_95": {
-          "n_settled": 102,
-          "n_matchday_blocks": 90,
-          "roi_ci_lower_95_pct": -17.243,
-          "roi_ci_upper_95_pct": 21.0443,
-          "roi_ci_lower_90_pct": -13.7657,
-          "roi_ci_upper_90_pct": 17.7515,
+          "n_settled": 103,
+          "n_matchday_blocks": 91,
+          "roi_ci_lower_95_pct": -16.7483,
+          "roi_ci_upper_95_pct": 22.3276,
+          "roi_ci_lower_90_pct": -13.6199,
+          "roi_ci_upper_90_pct": 19.1873,
           "compatible_with_zero_edge": true,
           "method": "temporal_matchday_block_bootstrap"
         },
@@ -334,61 +336,61 @@
           "max_drawdown_pen": 6.9229,
           "max_drawdown_pct": 6.3487,
           "peak_bankroll_pen": 109.0451,
-          "ending_bankroll_pen": 102.1222
+          "ending_bankroll_pen": 102.7273
         }
       },
       "kelly_stake": {
-        "final_bankroll_pen": 101.32,
-        "net_profit_pen": 1.32,
-        "total_staked_pen": 112.9,
-        "roi_pct": 1.17,
+        "final_bankroll_pen": 101.93,
+        "net_profit_pen": 1.93,
+        "total_staked_pen": 113.9,
+        "roi_pct": 1.69,
         "mean_stake_pen": 1.11,
         "drawdown": {
           "max_drawdown_pen": 7.7372,
           "max_drawdown_pct": 7.0944,
           "peak_bankroll_pen": 109.0599,
-          "ending_bankroll_pen": 101.3227
+          "ending_bankroll_pen": 101.9278
         }
       },
       "clv": {
-        "mean_clv_ev_pct": 1.399,
-        "beat_close_rate": 0.4804,
+        "mean_clv_ev_pct": 1.342,
+        "beat_close_rate": 0.4757,
         "bootstrap_95_pct": {
-          "lower": -0.9977,
-          "upper": 3.8902
+          "lower": -0.9982,
+          "upper": 3.8315
         }
       },
       "multiple_testing": {
-        "trials_evaluated_count": 3,
+        "trials_evaluated_count": 9,
         "method": "bonferroni_one_sided_t",
         "roi": {
-          "n_settled": 102,
-          "t_stat": 0.209,
-          "raw_p_value": 0.417425,
+          "n_settled": 103,
+          "t_stat": 0.2682,
+          "raw_p_value": 0.394547,
           "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         },
         "clv": {
-          "n": 102,
-          "t_stat": 1.0631,
-          "raw_p_value": 0.145141,
-          "bonferroni_p_value": 0.435423,
+          "n": 103,
+          "t_stat": 1.0285,
+          "raw_p_value": 0.153072,
+          "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         }
       },
       "by_market": {
         "moneyline": {
-          "bets": 45,
-          "won": 27,
-          "roi_flat_pct": 20.8,
+          "bets": 46,
+          "won": 28,
+          "roi_flat_pct": 21.67,
           "roi_ci95": [
-            -10.3739,
-            51.4089
+            -7.8844,
+            52.2654
           ],
-          "mean_clv_pct": 0.215,
+          "mean_clv_pct": 0.112,
           "clv_ci95": [
-            -3.2571,
-            3.6237
+            -3.1933,
+            3.4689
           ]
         },
         "total_points": {
@@ -436,17 +438,17 @@
           ]
         },
         "2026-27": {
-          "bets": 5,
-          "won": 1,
-          "roi_flat_pct": -50.83,
+          "bets": 6,
+          "won": 2,
+          "roi_flat_pct": -32.27,
           "roi_ci95": [
             -100.0,
-            84.4025
+            79.624
           ],
-          "mean_clv_pct": 5.443,
+          "mean_clv_pct": 3.784,
           "clv_ci95": [
-            -3.7315,
-            25.663
+            -3.967,
+            20.0493
           ]
         }
       }
@@ -458,6 +460,7 @@
         "2025-26"
       ],
       "holdout_season": "2026-27",
+      "season_holdout_contaminated": true,
       "development": {
         "games": 2155,
         "bets": 97,
@@ -467,130 +470,158 @@
         "mean_clv_pct": 1.19,
         "moneyline_brier": 0.205177,
         "multiple_testing": {
-          "trials_evaluated_count": 3,
+          "trials_evaluated_count": 9,
           "method": "bonferroni_one_sided_t",
           "roi": {
             "n_settled": 97,
             "t_stat": 0.4741,
             "raw_p_value": 0.318255,
-            "bonferroni_p_value": 0.954765,
+            "bonferroni_p_value": 1.0,
             "significant_bonferroni_05": false
           },
           "clv": {
             "n": 97,
             "t_stat": 0.8896,
             "raw_p_value": 0.187958,
-            "bonferroni_p_value": 0.563875,
+            "bonferroni_p_value": 1.0,
             "significant_bonferroni_05": false
           }
         }
       },
       "untouched_holdout": {
-        "games": 146,
-        "bets": 5,
-        "settled": 5,
-        "won": 1,
-        "roi_flat_pct": -50.83,
-        "mean_clv_pct": 5.443,
-        "moneyline_brier": 0.207602,
+        "games": 194,
+        "bets": 6,
+        "settled": 6,
+        "won": 2,
+        "roi_flat_pct": -32.27,
+        "mean_clv_pct": 3.784,
+        "moneyline_brier": 0.203578,
         "multiple_testing": {
-          "trials_evaluated_count": 3,
+          "trials_evaluated_count": 9,
           "method": "bonferroni_one_sided_t",
           "roi": {
-            "n_settled": 5,
-            "t_stat": -1.0336,
-            "raw_p_value": 0.820141,
+            "n_settled": 6,
+            "t_stat": -0.7296,
+            "raw_p_value": 0.750811,
             "bonferroni_p_value": 1.0,
             "significant_bonferroni_05": false
           },
           "clv": {
-            "n": 5,
-            "t_stat": 0.7419,
-            "raw_p_value": 0.249683,
-            "bonferroni_p_value": 0.749049,
+            "n": 6,
+            "t_stat": 0.6087,
+            "raw_p_value": 0.28466,
+            "bonferroni_p_value": 1.0,
+            "significant_bonferroni_05": false
+          }
+        }
+      },
+      "forward_holdout": {
+        "start_utc": "2026-11-15T00:00:00Z",
+        "games": 11,
+        "bets": 0,
+        "settled": 0,
+        "won": 0,
+        "roi_flat_pct": null,
+        "mean_clv_pct": null,
+        "moneyline_brier": 0.192482,
+        "multiple_testing": {
+          "trials_evaluated_count": 9,
+          "method": "bonferroni_one_sided_t",
+          "roi": {
+            "n_settled": 0,
+            "t_stat": null,
+            "raw_p_value": null,
+            "bonferroni_p_value": null,
+            "significant_bonferroni_05": false
+          },
+          "clv": {
+            "n": 0,
+            "t_stat": null,
+            "raw_p_value": null,
+            "bonferroni_p_value": null,
             "significant_bonferroni_05": false
           }
         }
       }
     },
     "uncapped_shadow": {
-      "bets": 925,
-      "settled": 925,
-      "won": 479,
+      "bets": 945,
+      "settled": 945,
+      "won": 487,
       "push_or_void": 0,
-      "net_profit_1u": -6.9452,
-      "roi_1u_pct": -0.75,
-      "mean_clv_pct": -0.781,
-      "beat_close_rate": 0.4508,
+      "net_profit_1u": -13.7277,
+      "roi_1u_pct": -1.45,
+      "mean_clv_pct": -0.74,
+      "beat_close_rate": 0.4497,
       "multiple_testing": {
-        "trials_evaluated_count": 3,
+        "trials_evaluated_count": 9,
         "method": "bonferroni_one_sided_t",
         "roi": {
-          "n_settled": 925,
-          "t_stat": -0.2337,
-          "raw_p_value": 0.592359,
+          "n_settled": 945,
+          "t_stat": -0.4578,
+          "raw_p_value": 0.676412,
           "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         },
         "clv": {
-          "n": 925,
-          "t_stat": -1.7992,
-          "raw_p_value": 0.963841,
+          "n": 945,
+          "t_stat": -1.7333,
+          "raw_p_value": 0.958315,
           "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         }
       },
       "by_market": {
         "moneyline": {
-          "bets": 359,
-          "settled": 359,
-          "won": 191,
-          "roi_1u_pct": 2.19,
-          "mean_clv_pct": -2.408
+          "bets": 370,
+          "settled": 370,
+          "won": 197,
+          "roi_1u_pct": 1.69,
+          "mean_clv_pct": -2.345
         },
         "total_points": {
-          "bets": 566,
-          "settled": 566,
-          "won": 288,
-          "roi_1u_pct": -2.61,
-          "mean_clv_pct": 0.25
+          "bets": 575,
+          "settled": 575,
+          "won": 290,
+          "roi_1u_pct": -3.47,
+          "mean_clv_pct": 0.292
         }
       }
     },
     "totals_clv_targeted": {
-      "bets": 1631,
-      "settled": 1631,
-      "won": 861,
+      "bets": 1657,
+      "settled": 1657,
+      "won": 875,
       "push_or_void": 0,
-      "net_profit_1u": 16.8679,
-      "roi_1u_pct": 1.03,
-      "mean_clv_pct": -0.921,
-      "beat_close_rate": 0.4506,
+      "net_profit_1u": 17.6625,
+      "roi_1u_pct": 1.07,
+      "mean_clv_pct": -0.927,
+      "beat_close_rate": 0.4496,
       "multiple_testing": {
-        "trials_evaluated_count": 3,
+        "trials_evaluated_count": 9,
         "method": "bonferroni_one_sided_t",
         "roi": {
-          "n_settled": 1631,
-          "t_stat": 0.437,
-          "raw_p_value": 0.331082,
-          "bonferroni_p_value": 0.993246,
+          "n_settled": 1657,
+          "t_stat": 0.454,
+          "raw_p_value": 0.324944,
+          "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         },
         "clv": {
-          "n": 1631,
-          "t_stat": -2.7126,
-          "raw_p_value": 0.996627,
+          "n": 1657,
+          "t_stat": -2.7602,
+          "raw_p_value": 0.99708,
           "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         }
       },
       "by_market": {
         "total_points": {
-          "bets": 1631,
-          "settled": 1631,
-          "won": 861,
-          "roi_1u_pct": 1.03,
-          "mean_clv_pct": -0.921
+          "bets": 1657,
+          "settled": 1657,
+          "won": 875,
+          "roi_1u_pct": 1.07,
+          "mean_clv_pct": -0.927
         }
       },
       "estimator": {
@@ -1009,7 +1040,7 @@
       "kelly_min_stake_pen": 1.0,
       "kelly_max_stake_pen": 10.0,
       "kelly_max_bankroll_fraction": 0.1,
-      "boxscores_games_loaded": 2822,
+      "boxscores_games_loaded": 2833,
       "zero_lookahead_verified": true
     }
   },
@@ -3053,24 +3084,44 @@
       "kelly_net_profit_pen": -1.16,
       "status": "LOST",
       "clv_ev_pct": 0.2243
+    },
+    {
+      "game_id": "ESPN_401909970_2026-11-12_DEN_AT_MEM",
+      "matchday_date": "2026-11-12",
+      "season": "2026-27",
+      "market": "moneyline",
+      "selection": "AWAY",
+      "line_value": null,
+      "decimal_odds": 1.6051,
+      "anchored_prob": 0.637952,
+      "ev_unit": 0.023977,
+      "p_open": 0.5962000000000001,
+      "p_close": 0.5949,
+      "result": "WON",
+      "stake_pen": 1.0,
+      "net_profit_pen": 0.6051,
+      "kelly_stake_pen": 1.0,
+      "kelly_net_profit_pen": 0.6051,
+      "status": "WON",
+      "clv_ev_pct": -4.5126
     }
   ],
   "sensitivity": {
     "4.5%": {
-      "bets": 102,
-      "settled": 102,
-      "won": 53,
+      "bets": 103,
+      "settled": 103,
+      "won": 54,
       "push_or_void": 0,
       "flat_stake": {
-        "net_profit_pen": 2.12,
-        "roi_pct": 2.08,
+        "net_profit_pen": 2.73,
+        "roi_pct": 2.65,
         "bootstrap_95": {
-          "n_settled": 102,
-          "n_matchday_blocks": 90,
-          "roi_ci_lower_95_pct": -17.243,
-          "roi_ci_upper_95_pct": 21.0443,
-          "roi_ci_lower_90_pct": -13.7657,
-          "roi_ci_upper_90_pct": 17.7515,
+          "n_settled": 103,
+          "n_matchday_blocks": 91,
+          "roi_ci_lower_95_pct": -16.7483,
+          "roi_ci_upper_95_pct": 22.3276,
+          "roi_ci_lower_90_pct": -13.6199,
+          "roi_ci_upper_90_pct": 19.1873,
           "compatible_with_zero_edge": true,
           "method": "temporal_matchday_block_bootstrap"
         },
@@ -3078,61 +3129,61 @@
           "max_drawdown_pen": 6.9229,
           "max_drawdown_pct": 6.3487,
           "peak_bankroll_pen": 109.0451,
-          "ending_bankroll_pen": 102.1222
+          "ending_bankroll_pen": 102.7273
         }
       },
       "kelly_stake": {
-        "final_bankroll_pen": 101.32,
-        "net_profit_pen": 1.32,
-        "total_staked_pen": 112.9,
-        "roi_pct": 1.17,
+        "final_bankroll_pen": 101.93,
+        "net_profit_pen": 1.93,
+        "total_staked_pen": 113.9,
+        "roi_pct": 1.69,
         "mean_stake_pen": 1.11,
         "drawdown": {
           "max_drawdown_pen": 7.7372,
           "max_drawdown_pct": 7.0944,
           "peak_bankroll_pen": 109.0599,
-          "ending_bankroll_pen": 101.3227
+          "ending_bankroll_pen": 101.9278
         }
       },
       "clv": {
-        "mean_clv_ev_pct": 1.399,
-        "beat_close_rate": 0.4804,
+        "mean_clv_ev_pct": 1.342,
+        "beat_close_rate": 0.4757,
         "bootstrap_95_pct": {
-          "lower": -0.9977,
-          "upper": 3.8902
+          "lower": -0.9982,
+          "upper": 3.8315
         }
       },
       "multiple_testing": {
-        "trials_evaluated_count": 3,
+        "trials_evaluated_count": 9,
         "method": "bonferroni_one_sided_t",
         "roi": {
-          "n_settled": 102,
-          "t_stat": 0.209,
-          "raw_p_value": 0.417425,
+          "n_settled": 103,
+          "t_stat": 0.2682,
+          "raw_p_value": 0.394547,
           "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         },
         "clv": {
-          "n": 102,
-          "t_stat": 1.0631,
-          "raw_p_value": 0.145141,
-          "bonferroni_p_value": 0.435423,
+          "n": 103,
+          "t_stat": 1.0285,
+          "raw_p_value": 0.153072,
+          "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         }
       },
       "by_market": {
         "moneyline": {
-          "bets": 45,
-          "won": 27,
-          "roi_flat_pct": 20.8,
+          "bets": 46,
+          "won": 28,
+          "roi_flat_pct": 21.67,
           "roi_ci95": [
-            -10.3739,
-            51.4089
+            -7.8844,
+            52.2654
           ],
-          "mean_clv_pct": 0.215,
+          "mean_clv_pct": 0.112,
           "clv_ci95": [
-            -3.2571,
-            3.6237
+            -3.1933,
+            3.4689
           ]
         },
         "total_points": {
@@ -3180,36 +3231,36 @@
           ]
         },
         "2026-27": {
-          "bets": 5,
-          "won": 1,
-          "roi_flat_pct": -50.83,
+          "bets": 6,
+          "won": 2,
+          "roi_flat_pct": -32.27,
           "roi_ci95": [
             -100.0,
-            84.4025
+            79.624
           ],
-          "mean_clv_pct": 5.443,
+          "mean_clv_pct": 3.784,
           "clv_ci95": [
-            -3.7315,
-            25.663
+            -3.967,
+            20.0493
           ]
         }
       }
     },
     "2.5%": {
-      "bets": 441,
-      "settled": 441,
-      "won": 238,
+      "bets": 451,
+      "settled": 451,
+      "won": 243,
       "push_or_void": 0,
       "flat_stake": {
-        "net_profit_pen": 19.24,
-        "roi_pct": 4.36,
+        "net_profit_pen": 17.2,
+        "roi_pct": 3.81,
         "bootstrap_95": {
-          "n_settled": 441,
-          "n_matchday_blocks": 256,
-          "roi_ci_lower_95_pct": -5.9097,
-          "roi_ci_upper_95_pct": 13.7404,
-          "roi_ci_lower_90_pct": -4.0274,
-          "roi_ci_upper_90_pct": 12.0513,
+          "n_settled": 451,
+          "n_matchday_blocks": 262,
+          "roi_ci_lower_95_pct": -6.1419,
+          "roi_ci_upper_95_pct": 13.2316,
+          "roi_ci_lower_90_pct": -4.703,
+          "roi_ci_upper_90_pct": 12.2064,
           "compatible_with_zero_edge": true,
           "method": "temporal_matchday_block_bootstrap"
         },
@@ -3217,75 +3268,75 @@
           "max_drawdown_pen": 20.1748,
           "max_drawdown_pct": 18.1437,
           "peak_bankroll_pen": 125.3387,
-          "ending_bankroll_pen": 119.2441
+          "ending_bankroll_pen": 117.1988
         }
       },
       "kelly_stake": {
-        "final_bankroll_pen": 122.13,
-        "net_profit_pen": 22.13,
-        "total_staked_pen": 612.84,
-        "roi_pct": 3.61,
+        "final_bankroll_pen": 119.96,
+        "net_profit_pen": 19.96,
+        "total_staked_pen": 628.83,
+        "roi_pct": 3.17,
         "mean_stake_pen": 1.39,
         "drawdown": {
           "max_drawdown_pen": 26.3369,
           "max_drawdown_pct": 22.9559,
           "peak_bankroll_pen": 133.1041,
-          "ending_bankroll_pen": 122.129
+          "ending_bankroll_pen": 119.9647
         }
       },
       "clv": {
-        "mean_clv_ev_pct": 1.803,
-        "beat_close_rate": 0.551,
+        "mean_clv_ev_pct": 1.84,
+        "beat_close_rate": 0.5543,
         "bootstrap_95_pct": {
-          "lower": 0.4926,
-          "upper": 3.141
+          "lower": 0.7001,
+          "upper": 3.1106
         }
       },
       "multiple_testing": {
-        "trials_evaluated_count": 3,
+        "trials_evaluated_count": 9,
         "method": "bonferroni_one_sided_t",
         "roi": {
-          "n_settled": 441,
-          "t_stat": 0.9311,
-          "raw_p_value": 0.176163,
-          "bonferroni_p_value": 0.528488,
+          "n_settled": 451,
+          "t_stat": 0.8252,
+          "raw_p_value": 0.204852,
+          "bonferroni_p_value": 1.0,
           "significant_bonferroni_05": false
         },
         "clv": {
-          "n": 441,
-          "t_stat": 2.9266,
-          "raw_p_value": 0.001802,
-          "bonferroni_p_value": 0.005407,
+          "n": 451,
+          "t_stat": 3.0397,
+          "raw_p_value": 0.001253,
+          "bonferroni_p_value": 0.011277,
           "significant_bonferroni_05": true
         }
       },
       "by_market": {
         "moneyline": {
-          "bets": 188,
-          "won": 106,
-          "roi_flat_pct": 7.81,
+          "bets": 195,
+          "won": 110,
+          "roi_flat_pct": 7.02,
           "roi_ci95": [
-            -7.948,
-            22.345
+            -8.8671,
+            21.4442
           ],
-          "mean_clv_pct": 0.619,
+          "mean_clv_pct": 0.721,
           "clv_ci95": [
-            -1.1035,
-            2.2746
+            -0.8604,
+            2.4015
           ]
         },
         "total_points": {
-          "bets": 253,
-          "won": 132,
-          "roi_flat_pct": 1.8,
+          "bets": 256,
+          "won": 133,
+          "roi_flat_pct": 1.37,
           "roi_ci95": [
-            -10.4377,
-            13.5723
+            -10.6336,
+            12.9642
           ],
-          "mean_clv_pct": 2.684,
+          "mean_clv_pct": 2.692,
           "clv_ci95": [
-            0.9606,
-            4.396
+            1.0871,
+            4.4416
           ]
         }
       },
@@ -3319,17 +3370,17 @@
           ]
         },
         "2026-27": {
-          "bets": 37,
-          "won": 18,
-          "roi_flat_pct": -7.81,
+          "bets": 47,
+          "won": 23,
+          "roi_flat_pct": -10.5,
           "roi_ci95": [
-            -34.1125,
-            22.4134
+            -35.315,
+            14.1809
           ],
-          "mean_clv_pct": 2.207,
+          "mean_clv_pct": 2.468,
           "clv_ci95": [
-            -1.704,
-            5.9062
+            -0.6963,
+            5.641
           ]
         }
       }
@@ -3369,7 +3420,7 @@
         "bootstrap_95_pct": {}
       },
       "multiple_testing": {
-        "trials_evaluated_count": 3,
+        "trials_evaluated_count": 9,
         "method": "bonferroni_one_sided_t",
         "roi": {
           "n_settled": 0,

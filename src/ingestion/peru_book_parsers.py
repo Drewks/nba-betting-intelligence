@@ -66,6 +66,66 @@ def _epoch_ms_to_utc_iso(ms_val: Any) -> str:
     return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# Two games between the same teams are at least ~20 h apart; a book that lists its start time in
+# local time (Lima, UTC-5) is still well inside this window.
+MAX_EVENT_START_DIFF_HOURS = 8.0
+
+
+def parse_event_start_utc(raw: Any) -> datetime | None:
+    """Parses a book's event start time (ISO with Z/offset, 'YYYY-MM-DD HH:MM:SS' as UTC, or epoch ms)."""
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(raw) / 1000.0, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+    text = str(raw).strip()
+    if text.isdigit():
+        return parse_event_start_utc(int(text))
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00").replace(" ", "T", 1))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+def select_slate_row_by_start_time(
+    candidates: list[dict[str, Any]],
+    game_start_time: str | None,
+    max_diff_hours: float = MAX_EVENT_START_DIFF_HOURS,
+) -> dict[str, Any] | None:
+    """
+    Picks the book event that is the same game as `game_start_time` among events of the same team pair.
+
+    - Without a reference start time (legacy callers) only an unambiguous single candidate is accepted.
+    - Events whose start time is known must be within `max_diff_hours`; the closest one wins.
+    - An event without a start time is accepted only when it is the sole candidate and no dated
+      candidate exists, since it cannot be told apart from another game of the same teams.
+    """
+    if not candidates:
+        return None
+    target = parse_event_start_utc(game_start_time) if game_start_time else None
+    if target is None:
+        return candidates[0] if len(candidates) == 1 else None
+    dated: list[tuple[float, dict[str, Any]]] = []
+    undated: list[dict[str, Any]] = []
+    for row in candidates:
+        start = parse_event_start_utc(row.get("start_time"))
+        if start is None:
+            undated.append(row)
+            continue
+        diff_h = abs((start - target).total_seconds()) / 3600.0
+        if diff_h <= max_diff_hours:
+            dated.append((diff_h, row))
+    if dated:
+        dated.sort(key=lambda item: item[0])
+        return dated[0][1]
+    if len(candidates) == 1 and undated:
+        return undated[0]
+    return None
+
+
 def parse_teapuesto_nba_events(
     payload: dict[str, Any],
     *,
