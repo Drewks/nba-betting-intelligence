@@ -716,6 +716,108 @@ def m013_add_shadow_candidates_and_version_indexes(
     return {"action": "shadow_candidates_created", "indexes_created": 3}
 
 
+def m014_quarantine_misattributed_same_pair_quotes(
+    conn: sqlite3.Connection,
+    migration_id: str,
+) -> dict[str, Any]:
+    """
+    Quarantines live-API quotes that were attached to two different games of the same two teams.
+
+    Until 2026-11-16 the live book feeds were matched to games by team pair only, so when the same
+    teams met on consecutive days (e.g. POR@MIN on 11-17 and 11-18) one game's quotes were stored on
+    both games. The copies are identical (provider, capture second, market, side, line, price), and it
+    cannot be told afterwards which game a quote really belonged to, so every copy is quarantined.
+    Quotes are never deleted or edited; predictions that used them stay in history and are counted.
+    """
+    # Only the affected feed path (live book APIs, provider label "[LIVE_API]") and only captures where a
+    # whole slate entry was copied: at least MIN_COPIED_QUOTES identical quotes of the same capture on
+    # both games. A single coincidental equal price between two real games is left untouched.
+    min_copied_quotes = 3
+    pairs = conn.execute(
+        """
+        SELECT o1.game_id AS g1, o2.game_id AS g2, o1.provider AS provider, o1.captured_at AS captured_at,
+               COUNT(*) AS n
+        FROM odds_snapshots o1
+        JOIN odds_snapshots o2
+          ON o1.provider = o2.provider
+         AND o1.captured_at = o2.captured_at
+         AND o1.market = o2.market
+         AND o1.selection = o2.selection
+         AND COALESCE(o1.line_value, -9999) = COALESCE(o2.line_value, -9999)
+         AND o1.decimal_odds = o2.decimal_odds
+         AND o1.game_id < o2.game_id
+        JOIN games g1 ON g1.game_id = o1.game_id
+        JOIN games g2 ON g2.game_id = o2.game_id
+        WHERE o1.provider LIKE '%[LIVE_API]%'
+          AND (
+            (g1.home_team = g2.home_team AND g1.away_team = g2.away_team)
+            OR (g1.home_team = g2.away_team AND g1.away_team = g2.home_team)
+          )
+        GROUP BY o1.game_id, o2.game_id, o1.provider, o1.captured_at
+        HAVING COUNT(*) >= ?
+        """,
+        (min_copied_quotes,),
+    ).fetchall()
+    rows: list[tuple[str]] = []
+    for g1, g2, provider, captured_at, _n in pairs:
+        rows.extend(
+            conn.execute(
+                """
+                SELECT o.odds_id FROM odds_snapshots o
+                WHERE o.game_id IN (?, ?) AND o.provider = ? AND o.captured_at = ?
+                  AND EXISTS (
+                    SELECT 1 FROM odds_snapshots c
+                    WHERE c.game_id IN (?, ?) AND c.game_id <> o.game_id
+                      AND c.provider = o.provider AND c.captured_at = o.captured_at
+                      AND c.market = o.market AND c.selection = o.selection
+                      AND COALESCE(c.line_value, -9999) = COALESCE(o.line_value, -9999)
+                      AND c.decimal_odds = o.decimal_odds
+                  )
+                """,
+                (g1, g2, provider, captured_at, g1, g2),
+            ).fetchall()
+        )
+    already = {str(r[0]) for r in conn.execute("SELECT odds_id FROM quarantined_odds").fetchall()}
+    now = _now()
+    quarantined = 0
+    for (odds_id,) in rows:
+        if str(odds_id) in already:
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO quarantined_odds (odds_id, reason, quarantined_at) VALUES (?, ?, ?)",
+            (odds_id, "MISATTRIBUTED_SAME_TEAM_PAIR_GAME", now),
+        )
+        quarantined += 1
+    affected_predictions = 0
+    if rows:
+        affected_predictions = int(
+            conn.execute(
+                """
+                SELECT COUNT(*) FROM predictions p
+                WHERE EXISTS (
+                    SELECT 1 FROM odds_snapshots o
+                    JOIN quarantined_odds q ON q.odds_id = o.odds_id
+                    WHERE q.reason = 'MISATTRIBUTED_SAME_TEAM_PAIR_GAME'
+                      AND o.game_id = p.game_id
+                      AND o.provider = p.odds_provider
+                      AND o.captured_at = p.odds_captured_at
+                      AND o.decimal_odds = p.decimal_odds_used
+                )
+                """
+            ).fetchone()[0]
+        )
+    _log_repair(
+        conn,
+        migration_id,
+        "odds_snapshots",
+        "SAME_TEAM_PAIR_MISATTRIBUTION",
+        "QUARANTINE_MISATTRIBUTED_QUOTES",
+        f"Quarantined {quarantined} live-API quotes copied onto both games of a same-team mini-series; "
+        f"{affected_predictions} historical predictions used one of them (kept unchanged).",
+    )
+    return {"quarantined_quotes": quarantined, "affected_predictions": affected_predictions}
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -730,6 +832,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_14_011_reconcile_observed_ledger_and_player_boxscores", m011_reconcile_observed_ledger_and_player_boxscores),
     ("2026_11_14_012_separate_prob_semantics_spread_and_manifests", m012_separate_prob_semantics_spread_and_manifests),
     ("2026_11_15_013_add_shadow_candidates_and_version_indexes", m013_add_shadow_candidates_and_version_indexes),
+    ("2026_11_16_014_quarantine_misattributed_same_pair_quotes", m014_quarantine_misattributed_same_pair_quotes),
 ]
 
 

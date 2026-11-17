@@ -15,6 +15,7 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from src.config import load_config
 from src.calibration.calibrator import (
     ProbabilityCalibrator,
     VennAbersConformalInterval,
@@ -200,8 +201,24 @@ def settle_cycle_pending_positions(
     return settled_now, shadow_settled
 
 
-def _pair_valid_pretip_quotes(raw_game_odds: list[dict[str, Any]], start_dt: datetime) -> list[dict[str, Any]]:
-    """Extracts complete two-sided pre-tipoff observed pairs grouped by `(provider, market, canonical_line)`."""
+def _pair_valid_pretip_quotes(
+    raw_game_odds: list[dict[str, Any]],
+    start_dt: datetime,
+    *,
+    decision_dt: datetime | None = None,
+    max_quote_age_hours: float | None = None,
+    excluded_provider_markers: tuple[str, ...] = (),
+    max_overround: float | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Extracts complete two-sided pre-tipoff observed pairs grouped by `(provider, market, canonical_line)`.
+
+    For live decisions (`decision_dt` set) only quotes that existed at the decision time and are at most
+    `max_quote_age_hours` old are used, and providers whose label contains an excluded marker (e.g.
+    "(Best of" aggregates that pair the best price of one book with another book's counterpart) are
+    skipped: those prices are not a quote any single book offered. Two-way markets whose overround
+    exceeds `max_overround` are dropped: at a ~10% margin no realistic edge survives.
+    """
     latest_by_key: dict[tuple[str, str, float | None, str], tuple[datetime, dict[str, Any]]] = {}
     for o in raw_game_odds:
         try:
@@ -211,6 +228,13 @@ def _pair_valid_pretip_quotes(raw_game_odds: list[dict[str, Any]], start_dt: dat
             continue
         if cap_dt >= start_dt or dec_val <= 1.0:
             continue
+        if any(marker in str(o.get("provider") or "") for marker in excluded_provider_markers):
+            continue
+        if decision_dt is not None:
+            if cap_dt > decision_dt:
+                continue
+            if max_quote_age_hours is not None and (decision_dt - cap_dt).total_seconds() > max_quote_age_hours * 3600.0:
+                continue
         mkt_str = str(o["market"])
         sel_u = str(o["selection"]).upper()
         raw_lv = o.get("line_value")
@@ -250,6 +274,10 @@ def _pair_valid_pretip_quotes(raw_game_odds: list[dict[str, Any]], start_dt: dat
             if not entry_a or not entry_b:
                 continue
             row_a, row_b = entry_a[1], entry_b[1]
+            if max_overround is not None:
+                overround = 1.0 / float(row_a["decimal_odds"]) + 1.0 / float(row_b["decimal_odds"]) - 1.0
+                if overround > max_overround:
+                    continue
             paired.append({**row_a, "counterpart_decimal_odds": float(row_b["decimal_odds"])})
             paired.append({**row_b, "counterpart_decimal_odds": float(row_a["decimal_odds"])})
     return paired
@@ -637,6 +665,9 @@ def evaluate_scheduled_slate_candidates(
     run_manifest_id: str = cal_bundle["run_manifest_id"]
 
     candidates_by_matchday: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    execution_cfg = load_config().execution
+    decision_dt = parse_iso_utc(now_str)
+    decision_ts = decision_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     scheduled_games = db.fetch_all(
         "SELECT * FROM games WHERE status = 'SCHEDULED' AND game_start_time > ? ORDER BY game_start_time ASC",
         (now_str,),
@@ -659,7 +690,17 @@ def evaluate_scheduled_slate_candidates(
 
         start_dt = parse_iso_utc(g["game_start_time"])
         avail_dt = parse_iso_utc(g["features_available_at"])
-        game_odds = _pair_valid_pretip_quotes(raw_game_odds, start_dt)
+        # The decision is made now: its timestamp is the wall clock, never a time in the future.
+        if decision_dt >= start_dt:
+            continue
+        game_odds = _pair_valid_pretip_quotes(
+            raw_game_odds,
+            start_dt,
+            decision_dt=decision_dt,
+            max_quote_age_hours=execution_cfg.max_quote_age_hours,
+            excluded_provider_markers=execution_cfg.excluded_provider_markers,
+            max_overround=execution_cfg.max_bookmaker_overround,
+        )
         if not game_odds:
             continue
 
@@ -671,10 +712,12 @@ def evaluate_scheduled_slate_candidates(
         if existing_preds and max(parse_iso_utc(str(r["odds_captured_at"])) for r in existing_preds) >= latest_odds_dt:
             continue
 
-        pred_dt = max(avail_dt, latest_odds_dt)
-        if pred_dt >= start_dt:
-            continue
-        pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Pre-game features of an upcoming game are computed now from finished games only. Rows stored
+        # with the legacy "tip-off − 2 h" availability (a time in the future) are clamped to the decision
+        # time, so the audit trail records when the decision was really taken.
+        if avail_dt > decision_dt:
+            g = {**g, "features_available_at": decision_ts}
+        pred_ts = decision_ts
         validate_game_record(g, simulated_prediction_time=pred_ts)
 
         feats = build_pregame_features(g, all_final_games, market="total_points")

@@ -77,13 +77,24 @@ TOTAL_SIGMA = 18.0
 MATCH_TOLERANCE_HOURS = 12.0
 
 
-def download_market_csvs(dest_dir: Path, seasons: list[str] | None = None, timeout: int = 60) -> list[Path]:
+def download_market_csvs(
+    dest_dir: Path,
+    seasons: list[str] | None = None,
+    timeout: int = 60,
+    refresh_seasons: list[str] | None = None,
+) -> list[Path]:
+    """
+    Returns the local market CSV per season, downloading missing ones. Seasons in `refresh_seasons`
+    are downloaded again: the in-progress season grows every day and the forward holdout (games after
+    the protocol freeze) stays empty while the cached copy is never refreshed.
+    """
     dest_dir.mkdir(parents=True, exist_ok=True)
+    refresh = set(refresh_seasons or [])
     paths: list[Path] = []
     for season in seasons or list(DATA_SOURCES):
         url = DATA_SOURCES[season]
         out = dest_dir / f"market_consensus_{season}.csv"
-        if not out.exists():
+        if not out.exists() or season in refresh:
             req = urllib.request.Request(url, headers={"User-Agent": "nba-betting-intelligence-backtest"})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 out.write_bytes(resp.read())
@@ -578,7 +589,7 @@ def run_real_odds_backtest(
             )
 
         for g, rec in day_records:
-            eval_rows.append(rec)
+            eval_rows.append({**rec, "game_start_time": g["game_start_time"]})
             oos_ml.append({"game_start_time": g["game_start_time"], "raw_probability": rec["raw_home"], "outcome": rec["home_won"]})
             if rec.get("total_result") in ("over", "under"):
                 oos_tot.append(
@@ -632,6 +643,8 @@ def run_real_odds_backtest(
                 "holdout_season": eff_holdout,
                 "trials_evaluated_count": eff_trials,
                 "frozen_protocol_id": eff_protocol,
+                "season_holdout_contaminated": eval_cfg.season_holdout_contaminated,
+                "forward_holdout_start_utc": eval_cfg.forward_holdout_start_utc,
             },
         },
         DATA_ATTRIBUTION,
@@ -648,4 +661,6 @@ def run_real_odds_backtest(
         holdout_season=eff_holdout,
         trials_evaluated_count=eff_trials,
         frozen_protocol_id=eff_protocol,
+        season_holdout_contaminated=eval_cfg.season_holdout_contaminated,
+        forward_holdout_start_utc=eval_cfg.forward_holdout_start_utc,
     )

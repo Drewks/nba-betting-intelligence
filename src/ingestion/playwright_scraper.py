@@ -19,6 +19,7 @@ import re
 from typing import Any
 
 from src.ingestion.normalizer import normalize_team_code
+from src.ingestion.peru_book_parsers import select_slate_row_by_start_time
 from src.storage.db import DatabaseManager
 from src.config import ScraperConfig, load_scraper_config
 
@@ -108,6 +109,7 @@ class PeruPlaywrightScraper:
         quotes: list[dict[str, Any]] = []
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         for row in slate_rows:
+            first_quote_idx = len(quotes)
             prov = str(row.get("book_name") or "Unknown")
             h_code = str(row.get("home_team") or "")
             a_code = str(row.get("away_team") or "")
@@ -237,6 +239,10 @@ class PeruPlaywrightScraper:
                         "captured_at": cap,
                         "source_type": "OBSERVED",
                     })
+            # Keep the book's event start time so the quote can be matched to the right game when the
+            # same two teams play on consecutive days.
+            for q in quotes[first_quote_idx:]:
+                q["start_time"] = row.get("start_time")
         return quotes
 
     def scrape_retabet_odds(self) -> list[dict[str, Any]]:
@@ -592,13 +598,13 @@ class PeruPlaywrightScraper:
         if not self.db or not quotes:
             return 0
 
-        # Map team pair -> game_id (exact home/away or swapped lookup if event order differs)
-        game_map: dict[tuple[str, str], str] = {}
-        pair_map: dict[frozenset[str], tuple[str, str, str]] = {}
+        # Team pair -> candidate games. The same teams can meet on consecutive days, so the game is
+        # resolved with the quote's event start time instead of the pair alone.
+        games_by_pair: dict[frozenset[str], list[dict[str, Any]]] = {}
         for g in slate_games:
-            h, a, gid = g["home_team"], g["away_team"], g["game_id"]
-            game_map[(h, a)] = gid
-            pair_map[frozenset({h, a})] = (gid, h, a)
+            games_by_pair.setdefault(frozenset({g["home_team"], g["away_team"]}), []).append(
+                {**g, "start_time": g.get("game_start_time")}
+            )
 
         inserted_count = 0
         for q in quotes:
@@ -607,12 +613,14 @@ class PeruPlaywrightScraper:
             if mkt not in ("moneyline", "total_points", "spread", "player_prop"):
                 continue
             lv = q.get("line_value")
-            gid = game_map.get((q["home_team"], q["away_team"]))
-            if not gid:
-                pair_match = pair_map.get(frozenset({q["home_team"], q["away_team"]}))
-                if not pair_match:
-                    continue
-                gid, true_home, true_away = pair_match
+            game = select_slate_row_by_start_time(
+                games_by_pair.get(frozenset({q["home_team"], q["away_team"]}), []),
+                q.get("start_time"),
+            )
+            if game is None:
+                continue
+            gid, true_home, true_away = game["game_id"], game["home_team"], game["away_team"]
+            if (q["home_team"], q["away_team"]) != (true_home, true_away):
                 if mkt == "moneyline":
                     if sel == "HOME" and q["home_team"] == true_away:
                         sel = "AWAY"

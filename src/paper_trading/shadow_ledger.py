@@ -13,9 +13,11 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import hashlib
 import logging
+import math
 from typing import Any
 
 import numpy as np
+from scipy.stats import t as student_t
 
 from src.evaluation.clv import compute_bet_clv, index_closing_rows
 from src.paper_trading.settlement import calculate_settlement_outcome
@@ -231,6 +233,62 @@ def settle_pending_shadow_candidates(db: Any, settled_at: str | None = None) -> 
     return settled_out
 
 
+def clv_evidence(
+    clvs: list[float],
+    target_clv_pct: float = 1.0,
+    groups: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    How much the closing-line-value sample says about an edge.
+
+    Signals on the same game are correlated (same result, same line move), so when `groups` (game ids)
+    are given the interval is computed over per-game mean CLVs: one independent observation per game.
+
+    - `verdict`: EDGE_SUPPORTED if the 95% Student-t CI of the mean CLV is above zero, NO_EDGE if it is below
+      zero, INCONCLUSIVE otherwise (INSUFFICIENT_SAMPLE under 10 signals).
+    - `signals_needed_for_target`: number of independent units (games when grouped) that would detect a
+      true mean CLV of `target_clv_pct` with 80% power at 5% two-sided significance, given the
+      observed dispersion.
+    """
+    n_signals = len(clvs)
+    values = list(clvs)
+    if groups is not None and len(groups) == len(clvs):
+        per_game: dict[str, list[float]] = defaultdict(list)
+        for g, c in zip(groups, clvs, strict=True):
+            per_game[str(g)].append(float(c))
+        values = [float(np.mean(v)) for v in per_game.values()]
+    n = len(values)
+    if n < 2:
+        return {"n": n, "n_signals": n_signals, "verdict": "INSUFFICIENT_SAMPLE"}
+    arr = np.asarray(values, dtype=float)
+    mean = float(arr.mean())
+    sd = float(arr.std(ddof=1))
+    # Student-t quantile: with ~10 independent games a normal 1.96 interval is too narrow.
+    t_crit = float(student_t.ppf(0.975, df=n - 1))
+    half = t_crit * sd / math.sqrt(n)
+    lower, upper = mean - half, mean + half
+    if n < 10:
+        verdict = "INSUFFICIENT_SAMPLE"
+    elif lower > 0.0:
+        verdict = "EDGE_SUPPORTED"
+    elif upper < 0.0:
+        verdict = "NO_EDGE"
+    else:
+        verdict = "INCONCLUSIVE"
+    needed = math.ceil(((1.96 + 0.8416) * sd / target_clv_pct) ** 2) if sd > 0 else n
+    return {
+        "n": n,
+        "n_signals": n_signals,
+        "independent_unit": "game" if groups is not None else "signal",
+        "mean_clv_pct": round(mean, 3),
+        "ci95_pct": [round(lower, 3), round(upper, 3)],
+        "std_clv_pct": round(sd, 3),
+        "verdict": verdict,
+        "target_clv_pct": target_clv_pct,
+        "signals_needed_for_target": needed,
+    }
+
+
 def summarize_shadow_ledger(db: Any, model_version_id: str | None = None) -> dict[str, Any]:
     """Returns audit-ready summary of all shadow candidates separated from the official bankroll."""
     has_table = db.fetch_one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'shadow_candidates'")
@@ -243,7 +301,9 @@ def summarize_shadow_ledger(db: Any, model_version_id: str | None = None) -> dic
 
     resolved = [r for r in rows if r["status"] in ("WON", "LOST", "PUSH")]
     non_push = [r for r in rows if r["status"] in ("WON", "LOST")]
-    clvs = [float(r["clv_pct"]) for r in resolved if r.get("clv_pct") is not None]
+    clv_rows = [r for r in resolved if r.get("clv_pct") is not None]
+    clvs = [float(r["clv_pct"]) for r in clv_rows]
+    clv_games = [str(r["game_id"]) for r in clv_rows]
     unit_profit = round(sum(float(r.get("hypothetical_unit_profit") or 0.0) for r in resolved), 4)
     unit_roi = round((unit_profit / len(non_push)) * 100.0, 2) if non_push else 0.0
 
@@ -271,5 +331,6 @@ def summarize_shadow_ledger(db: Any, model_version_id: str | None = None) -> dic
         "mean_clv_pct": round(float(np.mean(clvs)), 3) if clvs else None,
         "clv_beat_close_rate": round(float(np.mean([c > 0.0 for c in clvs])), 4) if clvs else None,
         "clv_sample_size": len(clvs),
+        "clv_evidence": clv_evidence(clvs, groups=clv_games),
         "by_rejection_reason": dict(by_reason),
     }

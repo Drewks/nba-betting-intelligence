@@ -37,6 +37,16 @@ from src.validation.validator import parse_iso_utc
 logger = logging.getLogger(__name__)
 
 
+# ESPN has published the same DraftKings feed as "DraftKings" and "Draft Kings"; two labels made the
+# consensus count one book twice and split its quote history.
+_PROVIDER_ALIASES: dict[str, str] = {"draft kings": "DraftKings"}
+
+
+def canonical_provider_name(name: str) -> str:
+    """Maps known aliases of a book to one label (new rows only; stored history is never rewritten)."""
+    return _PROVIDER_ALIASES.get(" ".join(name.split()).lower(), name)
+
+
 class ESPNPublicAdapter(BaseNBADataAdapter):
     """
     V2 Structured Adapter for ESPN's public NBA API + optional TheOddsAPI multi-bookmaker enrichment.
@@ -354,14 +364,18 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             a_rest = self._compute_team_rest_days(away_code, matchday_date)
 
             start_dt_val = None
+            feat_avail = now_utc
             if game_start_time:
                 try:
                     start_dt_val = parse_iso_utc(game_start_time)
-                    feat_avail = (start_dt_val - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    # The pre-game feature snapshot is computed now, so for an upcoming game its
+                    # availability is the ingestion time (a "tip-off − 2 h" stamp is a time in the
+                    # future and was being reused as the decision timestamp). Games already under way
+                    # or finished keep the historical "tip-off − 2 h" convention.
+                    if parse_iso_utc(now_utc) >= start_dt_val:
+                        feat_avail = (start_dt_val - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
                 except Exception:
                     feat_avail = now_utc
-            else:
-                feat_avail = now_utc
 
             games_out.append(
                 {
@@ -428,7 +442,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             else:
                 for odds_entry in raw_odds_list:
                     provider_obj = odds_entry.get("provider") or {}
-                    provider_name = str(provider_obj.get("name") or "ESPN_Consensus")
+                    provider_name = canonical_provider_name(str(provider_obj.get("name") or "ESPN_Consensus"))
                     captured_at = odds_captured_at
 
                     home_ml = odds_entry.get("homeTeamOdds", {}).get("moneyLine")
