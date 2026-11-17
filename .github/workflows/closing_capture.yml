@@ -89,9 +89,13 @@ jobs:
             if [ "${UPCOMING}" = "0" ]; then
               echo "Sin partidos próximos; fin del bucle."; exit 0
             fi
+            FP_BEFORE="$(uv run python scripts/capture_closing_odds.py --fingerprint | tail -n 1)"
             uv run python scripts/capture_closing_odds.py --window 45
             uv run python -c "from src.storage.db import DatabaseManager; DatabaseManager('data/nba_intelligence.sqlite3').checkpoint(truncate=True)"
-            if ! git diff --quiet "${BASE}" -- data/nba_intelligence.sqlite3; then
+            FP_AFTER="$(uv run python scripts/capture_closing_odds.py --fingerprint | tail -n 1)"
+            # Opening the database rewrites its bytes, so a byte diff is not a data change: push only when
+            # the capture added rows, otherwise every iteration would add another 44 MB to state-live.
+            if [ "${FP_BEFORE}" != "${FP_AFTER}" ]; then
               # Replace only the database in state-live's own tree, and never push over a main cycle.
               git read-tree "${BASE}"
               git add -f data/nba_intelligence.sqlite3
@@ -104,6 +108,8 @@ jobs:
                 echo "state-live cambió o hay un ciclo principal en curso; se descarta esta captura."
               fi
               git read-tree HEAD
+            else
+              echo "Sin datos nuevos (${FP_AFTER}); no se publica nada."
             fi
             if [ $(( $(date +%s) - START )) -gt "$MAX_RUNTIME_SECONDS" ]; then
               echo "Tiempo máximo alcanzado; fin del bucle."; exit 0

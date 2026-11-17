@@ -25,6 +25,20 @@ logger = logging.getLogger(__name__)
 DEFAULT_WINDOW_MINUTES = 45
 
 
+# Tables a closing capture can add rows to. Opening the database rewrites its bytes even when nothing
+# changes, so "did the capture add data" is decided on row counts, never on the file.
+CAPTURE_TABLES: tuple[str, ...] = ("odds_snapshots", "quarantined_odds", "audit_row_registry")
+
+
+def capture_fingerprint(db: Any) -> str:
+    """Row counts of the tables a capture writes, as a comparable string."""
+    parts = []
+    for table in CAPTURE_TABLES:
+        row = db.fetch_one(f"SELECT COUNT(*) AS n FROM {table}")
+        parts.append(f"{table}={int(row['n']) if row else 0}")
+    return ";".join(parts)
+
+
 def games_in_closing_window(db: Any, now: datetime, window_minutes: int = DEFAULT_WINDOW_MINUTES) -> list[dict[str, Any]]:
     """Scheduled real games that have not started and start within the next `window_minutes`."""
     now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
