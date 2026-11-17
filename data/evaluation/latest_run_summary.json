@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
-  "mode": "pregame",
-  "timestamp_utc": "2026-11-17T05:14:44Z",
-  "run_manifest_id": "RUN_20261117T051444Z_EB4082CC",
+  "mode": "settle_and_calibrate",
+  "timestamp_utc": "2026-11-17T16:31:25Z",
+  "run_manifest_id": "RUN_20261117T163125Z_78C48938",
   "run_manifest": {
-    "run_id": "RUN_20261117T051444Z_EB4082CC",
+    "run_id": "RUN_20261117T163125Z_78C48938",
     "commit_sha": "ff9821783712d3607b1ac650cd67933acb62be8f",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -72,16 +72,16 @@
     "main_branch_db_policy": "FROZEN_CI_BASELINE"
   },
   "ingested_dates": [
+    "2026-11-15",
     "2026-11-16",
-    "2026-11-17",
-    "2026-11-18"
+    "2026-11-17"
   ],
   "closing_lines_promoted": 0,
-  "official_injury_report_games": 4,
+  "official_injury_report_games": 0,
   "bets_settled_in_cycle": 0,
   "shadow_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
-  "predictions_generated": 26,
+  "predictions_generated": 0,
   "active_calibration_methods": {
     "moneyline": "isotonic",
     "total_points": "logistic",
@@ -414,12 +414,12 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 8,
+      "events_found_today": 5,
       "includes_draftkings_pregame_odds": true
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-17_12_00AM.pdf",
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-17_11_30AM.pdf",
       "players_listed": 33
     },
     "sportradar_api": {
@@ -436,7 +436,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-17T05:14:50Z",
+      "extracted_at": "2026-11-17T16:31:33Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -444,57 +444,57 @@
   "visual_context": {
     "pixelrag_installed": true,
     "external_mcp_server_installed": false,
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
     "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-    "indexed_documents_count": 124,
+    "indexed_documents_count": 105,
     "top_retrieved_context": [
       {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 16: Watson left Monday's 126-115 win over Chicago due to a head injury and did not return.",
-        "relevance_score": 0.3072,
-        "captured_at": "2026-11-17T05:14:52Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "PHI Jaylen Brown (SF) Day To Day (Hamstring): Brown did not return to Monday's (Nov. 16) game against the Nets.",
+        "relevance_score": 0.2218,
+        "captured_at": "2026-11-16"
       },
       {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Kingston Flemings G Nov 18 Day-To-Day Nov 16: Flemings (back) has been ruled out for Sunday's game against the Bucks.",
-        "relevance_score": 0.2329,
-        "captured_at": "2026-11-17T05:14:52Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Patrick Williams (PF) Day To Day (Finger): Williams did not return to Monday's (Nov. 16) game versus the Cavaliers.",
+        "relevance_score": 0.2172,
+        "captured_at": "2026-11-16"
       },
       {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Santi Aldama F Nov 18 Day-To-Day Nov 16: Aldama (ankle) is out for Sunday's game against the Celtics.",
-        "relevance_score": 0.2316,
-        "captured_at": "2026-11-17T05:14:52Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Jalen Smith (C) Day To Day (Head): Smith did not return to Monday's (Nov. 16) game versus the Cavaliers.",
+        "relevance_score": 0.2145,
+        "captured_at": "2026-11-16"
       },
       {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Jaylon Tyson G Nov 18 Day-To-Day Nov 16: Tyson (ankle) has been ruled out for Monday's game against Chicago.",
-        "relevance_score": 0.2276,
-        "captured_at": "2026-11-17T05:14:52Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MIN Jonathan Kuminga (PF) Day To Day (Shoulder): Kuminga did not return to Monday's (Nov. 16) game versus the Trail Blazers.",
+        "relevance_score": 0.2011,
+        "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play in Sunday's (Nov. 15) game against the Kings.",
-        "relevance_score": 0.2247,
+        "relevance_score": 0.174,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "ATL Kingston Flemings (PG) Day To Day (Back): Flemings did not play in Sunday's (Nov. 15) game against the Bucks.",
-        "relevance_score": 0.2241,
-        "captured_at": "2026-11-16"
-      },
-      {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Max Christie G Nov 18 Day-To-Day Nov 16: Christie (ankle) has been ruled out for Sunday's game against the Celtics.",
-        "relevance_score": 0.2232,
-        "captured_at": "2026-11-17T05:14:52Z"
+        "snippet": "PHI LeBron James (SF) Day To Day (Back): James did not play in Monday's (Nov. 16) game against the Nets.",
+        "relevance_score": 0.1724,
+        "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale did not play in Sunday's (Nov. 15) game against the Bucks.",
-        "relevance_score": 0.2231,
-        "captured_at": "2026-11-16"
+        "snippet": "NOP Dejounte Murray (PG) Day To Day (Ankle): Murray did not play in Monday's game (Nov. 16) against the Warriors.",
+        "relevance_score": 0.1682,
+        "captured_at": "2026-11-17"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play in Monday's game (Nov. 16) against the Cavaliers.",
+        "relevance_score": 0.1678,
+        "captured_at": "2026-11-17"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -505,7 +505,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261117T051444Z_EB4082CC",
+    "run_manifest_id": "RUN_20261117T163125Z_78C48938",
     "commit_sha": "ff9821783712d3607b1ac650cd67933acb62be8f",
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "database_role": {
@@ -518,7 +518,7 @@
     "sportradar_status": "CONFIGURED_RATE_LIMITED",
     "nba_stats_status": "FILTERED_BY_AKAMAI_TLS_WITHOUT_BROWSER_SESSION",
     "playwright_status": "OPERATIONAL",
-    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
+    "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
     "obsidian_vault_path": "/home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA"
   }
 }
