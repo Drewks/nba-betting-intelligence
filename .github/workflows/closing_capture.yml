@@ -20,7 +20,8 @@ permissions:
   contents: read
 
 # A separate group: a capture loop lasts hours and must not hold up the main cycle. Writes to
-# state-live are serialised instead by waiting for any running main cycle before each capture/push.
+# state-live are serialised instead by waiting for any running state-live writer (main cycle, weekly
+# backtest) before each capture and again before each push.
 concurrency:
   group: nba-closing-capture
   cancel-in-progress: false
@@ -34,7 +35,8 @@ jobs:
       actions: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MAIN_WORKFLOW: nba_cloud_automation.yml
+      # Every other workflow that writes state-live: the loop never captures or pushes while one runs.
+      STATE_WRITER_WORKFLOWS: "nba_cloud_automation.yml weekly_backtest.yml"
       LOOP_INTERVAL_SECONDS: "600"
       HORIZON_MINUTES: "240"
       MAX_RUNTIME_SECONDS: "18900"
@@ -57,13 +59,18 @@ jobs:
       - name: 3. Capturar cierres en bucle mientras haya partidos próximos
         run: |
           main_cycle_busy() {
-            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$MAIN_WORKFLOW" --limit 5 \
-              --json status --jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length'
+            busy=0
+            for wf in $STATE_WRITER_WORKFLOWS; do
+              n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --limit 5 \
+                --json status --jq '[.[] | select(.status == "in_progress" or .status == "queued")] | length')
+              busy=$((busy + ${n:-0}))
+            done
+            echo "$busy"
           }
           wait_for_main_cycle() {
             for _ in $(seq 1 30); do
               if [ "$(main_cycle_busy)" = "0" ]; then return 0; fi
-              echo "Ciclo principal en curso; espero 60 s."
+              echo "Otro escritor de state-live en curso (ciclo principal o backtest semanal); espero 60 s."
               sleep 60
             done
             return 1

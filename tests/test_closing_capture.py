@@ -103,6 +103,10 @@ def test_closing_workflow_is_event_driven_and_never_pushes_over_a_main_cycle() -
     assert wf["concurrency"]["group"] != main["concurrency"]["group"]
     steps_text = "\n".join(str(s.get("run", "")) for s in next(iter(wf["jobs"].values()))["steps"])
     assert "wait_for_main_cycle" in steps_text
+    job_env = next(iter(wf["jobs"].values()))["env"]
+    # every workflow that writes state-live is waited for, not only the main cycle
+    for writer in ("nba_cloud_automation.yml", "weekly_backtest.yml"):
+        assert writer in job_env["STATE_WRITER_WORKFLOWS"]
     assert '[ "$(main_cycle_busy)" = "0" ]' in steps_text  # re-checked right before pushing
     assert 'git read-tree "${BASE}"' in steps_text
     assert "checkpoint(truncate=True)" in steps_text
