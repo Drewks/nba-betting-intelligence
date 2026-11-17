@@ -90,17 +90,37 @@ def test_no_games_means_no_network_and_no_writes(tmp_path: Path) -> None:
     assert summary["games_in_window"] == 0 and collector.calls == []
 
 
-def test_closing_workflow_avoids_main_cycle_minutes_and_shares_concurrency() -> None:
+def test_closing_workflow_is_event_driven_and_never_pushes_over_a_main_cycle() -> None:
     wf = yaml.safe_load((PROJECT_ROOT / ".github" / "workflows" / "closing_capture.yml").read_text(encoding="utf-8"))
     main = yaml.safe_load((PROJECT_ROOT / ".github" / "workflows" / "nba_cloud_automation.yml").read_text(encoding="utf-8"))
     triggers = wf.get("on") or wf.get(True)
+    # Started when a main cycle finishes (GitHub's high-frequency cron proved unreliable)
+    assert main["name"] in triggers["workflow_run"]["workflows"]
     minutes = {c["cron"].split()[0] for c in triggers["schedule"]}
     main_minutes = {c["cron"].split()[0] for c in (main.get("on") or main.get(True))["schedule"]}
     assert not any(m in mm.split(",") for mm in minutes for m in main_minutes)
-    assert wf["concurrency"]["group"] == main["concurrency"]["group"]
+    # A multi-hour loop must not hold up the main cycle: own concurrency group, explicit waiting instead
+    assert wf["concurrency"]["group"] != main["concurrency"]["group"]
     steps_text = "\n".join(str(s.get("run", "")) for s in next(iter(wf["jobs"].values()))["steps"])
-    assert 'git read-tree "${STATE_BASE_SHA}"' in steps_text
+    assert "wait_for_main_cycle" in steps_text
+    assert '[ "$(main_cycle_busy)" = "0" ]' in steps_text  # re-checked right before pushing
+    assert 'git read-tree "${BASE}"' in steps_text
     assert "checkpoint(truncate=True)" in steps_text
+    assert "--count-upcoming" in steps_text
+
+
+def test_count_upcoming_cli(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    db = DatabaseManager(tmp_path / "count.sqlite3")
+    _seed_game(db, "G_FAR", "2099-01-01T00:00:00Z")
+    out = subprocess.run(
+        [sys.executable, str(PROJECT_ROOT / "scripts" / "capture_closing_odds.py"), "--db", str(tmp_path / "count.sqlite3"),
+         "--count-upcoming", "240"],
+        capture_output=True, text=True, check=True,
+    )
+    assert out.stdout.strip().splitlines()[-1] == "0"
 
 
 def test_weekly_backtest_report_survives_the_main_cycle() -> None:

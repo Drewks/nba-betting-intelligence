@@ -21,7 +21,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ingestion.closing_capture import DEFAULT_WINDOW_MINUTES, capture_closing_window
+from datetime import datetime, timezone
+
+from src.ingestion.closing_capture import DEFAULT_WINDOW_MINUTES, capture_closing_window, games_in_closing_window
 from src.storage.db import DatabaseManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -31,9 +33,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Capture closing lines for games about to start.")
     parser.add_argument("--db", default=str(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3"))
     parser.add_argument("--window", type=int, default=DEFAULT_WINDOW_MINUTES, help="Minutes ahead of now")
+    parser.add_argument(
+        "--count-upcoming",
+        type=int,
+        metavar="MINUTES",
+        help="Only print how many scheduled games start within MINUTES (used by the capture loop)",
+    )
     args = parser.parse_args()
 
     db = DatabaseManager(args.db)
+    if args.count_upcoming is not None:
+        print(len(games_in_closing_window(db, datetime.now(timezone.utc), args.count_upcoming)))
+        return
     summary = capture_closing_window(db, window_minutes=args.window)
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 
