@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-17T04:29:51Z",
-  "run_manifest_id": "RUN_20261117T042951Z_54906000",
+  "timestamp_utc": "2026-11-17T05:14:44Z",
+  "run_manifest_id": "RUN_20261117T051444Z_EB4082CC",
   "run_manifest": {
-    "run_id": "RUN_20261117T042951Z_54906000",
+    "run_id": "RUN_20261117T051444Z_EB4082CC",
     "commit_sha": "ff9821783712d3607b1ac650cd67933acb62be8f",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -76,12 +76,12 @@
     "2026-11-17",
     "2026-11-18"
   ],
-  "closing_lines_promoted": 70,
+  "closing_lines_promoted": 0,
   "official_injury_report_games": 4,
-  "bets_settled_in_cycle": 2,
-  "shadow_settled_in_cycle": 10,
+  "bets_settled_in_cycle": 0,
+  "shadow_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
-  "predictions_generated": 24,
+  "predictions_generated": 26,
   "active_calibration_methods": {
     "moneyline": "isotonic",
     "total_points": "logistic",
@@ -124,8 +124,8 @@
     "placed_parlays_count": 0
   },
   "shadow_ledger": {
-    "total_candidates": 52,
-    "pending": 5,
+    "total_candidates": 57,
+    "pending": 10,
     "settled": 47,
     "won": 32,
     "lost": 15,
@@ -151,21 +151,21 @@
     },
     "by_rejection_reason": {
       "EV_BELOW_THRESHOLD": {
-        "total": 27,
+        "total": 30,
         "settled": 24,
         "won": 12,
         "lost": 12,
         "unit_profit": -3.9192
       },
       "MODEL_MARKET_DISAGREEMENT": {
-        "total": 2,
+        "total": 3,
         "settled": 1,
         "won": 0,
         "lost": 1,
         "unit_profit": -1.0
       },
       "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-        "total": 2,
+        "total": 3,
         "settled": 1,
         "won": 1,
         "lost": 0,
@@ -238,10 +238,10 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 580,
+        "predictions_count": 606,
         "final_game_predictions": 550,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 416,
+        "m012_cal_probs_count": 442,
         "final_with_m012_cal_probs_count": 386,
         "settled_bets_count": 8,
         "first_emitted_at": "2026-11-07T23:20:56Z",
@@ -333,8 +333,8 @@
       }
     },
     "shadow_ledger": {
-      "total_candidates": 52,
-      "pending": 5,
+      "total_candidates": 57,
+      "pending": 10,
       "settled": 47,
       "won": 32,
       "lost": 15,
@@ -360,21 +360,21 @@
       },
       "by_rejection_reason": {
         "EV_BELOW_THRESHOLD": {
-          "total": 27,
+          "total": 30,
           "settled": 24,
           "won": 12,
           "lost": 12,
           "unit_profit": -3.9192
         },
         "MODEL_MARKET_DISAGREEMENT": {
-          "total": 2,
+          "total": 3,
           "settled": 1,
           "won": 0,
           "lost": 1,
           "unit_profit": -1.0
         },
         "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-          "total": 2,
+          "total": 3,
           "settled": 1,
           "won": 1,
           "lost": 0,
@@ -419,8 +419,8 @@
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-16_11_00PM.pdf",
-      "players_listed": 112
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-17_12_00AM.pdf",
+      "players_listed": 33
     },
     "sportradar_api": {
       "credentials_configured": true,
@@ -436,7 +436,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-17T04:30:00Z",
+      "extracted_at": "2026-11-17T05:14:50Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -452,30 +452,30 @@
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 16: Watson left Monday's 126-115 win over Chicago due to a head injury and did not return.",
         "relevance_score": 0.3072,
-        "captured_at": "2026-11-17T04:30:01Z"
+        "captured_at": "2026-11-17T05:14:52Z"
       },
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Kingston Flemings G Nov 18 Day-To-Day Nov 16: Flemings (back) has been ruled out for Sunday's game against the Bucks.",
         "relevance_score": 0.2329,
-        "captured_at": "2026-11-17T04:30:01Z"
+        "captured_at": "2026-11-17T05:14:52Z"
       },
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Santi Aldama F Nov 18 Day-To-Day Nov 16: Aldama (ankle) is out for Sunday's game against the Celtics.",
-        "relevance_score": 0.232,
-        "captured_at": "2026-11-17T04:30:01Z"
+        "relevance_score": 0.2316,
+        "captured_at": "2026-11-17T05:14:52Z"
       },
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Jaylon Tyson G Nov 18 Day-To-Day Nov 16: Tyson (ankle) has been ruled out for Monday's game against Chicago.",
-        "relevance_score": 0.2279,
-        "captured_at": "2026-11-17T04:30:01Z"
+        "relevance_score": 0.2276,
+        "captured_at": "2026-11-17T05:14:52Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play in Sunday's (Nov. 15) game against the Kings.",
-        "relevance_score": 0.2248,
+        "relevance_score": 0.2247,
         "captured_at": "2026-11-16"
       },
       {
@@ -487,8 +487,8 @@
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Max Christie G Nov 18 Day-To-Day Nov 16: Christie (ankle) has been ruled out for Sunday's game against the Celtics.",
-        "relevance_score": 0.2236,
-        "captured_at": "2026-11-17T04:30:01Z"
+        "relevance_score": 0.2232,
+        "captured_at": "2026-11-17T05:14:52Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
@@ -505,7 +505,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261117T042951Z_54906000",
+    "run_manifest_id": "RUN_20261117T051444Z_EB4082CC",
     "commit_sha": "ff9821783712d3607b1ac650cd67933acb62be8f",
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "database_role": {

@@ -3,23 +3,23 @@
     "game_id": "ESPN_401910002_2026-11-18_NYK_AT_TOR",
     "matchup": "New York Knicks @ Toronto Raptors (NYK @ TOR)",
     "game_start_time": "2026-11-18T00:30:00Z",
-    "captured_at_utc": "2026-11-17T04:30:09Z",
-    "hora_captura_peru": "2026-11-16 23:30 PET",
+    "captured_at_utc": "2026-11-17T05:14:58Z",
+    "hora_captura_peru": "2026-11-17 00:14 PET",
     "best_home": {
       "book": "Pinnacle [LIVE_API]",
       "odds": 2.29
     },
     "best_away": {
       "book": "Pinnacle [LIVE_API]",
-      "odds": 1.6897
+      "odds": 1.6849
     },
-    "synthetic_margin_pct": 2.85,
+    "synthetic_margin_pct": 3.02,
     "quotes": {
       "betano_pe": {
         "book_id": "betano_pe",
         "book_name": "Betano Perú",
-        "home_odds": 2.263,
-        "away_odds": 1.658,
+        "home_odds": 2.268,
+        "away_odds": 1.656,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -27,7 +27,24 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
+        "source": "ESTIMATE (derived from benchmark, not observed)",
+        "is_observed": false,
+        "source_type": "DERIVED"
+      },
+      "retabet_pe": {
+        "book_id": "retabet_pe",
+        "book_name": "RETAbet Perú",
+        "home_odds": 2.261,
+        "away_odds": 1.651,
+        "spread_home_line": null,
+        "spread_home_odds": null,
+        "spread_away_odds": null,
+        "total_points_line": null,
+        "total_over_odds": null,
+        "total_under_odds": null,
+        "player_props": null,
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -36,7 +53,7 @@
         "book_id": "coolbet_pe",
         "book_name": "Coolbet Perú",
         "home_odds": 2.256,
-        "away_odds": 1.664,
+        "away_odds": 1.66,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -44,24 +61,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
-        "source": "ESTIMATE (derived from benchmark, not observed)",
-        "is_observed": false,
-        "source_type": "DERIVED"
-      },
-      "retabet_pe": {
-        "book_id": "retabet_pe",
-        "book_name": "RETAbet Perú",
-        "home_odds": 2.256,
-        "away_odds": 1.654,
-        "spread_home_line": null,
-        "spread_home_odds": null,
-        "spread_away_odds": null,
-        "total_points_line": null,
-        "total_over_odds": null,
-        "total_under_odds": null,
-        "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -69,24 +69,7 @@
       "betsson_pe": {
         "book_id": "betsson_pe",
         "book_name": "Betsson Perú",
-        "home_odds": 2.248,
-        "away_odds": 1.648,
-        "spread_home_line": null,
-        "spread_home_odds": null,
-        "spread_away_odds": null,
-        "total_points_line": null,
-        "total_over_odds": null,
-        "total_under_odds": null,
-        "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
-        "source": "ESTIMATE (derived from benchmark, not observed)",
-        "is_observed": false,
-        "source_type": "DERIVED"
-      },
-      "inkabet": {
-        "book_id": "inkabet",
-        "book_name": "Inkabet",
-        "home_odds": 2.243,
+        "home_odds": 2.252,
         "away_odds": 1.645,
         "spread_home_line": null,
         "spread_home_odds": null,
@@ -95,7 +78,24 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
+        "source": "ESTIMATE (derived from benchmark, not observed)",
+        "is_observed": false,
+        "source_type": "DERIVED"
+      },
+      "inkabet": {
+        "book_id": "inkabet",
+        "book_name": "Inkabet",
+        "home_odds": 2.248,
+        "away_odds": 1.642,
+        "spread_home_line": null,
+        "spread_home_odds": null,
+        "spread_away_odds": null,
+        "total_points_line": null,
+        "total_over_odds": null,
+        "total_under_odds": null,
+        "player_props": null,
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -103,8 +103,8 @@
       "doradobet": {
         "book_id": "doradobet",
         "book_name": "Doradobet Perú",
-        "home_odds": 2.241,
-        "away_odds": 1.643,
+        "home_odds": 2.246,
+        "away_odds": 1.641,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -112,7 +112,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -120,8 +120,8 @@
       "apuesta_total": {
         "book_id": "apuesta_total",
         "book_name": "Apuesta Total",
-        "home_odds": 2.23,
-        "away_odds": 1.636,
+        "home_odds": 2.235,
+        "away_odds": 1.633,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -129,7 +129,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -137,8 +137,8 @@
       "te_apuesto": {
         "book_id": "te_apuesto",
         "book_name": "Te Apuesto",
-        "home_odds": 2.213,
-        "away_odds": 1.624,
+        "home_odds": 2.218,
+        "away_odds": 1.621,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -146,7 +146,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -155,7 +155,7 @@
         "book_id": "1xbet_pe",
         "book_name": "1xBet Perú",
         "home_odds": 2.279,
-        "away_odds": 1.681,
+        "away_odds": 1.676,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -163,7 +163,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -181,14 +181,6 @@
         "total_under_odds": 1.82,
         "player_props": [
           {
-            "player_name": "Mikal Bridges",
-            "prop_category": "3PM",
-            "line_value": 0.5,
-            "over_odds": 1.38,
-            "under_odds": 1.91,
-            "book_name": "Te Apuesto Perú"
-          },
-          {
             "player_name": "Jamal Shead",
             "prop_category": "3PM",
             "line_value": 0.5,
@@ -201,7 +193,15 @@
             "prop_category": "3PM",
             "line_value": 0.5,
             "over_odds": 1.35,
-            "under_odds": 1.96,
+            "under_odds": 1.97,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Mikal Bridges",
+            "prop_category": "3PM",
+            "line_value": 0.5,
+            "over_odds": 1.39,
+            "under_odds": 1.89,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -213,19 +213,19 @@
             "book_name": "Te Apuesto Perú"
           },
           {
-            "player_name": "Karl-Anthony Towns",
-            "prop_category": "3PM",
-            "line_value": 1.5,
-            "over_odds": 1.59,
-            "under_odds": 1.61,
-            "book_name": "Te Apuesto Perú"
-          },
-          {
             "player_name": "RJ Barrett",
             "prop_category": "3PM",
             "line_value": 1.5,
             "over_odds": 1.53,
             "under_odds": 1.68,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Karl-Anthony Towns",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.6,
+            "under_odds": 1.6,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -248,16 +248,8 @@
             "player_name": "Josh Hart",
             "prop_category": "3PM",
             "line_value": 1.5,
-            "over_odds": 1.92,
+            "over_odds": 1.93,
             "under_odds": 1.37,
-            "book_name": "Te Apuesto Perú"
-          },
-          {
-            "player_name": "Ja'Kobe Walter",
-            "prop_category": "3PM",
-            "line_value": 2.5,
-            "over_odds": 1.88,
-            "under_odds": 1.39,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -266,6 +258,14 @@
             "line_value": 2.5,
             "over_odds": 1.79,
             "under_odds": 1.45,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Ja'Kobe Walter",
+            "prop_category": "3PM",
+            "line_value": 2.5,
+            "over_odds": 1.88,
+            "under_odds": 1.39,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -288,8 +288,16 @@
             "player_name": "Miles McBride",
             "prop_category": "PTS",
             "line_value": 6.5,
-            "over_odds": 1.57,
-            "under_odds": 1.63,
+            "over_odds": 1.56,
+            "under_odds": 1.65,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Josh Hart",
+            "prop_category": "PTS",
+            "line_value": 7.5,
+            "over_odds": 1.55,
+            "under_odds": 1.65,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -304,8 +312,8 @@
             "player_name": "Mikal Bridges",
             "prop_category": "PTS",
             "line_value": 8.5,
-            "over_odds": 1.63,
-            "under_odds": 1.57,
+            "over_odds": 1.61,
+            "under_odds": 1.59,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -314,14 +322,6 @@
             "line_value": 8.5,
             "over_odds": 1.54,
             "under_odds": 1.66,
-            "book_name": "Te Apuesto Perú"
-          },
-          {
-            "player_name": "Josh Hart",
-            "prop_category": "PTS",
-            "line_value": 8.5,
-            "over_odds": 1.68,
-            "under_odds": 1.53,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -352,8 +352,8 @@
             "player_name": "OG Anunoby",
             "prop_category": "PTS",
             "line_value": 16.5,
-            "over_odds": 1.57,
-            "under_odds": 1.63,
+            "over_odds": 1.56,
+            "under_odds": 1.64,
             "book_name": "Te Apuesto Perú"
           },
           {
@@ -389,7 +389,7 @@
             "book_name": "Te Apuesto Perú"
           }
         ],
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "Te Apuesto API Direct",
         "is_observed": true,
         "source_type": "OBSERVED"
@@ -398,7 +398,7 @@
         "book_id": "sharp_benchmark",
         "book_name": "Pinnacle [LIVE_API]",
         "home_odds": 2.29,
-        "away_odds": 1.6897,
+        "away_odds": 1.6849,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -406,7 +406,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:29:51Z",
+        "captured_at": "2026-11-17T05:14:43Z",
         "source": "Stored observed sharp quote",
         "is_observed": false,
         "source_type": "OBSERVED"
@@ -421,8 +421,8 @@
     "game_id": "ESPN_401910004_2026-11-18_DET_AT_SAS",
     "matchup": "Detroit Pistons @ San Antonio Spurs (DET @ SAS)",
     "game_start_time": "2026-11-18T01:00:00Z",
-    "captured_at_utc": "2026-11-17T04:30:09Z",
-    "hora_captura_peru": "2026-11-16 23:30 PET",
+    "captured_at_utc": "2026-11-17T05:14:58Z",
+    "hora_captura_peru": "2026-11-17 00:14 PET",
     "best_home": {
       "book": "Pinnacle [LIVE_API]",
       "odds": 1.2899
@@ -445,7 +445,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -462,7 +462,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -479,7 +479,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -496,7 +496,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -513,7 +513,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -530,7 +530,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -547,7 +547,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -564,7 +564,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -581,7 +581,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -595,10 +595,187 @@
         "spread_home_odds": 1.83,
         "spread_away_odds": 1.81,
         "total_points_line": 221.5,
-        "total_over_odds": 1.82,
-        "total_under_odds": 1.82,
-        "player_props": [],
-        "captured_at": "2026-11-17T04:30:09Z",
+        "total_over_odds": 1.79,
+        "total_under_odds": 1.84,
+        "player_props": [
+          {
+            "player_name": "Daniss Jenkins",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.5,
+            "under_odds": 1.71,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Devin Vassell",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.54,
+            "under_odds": 1.67,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Victor Wembanyama",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.43,
+            "under_odds": 1.82,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Dylan Harper",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.84,
+            "under_odds": 1.41,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Stephon Castle",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.63,
+            "under_odds": 1.57,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "John Collins",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.94,
+            "under_odds": 1.36,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "De'Aaron Fox",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.92,
+            "under_odds": 1.37,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Julian Champagnie",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.4,
+            "under_odds": 1.87,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Kevin Huerter",
+            "prop_category": "3PM",
+            "line_value": 1.5,
+            "over_odds": 1.39,
+            "under_odds": 1.88,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Cade Cunningham",
+            "prop_category": "3PM",
+            "line_value": 2.5,
+            "over_odds": 1.85,
+            "under_odds": 1.41,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Julian Champagnie",
+            "prop_category": "PTS",
+            "line_value": 8.5,
+            "over_odds": 1.63,
+            "under_odds": 1.57,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Keldon Johnson",
+            "prop_category": "PTS",
+            "line_value": 8.5,
+            "over_odds": 1.57,
+            "under_odds": 1.63,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Ausar Thompson",
+            "prop_category": "PTS",
+            "line_value": 10.5,
+            "over_odds": 1.66,
+            "under_odds": 1.54,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Devin Vassell",
+            "prop_category": "PTS",
+            "line_value": 10.5,
+            "over_odds": 1.62,
+            "under_odds": 1.58,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Paul Reed",
+            "prop_category": "PTS",
+            "line_value": 11.5,
+            "over_odds": 1.59,
+            "under_odds": 1.61,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "John Collins",
+            "prop_category": "PTS",
+            "line_value": 12.5,
+            "over_odds": 1.64,
+            "under_odds": 1.56,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Kevin Huerter",
+            "prop_category": "PTS",
+            "line_value": 12.5,
+            "over_odds": 1.61,
+            "under_odds": 1.59,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Daniss Jenkins",
+            "prop_category": "PTS",
+            "line_value": 13.5,
+            "over_odds": 1.55,
+            "under_odds": 1.66,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "De'Aaron Fox",
+            "prop_category": "PTS",
+            "line_value": 13.5,
+            "over_odds": 1.59,
+            "under_odds": 1.61,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Stephon Castle",
+            "prop_category": "PTS",
+            "line_value": 15.5,
+            "over_odds": 1.55,
+            "under_odds": 1.66,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Dylan Harper",
+            "prop_category": "PTS",
+            "line_value": 16.5,
+            "over_odds": 1.65,
+            "under_odds": 1.56,
+            "book_name": "Te Apuesto Perú"
+          },
+          {
+            "player_name": "Victor Wembanyama",
+            "prop_category": "PTS",
+            "line_value": 27.5,
+            "over_odds": 1.56,
+            "under_odds": 1.64,
+            "book_name": "Te Apuesto Perú"
+          }
+        ],
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "Te Apuesto API Direct",
         "is_observed": true,
         "source_type": "OBSERVED"
@@ -615,14 +792,14 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:29:51Z",
+        "captured_at": "2026-11-17T05:14:43Z",
         "source": "Stored observed sharp quote",
         "is_observed": false,
         "source_type": "OBSERVED"
       }
     },
     "observed_quotes_count": 1,
-    "player_props_count": 0,
+    "player_props_count": 22,
     "stale_lines": [],
     "surebet": null
   },
@@ -630,23 +807,23 @@
     "game_id": "ESPN_401910006_2026-11-18_UTA_AT_LAC",
     "matchup": "Utah Jazz @ LA Clippers (UTA @ LAC)",
     "game_start_time": "2026-11-18T03:30:00Z",
-    "captured_at_utc": "2026-11-17T04:30:09Z",
-    "hora_captura_peru": "2026-11-16 23:30 PET",
+    "captured_at_utc": "2026-11-17T05:14:58Z",
+    "hora_captura_peru": "2026-11-17 00:14 PET",
     "best_home": {
       "book": "Pinnacle [LIVE_API]",
-      "odds": 1.4608
+      "odds": 1.4505
     },
     "best_away": {
       "book": "Pinnacle [LIVE_API]",
-      "odds": 2.87
+      "odds": 2.91
     },
-    "synthetic_margin_pct": 3.3,
+    "synthetic_margin_pct": 3.31,
     "quotes": {
       "coolbet_pe": {
         "book_id": "coolbet_pe",
         "book_name": "Coolbet Perú",
-        "home_odds": 1.439,
-        "away_odds": 2.827,
+        "home_odds": 1.429,
+        "away_odds": 2.866,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -654,7 +831,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -662,8 +839,8 @@
       "betano_pe": {
         "book_id": "betano_pe",
         "book_name": "Betano Perú",
-        "home_odds": 1.436,
-        "away_odds": 2.876,
+        "home_odds": 1.425,
+        "away_odds": 2.919,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -671,7 +848,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -679,8 +856,8 @@
       "retabet_pe": {
         "book_id": "retabet_pe",
         "book_name": "RETAbet Perú",
-        "home_odds": 1.432,
-        "away_odds": 2.868,
+        "home_odds": 1.421,
+        "away_odds": 2.91,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -688,7 +865,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -696,8 +873,8 @@
       "betsson_pe": {
         "book_id": "betsson_pe",
         "book_name": "Betsson Perú",
-        "home_odds": 1.426,
-        "away_odds": 2.856,
+        "home_odds": 1.416,
+        "away_odds": 2.898,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -705,7 +882,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -713,8 +890,8 @@
       "inkabet": {
         "book_id": "inkabet",
         "book_name": "Inkabet",
-        "home_odds": 1.424,
-        "away_odds": 2.851,
+        "home_odds": 1.414,
+        "away_odds": 2.893,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -722,7 +899,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -730,8 +907,8 @@
       "doradobet": {
         "book_id": "doradobet",
         "book_name": "Doradobet Perú",
-        "home_odds": 1.423,
-        "away_odds": 2.848,
+        "home_odds": 1.413,
+        "away_odds": 2.89,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -739,7 +916,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -747,8 +924,8 @@
       "apuesta_total": {
         "book_id": "apuesta_total",
         "book_name": "Apuesta Total",
-        "home_odds": 1.416,
-        "away_odds": 2.834,
+        "home_odds": 1.406,
+        "away_odds": 2.875,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -756,7 +933,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -764,8 +941,8 @@
       "te_apuesto": {
         "book_id": "te_apuesto",
         "book_name": "Te Apuesto",
-        "home_odds": 1.406,
-        "away_odds": 2.812,
+        "home_odds": 1.396,
+        "away_odds": 2.853,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -773,7 +950,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -781,8 +958,8 @@
       "1xbet_pe": {
         "book_id": "1xbet_pe",
         "book_name": "1xBet Perú",
-        "home_odds": 1.453,
-        "away_odds": 2.856,
+        "home_odds": 1.443,
+        "away_odds": 2.895,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -790,7 +967,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -804,10 +981,10 @@
         "spread_home_odds": 1.8,
         "spread_away_odds": 1.84,
         "total_points_line": 225.5,
-        "total_over_odds": 1.84,
-        "total_under_odds": 1.8,
+        "total_over_odds": 1.82,
+        "total_under_odds": 1.82,
         "player_props": [],
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "Te Apuesto API Direct",
         "is_observed": true,
         "source_type": "OBSERVED"
@@ -815,8 +992,8 @@
       "sharp_benchmark": {
         "book_id": "sharp_benchmark",
         "book_name": "Pinnacle [LIVE_API]",
-        "home_odds": 1.4608,
-        "away_odds": 2.87,
+        "home_odds": 1.4505,
+        "away_odds": 2.91,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -824,7 +1001,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:29:51Z",
+        "captured_at": "2026-11-17T05:14:43Z",
         "source": "Stored observed sharp quote",
         "is_observed": false,
         "source_type": "OBSERVED"
@@ -839,23 +1016,23 @@
     "game_id": "ESPN_401910005_2026-11-18_CHA_AT_LAL",
     "matchup": "Charlotte Hornets @ Los Angeles Lakers (CHA @ LAL)",
     "game_start_time": "2026-11-18T04:00:00Z",
-    "captured_at_utc": "2026-11-17T04:30:09Z",
-    "hora_captura_peru": "2026-11-16 23:30 PET",
+    "captured_at_utc": "2026-11-17T05:14:58Z",
+    "hora_captura_peru": "2026-11-17 00:14 PET",
     "best_home": {
       "book": "Pinnacle [LIVE_API]",
-      "odds": 1.3096
+      "odds": 1.3115
     },
     "best_away": {
       "book": "Pinnacle [LIVE_API]",
-      "odds": 3.67
+      "odds": 3.66
     },
-    "synthetic_margin_pct": 3.61,
+    "synthetic_margin_pct": 3.57,
     "quotes": {
       "coolbet_pe": {
         "book_id": "coolbet_pe",
         "book_name": "Coolbet Perú",
-        "home_odds": 1.29,
-        "away_odds": 3.615,
+        "home_odds": 1.292,
+        "away_odds": 3.605,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -863,7 +1040,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -871,8 +1048,8 @@
       "betano_pe": {
         "book_id": "betano_pe",
         "book_name": "Betano Perú",
-        "home_odds": 1.288,
-        "away_odds": 3.748,
+        "home_odds": 1.289,
+        "away_odds": 3.734,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -880,7 +1057,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -888,8 +1065,8 @@
       "retabet_pe": {
         "book_id": "retabet_pe",
         "book_name": "RETAbet Perú",
-        "home_odds": 1.284,
-        "away_odds": 3.736,
+        "home_odds": 1.286,
+        "away_odds": 3.723,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -897,7 +1074,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -905,8 +1082,8 @@
       "betsson_pe": {
         "book_id": "betsson_pe",
         "book_name": "Betsson Perú",
-        "home_odds": 1.28,
-        "away_odds": 3.721,
+        "home_odds": 1.281,
+        "away_odds": 3.708,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -914,7 +1091,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -922,8 +1099,8 @@
       "inkabet": {
         "book_id": "inkabet",
         "book_name": "Inkabet",
-        "home_odds": 1.278,
-        "away_odds": 3.713,
+        "home_odds": 1.279,
+        "away_odds": 3.7,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -931,7 +1108,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -939,8 +1116,8 @@
       "doradobet": {
         "book_id": "doradobet",
         "book_name": "Doradobet Perú",
-        "home_odds": 1.276,
-        "away_odds": 3.71,
+        "home_odds": 1.278,
+        "away_odds": 3.696,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -948,7 +1125,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -956,8 +1133,8 @@
       "apuesta_total": {
         "book_id": "apuesta_total",
         "book_name": "Apuesta Total",
-        "home_odds": 1.271,
-        "away_odds": 3.691,
+        "home_odds": 1.272,
+        "away_odds": 3.678,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -965,7 +1142,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -973,8 +1150,8 @@
       "te_apuesto": {
         "book_id": "te_apuesto",
         "book_name": "Te Apuesto",
-        "home_odds": 1.262,
-        "away_odds": 3.661,
+        "home_odds": 1.263,
+        "away_odds": 3.648,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -982,7 +1159,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -990,8 +1167,8 @@
       "1xbet_pe": {
         "book_id": "1xbet_pe",
         "book_name": "1xBet Perú",
-        "home_odds": 1.303,
-        "away_odds": 3.652,
+        "home_odds": 1.305,
+        "away_odds": 3.642,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -999,7 +1176,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -1016,7 +1193,7 @@
         "total_over_odds": 1.82,
         "total_under_odds": 1.82,
         "player_props": [],
-        "captured_at": "2026-11-17T04:30:09Z",
+        "captured_at": "2026-11-17T05:14:58Z",
         "source": "Te Apuesto API Direct",
         "is_observed": true,
         "source_type": "OBSERVED"
@@ -1024,8 +1201,8 @@
       "sharp_benchmark": {
         "book_id": "sharp_benchmark",
         "book_name": "Pinnacle [LIVE_API]",
-        "home_odds": 1.3096,
-        "away_odds": 3.67,
+        "home_odds": 1.3115,
+        "away_odds": 3.66,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -1033,7 +1210,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-17T04:29:51Z",
+        "captured_at": "2026-11-17T05:14:43Z",
         "source": "Stored observed sharp quote",
         "is_observed": false,
         "source_type": "OBSERVED"
