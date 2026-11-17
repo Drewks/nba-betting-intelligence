@@ -154,7 +154,9 @@ class PaperTradingEngine:
     def _evidence_kelly_multiplier(self, market: str) -> tuple[float, str | None]:
         """Kelly multiplier for `market` from its shadow-ledger CLV verdict (1.0 when disabled)."""
         cfg = self.evidence_staking
-        if cfg is None or not cfg.enabled:
+        # The shadow ledger holds signals settled up to now: replaying history with it would let future
+        # CLV change past stakes (lookahead), so walk-forward replays are never scaled.
+        if cfg is None or not cfg.enabled or self.is_backtest:
             return 1.0, None
         cache = self._evidence_cache
         if cache is None:

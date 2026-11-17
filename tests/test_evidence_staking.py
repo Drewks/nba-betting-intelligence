@@ -80,3 +80,12 @@ def test_engines_built_outside_production_are_not_scaled(tmp_path: Path) -> None
     _seed(db, 12, "total_points", clv=-3.0)
     engine = PaperTradingEngine(db, staking_mode="FRACTIONAL_KELLY")
     assert engine._evidence_kelly_multiplier("total_points") == (1.0, None)
+
+
+def test_walk_forward_replay_is_not_scaled_by_future_evidence(tmp_path: Path) -> None:
+    db = DatabaseManager(tmp_path / "evidence3.sqlite3")
+    _seed(db, 12, "total_points", clv=-3.0)
+    engine = build_production_engine(db)
+    assert engine._evidence_kelly_multiplier("total_points") == (0.5, "NO_EDGE")
+    engine.is_backtest = True  # what WalkForwardBacktester.run_walk_forward sets during a replay
+    assert engine._evidence_kelly_multiplier("total_points") == (1.0, None)
