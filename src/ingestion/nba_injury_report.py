@@ -216,7 +216,10 @@ def parse_nba_injury_pdf_bytes(
             elif joined.startswith("Injury Report:"):
                 skip_indices.add(idx)
 
-        if header_idx is not None and page_footer_indices and min(page_footer_indices) < header_idx:
+        y_is_bottom_up = bool(
+            header_idx is not None and page_footer_indices and min(page_footer_indices) < header_idx
+        )
+        if y_is_bottom_up:
             clusters = list(reversed(clusters))
             header_idx = None
             skip_indices = set()
@@ -325,7 +328,10 @@ def parse_nba_injury_pdf_bytes(
                 )
                 if abs(page_records[nearest_idx][0] - p_y) <= 18.0:
                     target_rec = page_records[nearest_idx][1]
-                    if p_y < page_records[nearest_idx][0]:
+                    is_visually_above = (
+                        p_y > page_records[nearest_idx][0] if y_is_bottom_up else p_y < page_records[nearest_idx][0]
+                    )
+                    if is_visually_above:
                         merged_raw = f"{p_txt} {target_rec['raw_name']}".strip()
                     else:
                         merged_raw = f"{target_rec['raw_name']} {p_txt}".strip()
@@ -333,7 +339,7 @@ def parse_nba_injury_pdf_bytes(
                     target_rec["name"] = canonicalize_nba_player_name(merged_raw)
 
             for _ry, rec, reason_parts in page_records:
-                reason_parts.sort(key=lambda item: item[0])
+                reason_parts.sort(key=lambda item: item[0], reverse=y_is_bottom_up)
                 rec["notes"] = _normalize_reason(" ".join(part for _py, part in reason_parts))
                 records.append(rec)
 

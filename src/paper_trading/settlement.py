@@ -235,15 +235,35 @@ def settle_simulated_bet(
 
 
 
-def persist_closing_lines_for_games(db: Any, as_of_utc: str | None = None) -> int:
+def persist_closing_lines_for_games(
+    db: Any,
+    as_of_utc: str | None = None,
+    *,
+    include_player_props: bool | None = None,
+) -> int:
     """
     Promotes the latest pre-tipoff OBSERVED odds capture to a formal closing line
     (is_closing_line = 1) for real games that are FINAL or within 45 minutes of tip-off.
+
+    Partitions by `(provider, market, selection)` so only the actual latest pre-tipoff main
+    line per book/market/side is marked as a closing line (never stale earlier line numbers).
+    Skips `player_prop` rows when player-prop betting is disabled in config unless explicitly enabled.
     """
+    if include_player_props is None:
+        try:
+            from src.config import load_config
+
+            allow_props = bool(load_config().risk.allow_player_props_betting)
+        except Exception:
+            allow_props = False
+    else:
+        allow_props = bool(include_player_props)
+    market_filter = "" if allow_props else "AND o.market <> 'player_prop'"
+
     now_dt = parse_iso_utc(as_of_utc) if as_of_utc else datetime.now(timezone.utc)
     cutoff_str = (now_dt + timedelta(minutes=45)).strftime("%Y-%m-%dT%H:%M:%SZ")
     games_needing_close = db.fetch_all(
-        """
+        f"""
         SELECT g.game_id, g.game_start_time, g.status
         FROM games g
         WHERE g.game_id NOT LIKE 'SYN%'
@@ -252,6 +272,7 @@ def persist_closing_lines_for_games(db: Any, as_of_utc: str | None = None) -> in
               SELECT 1 FROM v_observed_odds_snapshots o
               WHERE o.game_id = g.game_id
                 AND o.is_closing_line = 0
+                {market_filter}
                 AND datetime(o.captured_at) <= datetime(g.game_start_time)
           )
         """,
@@ -263,17 +284,18 @@ def persist_closing_lines_for_games(db: Any, as_of_utc: str | None = None) -> in
             gid = g["game_id"]
             start_ts = g["game_start_time"]
             snapshots = conn.execute(
-                """
+                f"""
                 SELECT *
                 FROM (
                     SELECT o.*,
                            ROW_NUMBER() OVER (
-                               PARTITION BY o.provider, o.market, o.selection, COALESCE(o.line_value, -9999)
+                               PARTITION BY o.provider, o.market, o.selection
                                ORDER BY datetime(o.captured_at) DESC, o.captured_at DESC
                            ) AS rn
                     FROM v_observed_odds_snapshots o
                     WHERE o.game_id = ?
                       AND o.is_closing_line = 0
+                      {market_filter}
                       AND datetime(o.captured_at) <= datetime(?)
                 )
                 WHERE rn = 1

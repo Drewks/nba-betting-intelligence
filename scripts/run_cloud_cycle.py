@@ -256,7 +256,11 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
 
     if mode != "settle_and_calibrate":
         try:
-            LivePeruOddsScraper(db=db).scan_and_alert_entire_slate(notify_telegram=False)
+            allow_props = bool(load_config().risk.allow_player_props_betting)
+            LivePeruOddsScraper(db=db).scan_and_alert_entire_slate(
+                notify_telegram=False,
+                include_player_props=allow_props,
+            )
         except Exception as exc:
             logger.warning(f"Live Peruvian/Pinnacle odds sync failed cleanly: {exc}")
 
