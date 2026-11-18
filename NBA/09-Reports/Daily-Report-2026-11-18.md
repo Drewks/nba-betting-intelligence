@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-18T04:41:52Z
+date_generated: 2026-11-18T16:02:02Z
 report_type: daily_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
 period_evaluated: 2026-11-18
@@ -11,7 +11,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-18
 
 ## 1. Metadatos de Ejecución y Estado de Banca Observada
-- **Fecha de generación (UTC)**: `2026-11-18T04:41:52Z`
+- **Fecha de generación (UTC)**: `2026-11-18T16:02:02Z`
 - **Jornada evaluada**: `2026-11-18`
 - **Versión de modelo activa**: `model_f_ensemble_v8` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)
 - **Bankroll virtual inicial**: `S/100.00 PEN`
@@ -63,7 +63,7 @@ simulation_only: true
 | Mercado | Partidos (señales) | CLV medio | IC95 (t, por partido) | Veredicto | Kelly aplicado |
 | :--- | ---: | ---: | :--- | :--- | ---: |
 | `moneyline` | 6 (6) | +0.12% | [-3.96%, +4.19%] | `INSUFFICIENT_SAMPLE` | ×1.00 |
-| `total_points` | 7 (13) | -4.48% | [-7.08%, -1.89%] | `INSUFFICIENT_SAMPLE` | ×1.00 |
+| `total_points` | 9 (15) | -2.88% | [-5.98%, +0.22%] | `INSUFFICIENT_SAMPLE` | ×1.00 |
 
 - **Holdout hacia adelante** (partidos desde `2026-11-15T00:00:00Z`, backtest `2026-11-18T01:49:56Z`): `14` partidos, `0` apuestas, ROI `n/d`, CLV `n/d`. Es la única evidencia fuera de muestra real.
 

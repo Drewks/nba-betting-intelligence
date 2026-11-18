@@ -1,15 +1,5 @@
 [
   {
-    "text": "🏀 *ALERTA +EV | NBA INTELLIGENCE V9*\n━━━━━━━━━━━━━━━━━━━━━━\n📍 *Partido:* `ESPN_401909961_2026-11-11_BOS_AT_PHI`\n🎯 *Mercado:* `` | *Selección:* *UNDER*\n💰 *Casa Sugerida:* *RETAbet Perú*\n📈 *Cuota:* `1.90` (Prob. Modelo: `64.4%`)\n⚡ *Valor Esperado (EV):* `+22.4%`\n💵 *Stake Sugerido:* *S/ 3.50 PEN*\n━━━━━━━━━━━━━━━━━━━━━━\n🔗 _Copia el pick directamente en tu app de RETAbet Perú_",
-    "sent_at": "2026-11-09T06:28:39Z",
-    "mode": "LIVE_TELEGRAM"
-  },
-  {
-    "text": "🏀 *ALERTA +EV | NBA INTELLIGENCE V9*\n━━━━━━━━━━━━━━━━━━━━━━\n📍 *Partido:* `ESPN_401909953_2026-11-10_CLE_AT_CHA`\n🎯 *Mercado:* `` | *Selección:* *UNDER*\n💰 *Casa Sugerida:* *RETAbet Perú*\n📈 *Cuota:* `1.90` (Prob. Modelo: `63.2%`)\n⚡ *Valor Esperado (EV):* `+20.2%`\n💵 *Stake Sugerido:* *S/ 3.50 PEN*\n━━━━━━━━━━━━━━━━━━━━━━\n🔗 _Copia el pick directamente en tu app de RETAbet Perú_",
-    "sent_at": "2026-11-09T06:28:40Z",
-    "mode": "LIVE_TELEGRAM"
-  },
-  {
     "text": "🏀 *ALERTA +EV | NBA INTELLIGENCE V9*\n━━━━━━━━━━━━━━━━━━━━━━\n📍 *Partido:* `ESPN_401909965_2026-11-11_OKC_AT_POR`\n🎯 *Mercado:* `` | *Selección:* *UNDER*\n💰 *Casa Sugerida:* *RETAbet Perú*\n📈 *Cuota:* `1.90` (Prob. Modelo: `63.2%`)\n⚡ *Valor Esperado (EV):* `+20.0%`\n💵 *Stake Sugerido:* *S/ 3.50 PEN*\n━━━━━━━━━━━━━━━━━━━━━━\n🔗 _Copia el pick directamente en tu app de RETAbet Perú_",
     "sent_at": "2026-11-09T06:28:41Z",
     "mode": "LIVE_TELEGRAM"
@@ -247,6 +237,16 @@
   {
     "text": "🌙 *RESUMEN DIARIO DE LIQUIDACIÓN | NBA INTELLIGENCE*\n━━━━━━━━━━━━━━━━━━━━━━\n📅 *Fecha:* `2026-11-14`\nℹ️ _No hubo apuestas ni props pendientes de liquidar en esta jornada._\n💰 *Bankroll Actual:* `S/ 97.01 PEN`\n━━━━━━━━━━━━━━━━━━━━━━",
     "sent_at": "2026-11-14T13:49:33Z",
+    "mode": "LIVE_TELEGRAM"
+  },
+  {
+    "text": "🌙 *RESUMEN DIARIO DE LIQUIDACIÓN | NBA INTELLIGENCE*\n━━━━━━━━━━━━━━━━━━━━━━\n📅 *Jornada:* `2026-11-18`\n💰 *Bankroll Principal:* `S/ 97.91 PEN` (Pico: `S/ 119.43`)\n🛡️ *Escudo CPPI:* `54.1%` (Piso 85%: `S/ 101.52 PEN`)\n\n📊 *Balance de la Jornada (Banca Principal):*\n  • Total Selecciones: `4`\n  • 4 Ganadas ✅ | 0 Perdidas ❌ | 0 PUSH ⏸️\n  • *Win Rate:* `100.0%`\n  • 📈 *Resultado Neto:* `+S/ 3.62 PEN` (ROI: `+62.1%`)\n\n📋 *Desglose de Resultados (Banca Principal):*\n  1. ✅ ESPN_401909999_2026-11-17_POR_AT_MIN total_points UNDER UNDER (+S/ 1.10)\n  2. ✅ ESPN_401909997_2026-11-17_PHI_AT_BKN moneyline AWAY AWAY (+S/ 0.79)\n  3. ✅ ESPN_401909992_2026-11-16_ATL_AT_MIL total_points UNDER UNDER (+S/ 1.20)\n  4. ✅ ESPN_401909991_2026-11-16_HOU_AT_WAS moneyline AWAY AWAY (+S/ 0.53)\n\n🔥 *Sub-Bankroll Combinadas (S/ 50.00 PEN — Alpha Lab):*\n  • Saldo Liquidado: *S/ 50.00 PEN*\n  • 🟢 PnL Acumulado: `+S/ 0.00 PEN` (+0.0% ROI)\n━━━━━━━━━━━━━━━━━━━━━━\n🔒 _Historial y balance auditado e inmutable en SQLite (Dual Bankroll: S/100 + S/50)._",
+    "sent_at": "2026-11-18T16:01:16Z",
+    "mode": "LIVE_TELEGRAM"
+  },
+  {
+    "text": "📋 *REPORTE DE JORNADA NBA (PREGAME)*\n━━━━━━━━━━━━━━━━━━━━━━\n🔎 *Mercados evaluados:* `66`\n✅ *Apuestas +EV nuevas (>=5%):* `0` (Pendientes: `1`)\n💼 *Banca Liquidada:* *S/ 97.91 PEN*\n━━━━━━━━━━━━━━━━━━━━━━\n🛡️ _Disciplina activa: sin picks forzado cuando el mercado no ofrece ventaja estadística._",
+    "sent_at": "2026-11-18T16:02:05Z",
     "mode": "LIVE_TELEGRAM"
   }
 ]

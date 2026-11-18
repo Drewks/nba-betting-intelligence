@@ -6,52 +6,52 @@
   "indexed_documents_count": 125,
   "top_retrieved_context": [
     {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 17: Watson (back) is listed as questionable for Wednesday's game against Memphis.",
-      "relevance_score": 0.2228,
-      "captured_at": "2026-11-18T04:41:49Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams is Questionable for Wednesday's (Nov. 18) game against the Hawks.",
+      "relevance_score": 0.2406,
+      "captured_at": "2026-11-17"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Amen Thompson (SF) Day To Day (Knee): Thompson is Questionable for Wednesday's (Nov. 18) game against the Pacers.",
-      "relevance_score": 0.2201,
+      "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson is Questionable for Wednesday's (Nov. 18) game against the Grizzlies.",
+      "relevance_score": 0.2337,
+      "captured_at": "2026-11-17"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "GSW Al Horford (C) Day To Day (Back): Horford is Questionable for Wednesday's (Nov. 18) game against the Mavericks.",
+      "relevance_score": 0.2311,
+      "captured_at": "2026-11-17"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CLE Sam Merrill (SG) Day To Day (Elbow): Merrill is Questionable for Wednesday's (Nov. 18) game against the Grizzlies.",
+      "relevance_score": 0.2243,
+      "captured_at": "2026-11-17"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DAL Max Christie (SG) Day To Day (Ankle): Christie is Questionable for Wednesday's (Nov. 18) game against the Warriors.",
+      "relevance_score": 0.2236,
+      "captured_at": "2026-11-17"
+    },
+    {
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 17: Watson (back) is listed as questionable for Wednesday's game against Memphis.",
+      "relevance_score": 0.2197,
+      "captured_at": "2026-11-18T16:01:58Z"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa is Questionable for Wednesday's (Nov. 18) game against the Suns.",
+      "relevance_score": 0.219,
       "captured_at": "2026-11-17"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Wednesday's (Nov. 18) game against the Rockets.",
-      "relevance_score": 0.2171,
+      "relevance_score": 0.2155,
       "captured_at": "2026-11-17"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "PHI Jaylen Brown (SF) Day To Day (Hamstring): Brown did not return to Monday's (Nov. 16) game against the Nets.",
-      "relevance_score": 0.1865,
-      "captured_at": "2026-11-16"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAS Dylan Harper (SG) Day To Day (Undisclosed): Harper did not return on Tuesday's (Nov. 17) game against the Pistons.",
-      "relevance_score": 0.1863,
-      "captured_at": "2026-11-18"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Patrick Williams (PF) Day To Day (Finger): Williams did not return to Monday's (Nov. 16) game versus the Cavaliers.",
-      "relevance_score": 0.1834,
-      "captured_at": "2026-11-16"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Jalen Smith (C) Day To Day (Head): Smith did not return to Monday's (Nov. 16) game versus the Cavaliers.",
-      "relevance_score": 0.1783,
-      "captured_at": "2026-11-16"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play in Sunday's (Nov. 15) game against the Kings.",
-      "relevance_score": 0.1391,
-      "captured_at": "2026-11-16"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
