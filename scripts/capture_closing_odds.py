@@ -23,7 +23,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from datetime import datetime, timezone
 
-from src.ingestion.closing_capture import DEFAULT_WINDOW_MINUTES, capture_closing_window, games_in_closing_window
+from src.ingestion.closing_capture import (
+    DEFAULT_WINDOW_MINUTES,
+    capture_closing_window,
+    capture_fingerprint,
+    games_in_closing_window,
+)
 from src.storage.db import DatabaseManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -39,9 +44,17 @@ def main() -> None:
         metavar="MINUTES",
         help="Only print how many scheduled games start within MINUTES (used by the capture loop)",
     )
+    parser.add_argument(
+        "--fingerprint",
+        action="store_true",
+        help="Only print the row-count fingerprint of the tables a capture writes (used by the loop)",
+    )
     args = parser.parse_args()
 
     db = DatabaseManager(args.db)
+    if args.fingerprint:
+        print(capture_fingerprint(db))
+        return
     if args.count_upcoming is not None:
         print(len(games_in_closing_window(db, datetime.now(timezone.utc), args.count_upcoming)))
         return

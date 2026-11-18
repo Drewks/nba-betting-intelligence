@@ -245,8 +245,8 @@
     "mode": "LIVE_TELEGRAM"
   },
   {
-    "text": "📋 *REPORTE DE JORNADA NBA (PREGAME)*\n━━━━━━━━━━━━━━━━━━━━━━\n🔎 *Mercados evaluados:* `30`\n✅ *Apuestas +EV nuevas (>=5%):* `0` (Pendientes: `0`)\n💼 *Banca Liquidada:* *S/ 97.91 PEN*\n━━━━━━━━━━━━━━━━━━━━━━\n🛡️ _Disciplina activa: sin picks forzado cuando el mercado no ofrece ventaja estadística._",
-    "sent_at": "2026-11-17T22:53:09Z",
+    "text": "🎯 *[PICK PRINCIPAL] (70% Totales / 30% Moneyline)*\n━━━━━━━━━━━━━━━━━━━━━━\n📍 *Partido:* `ESPN_401910008_2026-11-19_HOU_AT_IND`\n🎯 *Mercado:* `MONEYLINE` | *Selección:* *AWAY*\n💰 *Casa Sugerida:* `Pinnacle [LIVE_API]`\n📈 *Cuota:* `1.41` (Prob. Modelo: `72.7%`)\n⚡ *Valor Esperado (EV):* `+2.5%`\n💵 *Stake Sugerido:* *S/ 1.47 PEN*\n━━━━━━━━━━━━━━━━━━━━━━\n🔗 _Registra este pick revisando la cuota vigente en_ `Pinnacle [LIVE_API]`",
+    "sent_at": "2026-11-18T01:55:14Z",
     "mode": "LIVE_TELEGRAM"
   }
 ]

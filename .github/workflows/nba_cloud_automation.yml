@@ -104,18 +104,44 @@ jobs:
         run: |
           CYCLE_MODE="${{ github.event.inputs.cycle_mode }}"
           SCHEDULE="${{ github.event.schedule }}"
-          echo "Disparador: schedule='$SCHEDULE' | input='$CYCLE_MODE'"
+          UTC_HOUR=$((10#$(date -u +%H)))
+          echo "Disparador: schedule='$SCHEDULE' | input='$CYCLE_MODE' | utc_hour=$UTC_HOUR"
 
-          if [ "$CYCLE_MODE" = "settle" ] || [ "$SCHEDULE" = "45 6 * * *" ]; then
-            echo "🌙 [VENTANA NOCTURNA 01:45 AM PET] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
+          if [ "$CYCLE_MODE" = "settle" ]; then
+            echo "🌙 [MANUAL SETTLE] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
             uv run python scripts/run_automated_scheduler.py --run-now settle
-          elif [ "$CYCLE_MODE" = "morning" ] || [ "$SCHEDULE" = "15 15 * * *" ]; then
-            echo "☀️ [VENTANA MATUTINA 10:15 AM PET] Apertura de Mercado (ESPN + Cuotas Observadas) y Alertas Telegram"
+          elif [ "$CYCLE_MODE" = "morning" ]; then
+            echo "☀️ [MANUAL MORNING] Apertura de Mercado (ESPN + Cuotas Observadas) y Alertas Telegram"
             uv run python scripts/run_automated_scheduler.py --run-now morning
-          elif [ "$CYCLE_MODE" = "sniper" ] || [ "$SCHEDULE" = "15 22 * * *" ] || [ "$SCHEDULE" = "35 23 * * *" ]; then
-            echo "🎯 [VENTANA INJURY SNIPER & CUOTAS OBSERVADAS] Bajas T-2h/T-30m y Stale Lines / Surebets"
+          elif [ "$CYCLE_MODE" = "sniper" ]; then
+            echo "🎯 [MANUAL SNIPER] Bajas T-2h/T-30m, Paper Trading y Stale Lines / Surebets"
             uv run python scripts/run_automated_scheduler.py --run-now sniper
             uv run python scripts/run_live_odds_monitor.py --once
+          elif [ "$SCHEDULE" = "45 6 * * *" ]; then
+            echo "🌙 [VENTANA NOCTURNA 01:45 AM PET] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
+            uv run python scripts/run_automated_scheduler.py --run-now settle
+            if [ "$UTC_HOUR" -ge 14 ]; then
+              echo "⏱️ [CRON RETRASADO >=14 UTC] Ejecutando además ventana matutina para no perder apertura."
+              uv run python scripts/run_automated_scheduler.py --run-now morning
+            fi
+          elif [ "$SCHEDULE" = "15 15 * * *" ]; then
+            if [ "$UTC_HOUR" -ge 21 ] || [ "$UTC_HOUR" -lt 4 ]; then
+              echo "⏱️ [CRON MATUTINO RETRASADO A PRE-TIPOFF] Promoviendo a ventana Sniper + Paper Trading."
+              uv run python scripts/run_automated_scheduler.py --run-now sniper
+              uv run python scripts/run_live_odds_monitor.py --once
+            else
+              echo "☀️ [VENTANA MATUTINA 10:15 AM PET] Apertura de Mercado (ESPN + Cuotas Observadas) y Alertas Telegram"
+              uv run python scripts/run_automated_scheduler.py --run-now morning
+            fi
+          elif [ "$SCHEDULE" = "15 22 * * *" ] || [ "$SCHEDULE" = "35 23 * * *" ]; then
+            if [ "$UTC_HOUR" -ge 5 ] && [ "$UTC_HOUR" -lt 13 ]; then
+              echo "⏱️ [CRON SNIPER RETRASADO A MADRUGADA] Ejecutando liquidación oficial ESPN."
+              uv run python scripts/run_automated_scheduler.py --run-now settle
+            else
+              echo "🎯 [VENTANA INJURY SNIPER & CUOTAS OBSERVADAS] Bajas T-2h/T-30m y Stale Lines / Surebets"
+              uv run python scripts/run_automated_scheduler.py --run-now sniper
+              uv run python scripts/run_live_odds_monitor.py --once
+            fi
           else
             echo "🚀 [MODO MANUAL / COMPLETO] Ejecutando apertura matutina y escaneo de cuotas"
             uv run python scripts/run_automated_scheduler.py --run-now morning

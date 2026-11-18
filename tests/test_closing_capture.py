@@ -137,3 +137,24 @@ def test_weekly_backtest_report_survives_the_main_cycle() -> None:
     # The main cycle restores the weekly report from state-live before rebuilding the state tree
     assert "reports/real_odds_backtest.md" in main_raw.split("4b. Restaurar estado vivo")[1].split("- name: 5.")[0]
     assert weekly["concurrency"]["group"] == yaml.safe_load(main_raw)["concurrency"]["group"]
+
+
+def test_fingerprint_changes_only_when_a_capture_adds_rows(tmp_path: Path) -> None:
+    from src.ingestion.closing_capture import capture_fingerprint
+
+    db = DatabaseManager(tmp_path / "fp.sqlite3")
+    before = capture_fingerprint(db)
+    # Reopening the database (what every loop iteration does) is not a data change
+    assert capture_fingerprint(DatabaseManager(tmp_path / "fp.sqlite3")) == before
+    assert capture_closing_window(db, collector=_FakeCollector(db), now=NOW)["games_in_window"] == 0
+    assert capture_fingerprint(db) == before
+    _seed_game(db, "G_SOON", "2026-11-17T01:00:00Z")
+    capture_closing_window(db, collector=_FakeCollector(db), now=NOW, window_minutes=45)
+    assert capture_fingerprint(db) != before
+
+
+def test_loop_pushes_only_on_data_change() -> None:
+    wf = yaml.safe_load((PROJECT_ROOT / ".github" / "workflows" / "closing_capture.yml").read_text(encoding="utf-8"))
+    steps_text = "\n".join(str(s.get("run", "")) for s in next(iter(wf["jobs"].values()))["steps"])
+    assert '[ "${FP_BEFORE}" != "${FP_AFTER}" ]' in steps_text
+    assert 'git diff --quiet "${BASE}" -- data/nba_intelligence.sqlite3' not in steps_text

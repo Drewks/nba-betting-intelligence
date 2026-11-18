@@ -1,8 +1,8 @@
 ---
-date_generated: 2026-11-17T22:53:08Z
+date_generated: 2026-11-18T01:55:12Z
 report_type: weekly_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
-run_manifest_id: RUN_20261117T225258Z_F0B3DBA8
+run_manifest_id: RUN_20261118T015503Z_66DFDDD8
 settled_predictions: 33
 observed_bankroll_pen: 97.91
 simulation_only: true
@@ -10,15 +10,15 @@ simulation_only: true
 # Informe Semanal de Rendimiento y Validación Fuera de Muestra
 
 ## 1. Métricas Clave de Desempeño (Paper Trading — Cuotas Observadas)
-- **Fecha generada (UTC)**: `2026-11-17T22:53:08Z`
+- **Fecha generada (UTC)**: `2026-11-18T01:55:12Z`
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll virtual actual liquidado**: `S/97.91 PEN` (`33` apuestas observadas liquidadas)
 - **Beneficio neto acumulado**: `S/-2.09 PEN`
 - **ROI acumulado**: `-4.65%`
 - **Win Rate**: `51.52%` (`17G - 16P`)
 - **Apuestas liquidadas**: `33`
-- **CLV medio**: `-3.34%`
-- **Tasa de batir la línea de cierre (Beat CLV %)**: `6.7%`
+- **CLV medio**: `-3.08%`
+- **Tasa de batir la línea de cierre (Beat CLV %)**: `17.2%`
 - **Ratio de Sharpe simulado (anualizado)**: `n/d`
 - **Máximo Drawdown**: `9.00%` (Límite de alerta: `15.00%`)
 
