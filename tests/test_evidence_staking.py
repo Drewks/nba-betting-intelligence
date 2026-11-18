@@ -14,9 +14,18 @@ from src.storage.db import DatabaseManager
 from tests.helpers import PROJECT_ROOT
 
 
-def _seed(db: DatabaseManager, n_games: int, market: str, clv: float) -> None:
+def _seed(
+    db: DatabaseManager,
+    n_games: int,
+    market: str,
+    clv: float,
+    *,
+    ev_pct: float = 4.5,
+    rejection_reason: str = "KELLY_STAKE_BELOW_MINIMUM",
+    prefix: str = "G",
+) -> None:
     for i in range(n_games):
-        gid = f"G_{market}_{i}"
+        gid = f"{prefix}_{market}_{i}"
         db.execute_insert(
             """
             INSERT INTO games (
@@ -35,10 +44,10 @@ def _seed(db: DatabaseManager, n_games: int, market: str, clv: float) -> None:
                 ev_unit, ev_pct, hypothetical_kelly_stake_pen, decision_status, rejection_reason,
                 clv_pct, status, hypothetical_unit_profit, emitted_at, source_type
             ) VALUES (?, NULL, ?, '2026-11-10', ?, 'HOME', NULL, 'v_test', 'Pinnacle', 1.9, 0.55, 0.55,
-                      0.045, 4.5, 1.0, 'NO_BET', 'EV_BELOW_THRESHOLD', ?, 'WON', 0.9,
+                      ?, ?, 1.0, 'NO_BET', ?, ?, 'WON', 0.9,
                       '2026-11-09T20:00:00Z', 'OBSERVED')
             """,
-            (f"SHD_{gid}", gid, market, clv + 0.2 * (i % 3)),
+            (f"SHD_{gid}", gid, market, ev_pct / 100.0, ev_pct, rejection_reason, clv + 0.2 * (i % 3)),
         )
 
 

@@ -412,6 +412,7 @@ class LivePeruOddsScraper:
         as_of_utc: datetime | None = None,
         sharp_book_name: str | None = None,
         sharp_captured_at: str | None = None,
+        include_player_props: bool = True,
     ) -> dict[str, Any]:
         """
         Consolidates odds for a matchup. Only quotes genuinely fetched from a bookmaker are persisted
@@ -604,7 +605,7 @@ class LivePeruOddsScraper:
             to_persist = dict(quotes_by_book)
             if live_pin and live_pin.is_observed:
                 to_persist["pinnacle_live"] = live_pin
-            self._persist_quotes_to_db(game_id, to_persist, now_str)
+            self._persist_quotes_to_db(game_id, to_persist, now_str, include_player_props=include_player_props)
 
         all_quotes = {**{k: asdict(v) for k, v in derived_quotes.items()}, **{k: asdict(v) for k, v in quotes_by_book.items()}}
         if sharp_quote:
@@ -631,6 +632,8 @@ class LivePeruOddsScraper:
         game_id: str,
         quotes: dict[str, LiveGameOddsQuote],
         now_str: str,
+        *,
+        include_player_props: bool = True,
     ) -> None:
         """Persists live scraped odds into the SQLite database."""
         if not self.db:
@@ -715,6 +718,8 @@ class LivePeruOddsScraper:
                             "source_type": "OBSERVED",
                         }
                     )
+            if not include_player_props:
+                continue
             for pp in q.player_props or []:
                 p_name = str(pp.get("player_name") or "").strip()
                 raw_cat = str(pp.get("prop_category") or "PTS").strip().upper()
@@ -779,6 +784,7 @@ class LivePeruOddsScraper:
         self,
         notify_telegram: bool = True,
         force_all: bool = False,
+        include_player_props: bool = True,
     ) -> list[dict[str, Any]]:
         """
         Scans all scheduled slate games, performs live comparison across Peruvian sportsbooks,
@@ -786,6 +792,7 @@ class LivePeruOddsScraper:
         """
         if not self.db:
             return []
+        allow_props = bool(include_player_props)
 
         now_utc = datetime.now(timezone.utc)
         now_str = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -830,6 +837,7 @@ class LivePeruOddsScraper:
                 as_of_utc=now_utc,
                 sharp_book_name=bench_prov,
                 sharp_captured_at=bench_ts,
+                include_player_props=allow_props,
             )
             if res.get("observed_quotes_count", 0) > 0 or "sharp_benchmark" in res.get("quotes", {}):
                 results.append(res)

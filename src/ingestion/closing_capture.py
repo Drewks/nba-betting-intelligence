@@ -101,6 +101,7 @@ def capture_closing_window(
                 away_team=g["away_team"],
                 game_start_time=g["game_start_time"],
                 as_of_utc=now_dt,
+                include_player_props=False,
             )
             entry["observed_quotes"] = int(res.get("observed_quotes_count") or 0)
         except Exception as exc:  # one failing book must not lose the other books' closes
@@ -109,6 +110,8 @@ def capture_closing_window(
         summary["games"].append(entry)
 
     summary["closing_lines_promoted"] = persist_closing_lines_for_games(
-        db, as_of_utc=now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        db,
+        as_of_utc=now_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        include_player_props=False,
     )
     return summary

@@ -324,7 +324,14 @@ class NBADailyScheduler:
         live_res: dict[str, Any] = {}
         try:
             live_scraper = LivePeruOddsScraper(db=self.db)
-            scan_rows = live_scraper.scan_and_alert_entire_slate(notify_telegram=True)
+            scan_params = inspect.signature(live_scraper.scan_and_alert_entire_slate).parameters
+            if "include_player_props" in scan_params:
+                scan_rows = live_scraper.scan_and_alert_entire_slate(
+                    notify_telegram=True,
+                    include_player_props=bool(load_config().risk.allow_player_props_betting),
+                )
+            else:
+                scan_rows = live_scraper.scan_and_alert_entire_slate(notify_telegram=True)
             sources_executed.append("live_peru_odds_scraper")
             live_res = {
                 "games_scanned": len(scan_rows),

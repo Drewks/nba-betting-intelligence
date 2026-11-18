@@ -123,11 +123,18 @@ def main() -> None:
         bankroll_pen=args.bankroll,
     )
 
+    from src.config import load_config
+
     notify = not args.no_telegram
+    allow_props = bool(load_config().risk.allow_player_props_betting)
 
     if args.once:
         print("[*] Iniciando escaneo en vivo de casas de apuestas peruanas...")
-        results = scraper.scan_and_alert_entire_slate(notify_telegram=notify, force_all=args.force)
+        results = scraper.scan_and_alert_entire_slate(
+            notify_telegram=notify,
+            force_all=args.force,
+            include_player_props=allow_props,
+        )
         print_comparison_table(results)
         _print_source_diagnostics(scraper)
     else:
@@ -140,7 +147,11 @@ def main() -> None:
 
         while True:
             try:
-                results = scraper.scan_and_alert_entire_slate(notify_telegram=notify, force_all=args.force)
+                results = scraper.scan_and_alert_entire_slate(
+                    notify_telegram=notify,
+                    force_all=args.force,
+                    include_player_props=allow_props,
+                )
                 print_comparison_table(results)
                 time.sleep(args.poll_seconds)
             except KeyboardInterrupt:

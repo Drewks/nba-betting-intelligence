@@ -34,6 +34,65 @@ _NON_ELIGIBLE_REASONS = {
     "NO_MARKET",
 }
 
+# Signals rejected for insufficient edge or epistemic uncertainty are kept in the shadow ledger
+# for diagnostics, but must never pollute the CLV evidence used to scale live Kelly stakes.
+_EVIDENCE_EXCLUDED_REASONS = frozenset({
+    "EV_BELOW_THRESHOLD",
+    "MODEL_MARKET_DISAGREEMENT",
+    "CONFORMAL_UNCERTAINTY_TOO_WIDE",
+})
+
+
+def _resolve_default_min_ev_pct() -> float:
+    try:
+        from src.config import load_config
+
+        return round(float(load_config().risk.min_ev_threshold) * 100.0, 6)
+    except Exception:
+        return 2.0
+
+
+def _is_eligible_for_clv_evidence(row: dict[str, Any], min_ev_pct: float) -> bool:
+    reason = str(row.get("rejection_reason") or "").strip().upper()
+    if reason in _EVIDENCE_EXCLUDED_REASONS:
+        return False
+    ev_raw = row.get("ev_pct")
+    if ev_raw is None:
+        ev_unit = row.get("ev_unit")
+        ev_pct = float(ev_unit) * 100.0 if ev_unit is not None else 0.0
+    else:
+        ev_pct = float(ev_raw)
+    return ev_pct >= float(min_ev_pct)
+
+
+def _load_observed_closing_index(db: Any) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
+    try:
+        closing_rows = db.fetch_all(
+            """
+            SELECT game_id, market, selection, line_value, decimal_odds, counterpart_decimal_odds, provider, captured_at
+            FROM v_observed_odds_snapshots
+            WHERE is_closing_line = 1
+            """
+        )
+    except Exception:
+        return {}
+    return index_closing_rows(closing_rows)
+
+
+def _resolve_shadow_clv_pct(
+    row: dict[str, Any],
+    closing_index: dict[tuple[str, str, str], list[dict[str, Any]]],
+) -> float | None:
+    """
+    Computes line-movement-adjusted CLV against current observed closing lines when available
+    (without mutating immutable settled rows), falling back to stored `clv_pct` otherwise.
+    """
+    clv_info = compute_bet_clv(row, closing_index, row.get("odds_provider"))
+    if clv_info is not None:
+        return None if clv_info["is_outlier"] else float(clv_info["clv_ev_pct"])
+    stored = row.get("clv_pct")
+    return float(stored) if stored is not None else None
+
 
 def _shadow_key(cand: dict[str, Any]) -> tuple[str, str, str, float | None]:
     lv = cand.get("line_value")
@@ -289,21 +348,35 @@ def clv_evidence(
     }
 
 
-def clv_evidence_by_market(db: Any) -> dict[str, dict[str, Any]]:
-    """CLV evidence of the settled shadow signals of each market, one independent unit per game."""
+def clv_evidence_by_market(db: Any, *, min_ev_pct: float | None = None) -> dict[str, dict[str, Any]]:
+    """
+    CLV evidence of the settled eligible `+EV` shadow signals of each market (one independent unit per game).
+
+    Excludes signals rejected for `EV_BELOW_THRESHOLD`, `MODEL_MARKET_DISAGREEMENT`, or
+    `CONFORMAL_UNCERTAINTY_TOO_WIDE`, and evaluates against line-movement-adjusted closing prices.
+    """
     has_table = db.fetch_one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'shadow_candidates'")
     if not has_table:
         return {}
+    effective_min_ev = _resolve_default_min_ev_pct() if min_ev_pct is None else float(min_ev_pct)
     rows = db.fetch_all(
         """
-        SELECT market, game_id, clv_pct FROM shadow_candidates
-        WHERE status IN ('WON', 'LOST', 'PUSH') AND clv_pct IS NOT NULL
+        SELECT shadow_id, game_id, market, selection, line_value, odds_provider, decimal_odds,
+               ev_unit, ev_pct, rejection_reason, clv_pct
+        FROM shadow_candidates
+        WHERE status IN ('WON', 'LOST', 'PUSH')
         """
     )
+    closing_index = _load_observed_closing_index(db)
     by_market: dict[str, tuple[list[float], list[str]]] = defaultdict(lambda: ([], []))
     for r in rows:
+        if not _is_eligible_for_clv_evidence(r, effective_min_ev):
+            continue
+        clv_val = _resolve_shadow_clv_pct(r, closing_index)
+        if clv_val is None:
+            continue
         clvs, games = by_market[str(r["market"])]
-        clvs.append(float(r["clv_pct"]))
+        clvs.append(clv_val)
         games.append(str(r["game_id"]))
     return {m: clv_evidence(c, groups=g) for m, (c, g) in by_market.items()}
 
@@ -320,9 +393,19 @@ def summarize_shadow_ledger(db: Any, model_version_id: str | None = None) -> dic
 
     resolved = [r for r in rows if r["status"] in ("WON", "LOST", "PUSH")]
     non_push = [r for r in rows if r["status"] in ("WON", "LOST")]
-    clv_rows = [r for r in resolved if r.get("clv_pct") is not None]
-    clvs = [float(r["clv_pct"]) for r in clv_rows]
-    clv_games = [str(r["game_id"]) for r in clv_rows]
+    closing_index = _load_observed_closing_index(db)
+    min_ev_pct = _resolve_default_min_ev_pct()
+
+    clvs: list[float] = []
+    clv_games: list[str] = []
+    for r in resolved:
+        if not _is_eligible_for_clv_evidence(r, min_ev_pct):
+            continue
+        clv_val = _resolve_shadow_clv_pct(r, closing_index)
+        if clv_val is not None:
+            clvs.append(clv_val)
+            clv_games.append(str(r["game_id"]))
+
     unit_profit = round(sum(float(r.get("hypothetical_unit_profit") or 0.0) for r in resolved), 4)
     unit_roi = round((unit_profit / len(non_push)) * 100.0, 2) if non_push else 0.0
 
@@ -350,6 +433,7 @@ def summarize_shadow_ledger(db: Any, model_version_id: str | None = None) -> dic
         "mean_clv_pct": round(float(np.mean(clvs)), 3) if clvs else None,
         "clv_beat_close_rate": round(float(np.mean([c > 0.0 for c in clvs])), 4) if clvs else None,
         "clv_sample_size": len(clvs),
+        "clv_scope": "eligible_positive_ev_line_adjusted",
         "clv_evidence": clv_evidence(clvs, groups=clv_games),
         "by_rejection_reason": dict(by_reason),
     }
