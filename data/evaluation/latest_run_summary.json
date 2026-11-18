@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-18T01:55:03Z",
-  "run_manifest_id": "RUN_20261118T015503Z_66DFDDD8",
+  "timestamp_utc": "2026-11-18T03:43:24Z",
+  "run_manifest_id": "RUN_20261118T034324Z_8C3D0C73",
   "run_manifest": {
-    "run_id": "RUN_20261118T015503Z_66DFDDD8",
+    "run_id": "RUN_20261118T034324Z_8C3D0C73",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -18,48 +18,48 @@
     },
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "config_version": "model_f_ensemble_v8",
-    "data_cutoff_utc": "2026-11-17T02:00:00Z",
+    "data_cutoff_utc": "2026-11-18T01:00:00Z",
     "calibrators": {
       "moneyline": {
         "method": "isotonic",
-        "sample_size": 107,
+        "sample_size": 110,
         "venn_abers_fitted": true
       },
       "total_points": {
-        "method": "logistic",
-        "sample_size": 99,
+        "method": "isotonic",
+        "sample_size": 102,
         "venn_abers_fitted": true,
         "fallback_active": false,
         "line_bands": {
           "<=215.0": {
-            "sample_size": 5,
-            "empirical_over_rate": 0.6,
-            "mean_raw_prob": 0.5748,
-            "brier_score": 0.27518
+            "sample_size": 6,
+            "empirical_over_rate": 0.5,
+            "mean_raw_prob": 0.5662,
+            "brier_score": 0.27478
           },
           "215.5-225.0": {
             "sample_size": 51,
-            "empirical_over_rate": 0.549,
-            "mean_raw_prob": 0.491,
-            "brier_score": 0.26648
+            "empirical_over_rate": 0.5294,
+            "mean_raw_prob": 0.4893,
+            "brier_score": 0.26207
           },
           "225.5-235.0": {
-            "sample_size": 35,
-            "empirical_over_rate": 0.5429,
-            "mean_raw_prob": 0.4447,
-            "brier_score": 0.26961
+            "sample_size": 37,
+            "empirical_over_rate": 0.5135,
+            "mean_raw_prob": 0.4396,
+            "brier_score": 0.26152
           },
           ">235.0": {
             "sample_size": 8,
             "empirical_over_rate": 0.5,
             "mean_raw_prob": 0.4075,
-            "brier_score": 0.27027
+            "brier_score": 0.27036
           }
         }
       },
       "spread": {
         "method": "logistic",
-        "sample_size": 30,
+        "sample_size": 36,
         "venn_abers_fitted": false,
         "fallback_active": false
       }
@@ -76,44 +76,44 @@
     "2026-11-18",
     "2026-11-19"
   ],
-  "closing_lines_promoted": 0,
-  "official_injury_report_games": 13,
+  "closing_lines_promoted": 16,
+  "official_injury_report_games": 12,
   "bets_settled_in_cycle": 0,
-  "shadow_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 1,
-  "predictions_generated": 32,
+  "shadow_settled_in_cycle": 11,
+  "new_bets_placed_in_cycle": 0,
+  "predictions_generated": 58,
   "active_calibration_methods": {
     "moneyline": "isotonic",
-    "total_points": "logistic",
+    "total_points": "isotonic",
     "spread": "logistic"
   },
   "totals_calibration_diagnostics": {
-    "sample_size": 99,
+    "sample_size": 102,
     "fallback_active": false,
     "line_bands": {
       "<=215.0": {
-        "sample_size": 5,
-        "empirical_over_rate": 0.6,
-        "mean_raw_prob": 0.5748,
-        "brier_score": 0.27518
+        "sample_size": 6,
+        "empirical_over_rate": 0.5,
+        "mean_raw_prob": 0.5662,
+        "brier_score": 0.27478
       },
       "215.5-225.0": {
         "sample_size": 51,
-        "empirical_over_rate": 0.549,
-        "mean_raw_prob": 0.491,
-        "brier_score": 0.26648
+        "empirical_over_rate": 0.5294,
+        "mean_raw_prob": 0.4893,
+        "brier_score": 0.26207
       },
       "225.5-235.0": {
-        "sample_size": 35,
-        "empirical_over_rate": 0.5429,
-        "mean_raw_prob": 0.4447,
-        "brier_score": 0.26961
+        "sample_size": 37,
+        "empirical_over_rate": 0.5135,
+        "mean_raw_prob": 0.4396,
+        "brier_score": 0.26152
       },
       ">235.0": {
         "sample_size": 8,
         "empirical_over_rate": 0.5,
         "mean_raw_prob": 0.4075,
-        "brier_score": 0.27027
+        "brier_score": 0.27036
       }
     }
   },
@@ -124,60 +124,67 @@
     "placed_parlays_count": 0
   },
   "shadow_ledger": {
-    "total_candidates": 76,
-    "pending": 29,
-    "settled": 47,
-    "won": 32,
-    "lost": 15,
+    "total_candidates": 90,
+    "pending": 32,
+    "settled": 58,
+    "won": 42,
+    "lost": 16,
     "push": 0,
-    "unit_profit_1u": 9.9085,
-    "unit_roi_pct": 21.08,
-    "mean_clv_pct": -3.66,
-    "clv_beat_close_rate": 0.1111,
-    "clv_sample_size": 18,
+    "unit_profit_1u": 17.5906,
+    "unit_roi_pct": 30.33,
+    "mean_clv_pct": -3.09,
+    "clv_beat_close_rate": 0.1579,
+    "clv_sample_size": 19,
     "clv_scope": "eligible_positive_ev_line_adjusted",
     "clv_evidence": {
-      "n": 9,
-      "n_signals": 18,
+      "n": 10,
+      "n_signals": 19,
       "independent_unit": "game",
-      "mean_clv_pct": -2.855,
+      "mean_clv_pct": -1.854,
       "ci95_pct": [
-        -4.718,
-        -0.991
+        -4.647,
+        0.939
       ],
-      "std_clv_pct": 2.424,
-      "verdict": "INSUFFICIENT_SAMPLE",
+      "std_clv_pct": 3.904,
+      "verdict": "INCONCLUSIVE",
       "target_clv_pct": 1.0,
-      "signals_needed_for_target": 47
+      "signals_needed_for_target": 120
     },
     "by_rejection_reason": {
-      "MODEL_MARKET_DISAGREEMENT": {
-        "total": 6,
-        "settled": 1,
-        "won": 0,
-        "lost": 1,
-        "unit_profit": -1.0
+      "EV_BELOW_THRESHOLD": {
+        "total": 49,
+        "settled": 32,
+        "won": 19,
+        "lost": 13,
+        "unit_profit": 1.132
       },
       "KELLY_STAKE_BELOW_MINIMUM": {
-        "total": 16,
-        "settled": 13,
-        "won": 11,
+        "total": 18,
+        "settled": 14,
+        "won": 12,
         "lost": 2,
-        "unit_profit": 8.3449
+        "unit_profit": 9.0695
+      },
+      "EXCESSIVE_LONGSHOT_VARIANCE": {
+        "total": 1,
+        "settled": 0,
+        "won": 0,
+        "lost": 0,
+        "unit_profit": 0.0
       },
       "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-        "total": 6,
-        "settled": 1,
-        "won": 1,
+        "total": 7,
+        "settled": 2,
+        "won": 2,
         "lost": 0,
-        "unit_profit": 1.04
+        "unit_profit": 1.9659
       },
-      "EV_BELOW_THRESHOLD": {
-        "total": 39,
-        "settled": 24,
-        "won": 12,
-        "lost": 12,
-        "unit_profit": -3.9192
+      "MODEL_MARKET_DISAGREEMENT": {
+        "total": 6,
+        "settled": 2,
+        "won": 1,
+        "lost": 1,
+        "unit_profit": -0.0196
       },
       "QUALIFIED_POSITIVE_EV": {
         "total": 6,
@@ -239,14 +246,14 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 666,
-        "final_game_predictions": 550,
+        "predictions_count": 722,
+        "final_game_predictions": 600,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 502,
-        "final_with_m012_cal_probs_count": 386,
+        "m012_cal_probs_count": 558,
+        "final_with_m012_cal_probs_count": 436,
         "settled_bets_count": 8,
         "first_emitted_at": "2026-11-07T23:20:56Z",
-        "last_emitted_at": "2026-11-18T01:55:03Z"
+        "last_emitted_at": "2026-11-18T03:43:24Z"
       },
       "model_f_ensemble_v4": {
         "model_version_id": "model_f_ensemble_v4",
@@ -285,12 +292,12 @@
         "last_emitted_at": "2026-10-29T22:41:49Z"
       }
     },
-    "overall_brier_score": 0.222049,
-    "baseline_brier_score": 0.245476,
-    "overall_log_loss": 0.631799,
-    "market_brier_score": 0.225898,
-    "model_brier_on_market_subset": 0.222049,
-    "market_comparison_sample_size": 15,
+    "overall_brier_score": 0.226032,
+    "baseline_brier_score": 0.247859,
+    "overall_log_loss": 0.643964,
+    "market_brier_score": 0.236557,
+    "model_brier_on_market_subset": 0.226032,
+    "market_comparison_sample_size": 18,
     "history_integrity": {
       "missing_rows_total": 0,
       "missing_rows_by_table": {
@@ -304,7 +311,7 @@
       },
       "examples": {}
     },
-    "baseline_log_loss": 0.684796,
+    "baseline_log_loss": 0.689928,
     "mean_clv_pct": -3.079,
     "clv_governor_factor": 1.0,
     "by_market": {
@@ -334,60 +341,67 @@
       }
     },
     "shadow_ledger": {
-      "total_candidates": 76,
-      "pending": 29,
-      "settled": 47,
-      "won": 32,
-      "lost": 15,
+      "total_candidates": 90,
+      "pending": 32,
+      "settled": 58,
+      "won": 42,
+      "lost": 16,
       "push": 0,
-      "unit_profit_1u": 9.9085,
-      "unit_roi_pct": 21.08,
-      "mean_clv_pct": -3.66,
-      "clv_beat_close_rate": 0.1111,
-      "clv_sample_size": 18,
+      "unit_profit_1u": 17.5906,
+      "unit_roi_pct": 30.33,
+      "mean_clv_pct": -3.09,
+      "clv_beat_close_rate": 0.1579,
+      "clv_sample_size": 19,
       "clv_scope": "eligible_positive_ev_line_adjusted",
       "clv_evidence": {
-        "n": 9,
-        "n_signals": 18,
+        "n": 10,
+        "n_signals": 19,
         "independent_unit": "game",
-        "mean_clv_pct": -2.855,
+        "mean_clv_pct": -1.854,
         "ci95_pct": [
-          -4.718,
-          -0.991
+          -4.647,
+          0.939
         ],
-        "std_clv_pct": 2.424,
-        "verdict": "INSUFFICIENT_SAMPLE",
+        "std_clv_pct": 3.904,
+        "verdict": "INCONCLUSIVE",
         "target_clv_pct": 1.0,
-        "signals_needed_for_target": 47
+        "signals_needed_for_target": 120
       },
       "by_rejection_reason": {
-        "MODEL_MARKET_DISAGREEMENT": {
-          "total": 6,
-          "settled": 1,
-          "won": 0,
-          "lost": 1,
-          "unit_profit": -1.0
+        "EV_BELOW_THRESHOLD": {
+          "total": 49,
+          "settled": 32,
+          "won": 19,
+          "lost": 13,
+          "unit_profit": 1.132
         },
         "KELLY_STAKE_BELOW_MINIMUM": {
-          "total": 16,
-          "settled": 13,
-          "won": 11,
+          "total": 18,
+          "settled": 14,
+          "won": 12,
           "lost": 2,
-          "unit_profit": 8.3449
+          "unit_profit": 9.0695
+        },
+        "EXCESSIVE_LONGSHOT_VARIANCE": {
+          "total": 1,
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "unit_profit": 0.0
         },
         "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-          "total": 6,
-          "settled": 1,
-          "won": 1,
+          "total": 7,
+          "settled": 2,
+          "won": 2,
           "lost": 0,
-          "unit_profit": 1.04
+          "unit_profit": 1.9659
         },
-        "EV_BELOW_THRESHOLD": {
-          "total": 39,
-          "settled": 24,
-          "won": 12,
-          "lost": 12,
-          "unit_profit": -3.9192
+        "MODEL_MARKET_DISAGREEMENT": {
+          "total": 6,
+          "settled": 2,
+          "won": 1,
+          "lost": 1,
+          "unit_profit": -0.0196
         },
         "QUALIFIED_POSITIVE_EV": {
           "total": 6,
@@ -421,8 +435,8 @@
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-17_08_30PM.pdf",
-      "players_listed": 148
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-17_10_30PM.pdf",
+      "players_listed": 150
     },
     "sportradar_api": {
       "credentials_configured": true,
@@ -438,7 +452,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-18T01:55:08Z",
+      "extracted_at": "2026-11-18T03:43:31Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -453,49 +467,49 @@
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 17: Watson (back) is listed as questionable for Wednesday's game against Memphis.",
-        "relevance_score": 0.2429,
-        "captured_at": "2026-11-18T01:55:09Z"
+        "relevance_score": 0.2467,
+        "captured_at": "2026-11-18T03:43:33Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "HOU Amen Thompson (SF) Day To Day (Knee): Thompson is Questionable for Wednesday's (Nov. 18) game against the Pacers.",
-        "relevance_score": 0.2413,
+        "relevance_score": 0.2458,
         "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHI Jaylen Brown (SF) Day To Day (Hamstring): Brown did not return to Monday's (Nov. 16) game against the Nets.",
-        "relevance_score": 0.1974,
+        "relevance_score": 0.2029,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Patrick Williams (PF) Day To Day (Finger): Williams did not return to Monday's (Nov. 16) game versus the Cavaliers.",
-        "relevance_score": 0.1941,
+        "relevance_score": 0.1995,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Jalen Smith (C) Day To Day (Head): Smith did not return to Monday's (Nov. 16) game versus the Cavaliers.",
-        "relevance_score": 0.1893,
+        "relevance_score": 0.1946,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play in Sunday's (Nov. 15) game against the Kings.",
-        "relevance_score": 0.1562,
+        "relevance_score": 0.162,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play in Monday's game (Nov. 16) against the Cavaliers.",
-        "relevance_score": 0.1533,
+        "relevance_score": 0.1598,
         "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHI LeBron James (SF) Day To Day (Back): James did not play in Monday's (Nov. 16) game against the Nets.",
-        "relevance_score": 0.1523,
+        "relevance_score": 0.1588,
         "captured_at": "2026-11-17"
       }
     ],
@@ -507,7 +521,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261118T015503Z_66DFDDD8",
+    "run_manifest_id": "RUN_20261118T034324Z_8C3D0C73",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "database_role": {

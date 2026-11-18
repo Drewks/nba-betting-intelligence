@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-18T01:55:12Z
+date_generated: 2026-11-18T03:43:39Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 model_version_id: model_f_ensemble_v8
-run_manifest_id: RUN_20261118T015503Z_66DFDDD8
+run_manifest_id: RUN_20261118T034324Z_8C3D0C73
 commit_sha: 5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576
 config_hash: f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -11,10 +11,10 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-18T01:55:12Z`
-- **Run Manifest / Versión activa**: `RUN_20261118T015503Z_66DFDDD8` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
+- **Fecha de auditoría (UTC)**: `2026-11-18T03:43:39Z`
+- **Run Manifest / Versión activa**: `RUN_20261118T034324Z_8C3D0C73` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
 - **Origen de Base de Datos (`DB Provenance`)**: PRODUCTION_STATE_LIVE (`live: origin/state-live:data/nba_intelligence.sqlite3` | `main: FROZEN_CI_BASELINE`)
-- **Shadow Signal Ledger**: Total `76` señales +EV registradas (liquidadas `47`, ROI 1u `21.08%`, CLV medio `-3.66%`; cero impacto en banca S/100) — evidencia de CLV: `INSUFFICIENT_SAMPLE` (n=`9` partidos / `18` señales)
+- **Shadow Signal Ledger**: Total `90` señales +EV registradas (liquidadas `58`, ROI 1u `30.33%`, CLV medio `-3.09%`; cero impacto en banca S/100) — evidencia de CLV: `INCONCLUSIVE` (n=`10` partidos / `19` señales, IC95 `[-4.647%, 0.939%]`; para detectar +1.0% hacen falta ~`120` partidos)
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/97.91 PEN`
@@ -31,14 +31,14 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 | :--- | :--- | :--- | :--- |
 | `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `33` | `>= 500` |
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
-| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.222049, 'baseline_brier': 0.245476, 'model_log_loss': 0.631799, 'baseline_log_loss': 0.684796}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
+| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.226032, 'baseline_brier': 0.247859, 'model_log_loss': 0.643964, 'baseline_log_loss': 0.689928}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
 | `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -4.6483, 'yield_pct': -4.5011}` | `ROI > 0% and Yield > 0%` |
 | `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -40.2158, 'ci_95_upper_pct': 30.5736, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
 | `gate_9_independent_audit_approved` | **PASS** | `True` | `True` |
-| `gate_10_non_inferior_to_devigged_market` | **PASS** | `{'model_brier': 0.222049, 'market_brier': 0.225898, 'model_log_loss': 0.631799, 'market_log_loss': 0.641212, 'sample_size': 15}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
+| `gate_10_non_inferior_to_devigged_market` | **PASS** | `{'model_brier': 0.226032, 'market_brier': 0.236557, 'model_log_loss': 0.643964, 'market_log_loss': 0.666434, 'sample_size': 18}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
 
 ## 3. Estado Real de Herramientas y Fuentes Inspeccionadas
 - **Coordinador**: `Orchestrator Local (Ejecución secuencial verificada)`

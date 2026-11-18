@@ -1,8 +1,8 @@
 ---
-date_generated: 2026-11-18T01:55:12Z
+date_generated: 2026-11-18T03:43:39Z
 report_type: weekly_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
-run_manifest_id: RUN_20261118T015503Z_66DFDDD8
+run_manifest_id: RUN_20261118T034324Z_8C3D0C73
 settled_predictions: 33
 observed_bankroll_pen: 97.91
 simulation_only: true
@@ -10,7 +10,7 @@ simulation_only: true
 # Informe Semanal de Rendimiento y Validación Fuera de Muestra
 
 ## 1. Métricas Clave de Desempeño (Paper Trading — Cuotas Observadas)
-- **Fecha generada (UTC)**: `2026-11-18T01:55:12Z`
+- **Fecha generada (UTC)**: `2026-11-18T03:43:39Z`
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll virtual actual liquidado**: `S/97.91 PEN` (`33` apuestas observadas liquidadas)
 - **Beneficio neto acumulado**: `S/-2.09 PEN`
@@ -32,34 +32,34 @@ simulation_only: true
 ## 3. Calibración y Comparación de Modelos (Fuera de Muestra)
 | Modelo / Fuente | Brier Score | Log Loss |
 |---|---|---|
-| **Ensemble Ponderado (Modelos B+C+D+E)** | `0.22205` | `0.63180` |
-| Modelo A (Baseline Histórico) | `0.24548` | `0.68480` |
-| Mercado Sin Margen (Muestra común) | `0.22590` | `0.64121` |
-| Modelo sobre Muestra Común | `0.22205` | `0.63180` |
-| baseline_naive_ml | `0.22961` | `0.65185` |
-| ensemble_calibrated_ml | `0.18615` | `0.55368` |
-| baseline_naive_totals | `0.26134` | `0.71775` |
-| ensemble_calibrated_totals | `0.25794` | `0.70992` |
-| ensemble_raw_ml | `0.18660` | `0.55365` |
-| ensemble_calibrated_model_ml | `0.18615` | `0.55368` |
-| ensemble_market_anchored_ml | `0.18247` | `0.54350` |
-| ensemble_raw_totals | `0.26196` | `0.71804` |
-| ensemble_calibrated_model_totals | `0.25794` | `0.70992` |
-| ensemble_market_anchored_totals | `0.25537` | `0.70610` |
-| ensemble_raw_spread | `0.22902` | `0.65092` |
-| ensemble_calibrated_model_spread | `0.22902` | `0.65092` |
-| market_devig_spread | `0.24846` | `0.69006` |
-| ensemble_market_anchored_spread | `0.24273` | `0.67860` |
-| market_devig_ml | `0.19980` | `0.58527` |
-| market_devig_totals | `0.25200` | `0.69715` |
-| common_subset_raw_ml | `0.18621` | `0.55267` |
-| common_subset_raw_totals | `0.25726` | `0.70854` |
-| common_subset_calibrated_model_ml | `0.18615` | `0.55368` |
-| common_subset_calibrated_model_totals | `0.25794` | `0.70992` |
-| common_subset_market_anchored_ml | `0.19391` | `0.57240` |
-| common_subset_market_anchored_totals | `0.25238` | `0.69794` |
-| common_subset_ensemble_ml | `0.18615` | `0.55368` |
-| common_subset_ensemble_totals | `0.25794` | `0.70992` |
+| **Ensemble Ponderado (Modelos B+C+D+E)** | `0.22603` | `0.64396` |
+| Modelo A (Baseline Histórico) | `0.24786` | `0.68993` |
+| Mercado Sin Margen (Muestra común) | `0.23656` | `0.66643` |
+| Modelo sobre Muestra Común | `0.22603` | `0.64396` |
+| baseline_naive_ml | `0.23055` | `0.65378` |
+| ensemble_calibrated_ml | `0.20451` | `0.59931` |
+| baseline_naive_totals | `0.26516` | `0.72607` |
+| ensemble_calibrated_totals | `0.24755` | `0.68861` |
+| ensemble_raw_ml | `0.18951` | `0.56098` |
+| ensemble_calibrated_model_ml | `0.20451` | `0.59931` |
+| ensemble_market_anchored_ml | `0.18600` | `0.55202` |
+| ensemble_raw_totals | `0.26019` | `0.71440` |
+| ensemble_calibrated_model_totals | `0.24755` | `0.68861` |
+| ensemble_market_anchored_totals | `0.25475` | `0.70482` |
+| ensemble_raw_spread | `0.22934` | `0.65146` |
+| ensemble_calibrated_model_spread | `0.22950` | `0.65180` |
+| market_devig_spread | `0.24888` | `0.69091` |
+| ensemble_market_anchored_spread | `0.24203` | `0.67718` |
+| market_devig_ml | `0.22088` | `0.63525` |
+| market_devig_totals | `0.25223` | `0.69762` |
+| common_subset_raw_ml | `0.20466` | `0.59926` |
+| common_subset_raw_totals | `0.24680` | `0.68709` |
+| common_subset_calibrated_model_ml | `0.20451` | `0.59931` |
+| common_subset_calibrated_model_totals | `0.24755` | `0.68861` |
+| common_subset_market_anchored_ml | `0.21438` | `0.62155` |
+| common_subset_market_anchored_totals | `0.24899` | `0.69114` |
+| common_subset_ensemble_ml | `0.20451` | `0.59931` |
+| common_subset_ensemble_totals | `0.24755` | `0.68861` |
 
 ## 4. Desempeño por Mercado (Total: 33 Apuestas Observadas | Banca: S/97.91 PEN)
 | Mercado | Apuestas | Win Rate | Beneficio Neto (PEN) | ROI (%) | CLV Medio (%) | Brier Score |
@@ -69,7 +69,7 @@ simulation_only: true
 | `spread` | `0` | `0.0%` | `S/+0.00` | `+0.00%` | `n/d%` | `n/d` |
 
 ## 5. Evaluación de Reentrenamiento y Cambios Propuestos (Proceso C)
-- **Muestra OOS evaluada**: `15` partidos
+- **Muestra OOS evaluada**: `18` partidos
 - **Criterio de selección**: `OOS_BRIER_AND_LOG_LOSS vs incumbent, baseline and de-vigged market (never ROI)`
 - **¿Supera al modelo vigente en Brier y Log Loss?**: `False`
 - **¿Supera al Baseline en Brier y Log Loss?**: `True`
