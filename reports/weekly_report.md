@@ -1,8 +1,8 @@
 ---
-date_generated: 2026-11-18T03:43:39Z
+date_generated: 2026-11-18T04:41:52Z
 report_type: weekly_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
-run_manifest_id: RUN_20261118T034324Z_8C3D0C73
+run_manifest_id: RUN_20261118T044143Z_436ABF6D
 settled_predictions: 33
 observed_bankroll_pen: 97.91
 simulation_only: true
@@ -10,7 +10,7 @@ simulation_only: true
 # Informe Semanal de Rendimiento y Validación Fuera de Muestra
 
 ## 1. Métricas Clave de Desempeño (Paper Trading — Cuotas Observadas)
-- **Fecha generada (UTC)**: `2026-11-18T03:43:39Z`
+- **Fecha generada (UTC)**: `2026-11-18T04:41:52Z`
 - **Bankroll virtual inicial**: `S/100.00 PEN`
 - **Bankroll virtual actual liquidado**: `S/97.91 PEN` (`33` apuestas observadas liquidadas)
 - **Beneficio neto acumulado**: `S/-2.09 PEN`

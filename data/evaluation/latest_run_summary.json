@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-18T03:43:24Z",
-  "run_manifest_id": "RUN_20261118T034324Z_8C3D0C73",
+  "timestamp_utc": "2026-11-18T04:41:43Z",
+  "run_manifest_id": "RUN_20261118T044143Z_436ABF6D",
   "run_manifest": {
-    "run_id": "RUN_20261118T034324Z_8C3D0C73",
+    "run_id": "RUN_20261118T044143Z_436ABF6D",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -76,12 +76,12 @@
     "2026-11-18",
     "2026-11-19"
   ],
-  "closing_lines_promoted": 16,
-  "official_injury_report_games": 12,
+  "closing_lines_promoted": 0,
+  "official_injury_report_games": 11,
   "bets_settled_in_cycle": 0,
-  "shadow_settled_in_cycle": 11,
+  "shadow_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
-  "predictions_generated": 58,
+  "predictions_generated": 56,
   "active_calibration_methods": {
     "moneyline": "isotonic",
     "total_points": "isotonic",
@@ -124,8 +124,8 @@
     "placed_parlays_count": 0
   },
   "shadow_ledger": {
-    "total_candidates": 90,
-    "pending": 32,
+    "total_candidates": 103,
+    "pending": 45,
     "settled": 58,
     "won": 42,
     "lost": 16,
@@ -152,28 +152,28 @@
     },
     "by_rejection_reason": {
       "EV_BELOW_THRESHOLD": {
-        "total": 49,
+        "total": 58,
         "settled": 32,
         "won": 19,
         "lost": 13,
         "unit_profit": 1.132
       },
       "KELLY_STAKE_BELOW_MINIMUM": {
-        "total": 18,
+        "total": 20,
         "settled": 14,
         "won": 12,
         "lost": 2,
         "unit_profit": 9.0695
       },
       "EXCESSIVE_LONGSHOT_VARIANCE": {
-        "total": 1,
+        "total": 2,
         "settled": 0,
         "won": 0,
         "lost": 0,
         "unit_profit": 0.0
       },
       "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-        "total": 7,
+        "total": 8,
         "settled": 2,
         "won": 2,
         "lost": 0,
@@ -246,14 +246,14 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 722,
+        "predictions_count": 777,
         "final_game_predictions": 600,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 558,
+        "m012_cal_probs_count": 613,
         "final_with_m012_cal_probs_count": 436,
         "settled_bets_count": 8,
         "first_emitted_at": "2026-11-07T23:20:56Z",
-        "last_emitted_at": "2026-11-18T03:43:24Z"
+        "last_emitted_at": "2026-11-18T04:41:43Z"
       },
       "model_f_ensemble_v4": {
         "model_version_id": "model_f_ensemble_v4",
@@ -341,8 +341,8 @@
       }
     },
     "shadow_ledger": {
-      "total_candidates": 90,
-      "pending": 32,
+      "total_candidates": 103,
+      "pending": 45,
       "settled": 58,
       "won": 42,
       "lost": 16,
@@ -369,28 +369,28 @@
       },
       "by_rejection_reason": {
         "EV_BELOW_THRESHOLD": {
-          "total": 49,
+          "total": 58,
           "settled": 32,
           "won": 19,
           "lost": 13,
           "unit_profit": 1.132
         },
         "KELLY_STAKE_BELOW_MINIMUM": {
-          "total": 18,
+          "total": 20,
           "settled": 14,
           "won": 12,
           "lost": 2,
           "unit_profit": 9.0695
         },
         "EXCESSIVE_LONGSHOT_VARIANCE": {
-          "total": 1,
+          "total": 2,
           "settled": 0,
           "won": 0,
           "lost": 0,
           "unit_profit": 0.0
         },
         "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-          "total": 7,
+          "total": 8,
           "settled": 2,
           "won": 2,
           "lost": 0,
@@ -435,7 +435,7 @@
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-17_10_30PM.pdf",
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-17_11_30PM.pdf",
       "players_listed": 150
     },
     "sportradar_api": {
@@ -452,7 +452,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-18T03:43:31Z",
+      "extracted_at": "2026-11-18T04:41:48Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -467,50 +467,50 @@
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 17: Watson (back) is listed as questionable for Wednesday's game against Memphis.",
-        "relevance_score": 0.2467,
-        "captured_at": "2026-11-18T03:43:33Z"
+        "relevance_score": 0.2228,
+        "captured_at": "2026-11-18T04:41:49Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "HOU Amen Thompson (SF) Day To Day (Knee): Thompson is Questionable for Wednesday's (Nov. 18) game against the Pacers.",
-        "relevance_score": 0.2458,
+        "relevance_score": 0.2201,
+        "captured_at": "2026-11-17"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Wednesday's (Nov. 18) game against the Rockets.",
+        "relevance_score": 0.2171,
         "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "PHI Jaylen Brown (SF) Day To Day (Hamstring): Brown did not return to Monday's (Nov. 16) game against the Nets.",
-        "relevance_score": 0.2029,
+        "relevance_score": 0.1865,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "SAS Dylan Harper (SG) Day To Day (Undisclosed): Harper did not return on Tuesday's (Nov. 17) game against the Pistons.",
+        "relevance_score": 0.1863,
+        "captured_at": "2026-11-18"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Patrick Williams (PF) Day To Day (Finger): Williams did not return to Monday's (Nov. 16) game versus the Cavaliers.",
-        "relevance_score": 0.1995,
+        "relevance_score": 0.1834,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CHI Jalen Smith (C) Day To Day (Head): Smith did not return to Monday's (Nov. 16) game versus the Cavaliers.",
-        "relevance_score": 0.1946,
+        "relevance_score": 0.1783,
         "captured_at": "2026-11-16"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams did not play in Sunday's (Nov. 15) game against the Kings.",
-        "relevance_score": 0.162,
+        "relevance_score": 0.1391,
         "captured_at": "2026-11-16"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play in Monday's game (Nov. 16) against the Cavaliers.",
-        "relevance_score": 0.1598,
-        "captured_at": "2026-11-17"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "PHI LeBron James (SF) Day To Day (Back): James did not play in Monday's (Nov. 16) game against the Nets.",
-        "relevance_score": 0.1588,
-        "captured_at": "2026-11-17"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -521,7 +521,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261118T034324Z_8C3D0C73",
+    "run_manifest_id": "RUN_20261118T044143Z_436ABF6D",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "database_role": {
