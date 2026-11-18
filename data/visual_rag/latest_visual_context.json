@@ -8,49 +8,49 @@
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams is Questionable for Wednesday's (Nov. 18) game against the Hawks.",
-      "relevance_score": 0.2406,
-      "captured_at": "2026-11-17"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson is Questionable for Wednesday's (Nov. 18) game against the Grizzlies.",
-      "relevance_score": 0.2337,
+      "relevance_score": 0.2114,
       "captured_at": "2026-11-17"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "GSW Al Horford (C) Day To Day (Back): Horford is Questionable for Wednesday's (Nov. 18) game against the Mavericks.",
-      "relevance_score": 0.2311,
+      "relevance_score": 0.2023,
       "captured_at": "2026-11-17"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CLE Sam Merrill (SG) Day To Day (Elbow): Merrill is Questionable for Wednesday's (Nov. 18) game against the Grizzlies.",
-      "relevance_score": 0.2243,
+      "relevance_score": 0.1954,
       "captured_at": "2026-11-17"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "DAL Max Christie (SG) Day To Day (Ankle): Christie is Questionable for Wednesday's (Nov. 18) game against the Warriors.",
-      "relevance_score": 0.2236,
+      "relevance_score": 0.1949,
       "captured_at": "2026-11-17"
     },
     {
-      "source": "browserbase_cloud_espn_injuries_table",
-      "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 17: Watson (back) is listed as questionable for Wednesday's game against Memphis.",
-      "relevance_score": 0.2197,
-      "captured_at": "2026-11-18T16:01:58Z"
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "PHI Dean Wade (PF) Day To Day (Hamstring): Wade is Questionable for Wednesday's (Nov. 18) game against the Magic.",
+      "relevance_score": 0.1919,
+      "captured_at": "2026-11-18"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "TOR RJ Barrett (SF) Day To Day (Hamstring): Barrett is Questionable for Wednesday's (Nov. 18) game against the Wizards.",
+      "relevance_score": 0.1909,
+      "captured_at": "2026-11-18"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa is Questionable for Wednesday's (Nov. 18) game against the Suns.",
-      "relevance_score": 0.219,
+      "relevance_score": 0.19,
       "captured_at": "2026-11-17"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Wednesday's (Nov. 18) game against the Rockets.",
-      "relevance_score": 0.2155,
+      "snippet": "GSW Draymond Green (PF) Day To Day (Elbow): Green is Questionable for Wednesday's (Nov. 18) game against the Mavericks.",
+      "relevance_score": 0.1886,
       "captured_at": "2026-11-17"
     }
   ],

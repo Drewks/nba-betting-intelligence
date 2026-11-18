@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-18T16:01:48Z",
-  "run_manifest_id": "RUN_20261118T160148Z_F5923B8F",
+  "timestamp_utc": "2026-11-18T22:36:15Z",
+  "run_manifest_id": "RUN_20261118T223615Z_44D7392E",
   "run_manifest": {
-    "run_id": "RUN_20261118T160148Z_F5923B8F",
+    "run_id": "RUN_20261118T223615Z_44D7392E",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -77,7 +77,7 @@
     "2026-11-19"
   ],
   "closing_lines_promoted": 0,
-  "official_injury_report_games": 11,
+  "official_injury_report_games": 12,
   "bets_settled_in_cycle": 0,
   "shadow_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
@@ -124,8 +124,8 @@
     "placed_parlays_count": 0
   },
   "shadow_ledger": {
-    "total_candidates": 120,
-    "pending": 47,
+    "total_candidates": 138,
+    "pending": 65,
     "settled": 73,
     "won": 43,
     "lost": 30,
@@ -152,28 +152,28 @@
     },
     "by_rejection_reason": {
       "EV_BELOW_THRESHOLD": {
-        "total": 69,
+        "total": 80,
         "settled": 37,
         "won": 19,
         "lost": 18,
         "unit_profit": -3.868
       },
       "KELLY_STAKE_BELOW_MINIMUM": {
-        "total": 22,
+        "total": 25,
         "settled": 16,
         "won": 13,
         "lost": 3,
         "unit_profit": 9.0395
       },
       "MARKET_CAP_REACHED": {
-        "total": 2,
+        "total": 3,
         "settled": 1,
         "won": 1,
         "lost": 0,
         "unit_profit": 0.3521
       },
       "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-        "total": 11,
+        "total": 14,
         "settled": 6,
         "won": 2,
         "lost": 4,
@@ -246,14 +246,14 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 843,
+        "predictions_count": 909,
         "final_game_predictions": 656,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 679,
+        "m012_cal_probs_count": 745,
         "final_with_m012_cal_probs_count": 492,
         "settled_bets_count": 8,
         "first_emitted_at": "2026-11-07T23:20:56Z",
-        "last_emitted_at": "2026-11-18T16:01:48Z"
+        "last_emitted_at": "2026-11-18T22:36:15Z"
       },
       "model_f_ensemble_v4": {
         "model_version_id": "model_f_ensemble_v4",
@@ -341,8 +341,8 @@
       }
     },
     "shadow_ledger": {
-      "total_candidates": 120,
-      "pending": 47,
+      "total_candidates": 138,
+      "pending": 65,
       "settled": 73,
       "won": 43,
       "lost": 30,
@@ -369,28 +369,28 @@
       },
       "by_rejection_reason": {
         "EV_BELOW_THRESHOLD": {
-          "total": 69,
+          "total": 80,
           "settled": 37,
           "won": 19,
           "lost": 18,
           "unit_profit": -3.868
         },
         "KELLY_STAKE_BELOW_MINIMUM": {
-          "total": 22,
+          "total": 25,
           "settled": 16,
           "won": 13,
           "lost": 3,
           "unit_profit": 9.0395
         },
         "MARKET_CAP_REACHED": {
-          "total": 2,
+          "total": 3,
           "settled": 1,
           "won": 1,
           "lost": 0,
           "unit_profit": 0.3521
         },
         "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-          "total": 11,
+          "total": 14,
           "settled": 6,
           "won": 2,
           "lost": 4,
@@ -430,13 +430,13 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 5,
+      "events_found_today": 12,
       "includes_draftkings_pregame_odds": true
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-18_11_00AM.pdf",
-      "players_listed": 102
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-18_05_30PM.pdf",
+      "players_listed": 126
     },
     "sportradar_api": {
       "credentials_configured": true,
@@ -452,7 +452,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-18T16:01:57Z",
+      "extracted_at": "2026-11-18T22:36:21Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -467,49 +467,49 @@
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Jaylin Williams (PF) Day To Day (Back): Williams is Questionable for Wednesday's (Nov. 18) game against the Hawks.",
-        "relevance_score": 0.2406,
-        "captured_at": "2026-11-17"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson is Questionable for Wednesday's (Nov. 18) game against the Grizzlies.",
-        "relevance_score": 0.2337,
+        "relevance_score": 0.2114,
         "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "GSW Al Horford (C) Day To Day (Back): Horford is Questionable for Wednesday's (Nov. 18) game against the Mavericks.",
-        "relevance_score": 0.2311,
+        "relevance_score": 0.2023,
         "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "CLE Sam Merrill (SG) Day To Day (Elbow): Merrill is Questionable for Wednesday's (Nov. 18) game against the Grizzlies.",
-        "relevance_score": 0.2243,
+        "relevance_score": 0.1954,
         "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "DAL Max Christie (SG) Day To Day (Ankle): Christie is Questionable for Wednesday's (Nov. 18) game against the Warriors.",
-        "relevance_score": 0.2236,
+        "relevance_score": 0.1949,
         "captured_at": "2026-11-17"
       },
       {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Peyton Watson G Nov 18 Day-To-Day Nov 17: Watson (back) is listed as questionable for Wednesday's game against Memphis.",
-        "relevance_score": 0.2197,
-        "captured_at": "2026-11-18T16:01:58Z"
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "PHI Dean Wade (PF) Day To Day (Hamstring): Wade is Questionable for Wednesday's (Nov. 18) game against the Magic.",
+        "relevance_score": 0.1919,
+        "captured_at": "2026-11-18"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "TOR RJ Barrett (SF) Day To Day (Hamstring): Barrett is Questionable for Wednesday's (Nov. 18) game against the Wizards.",
+        "relevance_score": 0.1909,
+        "captured_at": "2026-11-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "SAC Precious Achiuwa (C) Day To Day (Leg): Achiuwa is Questionable for Wednesday's (Nov. 18) game against the Suns.",
-        "relevance_score": 0.219,
+        "relevance_score": 0.19,
         "captured_at": "2026-11-17"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Wednesday's (Nov. 18) game against the Rockets.",
-        "relevance_score": 0.2155,
+        "snippet": "GSW Draymond Green (PF) Day To Day (Elbow): Green is Questionable for Wednesday's (Nov. 18) game against the Mavericks.",
+        "relevance_score": 0.1886,
         "captured_at": "2026-11-17"
       }
     ],
@@ -521,7 +521,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261118T160148Z_F5923B8F",
+    "run_manifest_id": "RUN_20261118T223615Z_44D7392E",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "database_role": {
