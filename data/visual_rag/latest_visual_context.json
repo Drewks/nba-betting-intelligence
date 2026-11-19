@@ -7,51 +7,51 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "POR Deni Avdija (SF) Day To Day (Foot): Avdija is Questionable for Thursday's (Nov. 19) game against the Bucks.",
+      "relevance_score": 0.2123,
+      "captured_at": "2026-11-18"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "POR Toumani Camara (PF) Day To Day (Abdomen): Camara is Questionable for Thursday's (Nov. 19) game against the Bucks.",
+      "relevance_score": 0.2088,
+      "captured_at": "2026-11-18"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MIN Jonathan Kuminga (PF) Day To Day (Shoulder): Kuminga is Questionable for Thursday's (Nov. 19) game against the Knicks.",
+      "relevance_score": 0.2079,
+      "captured_at": "2026-11-18"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "MIN Zyon Pullin (SG) Day To Day (Quadriceps): Pullin is Questionable for Thursday's (Nov. 19) game against the Knicks.",
+      "relevance_score": 0.2055,
+      "captured_at": "2026-11-18"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Nikola Topić (PG) Day To Day (Hip): Topic did not return on Wednesday's (Nov. 18) game against the Hawks.",
-      "relevance_score": 0.2267,
+      "relevance_score": 0.1904,
       "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Alex Caruso (SG) Day To Day (Hip): Caruso did not return on Wednesday's (Nov. 18) game against the Hawks.",
-      "relevance_score": 0.2156,
+      "relevance_score": 0.1811,
       "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAS Dylan Harper (SG) Day To Day (Undisclosed): Harper did not return on Tuesday's (Nov. 17) game against the Pistons.",
-      "relevance_score": 0.2043,
-      "captured_at": "2026-11-18"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "TOR Collin Murray-Boyles (PF) Day To Day (Illness): Murray-Boyles did not return to Wednesday's (Nov. 18) game against the Wizards.",
-      "relevance_score": 0.1796,
+      "relevance_score": 0.15,
       "captured_at": "2026-11-19"
     },
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Kingston Flemings (PG) Day To Day (Back): Flemings did not play on Wednesday's (Nov. 18) game against the Thunder.",
-      "relevance_score": 0.1594,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson did not play on Wednesday's (Nov. 18) game against the Grizzlies.",
-      "relevance_score": 0.1592,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play on Wednesday's (Nov. 18) game against the Nets.",
-      "relevance_score": 0.1582,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale did not play on Wednesday's (Nov. 18) game against the Thunder.",
-      "relevance_score": 0.1581,
-      "captured_at": "2026-11-19"
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Kingston Flemings G Nov 20 Day-To-Day Nov 19: Flemings (back) is out for Wednesday's game against the Thunder.",
+      "relevance_score": 0.1269,
+      "captured_at": "2026-11-19T16:07:18Z"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

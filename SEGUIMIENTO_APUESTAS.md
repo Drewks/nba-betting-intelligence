@@ -1,8 +1,8 @@
 # 🎯 Panel de Seguimiento de Apuestas y Semáforo de Calibración (Estándar Sindicato V2)
 
-- **Última actualización**: `2026-11-18 23:29 (Hora Perú UTC-5)` (`2026-11-19T04:29:27Z`)
+- **Última actualización**: `2026-11-19 11:07 (Hora Perú UTC-5)` (`2026-11-19T16:07:21Z`)
 - **Bankroll Virtual Inicial**: `S/100.00 PEN` | **Bankroll Liquidado Actual**: **`S/98.51 PEN`** (`-1.49 PEN`)
-- **ROI Actual**: `-3.20%` | **Yield Actual**: `-3.20%` | **CLV (vs cierre sin margen)**: `-2.80%` (N=30) | **Max Drawdown**: `9.00%` | **Apuestas en espera**: `0` (`S/0.00 PEN` reservados)
+- **ROI Actual**: `-3.20%` | **Yield Actual**: `-3.12%` | **CLV (vs cierre sin margen)**: `-2.80%` (N=30) | **Max Drawdown**: `9.00%` | **Apuestas en espera**: `1` (`S/1.31 PEN` reservados)
 - **Motor Predictivo Activo**: `Ensemble (Elo + Ridge + LightGBM + Monte Carlo) anclado 70% al mercado sin margen`. Sin ventaja demostrada frente al mercado.
 - **Modo de Apuesta Activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%` | Solo cuotas observadas (nunca estimadas).
 - **Alcance de métricas**: solo apuestas hechas con cuotas observadas en un mercado real (`v_observed_simulated_bets`).
@@ -15,17 +15,17 @@
 
 ### Estado Global: **🔴 EN FASE DE CALIBRACIÓN Y PAPER TRADING (2/8 CRITERIOS EN VERDE — NO USAR DINERO REAL AÚN)**
 - **Progreso Muestra Total (Nivel 1)**: `[█░░░░░░░░░░░░░░░░░░░] 34 / 500 apuestas (6.8%)` — *Faltan **466** apuestas.*
-- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[███░░░░░░░░░░░░░░░░░] 34 / 200 en vivo (17.0%)` — *Tienes **0** apuestas reales en espera hoy.*
+- **Progreso Muestra 100% En Vivo (ESPN/OddsAPI)**: `[███░░░░░░░░░░░░░░░░░] 34 / 200 en vivo (17.0%)` — *Tienes **1** apuestas reales en espera hoy.*
 
 Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterios cuantitativos estrictos** divididos en **2 niveles de graduación**:
 
 | # | Criterio Cuantitativo de Auditoría | Estado Hoy | Valor Actual | Meta Nivel 1 (Piloto Micro-Banca 25%) | Meta Nivel 2 (Banca Completa 100%) |
 | :-: | :--- | :---: | :--- | :--- | :--- |
 | 1 | **Muestra total de apuestas liquidadas** | 🔴 PENDIENTE | `34 apuestas` | **>= 500 apuestas** | **>= 1,000 apuestas** |
-| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `34 liquidadas (0 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
-| 3 | **No peor que el Mercado sin margen ni que el Baseline (Brier & LogLoss)** | 🔴 PENDIENTE | `Modelo 0.2526 vs Mercado 0.2414 (N=29) | Baseline 0.2500` | **Modelo <= Mercado** | **Modelo <= Mercado** |
+| 2 | **Muestra 100% En Vivo (Pre-Partido Real)** | 🔴 PENDIENTE | `34 liquidadas (1 activas)` | **>= 200 en vivo** | **>= 500 en vivo** |
+| 3 | **No peor que el Mercado sin margen ni que el Baseline (Brier & LogLoss)** | 🔴 PENDIENTE | `Modelo 0.2581 vs Mercado 0.2470 (N=32) | Baseline 0.2510` | **Modelo <= Mercado** | **Modelo <= Mercado** |
 | 4 | **Error de Calibración por Tramos (ECE)** | 🟡 AJUSTANDO | `ECE 0.2239 (22.39%)` | **ECE <= 5.0%** | **ECE <= 3.5%** |
-| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -3.20% / Yield -3.20%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
+| 5 | **Rentabilidad Neta Positiva (ROI y Yield)** | 🔴 PENDIENTE | `ROI -3.20% / Yield -3.12%` | **ROI >= +2.0% / Yield >= +1.5%** | **ROI >= +3.5% (ambos mercados > 0%)** |
 | 6 | **Control de Caída Máxima (Max Drawdown)** | ✅ VERDE | `Total 9.00% (En vivo: 9.00%)` | **MaxDD <= 15.0%** | **MaxDD <= 15.0%** |
 | 7 | **Exclusión Estadística del Azar (Bootstrap CI)** | 🔴 PENDIENTE | `IC90 [-30.0%, +28.6%] / IC95 [-37.7%, +33.2%]` | **IC 90% lím. inf. > 0%** | **IC 95% lím. inf. > 0%** |
 | 8 | **Cero Fuga Temporal, historial íntegro y ledger reconciliado** | ✅ VERDE | `Sin violaciones` | **0 violaciones** | **0 violaciones** |
@@ -36,10 +36,17 @@ Para blindar tu capital contra rachas de suerte, el sistema evalúa **8 criterio
 
 ## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)
 
+> ### 🏆 PICK ESTRELLA DEL DÍA (`2026-11-19` — 1 Solo Pick: Mayor Probabilidad de Acierto)
+> - **Partido**: **Portland Trail Blazers @ Milwaukee Bucks (POR @ MIL)** (`2026-11-19 20:00 Hora Perú`)
+> - **Pick Más Probable**: 🎯 **UNDER 229.5 (Portland Trail Blazers @ Milwaukee Bucks)** (Total Puntos (Over/Under)) @ **`1.930`** *(Matchbook)*
+> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`54.4%`** | **EV**: `+4.9%`
+> - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor EV entre las apuestas pendientes con cuotas observadas)*.
+
 Estas son las selecciones emitidas por el bot sobre **partidos reales de la cartelera oficial de la NBA** (estrictamente pre-partido, con vigilancia de movimiento en contra `CLV < -5.0%`):
 
 | Fecha/Hora (Perú) | Partido | Mercado | Selección Recomendada | Mejor Cuota (Casa) | Prob. Modelo | EV (%) | CLV (%) | Stake | Estado | Resultado / Ganancia |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :---: | :--- |
+| `2026-11-19 20:00` | **Portland Trail Blazers @ Milwaukee Bucks (POR @ MIL)** | Total Puntos (Over/Under) | **UNDER 229.5 (Portland Trail Blazers @ Milwaukee Bucks)** | **1.930** *(Matchbook)* | 54.4% | `+4.9%` | — | S/1.31 | ⏳ PENDIENTE | Esperando final del partido |
 | `2026-11-18 19:00` | **Houston Rockets @ Indiana Pacers (HOU @ IND)** | Ganador (Moneyline) | **Gana Houston Rockets (HOU)** | **1.410** *(Pinnacle [LIVE_API])* | 72.7% | `+2.5%` | `+5.20%` | S/1.47 | ✅ GANADA | S/+0.60 (HOME 104 - AWAY 119 (Total: 223)) |
 | `2026-11-16 20:00` | **Portland Trail Blazers @ Minnesota Timberwolves (POR @ MIN)** | Total Puntos (Over/Under) | **UNDER 227.5 (Portland Trail Blazers @ Minnesota Timberwolves)** | **1.962** *(Pinnacle [LIVE_API])* | 53.3% | `+4.6%` | `-3.77%` | S/1.14 | ✅ GANADA | S/+1.10 (HOME 106 - AWAY 98 (Total: 204)) |
 | `2026-11-16 19:30` | **Philadelphia 76ers @ Brooklyn Nets (PHI @ BKN)** | Ganador (Moneyline) | **Gana Philadelphia 76ers (PHI)** | **1.442** *(Pinnacle [LIVE_API])* | 71.6% | `+3.3%` | `-2.00%` | S/1.78 | ✅ GANADA | S/+0.79 (HOME 123 - AWAY 135 (Total: 258)) |
@@ -77,28 +84,34 @@ Estas son las selecciones emitidas por el bot sobre **partidos reales de la cart
 
 ### 🔍 2.A Radiografía de Apuestas Activas (¿Qué Está Apostando Hoy, Cuotas y Estadísticas Clave?)
 
-- Actualmente no hay apuestas pendientes en espera de inicio.
+#### 🎯 **Milwaukee Bucks @ Portland Trail Blazers (MIL @ POR)** — `2026-11-20T01:00:00Z UTC`
+- **¿Qué está apostando el bot?**: **Menos de 229.5 pts (UNDER)** en *Matchbook (LineShop)*
+- **Cuota Tomada vs Cuota Justa**: **`1.930`** vs Cuota Justa **`1.840`** *(Ventaja Matemática EV: `+4.90%`)*
+- **Stake y Ganancia Potencial**: Stake **`S/1.31 PEN`** → Ganancia neta potencial: **`+S/1.22 PEN`**
+- **Probabilidades**: Modelo Calibrado **`54.4%`**
+- **Proyección de Marcador y Simulación Monte Carlo (10,000 partidos)**: Margen esperado `-9.6 pts` | Total esperado **`224.1 pts`** *(Intervalo Simulación 80% [Q10–Q90]: `201 – 247 pts` | Prob. Prórroga: `5.7%` | Prob. Paliza: `16.1%`)*
+- **Estadísticas Clave Tomadas en Cuenta**:
+  - **Rating Elo**: `MIL 1321.4` vs `POR 1570.6` | **Eficiencia Neta (Off/Def)**: `MIL (110.2/117.3)` vs `POR (114.1/111.4)` (`Dif: -9.9 pts/100`)
+  - **Ritmo (Pace)**: `99.6 posesiones` | **Descanso**: Dif `-1d` | **Viaje Geodésico**: `Dif. -972 millas`
+- **Por qué apostó el modelo**: _El modelo proyecta una probabilidad de éxito del 54.4% frente a una cuota de 1.93 (valor esperado positivo del +4.9% con stake calculado de S/ 1.31 PEN)._
 
 ### 📋 2.B Cartelera Completa de Próximos Partidos: Cuotas, Estadísticas a Tomar en Cuenta y Veredicto
 
 | Hora (UTC) | Partido | Cuotas Ganador (`Local / Visita`) | Proyección Modelo (`Margen / Total`) | Estadísticas Clave (`Elo`, `NetRtg`, `Descanso`) | ¿Qué Hace el Bot y Por Qué? |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `2026-11-19T02:30:00Z` | **Denver Nuggets @ Boston Celtics (DEN @ BOS)** | Local **2.280** / Visita **1.780** | **Margen -0.4 pts** (Local `48.9%`) · Total **218.2 pts** | Elo `1563.2/1652.1` · Net `-3.5` · Pace `98.0` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _HOME: EV 1.60% <= threshold 2.00%; HOME: EV 0.15% <= threshold 2.00%_ |
-| `2026-11-19T03:00:00Z` | **Los Angeles Lakers @ Utah Jazz (LAL @ UTA)** | Local **1.270** / Visita **5.600** | **Margen +14.7 pts** (Local `90.5%`) · Total **227.9 pts** | Elo `1637.0/1300.4` · Net `+10.9` · Pace `99.5` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _HOME: Venn-Abers conformal prediction interval width 0.300 > 0.22; epistemic uncertainty too high.; HOME: Venn-Abers conformal prediction interval width 0.286 > 0.22; epistemic uncertainty too high._ |
-| `2026-11-19T03:00:00Z` | **Sacramento Kings @ Phoenix Suns (SAC @ PHX)** | Local **3.500** / Visita **1.460** | **Margen -5.2 pts** (Local `31.5%`) · Total **228.0 pts** | Elo `1306.1/1514.0` · Net `-7.6` · Pace `100.1` · Desc `+1d` | **SIN APUESTA (NO_BET)** — _HOME: EV -0.01% <= threshold 2.00%; OVER: EV -0.79% <= threshold 2.00%_ |
-| `2026-11-20T01:00:00Z` | **Memphis Grizzlies @ Golden State Warriors (MEM @ GSW)** | ⏳ *Sin cuotas publicadas* | **Margen +4.2 pts** (Local `62.2%`) · Total **226.7 pts** | Elo `1473.7/1474.9` · Net `+3.5` · Pace `99.1` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-20T01:00:00Z` | **Milwaukee Bucks @ Portland Trail Blazers (MIL @ POR)** | Local **4.100** / Visita **1.290** | **Margen -9.7 pts** (Local `20.7%`) · Total **223.8 pts** | Elo `1321.4/1570.6` · Net `-10.2` · Pace `99.6` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _UNDER: EV -1.23% <= threshold 2.00%; OVER: EV -5.77% <= threshold 2.00%_ |
-| `2026-11-20T01:00:00Z` | **Minnesota Timberwolves @ New York Knicks (MIN @ NYK)** | Local **2.080** / Visita **1.860** | **Margen +0.4 pts** (Local `52.0%`) · Total **211.9 pts** | Elo `1622.4/1669.0` · Net `-1.4` · Pace `97.6` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-20T01:00:00Z` | **San Antonio Spurs @ LA Clippers (SAS @ LAC)** | Local **1.110** / Visita **10.050** | **Margen +11.8 pts** (Local `85.4%`) · Total **221.9 pts** | Elo `1708.4/1450.5` · Net `+9.3` · Pace `99.4` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _AWAY: Venn-Abers conformal prediction interval width 0.292 > 0.22; epistemic uncertainty too high.; AWAY: EV 1.62% <= threshold 2.00%_ |
-| `2026-11-21T00:00:00Z` | **Atlanta Hawks @ Charlotte Hornets (ATL @ CHA)** | ⏳ *Sin cuotas publicadas* | **Margen +4.5 pts** (Local `65.3%`) · Total **220.4 pts** | Elo `1521.6/1473.2` · Net `+3.3` · Pace `98.6` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T00:30:00Z` | **Brooklyn Nets @ Orlando Magic (BKN @ ORL)** | ⏳ *Sin cuotas publicadas* | **Margen -5.1 pts** (Local `31.7%`) · Total **221.6 pts** | Elo `1302.1/1500.1` · Net `-6.2` · Pace `99.7` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T00:30:00Z` | **Cleveland Cavaliers @ Indiana Pacers (CLE @ IND)** | ⏳ *Sin cuotas publicadas* | **Margen +8.5 pts** (Local `79.0%`) · Total **229.2 pts** | Elo `1558.3/1354.2` · Net `+6.4` · Pace `99.6` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T00:30:00Z` | **Detroit Pistons @ Toronto Raptors (DET @ TOR)** | ⏳ *Sin cuotas publicadas* | **Margen +7.4 pts** (Local `75.2%`) · Total **220.4 pts** | Elo `1646.0/1485.3` · Net `+6.3` · Pace `99.8` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T01:00:00Z` | **Chicago Bulls @ Washington Wizards (CHI @ WAS)** | ⏳ *Sin cuotas publicadas* | **Margen +4.7 pts** (Local `67.1%`) · Total **239.2 pts** | Elo `1400.4/1308.2` · Net `+3.4` · Pace `100.7` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T01:00:00Z` | **Oklahoma City Thunder @ New Orleans Pelicans (OKC @ NOP)** | ⏳ *Sin cuotas publicadas* | **Margen +11.8 pts** (Local `85.6%`) · Total **226.9 pts** | Elo `1642.5/1378.9` · Net `+8.7` · Pace `99.6` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T02:30:00Z` | **Utah Jazz @ Phoenix Suns (UTA @ PHX)** | ⏳ *Sin cuotas publicadas* | **Margen -6.6 pts** (Local `27.8%`) · Total **227.6 pts** | Elo `1300.4/1514.0` · Net `-8.5` · Pace `99.1` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T03:00:00Z` | **Denver Nuggets @ Houston Rockets (DEN @ HOU)** | ⏳ *Sin cuotas publicadas* | **Margen +1.6 pts** (Local `55.4%`) · Total **222.8 pts** | Elo `1563.2/1627.8` · Net `-2.3` · Pace `98.8` · Desc `+2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
-| `2026-11-21T03:00:00Z` | **Los Angeles Lakers @ Sacramento Kings (LAL @ SAC)** | ⏳ *Sin cuotas publicadas* | **Margen +14.7 pts** (Local `89.9%`) · Total **230.1 pts** | Elo `1637.0/1306.1` · Net `+12.7` · Pace `100.4` · Desc `-2d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-20T01:00:00Z` | **Memphis Grizzlies @ Golden State Warriors (MEM @ GSW)** | Local **1.460** / Visita **3.150** | **Margen +4.3 pts** (Local `62.3%`) · Total **226.9 pts** | Elo `1473.7/1474.9` · Net `+3.7` · Pace `99.1` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _AWAY: Moneyline odds 3.05 (> 2.80 max cap); skipped to protect bankroll and CLV.; AWAY: EV 0.83% <= threshold 2.00%_ |
+| `2026-11-20T01:00:00Z` | **Milwaukee Bucks @ Portland Trail Blazers (MIL @ POR)** | Local **5.000** / Visita **1.290** | **Margen -9.6 pts** (Local `20.8%`) · Total **224.1 pts** | Elo `1321.4/1570.6` · Net `-9.9` · Pace `99.6` · Desc `-1d` | **APUESTA DETECTADA: Menos de 229.5 pts (UNDER) @ 1.93 en Matchbook (LineShop)** — _El modelo proyecta una probabilidad de éxito del 54.4% frente a una cuota de 1.93 (valor esperado positivo del +4.9% con stake calculado de S/ 1.31 PEN)._ |
+| `2026-11-20T01:00:00Z` | **Minnesota Timberwolves @ New York Knicks (MIN @ NYK)** | Local **2.080** / Visita **1.960** | **Margen +0.5 pts** (Local `52.1%`) · Total **212.1 pts** | Elo `1622.4/1669.0` · Net `-1.4` · Pace `97.6` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _UNDER: EV 1.60% <= threshold 2.00%; HOME: EV 0.05% <= threshold 2.00%_ |
+| `2026-11-20T01:00:00Z` | **San Antonio Spurs @ LA Clippers (SAS @ LAC)** | Local **1.130** / Visita **10.050** | **Margen +11.8 pts** (Local `85.4%`) · Total **222.1 pts** | Elo `1708.4/1450.5` · Net `+9.3` · Pace `99.4` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _AWAY: Venn-Abers conformal prediction interval width 0.300 > 0.22; epistemic uncertainty too high.; UNDER: Fractional Kelly stake below S/1.00 (no material edge at 2.020)._ |
+| `2026-11-21T00:00:00Z` | **Atlanta Hawks @ Charlotte Hornets (ATL @ CHA)** | ⏳ *Sin cuotas publicadas* | **Margen +4.5 pts** (Local `65.3%`) · Total **220.6 pts** | Elo `1521.6/1473.2` · Net `+3.4` · Pace `98.6` · Desc `-1d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T00:30:00Z` | **Brooklyn Nets @ Orlando Magic (BKN @ ORL)** | ⏳ *Sin cuotas publicadas* | **Margen -5.2 pts** (Local `31.6%`) · Total **221.8 pts** | Elo `1302.1/1500.1` · Net `-6.4` · Pace `99.7` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T00:30:00Z` | **Cleveland Cavaliers @ Indiana Pacers (CLE @ IND)** | ⏳ *Sin cuotas publicadas* | **Margen +8.5 pts** (Local `79.1%`) · Total **229.4 pts** | Elo `1558.3/1354.2` · Net `+6.5` · Pace `99.6` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T00:30:00Z` | **Detroit Pistons @ Toronto Raptors (DET @ TOR)** | ⏳ *Sin cuotas publicadas* | **Margen +7.4 pts** (Local `75.2%`) · Total **220.7 pts** | Elo `1646.0/1485.3` · Net `+6.4` · Pace `99.8` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T01:00:00Z` | **Chicago Bulls @ Washington Wizards (CHI @ WAS)** | ⏳ *Sin cuotas publicadas* | **Margen +4.8 pts** (Local `67.2%`) · Total **239.5 pts** | Elo `1400.4/1308.2` · Net `+3.5` · Pace `100.7` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T01:00:00Z` | **Oklahoma City Thunder @ New Orleans Pelicans (OKC @ NOP)** | ⏳ *Sin cuotas publicadas* | **Margen +11.8 pts** (Local `85.6%`) · Total **227.2 pts** | Elo `1642.5/1378.9` · Net `+8.8` · Pace `99.6` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T02:30:00Z` | **Utah Jazz @ Phoenix Suns (UTA @ PHX)** | ⏳ *Sin cuotas publicadas* | **Margen -5.4 pts** (Local `31.2%`) · Total **226.7 pts** | Elo `1317.2/1524.1` · Net `-8.2` · Pace `98.8` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T03:00:00Z` | **Denver Nuggets @ Houston Rockets (DEN @ HOU)** | ⏳ *Sin cuotas publicadas* | **Margen +1.4 pts** (Local `54.7%`) · Total **222.5 pts** | Elo `1570.0/1627.8` · Net `-2.1` · Pace `98.7` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
+| `2026-11-21T03:00:00Z` | **Los Angeles Lakers @ Sacramento Kings (LAL @ SAC)** | ⏳ *Sin cuotas publicadas* | **Margen +13.9 pts** (Local `88.9%`) · Total **229.2 pts** | Elo `1620.2/1296.0` · Net `+12.1` · Pace `100.1` · Desc `+0d` | **SIN APUESTA (NO_BET)** — _Las cuotas actuales de las casas no ofrecen suficiente margen de valor esperado (>= 2.0% EV) para justificar una entrada segura._ |
 
 ---
 
