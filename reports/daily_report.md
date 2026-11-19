@@ -1,28 +1,28 @@
 ---
-date_generated: 2026-11-18T22:36:26Z
+date_generated: 2026-11-19T03:23:18Z
 report_type: daily_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
-period_evaluated: 2026-11-18
-predictions_count: 106
-observed_settled_bets: 33
-observed_bankroll_pen: 97.91
+period_evaluated: 2026-11-19
+predictions_count: 253
+observed_settled_bets: 34
+observed_bankroll_pen: 98.51
 simulation_only: true
 ---
-# Informe Diario NBA Betting Intelligence — 2026-11-18
+# Informe Diario NBA Betting Intelligence — 2026-11-19
 
 ## 1. Metadatos de Ejecución y Estado de Banca Observada
-- **Fecha de generación (UTC)**: `2026-11-18T22:36:26Z`
-- **Jornada evaluada**: `2026-11-18`
+- **Fecha de generación (UTC)**: `2026-11-19T03:23:18Z`
+- **Jornada evaluada**: `2026-11-19`
 - **Versión de modelo activa**: `model_f_ensemble_v8` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)
 - **Bankroll virtual inicial**: `S/100.00 PEN`
-- **Bankroll observado liquidado actual**: **`S/97.91 PEN`** (`S/-2.09 PEN` en `33` apuestas observadas liquidadas)
+- **Bankroll observado liquidado actual**: **`S/98.51 PEN`** (`S/-1.49 PEN` en `34` apuestas observadas liquidadas)
 - **Modo de apuesta activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%`
-- **Partidos evaluados**: `5`
+- **Partidos evaluados**: `12`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `106`
-- **Apuestas simuladas registradas en la jornada**: `0` (límite diario: 3, Kelly Fraccional (25%), EV >= 2.0%)
-- **Decisiones NO_BET registradas**: `110`
-- **Resultados pendientes globales**: `1`
+- **Predicciones emitidas**: `253`
+- **Apuestas simuladas registradas en la jornada**: `1` (límite diario: 3, Kelly Fraccional (25%), EV >= 2.0%)
+- **Decisiones NO_BET registradas**: `253`
+- **Resultados pendientes globales**: `0`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.
@@ -31,42 +31,42 @@ simulation_only: true
 
 | Partido | Mercado | Selección | Línea | Cuota Dec. | Prob. Implícita Bruta | Prob. Estimada (Cal.) | EV (%) | Proveedor |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- |
-| `UTA @ LAC` | `moneyline` | **HOME** | — | 1.454 | 0.6875 | 0.7276 | +5.83% | `Pinnacle [LIVE_API]` |
-| `UTA @ LAC` | `moneyline` | **HOME** | — | 1.461 | 0.6846 | 0.7236 | +5.71% | `Pinnacle [LIVE_API]` |
-| `UTA @ LAC` | `moneyline` | **HOME** | — | 1.450 | 0.6894 | 0.7270 | +5.45% | `Pinnacle [LIVE_API]` |
-| `POR @ MIN` | `total_points` | **UNDER** | 225.0 | 1.980 | 0.5049 | 0.5219 | +5.42% | `Pinnacle [LIVE_API]` |
-| `UTA @ LAC` | `moneyline` | **HOME** | — | 1.435 | 0.6970 | 0.7344 | +5.37% | `Pinnacle [LIVE_API]` |
-| `UTA @ LAC` | `spread` | **HOME** | -6.0 | 1.990 | 0.5025 | 0.5141 | +4.84% | `Pinnacle [LIVE_API]` |
-| `UTA @ LAC` | `spread` | **HOME** | -6.0 | 1.952 | 0.5122 | 0.5221 | +4.48% | `Pinnacle [LIVE_API]` |
-| `UTA @ LAC` | `spread` | **HOME** | -6.0 | 1.962 | 0.5098 | 0.5189 | +4.32% | `Pinnacle [LIVE_API]` |
-| `UTA @ LAC` | `spread` | **HOME** | -6.0 | 1.917 | 0.5215 | 0.5286 | +3.89% | `Pinnacle [LIVE_API]` |
-| `POR @ MIN` | `moneyline` | **HOME** | — | 1.725 | 0.5798 | 0.5982 | +3.17% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `moneyline` | **AWAY** | — | 2.940 | 0.3401 | 0.3655 | +7.47% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `moneyline` | **AWAY** | — | 2.940 | 0.3401 | 0.3652 | +7.37% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `spread` | **AWAY** | 6.0 | 1.917 | 0.5215 | 0.5412 | +6.25% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `moneyline` | **AWAY** | — | 2.680 | 0.3731 | 0.3947 | +5.77% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `moneyline` | **AWAY** | — | 2.650 | 0.3774 | 0.3976 | +5.37% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `spread` | **AWAY** | 6.0 | 1.926 | 0.5192 | 0.5341 | +5.34% | `Pinnacle [LIVE_API]` |
+| `UTA @ LAL` | `spread` | **HOME** | -10.0 | 1.926 | 0.5192 | 0.5329 | +5.12% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `spread` | **AWAY** | 4.5 | 1.980 | 0.5049 | 0.5272 | +4.41% | `Pinnacle [LIVE_API]` |
+| `GSW @ DAL` | `spread` | **AWAY** | 4.5 | 1.971 | 0.5074 | 0.5289 | +4.24% | `Pinnacle [LIVE_API]` |
+| `UTA @ LAL` | `spread` | **HOME** | -11.5 | 1.926 | 0.5192 | 0.5400 | +4.01% | `Pinnacle [LIVE_API]` |
 
-## 4. Apuestas Simuladas (Paper Trading — Banca Observada S/97.91 PEN en 33 Apuestas Liquidadas)
+## 4. Apuestas Simuladas (Paper Trading — Banca Observada S/98.51 PEN en 34 Apuestas Liquidadas)
 
 | Bet ID | Partido | Mercado | Selección | Cuota | Prob. Est. | EV (%) | Stake Virtual | Estado | Beneficio Neto |
 | :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: | :--- | ---: |
-| — | — | — | **NO BET** | — | — | — | S/0.00 | `NO_BET` | S/0.00 |
+| `BET_20261119_776B4D10` | `ESPN_401910008_2026-11-19_HOU_AT_IND` | `moneyline` | **AWAY** | 1.410 | 0.7267 | +2.45% | S/1.47 | `WON` | S/+0.60 |
 
 ## 5. Registro de Decisiones NO_BET (Muestra de Control)
-- `ESPN_401910006_2026-11-18_UTA_AT_LAC` (`moneyline` - `HOME`): **NO_BET** [MODEL_MARKET_DISAGREEMENT] — Model differs from de-vigged market by 18.5 pts (> 15); likely missing information, skipped.
-- `ESPN_401910006_2026-11-18_UTA_AT_LAC` (`spread` - `HOME`): **NO_BET** [CONFORMAL_UNCERTAINTY_TOO_WIDE] — Venn-Abers conformal prediction interval width 0.292 > 0.22; epistemic uncertainty too high.
-- `ESPN_401910002_2026-11-18_NYK_AT_TOR` (`moneyline` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.47% <= threshold 2.00%
-- `ESPN_401910004_2026-11-18_DET_AT_SAS` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.42% <= threshold 2.00%
-- `ESPN_401910004_2026-11-18_DET_AT_SAS` (`spread` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.02% <= threshold 2.00%
-- `ESPN_401910005_2026-11-18_CHA_AT_LAL` (`spread` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -0.41% <= threshold 2.00%
-- `ESPN_401910004_2026-11-18_DET_AT_SAS` (`moneyline` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -0.61% <= threshold 2.00%
-- `ESPN_401910002_2026-11-18_NYK_AT_TOR` (`spread` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -1.00% <= threshold 2.00%
+- `ESPN_401910009_2026-11-19_MIL_AT_MIA` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 1.96% <= threshold 2.00%
+- `ESPN_401910008_2026-11-19_HOU_AT_IND` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 1.89% <= threshold 2.00%
+- `ESPN_401910009_2026-11-19_MIL_AT_MIA` (`spread` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.78% <= threshold 2.00%
+- `ESPN_401910007_2026-11-19_MEM_AT_CLE` (`moneyline` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV 0.48% <= threshold 2.00%
+- `ESPN_401910007_2026-11-19_MEM_AT_CLE` (`total_points` - `UNDER`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -1.65% <= threshold 2.00%
+- `ESPN_401910009_2026-11-19_MIL_AT_MIA` (`moneyline` - `HOME`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -1.90% <= threshold 2.00%
+- `ESPN_401910007_2026-11-19_MEM_AT_CLE` (`spread` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -2.28% <= threshold 2.00%
+- `ESPN_401910008_2026-11-19_HOU_AT_IND` (`spread` - `AWAY`): **NO_BET** [EV_BELOW_THRESHOLD] — EV -2.40% <= threshold 2.00%
 
 ## 6. Evidencia de Ventaja (CLV y Holdout hacia Adelante)
 
 | Mercado | Partidos (señales) | CLV medio | IC95 (t, por partido) | Veredicto | Kelly aplicado |
 | :--- | ---: | ---: | :--- | :--- | ---: |
-| `moneyline` | 6 (6) | +0.12% | [-3.96%, +4.19%] | `INSUFFICIENT_SAMPLE` | ×1.00 |
-| `total_points` | 9 (15) | -2.88% | [-5.98%, +0.22%] | `INSUFFICIENT_SAMPLE` | ×1.00 |
+| `moneyline` | 7 (7) | +0.84% | [-2.88%, +4.57%] | `INSUFFICIENT_SAMPLE` | ×1.00 |
+| `total_points` | 12 (22) | -3.42% | [-6.24%, -0.59%] | `NO_EDGE` | ×0.50 |
 
 - **Holdout hacia adelante** (partidos desde `2026-11-15T00:00:00Z`, backtest `2026-11-18T01:49:56Z`): `14` partidos, `0` apuestas, ROI `n/d`, CLV `n/d`. Es la única evidencia fuera de muestra real.
 
 ## 7. Limitaciones Documentadas
-- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual inicial de **S/100.00 PEN** (bankroll observado liquidado actual: **S/97.91 PEN** en **33** apuestas observadas).
+- Todas las operaciones son estrictamente simuladas sobre el bankroll virtual inicial de **S/100.00 PEN** (bankroll observado liquidado actual: **S/98.51 PEN** en **34** apuestas observadas).
 - Cuando una fuente externa no proporciona cuota verificable antes del inicio del partido (`captured_at < game_start_time`), el sistema bloquea el cálculo de EV y registra `NO_BET`.

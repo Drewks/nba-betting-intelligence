@@ -1,13 +1,13 @@
 ---
-date_generated: 2026-11-18T22:36:28Z
+date_generated: 2026-11-19T03:23:20Z
 initial_bankroll_pen: 100.00
-current_bankroll_pen: 97.91
+current_bankroll_pen: 98.51
 ---
 # Libro Mayor de Paper Trading (S/100.00 PEN Virtuales)
 
 - **Saldo inicial**: `S/100.00 PEN`
-- **Saldo liquidado actual**: `S/97.91 PEN`
-- **Beneficio neto acumulado**: `S/-2.09 PEN`
+- **Saldo liquidado actual**: `S/98.51 PEN`
+- **Beneficio neto acumulado**: `S/-1.49 PEN`
 - **Exposición pendiente**: `S/0.00 PEN`
-- **Apuestas liquidadas**: `33`
+- **Apuestas liquidadas**: `34`
 - **Reglas activas**: Kelly Fraccional (25%), máx 3 selecciones/jornada, EV >= 2.0%.
