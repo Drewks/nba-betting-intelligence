@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-19T16:07:12Z",
-  "run_manifest_id": "RUN_20261119T160712Z_5E2F1079",
+  "timestamp_utc": "2026-11-19T22:41:37Z",
+  "run_manifest_id": "RUN_20261119T224137Z_7574D187",
   "run_manifest": {
-    "run_id": "RUN_20261119T160712Z_5E2F1079",
+    "run_id": "RUN_20261119T224137Z_7574D187",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -77,11 +77,11 @@
     "2026-11-20"
   ],
   "closing_lines_promoted": 0,
-  "official_injury_report_games": 3,
+  "official_injury_report_games": 10,
   "bets_settled_in_cycle": 0,
   "shadow_settled_in_cycle": 0,
-  "new_bets_placed_in_cycle": 1,
-  "predictions_generated": 24,
+  "new_bets_placed_in_cycle": 0,
+  "predictions_generated": 18,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic",
@@ -124,8 +124,8 @@
     "placed_parlays_count": 0
   },
   "shadow_ledger": {
-    "total_candidates": 152,
-    "pending": 14,
+    "total_candidates": 157,
+    "pending": 19,
     "settled": 138,
     "won": 64,
     "lost": 74,
@@ -152,18 +152,32 @@
     },
     "by_rejection_reason": {
       "EXCESSIVE_LONGSHOT_VARIANCE": {
-        "total": 3,
+        "total": 4,
         "settled": 2,
         "won": 0,
         "lost": 2,
         "unit_profit": -2.0
       },
       "EV_BELOW_THRESHOLD": {
-        "total": 88,
+        "total": 90,
         "settled": 80,
         "won": 39,
         "lost": 41,
         "unit_profit": -6.6463
+      },
+      "KELLY_STAKE_BELOW_MINIMUM": {
+        "total": 27,
+        "settled": 25,
+        "won": 13,
+        "lost": 12,
+        "unit_profit": 0.0395
+      },
+      "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
+        "total": 18,
+        "settled": 14,
+        "won": 2,
+        "lost": 12,
+        "unit_profit": -10.0341
       },
       "QUALIFIED_POSITIVE_EV": {
         "total": 7,
@@ -171,20 +185,6 @@
         "won": 6,
         "lost": 0,
         "unit_profit": 3.7697
-      },
-      "KELLY_STAKE_BELOW_MINIMUM": {
-        "total": 26,
-        "settled": 25,
-        "won": 13,
-        "lost": 12,
-        "unit_profit": 0.0395
-      },
-      "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-        "total": 17,
-        "settled": 14,
-        "won": 2,
-        "lost": 12,
-        "unit_profit": -10.0341
       },
       "MARKET_CAP_REACHED": {
         "total": 3,
@@ -246,14 +246,14 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 949,
+        "predictions_count": 967,
         "final_game_predictions": 909,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 785,
+        "m012_cal_probs_count": 803,
         "final_with_m012_cal_probs_count": 745,
         "settled_bets_count": 9,
         "first_emitted_at": "2026-11-07T23:20:56Z",
-        "last_emitted_at": "2026-11-19T16:07:12Z"
+        "last_emitted_at": "2026-11-19T22:41:37Z"
       },
       "model_f_ensemble_v4": {
         "model_version_id": "model_f_ensemble_v4",
@@ -341,8 +341,8 @@
       }
     },
     "shadow_ledger": {
-      "total_candidates": 152,
-      "pending": 14,
+      "total_candidates": 157,
+      "pending": 19,
       "settled": 138,
       "won": 64,
       "lost": 74,
@@ -369,18 +369,32 @@
       },
       "by_rejection_reason": {
         "EXCESSIVE_LONGSHOT_VARIANCE": {
-          "total": 3,
+          "total": 4,
           "settled": 2,
           "won": 0,
           "lost": 2,
           "unit_profit": -2.0
         },
         "EV_BELOW_THRESHOLD": {
-          "total": 88,
+          "total": 90,
           "settled": 80,
           "won": 39,
           "lost": 41,
           "unit_profit": -6.6463
+        },
+        "KELLY_STAKE_BELOW_MINIMUM": {
+          "total": 27,
+          "settled": 25,
+          "won": 13,
+          "lost": 12,
+          "unit_profit": 0.0395
+        },
+        "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
+          "total": 18,
+          "settled": 14,
+          "won": 2,
+          "lost": 12,
+          "unit_profit": -10.0341
         },
         "QUALIFIED_POSITIVE_EV": {
           "total": 7,
@@ -388,20 +402,6 @@
           "won": 6,
           "lost": 0,
           "unit_profit": 3.7697
-        },
-        "KELLY_STAKE_BELOW_MINIMUM": {
-          "total": 26,
-          "settled": 25,
-          "won": 13,
-          "lost": 12,
-          "unit_profit": 0.0395
-        },
-        "CONFORMAL_UNCERTAINTY_TOO_WIDE": {
-          "total": 17,
-          "settled": 14,
-          "won": 2,
-          "lost": 12,
-          "unit_profit": -10.0341
         },
         "MARKET_CAP_REACHED": {
           "total": 3,
@@ -430,13 +430,13 @@
   "sources_info": {
     "espn_public_api": {
       "reachable": true,
-      "events_found_today": 12,
+      "events_found_today": 4,
       "includes_draftkings_pregame_odds": true
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-19_11_00AM.pdf",
-      "players_listed": 23
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-19_05_30PM.pdf",
+      "players_listed": 103
     },
     "sportradar_api": {
       "credentials_configured": true,
@@ -452,7 +452,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-19T16:07:15Z",
+      "extracted_at": "2026-11-19T22:41:41Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -465,52 +465,52 @@
     "indexed_documents_count": 124,
     "top_retrieved_context": [
       {
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Peyton Watson G Nov 20 Day-To-Day Nov 19: Watson (back) is questionable for Friday's game against the Pacers.",
+        "relevance_score": 0.2278,
+        "captured_at": "2026-11-19T22:41:42Z"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "GSW LJ Cryer (PG) Day To Day (Back): Cryer is Questionable for Thursday's (Nov. 19) game versus the Grizzlies.",
+        "relevance_score": 0.2237,
+        "captured_at": "2026-11-19"
+      },
+      {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "POR Deni Avdija (SF) Day To Day (Foot): Avdija is Questionable for Thursday's (Nov. 19) game against the Bucks.",
-        "relevance_score": 0.2123,
+        "relevance_score": 0.2213,
         "captured_at": "2026-11-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "MEM Isaiah Stewart (C) Day To Day (Illness): Stewart is Questionable for Thursday's (Nov. 19) game versus the Warriors.",
+        "relevance_score": 0.22,
+        "captured_at": "2026-11-19"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
         "snippet": "POR Toumani Camara (PF) Day To Day (Abdomen): Camara is Questionable for Thursday's (Nov. 19) game against the Bucks.",
-        "relevance_score": 0.2088,
+        "relevance_score": 0.2184,
         "captured_at": "2026-11-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "MIN Jonathan Kuminga (PF) Day To Day (Shoulder): Kuminga is Questionable for Thursday's (Nov. 19) game against the Knicks.",
-        "relevance_score": 0.2079,
-        "captured_at": "2026-11-18"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIN Zyon Pullin (SG) Day To Day (Quadriceps): Pullin is Questionable for Thursday's (Nov. 19) game against the Knicks.",
-        "relevance_score": 0.2055,
+        "relevance_score": 0.2163,
         "captured_at": "2026-11-18"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Nikola Topić (PG) Day To Day (Hip): Topic did not return on Wednesday's (Nov. 18) game against the Hawks.",
-        "relevance_score": 0.1904,
+        "relevance_score": 0.2127,
         "captured_at": "2026-11-19"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Alex Caruso (SG) Day To Day (Hip): Caruso did not return on Wednesday's (Nov. 18) game against the Hawks.",
-        "relevance_score": 0.1811,
+        "relevance_score": 0.2018,
         "captured_at": "2026-11-19"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "TOR Collin Murray-Boyles (PF) Day To Day (Illness): Murray-Boyles did not return to Wednesday's (Nov. 18) game against the Wizards.",
-        "relevance_score": 0.15,
-        "captured_at": "2026-11-19"
-      },
-      {
-        "source": "browserbase_cloud_espn_injuries_table",
-        "snippet": "Kingston Flemings G Nov 20 Day-To-Day Nov 19: Flemings (back) is out for Wednesday's game against the Thunder.",
-        "relevance_score": 0.1269,
-        "captured_at": "2026-11-19T16:07:18Z"
       }
     ],
     "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
@@ -521,7 +521,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261119T160712Z_5E2F1079",
+    "run_manifest_id": "RUN_20261119T224137Z_7574D187",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "database_role": {
