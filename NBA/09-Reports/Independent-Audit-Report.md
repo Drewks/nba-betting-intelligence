@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-19T03:23:18Z
+date_generated: 2026-11-19T04:29:27Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 model_version_id: model_f_ensemble_v8
-run_manifest_id: RUN_20261119T032309Z_83164EA0
+run_manifest_id: RUN_20261119T042919Z_48D47DC1
 commit_sha: 5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576
 config_hash: f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -11,10 +11,10 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-19T03:23:18Z`
-- **Run Manifest / Versión activa**: `RUN_20261119T032309Z_83164EA0` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
+- **Fecha de auditoría (UTC)**: `2026-11-19T04:29:27Z`
+- **Run Manifest / Versión activa**: `RUN_20261119T042919Z_48D47DC1` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
 - **Origen de Base de Datos (`DB Provenance`)**: PRODUCTION_STATE_LIVE (`live: origin/state-live:data/nba_intelligence.sqlite3` | `main: FROZEN_CI_BASELINE`)
-- **Shadow Signal Ledger**: Total `141` señales +EV registradas (liquidadas `112`, ROI 1u `-13.73%`, CLV medio `-2.627%`; cero impacto en banca S/100) — evidencia de CLV: `INCONCLUSIVE` (n=`16` partidos / `29` señales, IC95 `[-3.956%, 1.083%]`; para detectar +1.0% hacen falta ~`176` partidos)
+- **Shadow Signal Ledger**: Total `145` señales +EV registradas (liquidadas `123`, ROI 1u `-21.44%`, CLV medio `-1.672%`; cero impacto en banca S/100) — evidencia de CLV: `INCONCLUSIVE` (n=`17` partidos / `35` señales, IC95 `[-3.595%, 1.238%]`; para detectar +1.0% hacen falta ~`174` partidos)
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/98.51 PEN`
@@ -31,14 +31,14 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 | :--- | :--- | :--- | :--- |
 | `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `34` | `>= 500` |
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
-| `gate_3_calibration_non_inferior_to_baseline` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.256811, 'baseline_brier': 0.250076, 'model_log_loss': 0.710917, 'baseline_log_loss': 0.694478}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
+| `gate_3_calibration_non_inferior_to_baseline` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.25257, 'baseline_brier': 0.250031, 'model_log_loss': 0.701918, 'baseline_log_loss': 0.694373}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
 | `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -3.2034, 'yield_pct': -3.2034}` | `ROI > 0% and Yield > 0%` |
 | `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -37.7499, 'ci_95_upper_pct': 33.2322, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
 | `gate_9_independent_audit_approved` | **FAIL (Permanece en Simulación)** | `False` | `True` |
-| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.256811, 'market_brier': 0.245007, 'model_log_loss': 0.710917, 'market_log_loss': 0.68237, 'sample_size': 27}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
+| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.25257, 'market_brier': 0.241353, 'model_log_loss': 0.701918, 'market_log_loss': 0.674949, 'sample_size': 29}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
 
 ## 3. Estado Real de Herramientas y Fuentes Inspeccionadas
 - **Coordinador**: `Orchestrator Local (Ejecución secuencial verificada)`

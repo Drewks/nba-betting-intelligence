@@ -1,25 +1,91 @@
 [
   {
+    "game_id": "ESPN_401910020_2026-11-20_POR_AT_MIL",
+    "matchup": "Portland Trail Blazers @ Milwaukee Bucks (POR @ MIL)",
+    "game_start_time": "2026-11-20T01:00:00Z",
+    "captured_at_utc": "2026-11-19T04:29:29Z",
+    "hora_captura_peru": "2026-11-18 23:29 PET",
+    "best_home": null,
+    "best_away": null,
+    "synthetic_margin_pct": 0.0,
+    "quotes": {
+      "teapuesto_pe": {
+        "book_id": "teapuesto_pe",
+        "book_name": "Te Apuesto Perú",
+        "home_odds": 3.5,
+        "away_odds": 1.24,
+        "spread_home_line": 9.5,
+        "spread_home_odds": 1.78,
+        "spread_away_odds": 1.85,
+        "total_points_line": 225.5,
+        "total_over_odds": 1.82,
+        "total_under_odds": 1.82,
+        "player_props": [],
+        "captured_at": "2026-11-19T04:29:29Z",
+        "source": "Te Apuesto API Direct",
+        "is_observed": true,
+        "source_type": "OBSERVED"
+      }
+    },
+    "observed_quotes_count": 1,
+    "player_props_count": 0,
+    "stale_lines": [],
+    "surebet": null
+  },
+  {
+    "game_id": "ESPN_401910021_2026-11-20_NYK_AT_MIN",
+    "matchup": "New York Knicks @ Minnesota Timberwolves (NYK @ MIN)",
+    "game_start_time": "2026-11-20T01:00:00Z",
+    "captured_at_utc": "2026-11-19T04:29:29Z",
+    "hora_captura_peru": "2026-11-18 23:29 PET",
+    "best_home": null,
+    "best_away": null,
+    "synthetic_margin_pct": 0.0,
+    "quotes": {
+      "teapuesto_pe": {
+        "book_id": "teapuesto_pe",
+        "book_name": "Te Apuesto Perú",
+        "home_odds": 1.88,
+        "away_odds": 1.79,
+        "spread_home_line": 1.5,
+        "spread_home_odds": 1.77,
+        "spread_away_odds": 1.87,
+        "total_points_line": 217.5,
+        "total_over_odds": 1.84,
+        "total_under_odds": 1.79,
+        "player_props": [],
+        "captured_at": "2026-11-19T04:29:29Z",
+        "source": "Te Apuesto API Direct",
+        "is_observed": true,
+        "source_type": "OBSERVED"
+      }
+    },
+    "observed_quotes_count": 1,
+    "player_props_count": 0,
+    "stale_lines": [],
+    "surebet": null
+  },
+  {
     "game_id": "ESPN_401910022_2026-11-20_LAC_AT_SAS",
     "matchup": "LA Clippers @ San Antonio Spurs (LAC @ SAS)",
     "game_start_time": "2026-11-20T01:00:00Z",
-    "captured_at_utc": "2026-11-19T03:23:21Z",
-    "hora_captura_peru": "2026-11-18 22:23 PET",
+    "captured_at_utc": "2026-11-19T04:29:29Z",
+    "hora_captura_peru": "2026-11-18 23:29 PET",
     "best_home": {
       "book": "Pinnacle [LIVE_API]",
-      "odds": 1.0765
+      "odds": 1.0747
     },
     "best_away": {
       "book": "Pinnacle [LIVE_API]",
-      "odds": 9.88
+      "odds": 10.05
     },
-    "synthetic_margin_pct": 3.02,
+    "synthetic_margin_pct": 3.0,
     "quotes": {
       "coolbet_pe": {
         "book_id": "coolbet_pe",
         "book_name": "Coolbet Perú",
-        "home_odds": 1.06,
-        "away_odds": 9.732,
+        "home_odds": 1.059,
+        "away_odds": 9.899,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -27,7 +93,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -35,8 +101,8 @@
       "betano_pe": {
         "book_id": "betano_pe",
         "book_name": "Betano Perú",
-        "home_odds": 1.054,
-        "away_odds": 10.962,
+        "home_odds": 1.052,
+        "away_odds": 11.171,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -44,7 +110,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -52,8 +118,8 @@
       "retabet_pe": {
         "book_id": "retabet_pe",
         "book_name": "RETAbet Perú",
-        "home_odds": 1.051,
-        "away_odds": 10.927,
+        "home_odds": 1.049,
+        "away_odds": 11.135,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -61,7 +127,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -69,8 +135,8 @@
       "betsson_pe": {
         "book_id": "betsson_pe",
         "book_name": "Betsson Perú",
-        "home_odds": 1.047,
-        "away_odds": 10.881,
+        "home_odds": 1.046,
+        "away_odds": 11.088,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -78,7 +144,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -86,8 +152,8 @@
       "inkabet": {
         "book_id": "inkabet",
         "book_name": "Inkabet",
-        "home_odds": 1.046,
-        "away_odds": 10.858,
+        "home_odds": 1.044,
+        "away_odds": 11.064,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -95,7 +161,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -103,8 +169,8 @@
       "doradobet": {
         "book_id": "doradobet",
         "book_name": "Doradobet Perú",
-        "home_odds": 1.045,
-        "away_odds": 10.846,
+        "home_odds": 1.043,
+        "away_odds": 11.053,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -112,7 +178,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -120,8 +186,8 @@
       "apuesta_total": {
         "book_id": "apuesta_total",
         "book_name": "Apuesta Total",
-        "home_odds": 1.04,
-        "away_odds": 10.789,
+        "home_odds": 1.039,
+        "away_odds": 10.995,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -129,7 +195,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -137,8 +203,8 @@
       "te_apuesto": {
         "book_id": "te_apuesto",
         "book_name": "Te Apuesto",
-        "home_odds": 1.034,
-        "away_odds": 10.699,
+        "home_odds": 1.032,
+        "away_odds": 10.903,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -146,7 +212,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -154,8 +220,8 @@
       "1xbet_pe": {
         "book_id": "1xbet_pe",
         "book_name": "1xBet Perú",
-        "home_odds": 1.071,
-        "away_odds": 9.831,
+        "home_odds": 1.069,
+        "away_odds": 10.0,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -163,7 +229,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "ESTIMATE (derived from benchmark, not observed)",
         "is_observed": false,
         "source_type": "DERIVED"
@@ -172,15 +238,15 @@
         "book_id": "teapuesto_pe",
         "book_name": "Te Apuesto Perú",
         "home_odds": 1.06,
-        "away_odds": 6.8,
+        "away_odds": 7.0,
         "spread_home_line": -16.5,
-        "spread_home_odds": 1.85,
-        "spread_away_odds": 1.79,
+        "spread_home_odds": 1.86,
+        "spread_away_odds": 1.78,
         "total_points_line": 225.5,
-        "total_over_odds": 1.82,
-        "total_under_odds": 1.82,
+        "total_over_odds": 1.83,
+        "total_under_odds": 1.8,
         "player_props": [],
-        "captured_at": "2026-11-19T03:23:21Z",
+        "captured_at": "2026-11-19T04:29:29Z",
         "source": "Te Apuesto API Direct",
         "is_observed": true,
         "source_type": "OBSERVED"
@@ -188,8 +254,8 @@
       "sharp_benchmark": {
         "book_id": "sharp_benchmark",
         "book_name": "Pinnacle [LIVE_API]",
-        "home_odds": 1.0765,
-        "away_odds": 9.88,
+        "home_odds": 1.0747,
+        "away_odds": 10.05,
         "spread_home_line": null,
         "spread_home_odds": null,
         "spread_away_odds": null,
@@ -197,7 +263,7 @@
         "total_over_odds": null,
         "total_under_odds": null,
         "player_props": null,
-        "captured_at": "2026-11-19T03:23:08Z",
+        "captured_at": "2026-11-19T04:29:18Z",
         "source": "Stored observed sharp quote",
         "is_observed": false,
         "source_type": "OBSERVED"

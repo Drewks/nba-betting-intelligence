@@ -7,51 +7,51 @@
   "top_retrieved_context": [
     {
       "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Nikola Topić (PG) Day To Day (Hip): Topic did not return on Wednesday's (Nov. 18) game against the Hawks.",
+      "relevance_score": 0.2267,
+      "captured_at": "2026-11-19"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "OKC Alex Caruso (SG) Day To Day (Hip): Caruso did not return on Wednesday's (Nov. 18) game against the Hawks.",
+      "relevance_score": 0.2156,
+      "captured_at": "2026-11-19"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
       "snippet": "SAS Dylan Harper (SG) Day To Day (Undisclosed): Harper did not return on Tuesday's (Nov. 17) game against the Pistons.",
-      "relevance_score": 0.3043,
+      "relevance_score": 0.2043,
       "captured_at": "2026-11-18"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson is Out for Wednesday's (Nov. 18) game against the Grizzlies.",
-      "relevance_score": 0.2935,
-      "captured_at": "2026-11-18"
+      "snippet": "TOR Collin Murray-Boyles (PF) Day To Day (Illness): Murray-Boyles did not return to Wednesday's (Nov. 18) game against the Wizards.",
+      "relevance_score": 0.1796,
+      "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Dennis Schröder (PG) Day To Day (Hamstring): Schroder did not play in Tuesday's (Nov. 17) game against the Lakers.",
-      "relevance_score": 0.2669,
-      "captured_at": "2026-11-18"
+      "snippet": "ATL Kingston Flemings (PG) Day To Day (Back): Flemings did not play on Wednesday's (Nov. 18) game against the Thunder.",
+      "relevance_score": 0.1594,
+      "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHI Patrick Williams (PF) Day To Day (Finger): Williams is Available for Wednesday's (Nov. 18) game against the Nets.",
-      "relevance_score": 0.2621,
-      "captured_at": "2026-11-18"
+      "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson did not play on Wednesday's (Nov. 18) game against the Grizzlies.",
+      "relevance_score": 0.1592,
+      "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "CHA Kon Knueppel (SF) Day To Day (Hamstring): Knueppel did not play in Tuesday's (Nov. 17) game against the Lakers.",
-      "relevance_score": 0.2595,
-      "captured_at": "2026-11-18"
+      "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play on Wednesday's (Nov. 18) game against the Nets.",
+      "relevance_score": 0.1582,
+      "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAS Tobias Harris (PF) Day To Day (Calf): Harris did not play on Tuesday's (Nov. 17) game against the Pistons.",
-      "relevance_score": 0.2528,
-      "captured_at": "2026-11-18"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "POR Chris Youngblood (SG) Day To Day (Heel): Youngblood did not play on Tuesday's (Nov. 17) game against the Timberwolves.",
-      "relevance_score": 0.2514,
-      "captured_at": "2026-11-18"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MIN Jonathan Kuminga (PF) Day To Day (Shoulder): Kuminga did not play on Tuesday's (Nov. 17) game against the TrailBlazers.",
-      "relevance_score": 0.2511,
-      "captured_at": "2026-11-18"
+      "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale did not play on Wednesday's (Nov. 18) game against the Thunder.",
+      "relevance_score": 0.1581,
+      "captured_at": "2026-11-19"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
