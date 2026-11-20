@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-20T03:09:09Z
+date_generated: 2026-11-20T04:15:31Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 model_version_id: model_f_ensemble_v8
-run_manifest_id: RUN_20261120T030902Z_DB729846
+run_manifest_id: RUN_20261120T041522Z_8FBABAD4
 commit_sha: 5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576
 config_hash: f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -11,13 +11,13 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-20T03:09:09Z`
-- **Run Manifest / Versión activa**: `RUN_20261120T030902Z_DB729846` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
+- **Fecha de auditoría (UTC)**: `2026-11-20T04:15:31Z`
+- **Run Manifest / Versión activa**: `RUN_20261120T041522Z_8FBABAD4` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
 - **Origen de Base de Datos (`DB Provenance`)**: PRODUCTION_STATE_LIVE (`live: origin/state-live:data/nba_intelligence.sqlite3` | `main: FROZEN_CI_BASELINE`)
-- **Shadow Signal Ledger**: Total `157` señales +EV registradas (liquidadas `138`, ROI 1u `-13.63%`, CLV medio `-1.672%`; cero impacto en banca S/100) — evidencia de CLV: `INCONCLUSIVE` (n=`17` partidos / `35` señales, IC95 `[-3.595%, 1.238%]`; para detectar +1.0% hacen falta ~`174` partidos)
+- **Shadow Signal Ledger**: Total `164` señales +EV registradas (liquidadas `157`, ROI 1u `-16.58%`, CLV medio `-1.594%`; cero impacto en banca S/100) — evidencia de CLV: `INCONCLUSIVE` (n=`21` partidos / `40` señales, IC95 `[-3.18%, 0.761%]`; para detectar +1.0% hacen falta ~`148` partidos)
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
-- **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/98.51 PEN`
+- **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/97.20 PEN`
 - **Violaciones de fuga temporal (Data Leakage) detectadas**: `0`
 - **Inmutabilidad de predicciones y liquidaciones (Triggers SQLite)**: `ACTIVA Y VERIFICADA`
 - **Integridad del historial (registro append-only de filas)**: `ÍNTEGRO` — faltantes por tabla: `{'predictions': 0, 'simulated_bets': 0, 'odds_snapshots': 0, 'decision_log': 0, 'player_prop_picks': 0, 'bankroll_ledger': 0, 'sniper_alerts': 0}`
@@ -29,16 +29,16 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 
 | Puerta de Validación | Estado | Valor Observado | Criterio Requerido |
 | :--- | :--- | :--- | :--- |
-| `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `34` | `>= 500` |
+| `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `35` | `>= 500` |
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
-| `gate_3_calibration_non_inferior_to_baseline` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.258084, 'baseline_brier': 0.251022, 'model_log_loss': 0.724838, 'baseline_log_loss': 0.696448}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
+| `gate_3_calibration_non_inferior_to_baseline` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.252526, 'baseline_brier': 0.251706, 'model_log_loss': 0.710031, 'baseline_log_loss': 0.697968}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
-| `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -3.2034, 'yield_pct': -3.1154}` | `ROI > 0% and Yield > 0%` |
-| `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -37.7499, 'ci_95_upper_pct': 33.2322, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
+| `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -5.86, 'yield_pct': -5.86}` | `ROI > 0% and Yield > 0%` |
+| `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -37.3255, 'ci_95_upper_pct': 30.1653, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
 | `gate_9_independent_audit_approved` | **FAIL (Permanece en Simulación)** | `False` | `True` |
-| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.258084, 'market_brier': 0.246995, 'model_log_loss': 0.724838, 'market_log_loss': 0.68877, 'sample_size': 32}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
+| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.252526, 'market_brier': 0.239611, 'model_log_loss': 0.710031, 'market_log_loss': 0.671589, 'sample_size': 36}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
 
 ## 3. Estado Real de Herramientas y Fuentes Inspeccionadas
 - **Coordinador**: `Orchestrator Local (Ejecución secuencial verificada)`
