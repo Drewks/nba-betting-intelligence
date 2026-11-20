@@ -1,10 +1,10 @@
 {
   "cycle_type": "INCREMENTAL_CLOUD_AUTO_CYCLE",
   "mode": "pregame",
-  "timestamp_utc": "2026-11-19T22:41:37Z",
-  "run_manifest_id": "RUN_20261119T224137Z_7574D187",
+  "timestamp_utc": "2026-11-20T03:09:02Z",
+  "run_manifest_id": "RUN_20261120T030902Z_DB729846",
   "run_manifest": {
-    "run_id": "RUN_20261119T224137Z_7574D187",
+    "run_id": "RUN_20261120T030902Z_DB729846",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "model_version_id": "model_f_ensemble_v8",
     "ensemble_version": "model_f_ensemble_v8",
@@ -72,16 +72,16 @@
     "main_branch_db_policy": "FROZEN_CI_BASELINE"
   },
   "ingested_dates": [
-    "2026-11-18",
     "2026-11-19",
-    "2026-11-20"
+    "2026-11-20",
+    "2026-11-21"
   ],
   "closing_lines_promoted": 0,
-  "official_injury_report_games": 10,
+  "official_injury_report_games": 9,
   "bets_settled_in_cycle": 0,
   "shadow_settled_in_cycle": 0,
   "new_bets_placed_in_cycle": 0,
-  "predictions_generated": 18,
+  "predictions_generated": 2,
   "active_calibration_methods": {
     "moneyline": "logistic",
     "total_points": "logistic",
@@ -246,14 +246,14 @@
       "model_f_ensemble_v8": {
         "model_version_id": "model_f_ensemble_v8",
         "is_active": true,
-        "predictions_count": 967,
+        "predictions_count": 969,
         "final_game_predictions": 909,
         "has_m012_cal_probs": true,
-        "m012_cal_probs_count": 803,
+        "m012_cal_probs_count": 805,
         "final_with_m012_cal_probs_count": 745,
         "settled_bets_count": 9,
         "first_emitted_at": "2026-11-07T23:20:56Z",
-        "last_emitted_at": "2026-11-19T22:41:37Z"
+        "last_emitted_at": "2026-11-20T03:09:02Z"
       },
       "model_f_ensemble_v4": {
         "model_version_id": "model_f_ensemble_v4",
@@ -435,8 +435,8 @@
     },
     "nba_official_injury_report": {
       "reachable": true,
-      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-19_05_30PM.pdf",
-      "players_listed": 103
+      "report_url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-11-19_10_00PM.pdf",
+      "players_listed": 134
     },
     "sportradar_api": {
       "credentials_configured": true,
@@ -452,7 +452,7 @@
       "browserbase_cli_installed": true,
       "browserbase_api_key_configured": true,
       "browserbase_mode": "REMOTE_CLOUD_CDP",
-      "extracted_at": "2026-11-19T22:41:41Z",
+      "extracted_at": "2026-11-20T03:09:04Z",
       "anti_bot_bypass_enabled": false,
       "status": "OPERATIONAL"
     }
@@ -467,49 +467,49 @@
       {
         "source": "browserbase_cloud_espn_injuries_table",
         "snippet": "Peyton Watson G Nov 20 Day-To-Day Nov 19: Watson (back) is questionable for Friday's game against the Pacers.",
-        "relevance_score": 0.2278,
-        "captured_at": "2026-11-19T22:41:42Z"
+        "relevance_score": 0.271,
+        "captured_at": "2026-11-20T03:09:06Z"
       },
       {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "GSW LJ Cryer (PG) Day To Day (Back): Cryer is Questionable for Thursday's (Nov. 19) game versus the Grizzlies.",
-        "relevance_score": 0.2237,
-        "captured_at": "2026-11-19"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "POR Deni Avdija (SF) Day To Day (Foot): Avdija is Questionable for Thursday's (Nov. 19) game against the Bucks.",
-        "relevance_score": 0.2213,
-        "captured_at": "2026-11-18"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MEM Isaiah Stewart (C) Day To Day (Illness): Stewart is Questionable for Thursday's (Nov. 19) game versus the Warriors.",
-        "relevance_score": 0.22,
-        "captured_at": "2026-11-19"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "POR Toumani Camara (PF) Day To Day (Abdomen): Camara is Questionable for Thursday's (Nov. 19) game against the Bucks.",
-        "relevance_score": 0.2184,
-        "captured_at": "2026-11-18"
-      },
-      {
-        "source": "sportradar_nba_v8_official_injuries",
-        "snippet": "MIN Jonathan Kuminga (PF) Day To Day (Shoulder): Kuminga is Questionable for Thursday's (Nov. 19) game against the Knicks.",
-        "relevance_score": 0.2163,
-        "captured_at": "2026-11-18"
+        "source": "browserbase_cloud_espn_injuries_table",
+        "snippet": "Kingston Flemings G Nov 20 Day-To-Day Nov 19: Flemings (back) is questionable for Friday's game against the Hornets, Brad Rowland of the Locked On Podcast Network reports.",
+        "relevance_score": 0.2306,
+        "captured_at": "2026-11-20T03:09:06Z"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Nikola Topić (PG) Day To Day (Hip): Topic did not return on Wednesday's (Nov. 18) game against the Hawks.",
-        "relevance_score": 0.2127,
+        "relevance_score": 0.2117,
         "captured_at": "2026-11-19"
       },
       {
         "source": "sportradar_nba_v8_official_injuries",
         "snippet": "OKC Alex Caruso (SG) Day To Day (Hip): Caruso did not return on Wednesday's (Nov. 18) game against the Hawks.",
-        "relevance_score": 0.2018,
+        "relevance_score": 0.2012,
+        "captured_at": "2026-11-19"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson did not play on Wednesday's (Nov. 18) game against the Grizzlies.",
+        "relevance_score": 0.16,
+        "captured_at": "2026-11-19"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "ATL Kingston Flemings (PG) Day To Day (Back): Flemings did not play on Wednesday's (Nov. 18) game against the Thunder.",
+        "relevance_score": 0.1587,
+        "captured_at": "2026-11-19"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "ATL Jock Landale (C) Day To Day (Hip): Landale did not play on Wednesday's (Nov. 18) game against the Thunder.",
+        "relevance_score": 0.1576,
+        "captured_at": "2026-11-19"
+      },
+      {
+        "source": "sportradar_nba_v8_official_injuries",
+        "snippet": "CHI Tobe Awaka (PF) Day To Day (Back): Awaka did not play on Wednesday's (Nov. 18) game against the Nets.",
+        "relevance_score": 0.1574,
         "captured_at": "2026-11-19"
       }
     ],
@@ -521,7 +521,7 @@
   "environment_status": {
     "python_version": "CPython 3.12 (uv cloud/local runner)",
     "model_version_id": "model_f_ensemble_v8",
-    "run_manifest_id": "RUN_20261119T224137Z_7574D187",
+    "run_manifest_id": "RUN_20261120T030902Z_DB729846",
     "commit_sha": "5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576",
     "config_hash": "f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec",
     "database_role": {
