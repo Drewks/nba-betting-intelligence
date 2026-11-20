@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-20T04:15:31Z
+date_generated: 2026-11-20T15:48:10Z
 report_type: daily_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
 period_evaluated: 2026-11-20
@@ -11,7 +11,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-20
 
 ## 1. Metadatos de Ejecución y Estado de Banca Observada
-- **Fecha de generación (UTC)**: `2026-11-20T04:15:31Z`
+- **Fecha de generación (UTC)**: `2026-11-20T15:48:10Z`
 - **Jornada evaluada**: `2026-11-20`
 - **Versión de modelo activa**: `model_f_ensemble_v8` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)
 - **Bankroll virtual inicial**: `S/100.00 PEN`
@@ -22,7 +22,7 @@ simulation_only: true
 - **Predicciones emitidas**: `58`
 - **Apuestas simuladas registradas en la jornada**: `1` (límite diario: 3, Kelly Fraccional (25%), EV >= 2.0%)
 - **Decisiones NO_BET registradas**: `57`
-- **Resultados pendientes globales**: `0`
+- **Resultados pendientes globales**: `1`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
 - Ningún partido descartado por falta de variables esenciales en el lote validado.

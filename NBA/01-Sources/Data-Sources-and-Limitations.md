@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-20T04:15:33Z
+date_generated: 2026-11-20T15:48:12Z
 component: nba_data_scout
 ---
 # Evaluación de Fuentes de Estadísticas y Cuotas NBA
@@ -17,4 +17,4 @@ component: nba_data_scout
 
 ## 4. Playwright + PixelRAG (`visual_researcher`)
 - Playwright: `OPERATIONAL`.
-- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)`.
+- PixelRAG: `OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)`.
