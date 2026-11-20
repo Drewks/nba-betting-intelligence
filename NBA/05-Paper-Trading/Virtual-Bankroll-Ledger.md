@@ -1,5 +1,5 @@
 ---
-date_generated: 2026-11-20T15:48:12Z
+date_generated: 2026-11-20T22:16:21Z
 initial_bankroll_pen: 100.00
 current_bankroll_pen: 97.20
 ---

@@ -1,56 +1,56 @@
 {
   "pixelrag_installed": true,
   "external_mcp_server_installed": false,
-  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 105 docs indexed)",
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 124 docs indexed)",
   "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
-  "indexed_documents_count": 105,
+  "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Alperen Şengün (C) Day To Day (Eye): Sengun is Questionable for Friday's (Nov. 20) game against the Nuggets.",
-      "relevance_score": 0.2041,
-      "captured_at": "2026-11-19"
+      "source": "browserbase_cloud_espn_injuries_table",
+      "snippet": "Peyton Watson G Nov 20 Day-To-Day Nov 19: Watson (back) is questionable for Friday's game against the Pacers.",
+      "relevance_score": 0.1969,
+      "captured_at": "2026-11-20T22:16:15Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "ATL Kingston Flemings (PG) Day To Day (Back): Flemings is Questionable for Friday's (Nov. 20) game against the Hornets.",
-      "relevance_score": 0.1981,
+      "relevance_score": 0.1956,
       "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "CLE Peyton Watson (SF) Day To Day (Back): Watson is Questionable for Friday's (Nov. 20) game against the Pacers.",
-      "relevance_score": 0.1973,
+      "relevance_score": 0.194,
+      "captured_at": "2026-11-19"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "HOU Alperen Şengün (C) Day To Day (Eye): Sengun is Questionable for Friday's (Nov. 20) game against the Nuggets.",
+      "relevance_score": 0.1929,
+      "captured_at": "2026-11-19"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHI Jalen Smith (C) Day To Day (Illness): Smith is Questionable for Friday's (Nov. 20) game against the Wizards.",
+      "relevance_score": 0.1929,
+      "captured_at": "2026-11-20"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "IND Braden Smith (PG) Day To Day (Ankle): Smith is Questionable for Friday's (Nov. 20) game against the Cavaliers.",
+      "relevance_score": 0.188,
       "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "OKC Alex Caruso (SG) Day To Day (Hip): Caruso is Questionable for Friday's (Nov. 20) game against the Pelicans.",
-      "relevance_score": 0.1937,
+      "relevance_score": 0.1828,
       "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "IND Andrew Nembhard (SG) Day To Day (Hip): Nembhard is Questionable for Friday's (Nov. 20) game against the Cavaliers.",
-      "relevance_score": 0.1933,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "IND Braden Smith (PG) Day To Day (Ankle): Smith is Questionable for Friday's (Nov. 20) game against the Cavaliers.",
-      "relevance_score": 0.1925,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "HOU Steven Adams (C) Day To Day (Quadriceps): Adams is Questionable for Friday's (Nov. 20) game against the Nuggets.",
-      "relevance_score": 0.1921,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAC De'Andre Hunter (SF) Day To Day (Hip): Hunter is Questionable for Friday's (Nov. 20) game against the Lakers.",
-      "relevance_score": 0.1908,
+      "relevance_score": 0.1824,
       "captured_at": "2026-11-19"
     }
   ],
