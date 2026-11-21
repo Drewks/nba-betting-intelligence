@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-21T04:15:57Z
+date_generated: 2026-11-21T14:58:44Z
 report_type: daily_report
 model_versions: [model_f_ensemble_v8, model_a_baseline_v1, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]
 period_evaluated: 2026-11-21
-predictions_count: 169
+predictions_count: 175
 observed_settled_bets: 36
 observed_bankroll_pen: 98.03
 simulation_only: true
@@ -11,7 +11,7 @@ simulation_only: true
 # Informe Diario NBA Betting Intelligence — 2026-11-21
 
 ## 1. Metadatos de Ejecución y Estado de Banca Observada
-- **Fecha de generación (UTC)**: `2026-11-21T04:15:57Z`
+- **Fecha de generación (UTC)**: `2026-11-21T14:58:44Z`
 - **Jornada evaluada**: `2026-11-21`
 - **Versión de modelo activa**: `model_f_ensemble_v8` (Submodelos `model_b_elo_v8`, `model_c_point_margin_v8`, `model_d_total_points_v8`, `model_e_lightgbm_v8`, `model_g_ml_montecarlo_v8`)
 - **Bankroll virtual inicial**: `S/100.00 PEN`
@@ -19,9 +19,9 @@ simulation_only: true
 - **Modo de apuesta activo**: `Kelly Fraccional (25%) | Máx. 3 selecciones/jornada | EV >= 2.0%`
 - **Partidos evaluados**: `10`
 - **Partidos descartados por falta de datos/cuotas**: `0`
-- **Predicciones emitidas**: `169`
+- **Predicciones emitidas**: `175`
 - **Apuestas simuladas registradas en la jornada**: `1` (límite diario: 3, Kelly Fraccional (25%), EV >= 2.0%)
-- **Decisiones NO_BET registradas**: `171`
+- **Decisiones NO_BET registradas**: `177`
 - **Resultados pendientes globales**: `1`
 
 ## 2. Partidos Descartados por Falta de Datos o Cuotas
@@ -63,7 +63,7 @@ simulation_only: true
 | Mercado | Partidos (señales) | CLV medio | IC95 (t, por partido) | Veredicto | Kelly aplicado |
 | :--- | ---: | ---: | :--- | :--- | ---: |
 | `moneyline` | 11 (16) | +0.35% | [-1.95%, +2.64%] | `INCONCLUSIVE` | ×1.00 |
-| `total_points` | 18 (31) | -2.94% | [-5.06%, -0.81%] | `NO_EDGE` | ×0.50 |
+| `total_points` | 19 (32) | -3.09% | [-5.12%, -1.06%] | `NO_EDGE` | ×0.50 |
 
 - **Holdout hacia adelante** (partidos desde `2026-11-15T00:00:00Z`, backtest `2026-11-18T01:49:56Z`): `14` partidos, `0` apuestas, ROI `n/d`, CLV `n/d`. Es la única evidencia fuera de muestra real.
 

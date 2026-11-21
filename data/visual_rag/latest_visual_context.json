@@ -6,52 +6,52 @@
   "indexed_documents_count": 124,
   "top_retrieved_context": [
     {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "PHX Ryan Dunn (SF) Day To Day (Quadriceps): Dunn did not return to Friday's (Nov. 20) game against the Jazz due to a right quad injury.",
+      "relevance_score": 0.2542,
+      "captured_at": "2026-11-21"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DAL P.J. Washington (PF) Day To Day (Shoulder): Washington is Questionable for Saturday's (Nov. 21) game against the Clippers.",
+      "relevance_score": 0.2307,
+      "captured_at": "2026-11-20"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "PHI Tyrese Maxey (PG) Day To Day (Foot): Maxey is Questionable for Saturday's (Nov. 21) game against the Bucks.",
+      "relevance_score": 0.213,
+      "captured_at": "2026-11-20"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "POR Deni Avdija (SF) Day To Day (Foot): Avdija is Questionable for Saturday's (Nov. 21) game against the Knicks.",
+      "relevance_score": 0.2095,
+      "captured_at": "2026-11-20"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "NYK OG Anunoby (PF) Day To Day (Calf): Anunoby is Questionable for Saturday's (Nov. 20) game against Portland.",
+      "relevance_score": 0.2079,
+      "captured_at": "2026-11-20"
+    },
+    {
       "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Derrick White G Nov 21 Day-To-Day Nov 20: White (shoulder) is questionable to play in Saturday's game against Sacramento.",
-      "relevance_score": 0.2665,
-      "captured_at": "2026-11-21T04:15:55Z"
+      "relevance_score": 0.2023,
+      "captured_at": "2026-11-21T14:58:41Z"
     },
     {
       "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Jayson Tatum F Nov 21 Day-To-Day Nov 20: Tatum (rest) is listed as questionable for Saturday's game against Sacramento.",
-      "relevance_score": 0.2623,
-      "captured_at": "2026-11-21T04:15:55Z"
+      "relevance_score": 0.2,
+      "captured_at": "2026-11-21T14:58:41Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Jerami Grant (PF) Day To Day (Calf): Grant did not return on Thursday's (Nov. 19) game against the Warriors.",
-      "relevance_score": 0.2433,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "MEM Zach Edey (C) Day To Day (Ankle): Edey did not play on Thursday's (Nov. 19) game versus the Warriors.",
-      "relevance_score": 0.1864,
+      "snippet": "DAL Walter Clayton Jr. (PG) Day To Day (Knee): Clayton Jr. is Questionable for Saturday's (Nov. 21) game against the Clippers.",
+      "relevance_score": 0.1816,
       "captured_at": "2026-11-20"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "POR Deni Avdija (SF) Day To Day (Foot): Avdija did not play on Thursday's (Nov. 19) game against the Bucks.",
-      "relevance_score": 0.1851,
-      "captured_at": "2026-11-20"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "PHI Dean Wade (PF) Day To Day (Hamstring): Wade did not play on Wednesday's (Nov. 18) game against the Magic.",
-      "relevance_score": 0.1836,
-      "captured_at": "2026-11-19"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "POR Chris Youngblood (SG) Day To Day (Heel): Youngblood did not play on Thursday's (Nov. 19) game against the Bucks.",
-      "relevance_score": 0.1834,
-      "captured_at": "2026-11-20"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "PHI Jaylen Brown (SF) Day To Day (Hamstring): Brown did not play on Wednesday's (Nov. 18) game against the Magic.",
-      "relevance_score": 0.1827,
-      "captured_at": "2026-11-19"
     }
   ],
   "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",

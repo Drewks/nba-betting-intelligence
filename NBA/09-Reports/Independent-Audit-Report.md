@@ -1,9 +1,9 @@
 ---
-date_generated: 2026-11-21T04:15:57Z
+date_generated: 2026-11-21T14:58:44Z
 report_type: independent_audit_report
 auditor_agent: nba_auditor
 model_version_id: model_f_ensemble_v8
-run_manifest_id: RUN_20261121T041549Z_BE138C0C
+run_manifest_id: RUN_20261121T145837Z_D39EFC1C
 commit_sha: 5f3fcc0bbc6e2c7cbf1facedeef4aa4ad74c6576
 config_hash: f886c6d71a3ef7a20e249cf7cd759739a413b929eb3f097971a5effe2843eeec
 final_verdict: REMAIN_IN_PAPER_TRADING
@@ -11,10 +11,10 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 # Informe de Auditoría Independiente (`nba_auditor`)
 
 ## 1. Dictamen Ejecutivo
-- **Fecha de auditoría (UTC)**: `2026-11-21T04:15:57Z`
-- **Run Manifest / Versión activa**: `RUN_20261121T041549Z_BE138C0C` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
+- **Fecha de auditoría (UTC)**: `2026-11-21T14:58:44Z`
+- **Run Manifest / Versión activa**: `RUN_20261121T145837Z_D39EFC1C` (`model_f_ensemble_v8`, commit `5f3fcc0bbc6e`, config `f886c6d71a3e`)
 - **Origen de Base de Datos (`DB Provenance`)**: PRODUCTION_STATE_LIVE (`live: origin/state-live:data/nba_intelligence.sqlite3` | `main: FROZEN_CI_BASELINE`)
-- **Shadow Signal Ledger**: Total `184` señales +EV registradas (liquidadas `174`, ROI 1u `-22.02%`, CLV medio `-1.974%`; cero impacto en banca S/100) — evidencia de CLV: `INCONCLUSIVE` (n=`24` partidos / `47` señales, IC95 `[-3.306%, 0.204%]`; para detectar +1.0% hacen falta ~`136` partidos)
+- **Shadow Signal Ledger**: Total `187` señales +EV registradas (liquidadas `180`, ROI 1u `-22.02%`, CLV medio `-2.054%`; cero impacto en banca S/100) — evidencia de CLV: `NO_EDGE` (n=`25` partidos / `48` señales, IC95 `[-3.438%, -0.005%]`; para detectar +1.0% hacen falta ~`136` partidos)
 - **Dictamen sobre transición de fase**: **`REMAIN_IN_PAPER_TRADING`**
 - **Transición automática a dinero real**: `False` (Deshabilitada permanentemente por diseño)
 - **Integridad contable del bankroll virtual (S/100.00 PEN)**: `VERIFICADA` — Saldo liquidado observado: `S/98.03 PEN`
@@ -31,14 +31,14 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 | :--- | :--- | :--- | :--- |
 | `gate_1_min_500_settled_selections` | **FAIL (Permanece en Simulación)** | `36` | `>= 500` |
 | `gate_2_multi_period_oos_evaluation` | **FAIL (Permanece en Simulación)** | `1` | `>= 2 temporal periods/seasons` |
-| `gate_3_calibration_non_inferior_to_baseline` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.25285, 'baseline_brier': 0.252811, 'model_log_loss': 0.708304, 'baseline_log_loss': 0.700369}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
+| `gate_3_calibration_non_inferior_to_baseline` | **PASS** | `{'model_brier': 0.248846, 'baseline_brier': 0.252073, 'model_log_loss': 0.698216, 'baseline_log_loss': 0.698826}` | `model Brier <= baseline Brier AND model LogLoss <= baseline LogLoss` |
 | `gate_4_zero_information_leakage` | **PASS** | `0` | `0` |
 | `gate_5_positive_roi_and_yield` | **FAIL (Permanece en Simulación)** | `{'roi_pct': -3.9778, 'yield_pct': -3.8138}` | `ROI > 0% and Yield > 0%` |
 | `gate_6_statistical_uncertainty_excludes_zero_edge` | **FAIL (Permanece en Simulación)** | `{'ci_95_lower_pct': -36.3944, 'ci_95_upper_pct': 32.2538, 'compatible_with_zero_edge': True}` | `95% block bootstrap CI lower bound > 0%` |
 | `gate_7_reproducible_results` | **PASS** | `True` | `True` |
 | `gate_8_data_and_odds_integrity` | **PASS** | `0` | `0` |
 | `gate_9_independent_audit_approved` | **FAIL (Permanece en Simulación)** | `False` | `True` |
-| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.25285, 'market_brier': 0.236595, 'model_log_loss': 0.708304, 'market_log_loss': 0.664791, 'sample_size': 42}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
+| `gate_10_non_inferior_to_devigged_market` | **FAIL (Permanece en Simulación)** | `{'model_brier': 0.248846, 'market_brier': 0.233077, 'model_log_loss': 0.698216, 'market_log_loss': 0.656818, 'sample_size': 45}` | `model Brier/LogLoss <= de-vigged market Brier/LogLoss on the same games` |
 
 ## 3. Estado Real de Herramientas y Fuentes Inspeccionadas
 - **Coordinador**: `Orchestrator Local (Ejecución secuencial verificada)`
@@ -52,4 +52,4 @@ final_verdict: REMAIN_IN_PAPER_TRADING
 - **Obsidian Vault (`NBA/`)**: `Operativo en /home/runner/work/nba-betting-intelligence/nba-betting-intelligence/NBA`
 
 ## 4. Conclusión Estadística del Auditor
-- Con las predicciones calibradas actualmente registradas, el sistema aún no supera simultáneamente las puertas estadísticas de calibración (`gate_3` / `gate_10`); manteniendo trazabilidad contable del bankroll virtual de **S/100.00 PEN**, el sistema **`REMAIN_IN_PAPER_TRADING`** hasta superar las 10 puertas estadísticas (incluyendo >= **500 selecciones liquidadas** e IC 95% Block Bootstrap > 0%).
+- Aunque el motor supera al modelo Baseline (`Modelo A`), aún no cumple `gate_10` frente al mercado sin margen; manteniendo trazabilidad contable del bankroll virtual de **S/100.00 PEN**, el sistema **`REMAIN_IN_PAPER_TRADING`** hasta superar las 10 puertas estadísticas (incluyendo >= **500 selecciones liquidadas** e IC 95% Block Bootstrap > 0%).
