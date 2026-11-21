@@ -8,49 +8,49 @@
     {
       "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Derrick White G Nov 21 Day-To-Day Nov 20: White (shoulder) is questionable to play in Saturday's game against Sacramento.",
-      "relevance_score": 0.2369,
-      "captured_at": "2026-11-21T03:13:41Z"
+      "relevance_score": 0.2665,
+      "captured_at": "2026-11-21T04:15:55Z"
     },
     {
       "source": "browserbase_cloud_espn_injuries_table",
       "snippet": "Jayson Tatum F Nov 21 Day-To-Day Nov 20: Tatum (rest) is listed as questionable for Saturday's game against Sacramento.",
-      "relevance_score": 0.2333,
-      "captured_at": "2026-11-21T03:13:41Z"
+      "relevance_score": 0.2623,
+      "captured_at": "2026-11-21T04:15:55Z"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "MEM Jerami Grant (PF) Day To Day (Calf): Grant did not return on Thursday's (Nov. 19) game against the Warriors.",
-      "relevance_score": 0.214,
+      "relevance_score": 0.2433,
       "captured_at": "2026-11-19"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "MEM Zach Edey (C) Day To Day (Ankle): Edey did not play on Thursday's (Nov. 19) game versus the Warriors.",
-      "relevance_score": 0.1657,
+      "relevance_score": 0.1864,
       "captured_at": "2026-11-20"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "POR Deni Avdija (SF) Day To Day (Foot): Avdija did not play on Thursday's (Nov. 19) game against the Bucks.",
-      "relevance_score": 0.1645,
-      "captured_at": "2026-11-20"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "POR Chris Youngblood (SG) Day To Day (Heel): Youngblood did not play on Thursday's (Nov. 19) game against the Bucks.",
-      "relevance_score": 0.163,
-      "captured_at": "2026-11-20"
-    },
-    {
-      "source": "sportradar_nba_v8_official_injuries",
-      "snippet": "SAS Tobias Harris (PF) Day To Day (Calf): Harris did not play on Thursday's (Nov. 19) game against the Clippers.",
-      "relevance_score": 0.1629,
+      "relevance_score": 0.1851,
       "captured_at": "2026-11-20"
     },
     {
       "source": "sportradar_nba_v8_official_injuries",
       "snippet": "PHI Dean Wade (PF) Day To Day (Hamstring): Wade did not play on Wednesday's (Nov. 18) game against the Magic.",
-      "relevance_score": 0.1629,
+      "relevance_score": 0.1836,
+      "captured_at": "2026-11-19"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "POR Chris Youngblood (SG) Day To Day (Heel): Youngblood did not play on Thursday's (Nov. 19) game against the Bucks.",
+      "relevance_score": 0.1834,
+      "captured_at": "2026-11-20"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "PHI Jaylen Brown (SF) Day To Day (Hamstring): Brown did not play on Wednesday's (Nov. 18) game against the Magic.",
+      "relevance_score": 0.1827,
       "captured_at": "2026-11-19"
     }
   ],
