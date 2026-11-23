@@ -7,11 +7,13 @@ counterpart odds for accurate de-vigging and EV calculation.
 from __future__ import annotations
 
 from collections import defaultdict
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 from typing import Any
+import urllib.error
 import urllib.request
 import numpy as np
 
@@ -48,11 +50,22 @@ class TheOddsAPIAdapter:
     """
 
     provider_name = "the_odds_api_v4_lineshopper"
+    _DISABLED_KEY_FINGERPRINTS: set[str] = set()
+    _LAST_REMAINING_REQUESTS: int | None = None
 
     def __init__(self, api_key: str | None = None, timeout_seconds: int = 10) -> None:
         _load_dotenv_if_present()
         self.api_key = (api_key or os.getenv("THE_ODDS_API_KEY") or "").strip()
         self.timeout_seconds = timeout_seconds
+
+    @classmethod
+    def reset_circuit_breaker(cls) -> None:
+        """Clears per-process circuit-breaker state (primarily for tests or key rotation)."""
+        cls._DISABLED_KEY_FINGERPRINTS.clear()
+        cls._LAST_REMAINING_REQUESTS = None
+
+    def _key_fingerprint(self) -> str:
+        return hashlib.sha256(self.api_key.encode("utf-8")).hexdigest()[:12]
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -63,6 +76,11 @@ class TheOddsAPIAdapter:
         and returns a mapping keyed by (matchday_date, away_team_code, home_team_code).
         """
         if not self.api_key:
+            return {}
+
+        key_fp = self._key_fingerprint()
+        if key_fp in self._DISABLED_KEY_FINGERPRINTS:
+            logger.debug("TheOddsAPI circuit breaker open for key %s; skipping call.", key_fp)
             return {}
 
         url = (
@@ -78,11 +96,38 @@ class TheOddsAPIAdapter:
             )
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 events = json.loads(resp.read().decode("utf-8"))
+                headers = getattr(resp, "headers", None)
+                if headers is not None:
+                    rem_raw = headers.get("x-requests-remaining")
+                    used_raw = headers.get("x-requests-used")
+                    if isinstance(rem_raw, (int, str)):
+                        remaining: int | None = None
+                        try:
+                            remaining = int(rem_raw)
+                        except (TypeError, ValueError):
+                            remaining = None
+                        if remaining is not None:
+                            type(self)._LAST_REMAINING_REQUESTS = remaining
+                            logger.info("TheOddsAPI quota: used=%s remaining=%s", used_raw, remaining)
+                            if remaining <= 0:
+                                type(self)._DISABLED_KEY_FINGERPRINTS.add(key_fp)
+                                logger.warning(
+                                    "TheOddsAPI quota exhausted (remaining=%d); circuit breaker tripped for this run.",
+                                    remaining,
+                                )
         except Exception as exc:
             sanitized = str(exc)
             if self.api_key:
                 sanitized = sanitized.replace(self.api_key, "***")
-            logger.warning("TheOddsAPI request failed: %s", sanitized)
+            if isinstance(exc, urllib.error.HTTPError) and exc.code in (401, 402, 429):
+                type(self)._DISABLED_KEY_FINGERPRINTS.add(key_fp)
+                logger.warning(
+                    "TheOddsAPI request failed: %s — circuit breaker tripped for this run (HTTP %d; check THE_ODDS_API_KEY / quota).",
+                    sanitized,
+                    exc.code,
+                )
+            else:
+                logger.warning("TheOddsAPI request failed: %s", sanitized)
             return {}
 
         by_matchup: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)

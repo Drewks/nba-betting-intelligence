@@ -81,6 +81,10 @@ sources:
   peru_scrapers_enabled: true
   peru_scraper_policy: "PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS"
   allowed_live_api_books: ["te_apuesto", "pinnacle", "betano"]
+  # Trial Sportradar keys return HTTP 404 on Synergy endpoints; enable only with an active Synergy plan.
+  sportradar_synergy_enabled: false
+  # Cloud runs use least-privilege `contents: write` (T-018) with Telegram alerts; opt-in only with token scope.
+  github_issue_notifications_enabled: false
 
 evaluation:
   development_seasons: ["2024-25", "2025-26"]
@@ -113,6 +117,12 @@ execution:                           # Which observed quotes count as a price th
   # No bets into markets with a larger margin: in 378 simultaneous snapshots Te Apuesto (median 9.9%)
   # never beat Pinnacle's no-vig fair price (Pinnacle median 3.2%).
   max_bookmaker_overround: 0.06
+  # Pre-bet operational safety guards (V8 defaults centralized from execution_helpers.py)
+  max_plausible_ev_unit: 0.45        # skips extreme ESPN EV outliers caused by unpriced late scratches
+  longshot_odds_threshold: 3.50      # decimal odds above which higher EV is required
+  longshot_min_ev_pct: 15.0          # minimum EV% required above longshot_odds_threshold
+  adverse_steam_threshold: -0.045    # skip if sharp market moved >= 4.5 pts against pick since opening
+  max_conformal_width: 0.22          # maximum Venn-Abers conformal interval width allowed for live bets
 
 sub_bankroll_combinadas:             # Sub-bankroll independiente para SGP y combinadas de alta probabilidad
   enabled: true

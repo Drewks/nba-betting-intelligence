@@ -50,10 +50,9 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: 3. Instalar dependencias del proyecto y motor Chromium para Playwright
+      - name: 3. Instalar dependencias del proyecto
         run: |
           uv sync --extra dev --python 3.12
-          uv run playwright install chromium
 
       - name: 4. Ejecutar lint, type check y suite de pruebas (sobre la base congelada de main, antes de restaurar el estado vivo)
         run: |
@@ -187,12 +186,20 @@ jobs:
                 echo "::error::state-live changed concurrently during the cycle; refusing to overwrite the audit database. Re-run the workflow."
                 exit 1
               fi
-              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -p "$STATE_BASE_SHA" -m 'chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]')"
+              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -m 'chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]')"
+              git push --force-with-lease="refs/heads/state-live:${STATE_BASE_SHA}" origin "${NEW_COMMIT}:refs/heads/state-live"
             else
-              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -p HEAD -m 'chore(auto-cycle): bootstrap inicial state-live de paper trading S/100 y calibración [skip ci]')"
+              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -m 'chore(auto-cycle): bootstrap inicial state-live de paper trading S/100 y calibración [skip ci]')"
+              git push origin "${NEW_COMMIT}:refs/heads/state-live"
             fi
-            git push origin "${NEW_COMMIT}:refs/heads/state-live"
           fi
+
+      - name: 7c. Respaldo temporal de SQLite vivo (7 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-state-live-db-backup
+          path: data/nba_intelligence.sqlite3
+          retention-days: 7
 
       - name: 7a. Subir artefacto web actualizado para GitHub Pages
         uses: actions/upload-artifact@v4

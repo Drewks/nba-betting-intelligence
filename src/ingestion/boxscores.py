@@ -13,10 +13,12 @@ import json
 import logging
 import sqlite3
 from typing import Any
+import urllib.error
 import urllib.request
 
 from src.ingestion.normalizer import normalize_player_match_key, normalize_team_code
 from src.storage.db import DatabaseManager
+from src.validation.validator import parse_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -149,37 +151,100 @@ def upsert_player_boxscores_rows(
     return upserted
 
 
-def backfill_boxscores(db: DatabaseManager, limit: int | None = None, workers: int = 8) -> dict[str, int]:
-    """Fetches box scores for FINAL real games that do not have one yet (oldest first)."""
+def backfill_boxscores(
+    db: DatabaseManager,
+    limit: int | None = None,
+    workers: int = 8,
+    *,
+    max_404_attempts: int = 3,
+    permanent_404_min_age_days: int = 7,
+) -> dict[str, int]:
+    """Fetches box scores for FINAL real games not yet stored and not marked permanently unavailable."""
     missing = db.fetch_all(
         """
         SELECT g.game_id, g.game_start_time FROM games g
         WHERE g.status = 'FINAL' AND g.game_id LIKE 'ESPN_%'
           AND g.game_id NOT IN (SELECT game_id FROM game_boxscores)
+          AND g.game_id NOT IN (
+              SELECT game_id FROM boxscore_fetch_failures WHERE permanently_unavailable = 1
+          )
         ORDER BY g.game_start_time ASC
         """
     )
     start_by_id = {str(r["game_id"]): str(r["game_start_time"]) for r in missing}
-    ids = [r["game_id"] for r in missing if espn_event_id(r["game_id"])]
+    ids = [str(r["game_id"]) for r in missing if espn_event_id(str(r["game_id"]))]
     if limit is not None:
         ids = ids[:limit]
 
-    def _one(game_id: str) -> tuple[str, dict[str, Any] | None]:
+    prior_failures = {
+        str(r["game_id"]): int(r["attempts"] or 0)
+        for r in db.fetch_all("SELECT game_id, attempts FROM boxscore_fetch_failures")
+    }
+
+    def _one(game_id: str) -> tuple[str, dict[str, Any] | None, int | None, str | None]:
         try:
-            return game_id, fetch_boxscore(str(espn_event_id(game_id)))
+            return game_id, fetch_boxscore(str(espn_event_id(game_id))), None, None
+        except urllib.error.HTTPError as exc:
+            logger.warning("Box score fetch failed for %s: %s", game_id, exc)
+            return game_id, None, int(exc.code), str(exc)[:300]
         except Exception as exc:
             logger.warning("Box score fetch failed for %s: %s", game_id, exc)
-            return game_id, None
+            return game_id, None, None, str(exc)[:300]
 
     stored = 0
     player_rows_stored = 0
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    failed = 0
+    marked_permanent = 0
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(_one, ids))
     with db.connect() as conn:
-        for game_id, box in results:
+        for game_id, box, http_status, error_msg in results:
             if box is None:
+                failed += 1
+                new_attempts = prior_failures.get(game_id, 0) + 1
+                game_age_days = 0.0
+                start_raw = start_by_id.get(game_id, "")
+                if start_raw:
+                    try:
+                        game_age_days = (now_dt - parse_iso_utc(start_raw)).total_seconds() / 86400.0
+                    except Exception:
+                        game_age_days = 0.0
+                perm = (
+                    1
+                    if (
+                        http_status == 404
+                        and new_attempts >= max_404_attempts
+                        and game_age_days >= permanent_404_min_age_days
+                    )
+                    else 0
+                )
+                conn.execute(
+                    """
+                    INSERT INTO boxscore_fetch_failures (
+                        game_id, http_status, error_message, attempts,
+                        first_failed_at, last_failed_at, permanently_unavailable
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(game_id) DO UPDATE SET
+                        http_status = excluded.http_status,
+                        error_message = excluded.error_message,
+                        attempts = boxscore_fetch_failures.attempts + 1,
+                        last_failed_at = excluded.last_failed_at,
+                        permanently_unavailable = excluded.permanently_unavailable
+                    """,
+                    (game_id, http_status, error_msg, 1, now, now, perm),
+                )
+                if perm == 1:
+                    marked_permanent += 1
+                    logger.info(
+                        "Marking %s boxscore permanently unavailable after %d HTTP 404 failures.",
+                        game_id,
+                        new_attempts,
+                    )
                 continue
+
+            conn.execute("DELETE FROM boxscore_fetch_failures WHERE game_id = ?", (game_id,))
             conn.execute(
                 "INSERT OR IGNORE INTO game_boxscores (game_id, team_stats_json, players_json, source, fetched_at) "
                 "VALUES (?, ?, ?, 'espn_summary', ?)",
@@ -192,7 +257,13 @@ def backfill_boxscores(db: DatabaseManager, limit: int | None = None, workers: i
                 box.get("players"),
             )
             stored += 1
-    return {"requested": len(ids), "stored": stored, "player_rows_stored": player_rows_stored}
+    return {
+        "requested": len(ids),
+        "stored": stored,
+        "player_rows_stored": player_rows_stored,
+        "failed": failed,
+        "marked_permanent": marked_permanent,
+    }
 
 
 def load_boxscores(db: DatabaseManager) -> dict[str, dict[str, Any]]:

@@ -772,6 +772,36 @@ def m014_quarantine_misattributed_same_pair_quotes(
     return {"quarantined_quotes": quarantined, "affected_predictions": affected_predictions}
 
 
+def m015_add_boxscore_fetch_failures(
+    conn: sqlite3.Connection,
+    migration_id: str,
+) -> dict[str, Any]:
+    """Creates operational `boxscore_fetch_failures` table to stop retrying permanent HTTP 404 ESPN IDs."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS boxscore_fetch_failures (
+            game_id TEXT PRIMARY KEY,
+            http_status INTEGER,
+            error_message TEXT,
+            attempts INTEGER NOT NULL DEFAULT 1,
+            first_failed_at TEXT NOT NULL,
+            last_failed_at TEXT NOT NULL,
+            permanently_unavailable INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        )
+        """
+    )
+    _log_repair(
+        conn,
+        migration_id,
+        "boxscore_fetch_failures",
+        "BOXSCORE_FETCH_STATE_INIT",
+        "CREATE_BOXSCORE_FETCH_FAILURES",
+        "Created operational boxscore_fetch_failures table to suppress terminal 404 retry loops.",
+    )
+    return {"action": "boxscore_fetch_failures_created"}
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -787,6 +817,7 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_14_012_separate_prob_semantics_spread_and_manifests", m012_separate_prob_semantics_spread_and_manifests),
     ("2026_11_15_013_add_shadow_candidates_and_version_indexes", m013_add_shadow_candidates_and_version_indexes),
     ("2026_11_16_014_quarantine_misattributed_same_pair_quotes", m014_quarantine_misattributed_same_pair_quotes),
+    ("2026_11_23_015_add_boxscore_fetch_failures", m015_add_boxscore_fetch_failures),
 ]
 
 

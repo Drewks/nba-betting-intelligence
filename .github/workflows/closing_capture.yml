@@ -102,8 +102,8 @@ jobs:
               TREE_SHA="$(git write-tree)"
               git fetch --depth=1 origin state-live
               if [ "$(git rev-parse origin/state-live)" = "${BASE}" ] && [ "$(main_cycle_busy)" = "0" ]; then
-                NEW_COMMIT="$(git commit-tree "$TREE_SHA" -p "$BASE" -m 'chore(closing-capture): líneas de cierre pre-tipoff [skip ci]')"
-                git push origin "${NEW_COMMIT}:refs/heads/state-live" || echo "Push rechazado; se reintenta en la próxima iteración."
+                NEW_COMMIT="$(git commit-tree "$TREE_SHA" -m 'chore(closing-capture): líneas de cierre pre-tipoff [skip ci]')"
+                git push --force-with-lease="refs/heads/state-live:${BASE}" origin "${NEW_COMMIT}:refs/heads/state-live" || echo "Push rechazado; se reintenta en la próxima iteración."
               else
                 echo "state-live cambió o hay un ciclo principal en curso; se descarta esta captura."
               fi
