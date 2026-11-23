@@ -59,7 +59,7 @@ class NBADataScoutAgent:
         espn_reachable = False
         espn_events_today = 0
         try:
-            espn_data = ESPNPublicAdapter(timeout_seconds=6).fetch_games_and_odds()
+            espn_data = ESPNPublicAdapter(timeout_seconds=6, enrich_with_the_odds_api=False).fetch_games_and_odds()
             espn_reachable = True
             espn_events_today = len(espn_data.get("games", []))
         except Exception:
