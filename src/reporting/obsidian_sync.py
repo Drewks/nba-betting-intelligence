@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config import load_config
+from src.ingestion.sportradar import resolve_nba_season_year
 from src.reporting.slate_intelligence import _fmt
 
 
@@ -24,7 +25,20 @@ def sync_obsidian_vault(
     """Populates the dedicated Obsidian vault (`NBA/00-Inbox` through `NBA/09-Reports`)."""
     root = Path(vault_root)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    risk_cfg = load_config().risk
+    cfg = load_config()
+    risk_cfg = cfg.risk
+    src_cfg = cfg.sources
+    season_yr = resolve_nba_season_year()
+    synergy_note = (
+        "y la telemetría de posesiones y jugadas de **Synergy Basketball NBA API** (`/synergy/basketball/nba/games` y `/events`)"
+        if src_cfg.sportradar_synergy_enabled
+        else "(Synergy Basketball desactivado por configuración: `sportradar_synergy_enabled: false`)"
+    )
+    sr_heading = (
+        "## 2. Sportradar NBA API v8 & Synergy Basketball NBA API (`SportradarAdapter`)\n"
+        if src_cfg.sportradar_synergy_enabled
+        else "## 2. Sportradar NBA API v8 (`SportradarAdapter`)\n"
+    )
     min_ev_pct = float(risk_cfg.min_ev_threshold) * 100.0
     max_sel = int(risk_cfg.max_selections_per_matchday)
     if str(risk_cfg.staking_mode).lower() == "fractional_kelly":
@@ -111,11 +125,11 @@ def sync_obsidian_vault(
             "## 1. ESPN Public API (`site.api.espn.com`) — Activa sin Credenciales\n"
             "- Proporciona calendario oficial, estados de partido (`SCHEDULED`, `FINAL`), estadísticas de equipo y cuotas pre-partido de `DraftKings` (`moneyline` y `total_points`).\n"
             "- Limitación histórica: en partidos históricos finalizados, `pickcenter` refleja la línea archivada sin historial tick-a-tick; por ello el sistema exige `captured_at < game_start_time` para toda captura en vivo.\n\n"
-            "## 2. Sportradar NBA API v8 & Synergy Basketball NBA API (`SportradarAdapter`)\n"
+            f"{sr_heading}"
             f"- Estado: `{environment_status.get('sportradar_status', 'Adaptador implementado; verificar SPORTRADAR_API_KEY en runtime')}`.\n"
-            "- Sincroniza el parte médico oficial de la liga (`league/injuries.json`), los splits tácticos de los 30 equipos (`seasons/2026/REG/standings.json`) y la telemetría de posesiones y jugadas de **Synergy Basketball NBA API** (`/synergy/basketball/nba/games` y `/events`) usando `SPORTRADAR_API_KEY`.\n\n"
+            f"- Sincroniza el parte médico oficial de la liga (`league/injuries.json`) y los splits tácticos de los 30 equipos (`seasons/{season_yr}/REG/standings.json`) {synergy_note} usando `SPORTRADAR_API_KEY`.\n\n"
             "## 3. TheOddsAPI Multi-Bookmaker Line Shopping (`TheOddsAPIAdapter`)\n"
-            "- Escanea en tiempo real hasta 25+ casas de apuestas (`Pinnacle`, `DraftKings`, `FanDuel`, `BetMGM`, `Coolbet`, `Matchbook`, `GTbets`, etc.) para elegir siempre la cuota máxima disponible.\n\n"
+            f"- Escanea casas activas en región `{src_cfg.the_odds_api_regions}` y mercados `{src_cfg.the_odds_api_markets}` (`Pinnacle`, `Matchbook`, `Betfair`, `Coolbet`, `Marathon Bet`, `888sport`, complementado con `DraftKings` vía ESPN y caché TTL de `{src_cfg.the_odds_api_cache_ttl_seconds}s`) para elegir la mejor cuota disponible.\n\n"
             "## 4. Playwright + PixelRAG (`visual_researcher`)\n"
             f"- Playwright: `{environment_status.get('playwright_status', 'Verificar estado en runtime')}`.\n"
             f"- PixelRAG: `{environment_status.get('pixelrag_status', 'Pipeline tabular/RAG local (verificar estado en runtime)')}`.\n"

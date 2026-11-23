@@ -404,19 +404,28 @@ def export_bets_and_tracking_dashboard(
         "",
         "---",
         "",
-        "## 🏀 2. Mis Apuestas NBA Reales (ESPN / Line Shopping 25 Casas)",
+        "## 🏀 2. Mis Apuestas NBA Reales (ESPN / TheOddsAPI Line Shopping)",
         "",
     ]
 
     if daily_top_info and daily_top_info.get("top_pick"):
         tp = daily_top_info["top_pick"]
+        try:
+            gh_issues_on = bool(load_config().sources.github_issue_notifications_enabled)
+        except Exception:
+            gh_issues_on = False
+        channel_desc = (
+            "`ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor EV entre las apuestas pendientes con cuotas observadas)*."
+            if gh_issues_on
+            else "`TELEGRAM / SMTP` *(GitHub Issues desactivado por política de mínimos privilegios `T-018`; despacho por Telegram/SMTP con la selección de mayor EV)*."
+        )
         lines.extend(
             [
                 f"> ### 🏆 PICK ESTRELLA DEL DÍA (`{daily_top_info['pick_date']}` — 1 Solo Pick: Mayor Probabilidad de Acierto)",
                 f"> - **Partido**: **{tp['partido']}** (`{tp['hora_partido_peru']} Hora Perú`)",
                 f"> - **Pick Más Probable**: 🎯 **{tp['seleccion']}** ({tp['mercado']}) @ **`{tp['cuota_decimal']:.3f}`** *({tp['casa_apuestas']})*",
                 f"> - **Probabilidad de Acierto (Modelo Calibrado)**: 🔥 **`{tp['prob_estimada']:.1f}%`** | **EV**: `+{tp['ev_porcentaje']:.1f}%`",
-                "> - **Envío diario a tu correo**: `ACTIVO` *(1 solo correo diario vía GitHub Notification `@Drewks` con la selección de mayor EV entre las apuestas pendientes con cuotas observadas)*.",
+                f"> - **Despacho diario**: {channel_desc}",
                 "",
             ]
         )

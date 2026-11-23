@@ -93,8 +93,8 @@ def main() -> None:
         print("  [i] No se encontraron desajustes de Player Props que superen el umbral de EV en este momento.")
     print("=" * 80)
 
-    from src.paper_trading.engine import PaperTradingEngine
-    pt_engine = PaperTradingEngine(db=db)
+    from src.paper_trading.engine import build_production_engine
+    pt_engine = build_production_engine(db)
     pt_metrics = pt_engine.get_player_props_performance_metrics()
     print("\n" + "=" * 80)
     print("📈 SEGUIMIENTO AUDITADO DE PAPER TRADING (PROPS & SGP RETABET)")

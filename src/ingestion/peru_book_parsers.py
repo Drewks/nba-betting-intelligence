@@ -10,11 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 import re
 from typing import Any
 
 from src.ingestion.normalizer import american_to_decimal_odds
 from src.utils.team_dictionary import get_team
+
+logger = logging.getLogger(__name__)
 
 TEAPUESTO_NBA_TOURNAMENT_ID = "46"
 _PAREN_LINE_RE = re.compile(r"\(([-+]?\d+(?:\.\d+)?)\)")
@@ -551,8 +554,8 @@ def parse_pinnacle_nba_events(
                         a_dec = american_to_decimal_odds(p_map["away"]["price"])
                         if h_dec > 1.0 and a_dec > 1.0:
                             home_odds, away_odds = h_dec, a_dec
-                    except Exception:
-                        pass
+                    except (KeyError, TypeError, ValueError) as exc:
+                        logger.debug("Skipping malformed Pinnacle %s quote: %s", mtype, exc)
             elif mtype == "total" and total_line is None:
                 p_map = {str(p.get("designation") or "").lower(): p for p in prices}
                 if "over" in p_map and "under" in p_map and p_map["over"].get("points") is not None:
@@ -562,8 +565,8 @@ def parse_pinnacle_nba_events(
                         if ov > 1.0 and un > 1.0:
                             total_line = float(p_map["over"]["points"])
                             over_odds, under_odds = ov, un
-                    except Exception:
-                        pass
+                    except (KeyError, TypeError, ValueError) as exc:
+                        logger.debug("Skipping malformed Pinnacle %s quote: %s", mtype, exc)
             elif mtype == "spread" and spread_home_line is None:
                 p_map = {str(p.get("designation") or "").lower(): p for p in prices}
                 if "home" in p_map and "away" in p_map and p_map["home"].get("points") is not None:
@@ -573,8 +576,8 @@ def parse_pinnacle_nba_events(
                         if sh > 1.0 and sa > 1.0:
                             spread_home_line = float(p_map["home"]["points"])
                             spread_home_odds, spread_away_odds = sh, sa
-                    except Exception:
-                        pass
+                    except (KeyError, TypeError, ValueError) as exc:
+                        logger.debug("Skipping malformed Pinnacle %s quote: %s", mtype, exc)
 
         if not (home_odds and away_odds) and not (total_line and over_odds and under_odds):
             continue

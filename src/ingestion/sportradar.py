@@ -103,7 +103,6 @@ class SportradarAdapter(BaseNBADataAdapter):
                     t_code = normalize_team_code(t_obj.get("alias") or t_obj.get("name", ""))
                 except ValueError:
                     continue
-                pen = 0.0
                 for p_obj in t_obj.get("players") or []:
                     p_name = str(p_obj.get("full_name", "")).strip()
                     pos = str(p_obj.get("primary_position") or p_obj.get("position", "")).strip()
@@ -120,8 +119,6 @@ class SportradarAdapter(BaseNBADataAdapter):
                                     "captured_at": upd,
                                 }
                             )
-                if pen > 0.0:
-                    injury_penalties[t_code] = round(pen, 2)
         except Exception as exc:
             logger.warning(f"Failed to fetch Sportradar injuries: {exc}")
 

@@ -845,6 +845,7 @@ def test_t020_readme_matches_active_model_config() -> None:
     assert cfg.model.version_id in readme
     assert f"`allow_parlays: {str(cfg.risk.allow_parlays).lower()}`" in readme
     assert f"`allow_player_props_betting: {str(cfg.risk.allow_player_props_betting).lower()}`" in readme
+    assert f"trials_evaluated_count: {cfg.evaluation.trials_evaluated_count}" in readme
     assert "50% Kelly" not in readme
     assert "EV <= 5%" not in readme
 

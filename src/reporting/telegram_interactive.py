@@ -23,8 +23,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.config import load_config
 from src.ingestion.live_peru_scraper import LivePeruOddsScraper
-from src.paper_trading.engine import PaperTradingEngine
+from src.paper_trading.engine import build_production_engine
 from src.paper_trading.parlay_engine import ParlayTradingEngine
 from src.reporting.telegram_bot import TelegramAlertBot, _load_dotenv_if_present
 from src.storage.db import DatabaseManager
@@ -69,20 +70,7 @@ class TelegramInteractiveListener:
         self.allowed_chat_ids: set[str] = {str(c).strip() for c in raw_allowed if str(c).strip()}
 
         self.db = db or DatabaseManager(PROJECT_ROOT / "data" / "nba_intelligence.sqlite3")
-        self.paper_engine = PaperTradingEngine(
-            db=self.db,
-            initial_bankroll_pen=100.00,
-            base_stake_pen=1.00,
-            max_stake_pen=3.00,
-            min_ev_threshold=0.05,
-            dynamic_conviction_staking=False,
-            enable_cppi_shield=True,
-            staking_mode="FRACTIONAL_KELLY",
-            exclude_synthetic=True,
-            hybrid_allocation_enabled=True,
-            max_totals_per_matchday=2,
-            max_moneyline_per_matchday=1,
-        )
+        self.paper_engine = build_production_engine(self.db)
         self.parlay_engine = ParlayTradingEngine(
             db=self.db,
             initial_bankroll_pen=50.00,
@@ -223,12 +211,16 @@ class TelegramInteractiveListener:
 
     def handle_help(self, user_name: str) -> str:
         """Generates comprehensive command menu."""
+        risk = load_config().risk
+        kelly_pct = risk.kelly_fraction * 100.0
+        min_ev_pct = risk.min_ev_threshold * 100.0
         return (
             f"🏀 *NBA BETTING INTELLIGENCE V9*\n"
             f"👋 ¡Hola, *{user_name}*! Bot de comando interactivo activo.\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💰 *Banca Virtual:* `S/ 100.00 PEN` (Paper Trading Estricto)\n"
-            f"🛡️ *Gestión de Riesgo:* Stakes de S/ 1.00 a S/ 2.00 PEN (Quarter-Kelly, EV ≥ 5%)\n"
+            f"💰 *Banca Virtual:* `S/ {risk.virtual_bankroll_initial_pen:.2f} PEN` (Paper Trading Estricto)\n"
+            f"🛡️ *Gestión de Riesgo:* Stakes de S/ {risk.min_stake_pen:.2f} a S/ {risk.max_stake_pen:.2f} PEN "
+            f"({kelly_pct:.0f}% Kelly, EV ≥ {min_ev_pct:.1f}%)\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📱 *BOTONERA TÁCTIL ACTIVADA:*\n"
             f"Toca cualquiera de los botones táctiles o escribe los comandos:\n\n"

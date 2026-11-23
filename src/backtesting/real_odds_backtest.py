@@ -266,6 +266,7 @@ def run_real_odds_backtest(
     """Walk-forward backtest against consensus opening/closing lines with zero lookahead leakage."""
     app_cfg = load_config()
     eval_cfg = app_cfg.evaluation
+    exec_cfg = app_cfg.execution
     eff_dev_seasons = tuple(development_seasons) if development_seasons is not None else tuple(eval_cfg.development_seasons)
     eff_holdout = str(holdout_season) if holdout_season is not None else str(eval_cfg.holdout_season)
     eff_trials = int(trials_evaluated_count) if trials_evaluated_count is not None else int(eval_cfg.trials_evaluated_count)
@@ -500,10 +501,10 @@ def run_real_odds_backtest(
                 ev = float(opp["ev_unit"])
                 hard_block = (
                     abs(float(opp.get("model_market_disagreement") or 0.0)) > eff_md
-                    or ev > 0.45
+                    or ev > exec_cfg.max_plausible_ev_unit
                     or (market == "moneyline" and moneyline_max_odds is not None and price > moneyline_max_odds)
-                    or (price > 3.50 and ev < 0.15)
-                    or (conf.get("width") is not None and float(conf["width"]) > 0.22)
+                    or (price > exec_cfg.longshot_odds_threshold and ev < (exec_cfg.longshot_min_ev_pct / 100.0))
+                    or (conf.get("width") is not None and float(conf["width"]) > exec_cfg.max_conformal_width)
                 )
                 if ev > 0.0 and not hard_block:
                     sh_mult = (price - 1.0) if result == "WON" else (-1.0 if result == "LOST" else 0.0)
