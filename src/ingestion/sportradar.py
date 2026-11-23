@@ -12,10 +12,37 @@ import os
 from typing import Any
 import urllib.request
 
+from src.config import load_config
 from src.ingestion.base import AdapterUnavailableError, BaseNBADataAdapter
 from src.ingestion.normalizer import normalize_team_code
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_nba_season_year(now_utc: datetime | None = None) -> int:
+    """Returns Sportradar's NBA season starting year (Oct-Dec -> year, Jan-Sep -> year - 1)."""
+    dt = now_utc or datetime.now(timezone.utc)
+    return dt.year if dt.month >= 10 else dt.year - 1
+
+
+def _extract_record_splits(records: Any) -> dict[str, tuple[int, int]]:
+    """Normalizes Sportradar NBA v8 team splits whether `records` is a list of dicts or a mapping."""
+    splits: dict[str, tuple[int, int]] = {"home": (0, 0), "road": (0, 0), "last_10": (0, 0)}
+    aliases = {"home": "home", "road": "road", "away": "road", "last_10": "last_10", "last10": "last_10"}
+    if isinstance(records, dict):
+        for raw_k, target_k in aliases.items():
+            rec = records.get(raw_k)
+            if isinstance(rec, dict):
+                splits[target_k] = (int(rec.get("wins") or 0), int(rec.get("losses") or 0))
+    elif isinstance(records, list):
+        for rec in records:
+            if not isinstance(rec, dict):
+                continue
+            raw_type = str(rec.get("record_type") or rec.get("type") or "").strip().lower()
+            mapped_k = aliases.get(raw_type)
+            if mapped_k:
+                splits[mapped_k] = (int(rec.get("wins") or 0), int(rec.get("losses") or 0))
+    return splits
 
 
 class SportradarAdapter(BaseNBADataAdapter):
@@ -27,9 +54,24 @@ class SportradarAdapter(BaseNBADataAdapter):
     provider_name = "sportradar_nba_v8"
     _CACHED_CONTEXT: dict[str, Any] | None = None
 
-    def __init__(self, api_key: str | None = None, access_level: str = "trial") -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        access_level: str = "trial",
+        *,
+        synergy_enabled: bool | None = None,
+        season_year: int | None = None,
+    ) -> None:
         self.api_key = (api_key or os.getenv("SPORTRADAR_API_KEY") or os.getenv("SPORTRADAR_SYNERGY_API_KEY") or "").strip()
         self.access_level = access_level
+        if synergy_enabled is None:
+            try:
+                self.synergy_enabled = bool(load_config().sources.sportradar_synergy_enabled)
+            except Exception:
+                self.synergy_enabled = False
+        else:
+            self.synergy_enabled = bool(synergy_enabled)
+        self.season_year = season_year
 
     def is_configured(self) -> bool:
         return len(self.api_key) >= 16
@@ -37,7 +79,7 @@ class SportradarAdapter(BaseNBADataAdapter):
     def fetch_league_intelligence_context(self) -> dict[str, Any]:
         """
         Fetches and caches league-wide NBA official injuries (`league/injuries.json`) and
-        official seasonal standings & tactical splits (`seasons/2026/REG/standings.json`).
+        official seasonal standings & tactical splits (`seasons/{season_year}/REG/standings.json`).
         """
         if SportradarAdapter._CACHED_CONTEXT is not None:
             return SportradarAdapter._CACHED_CONTEXT
@@ -84,7 +126,8 @@ class SportradarAdapter(BaseNBADataAdapter):
             logger.warning(f"Failed to fetch Sportradar injuries: {exc}")
 
         # 2. Official Standings & Splits (1 request)
-        std_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/seasons/2025/REG/standings.json"
+        season_yr = self.season_year if self.season_year is not None else resolve_nba_season_year()
+        std_url = f"https://api.sportradar.com/nba/{self.access_level}/v8/en/seasons/{season_yr}/REG/standings.json"
         try:
             req = urllib.request.Request(std_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "x-api-key": self.api_key})
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -96,9 +139,10 @@ class SportradarAdapter(BaseNBADataAdapter):
                             code = normalize_team_code(t_rec.get("alias") or t_rec.get("name", ""))
                         except ValueError:
                             continue
-                        hw, hl = t_rec.get("records", {}).get("home", {}).get("wins", 0), t_rec.get("records", {}).get("home", {}).get("losses", 0)
-                        rw, rl = t_rec.get("records", {}).get("road", {}).get("wins", 0), t_rec.get("records", {}).get("road", {}).get("losses", 0)
-                        l10w, l10l = t_rec.get("records", {}).get("last_10", {}).get("wins", 0), t_rec.get("records", {}).get("last_10", {}).get("losses", 0)
+                        rec_splits = _extract_record_splits(t_rec.get("records"))
+                        hw, hl = rec_splits["home"]
+                        rw, rl = rec_splits["road"]
+                        l10w, l10l = rec_splits["last_10"]
                         team_splits[code] = {
                             "home_win_pct": round(hw / max(1, hw + hl), 3) if (hw + hl) > 0 else 0.50,
                             "road_win_pct": round(rw / max(1, rw + rl), 3) if (rw + rl) > 0 else 0.50,
@@ -109,76 +153,83 @@ class SportradarAdapter(BaseNBADataAdapter):
         except Exception as exc:
             logger.warning(f"Failed to fetch Sportradar standings: {exc}")
 
-        # 3. Synergy Basketball Telemetry Integration (Phase V2.3)
+        # 3. Synergy Basketball Telemetry Integration (enabled declaratively when subscription permits)
         synergy_teams_loaded = 0
         synergy_events_loaded = 0
-        syn_teams_url = f"https://api.sportradar.com/synergy-basketball/{self.access_level}/nba/teams.json"
-        try:
-            req = urllib.request.Request(syn_teams_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "x-api-key": self.api_key})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                syn_teams_data = json.loads(resp.read().decode("utf-8"))
-                for st in syn_teams_data.get("teams") or []:
-                    raw_name = st.get("name") or st.get("market", "")
-                    try:
-                        code = normalize_team_code(raw_name)
-                    except ValueError:
-                        continue
-                    if code not in team_splits:
-                        team_splits[code] = {}
-                    synergy_id = st.get("id", "")
-                    team_splits[code]["synergy_team_id"] = synergy_id
-                    synergy_teams_loaded += 1
-        except Exception as exc:
-            logger.warning(f"Failed to fetch Synergy basketball teams: {exc}")
+        if self.synergy_enabled:
+            syn_teams_url = f"https://api.sportradar.com/synergy-basketball/{self.access_level}/nba/teams.json"
+            try:
+                req = urllib.request.Request(syn_teams_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "x-api-key": self.api_key})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    syn_teams_data = json.loads(resp.read().decode("utf-8"))
+                    for st in syn_teams_data.get("teams") or []:
+                        raw_name = st.get("name") or st.get("market", "")
+                        try:
+                            code = normalize_team_code(raw_name)
+                        except ValueError:
+                            continue
+                        if code not in team_splits:
+                            team_splits[code] = {}
+                        synergy_id = st.get("id", "")
+                        team_splits[code]["synergy_team_id"] = synergy_id
+                        synergy_teams_loaded += 1
+            except Exception as exc:
+                logger.warning(f"Failed to fetch Synergy basketball teams: {exc}")
 
-        # 4. Synergy Possession-Type Telemetry Events
-        syn_events_url = f"https://api.sportradar.com/synergy-basketball/{self.access_level}/nba/events.json?limit=50"
-        try:
-            req = urllib.request.Request(syn_events_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "x-api-key": self.api_key})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                syn_events_data = json.loads(resp.read().decode("utf-8"))
-                events = syn_events_data.get("events") or []
-                synergy_events_loaded = len(events)
-                play_counts: dict[str, int] = {}
-                ato_cnt = 0
-                pnr_cnt = 0
-                zone_cnt = 0
-                for ev in events:
-                    ed = ev.get("event_details") or {}
-                    if ed.get("is_after_timeout"):
-                        ato_cnt += 1
-                    if ed.get("is_pick_and_roll"):
-                        pnr_cnt += 1
-                    if ed.get("zone"):
-                        zone_cnt += 1
-                    for pl in ed.get("plays") or []:
-                        pname = str(pl.get("name", "")).strip()
-                        if pname and pname not in ("NonPossession", "LineupClip"):
-                            play_counts[pname] = play_counts.get(pname, 0) + 1
-                top_plays = sorted(play_counts.items(), key=lambda x: x[1], reverse=True)[:8]
-                plays_summary = ", ".join(f"{k}:{v}" for k, v in top_plays)
-                injury_documents.append(
-                    {
-                        "source": "sportradar_synergy_possession_telemetry",
-                        "title": f"Synergy Possession Play-Types Telemetry ({synergy_events_loaded} events)",
-                        "content": (
-                            f"Synergy Basketball NBA possession tracking telemetry: "
-                            f"ATO={ato_cnt}, PickAndRoll={pnr_cnt}, ZoneDefense={zone_cnt}, "
-                            f"TopPlayTags=[{plays_summary}]."
-                        ),
-                        "captured_at": now_utc,
-                    }
-                )
-        except Exception as exc:
-            logger.warning(f"Failed to fetch Synergy game events: {exc}")
+            # 4. Synergy Possession-Type Telemetry Events
+            syn_events_url = f"https://api.sportradar.com/synergy-basketball/{self.access_level}/nba/events.json?limit=50"
+            try:
+                req = urllib.request.Request(syn_events_url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0", "x-api-key": self.api_key})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    syn_events_data = json.loads(resp.read().decode("utf-8"))
+                    events = syn_events_data.get("events") or []
+                    synergy_events_loaded = len(events)
+                    play_counts: dict[str, int] = {}
+                    ato_cnt = 0
+                    pnr_cnt = 0
+                    zone_cnt = 0
+                    for ev in events:
+                        ed = ev.get("event_details") or {}
+                        if ed.get("is_after_timeout"):
+                            ato_cnt += 1
+                        if ed.get("is_pick_and_roll"):
+                            pnr_cnt += 1
+                        if ed.get("zone"):
+                            zone_cnt += 1
+                        for pl in ed.get("plays") or []:
+                            pname = str(pl.get("name", "")).strip()
+                            if pname and pname not in ("NonPossession", "LineupClip"):
+                                play_counts[pname] = play_counts.get(pname, 0) + 1
+                    top_plays = sorted(play_counts.items(), key=lambda x: x[1], reverse=True)[:8]
+                    plays_summary = ", ".join(f"{k}:{v}" for k, v in top_plays)
+                    injury_documents.append(
+                        {
+                            "source": "sportradar_synergy_possession_telemetry",
+                            "title": f"Synergy Possession Play-Types Telemetry ({synergy_events_loaded} events)",
+                            "content": (
+                                f"Synergy Basketball NBA possession tracking telemetry: "
+                                f"ATO={ato_cnt}, PickAndRoll={pnr_cnt}, ZoneDefense={zone_cnt}, "
+                                f"TopPlayTags=[{plays_summary}]."
+                            ),
+                            "captured_at": now_utc,
+                        }
+                    )
+            except Exception as exc:
+                logger.warning(f"Failed to fetch Synergy game events: {exc}")
 
-        status_str = (
-            f"OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY ({len(injury_penalties)} teams injuries + "
-            f"{len(team_splits)} teams tactical splits + {synergy_teams_loaded} Synergy NBA teams + "
-            f"{synergy_events_loaded} Synergy possession events)"
-            if (injury_penalties or team_splits or synergy_teams_loaded)
-            else "CONFIGURED_RATE_LIMITED"
-        )
+        if not (injury_penalties or injury_documents or team_splits or synergy_teams_loaded):
+            status_str = "CONFIGURED_RATE_LIMITED"
+        elif self.synergy_enabled:
+            status_str = (
+                f"OPERATIONAL_LIVE_NBA_V8_AND_SYNERGY ({len(injury_documents)} injury docs + "
+                f"{len(team_splits)} teams tactical splits + {synergy_teams_loaded} Synergy NBA teams + "
+                f"{synergy_events_loaded} Synergy possession events)"
+            )
+        else:
+            status_str = (
+                f"OPERATIONAL_LIVE_NBA_V8 ({len(injury_documents)} injury docs + "
+                f"{len(team_splits)} teams tactical splits)"
+            )
         SportradarAdapter._CACHED_CONTEXT = {
             "injury_penalties": injury_penalties,
             "injury_documents": injury_documents,

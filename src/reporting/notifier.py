@@ -26,6 +26,18 @@ from typing import Any
 
 import httpx
 
+from src.config import load_config
+
+
+def _github_issue_notifications_enabled(override: bool | None = None) -> bool:
+    """Returns whether GitHub Issue notifications are enabled declaratively in config."""
+    if override is not None:
+        return bool(override)
+    try:
+        return bool(load_config().sources.github_issue_notifications_enabled)
+    except Exception:
+        return False
+
 
 
 def _nd(value: float | None, spec: str = ".4f") -> str:
@@ -374,12 +386,17 @@ def select_and_dispatch_daily_top_pick(
     }
 
 
-def _send_daily_pick_email(top_pick: dict[str, Any], pick_date: str) -> list[str]:
+def _send_daily_pick_email(
+    top_pick: dict[str, Any],
+    pick_date: str,
+    *,
+    enable_github_issues: bool | None = None,
+) -> list[str]:
     """Dispatches the single daily highest-probability pick to user's email via GitHub Issue (@Drewks) and/or SMTP."""
     triggered: list[str] = []
     repo = os.getenv("GITHUB_REPOSITORY", "Drewks/nba-betting-intelligence")
     owner = repo.split("/")[0] if "/" in repo else "Drewks"
-    gh_token = _resolve_github_token()
+    gh_token = _resolve_github_token() if _github_issue_notifications_enabled(enable_github_issues) else ""
 
     partido = top_pick["partido"]
     mercado = top_pick["mercado"]
@@ -412,7 +429,7 @@ def _send_daily_pick_email(top_pick: dict[str, Any], pick_date: str) -> list[str
         f"- 🛡️ *Filtro de seguridad activo*: Esta selección no presenta movimientos bruscos en contra (`CLV OK`) ni bajas de última hora no descontadas.\n"
     )
 
-    if gh_token and repo:
+    if _github_issue_notifications_enabled(enable_github_issues) and gh_token and repo:
         try:
             headers = {
                 "Authorization": f"Bearer {gh_token}",
@@ -434,10 +451,23 @@ def _send_daily_pick_email(top_pick: dict[str, Any], pick_date: str) -> list[str
                             # Close previous days' daily pick issues to keep repo clean
                             issue_num = item.get("number")
                             if issue_num:
-                                client.patch(
+                                patch_resp = client.patch(
                                     f"https://api.github.com/repos/{repo}/issues/{issue_num}",
                                     json={"state": "closed"},
                                 )
+                                if patch_resp.status_code not in (200, 201):
+                                    logging.warning(
+                                        "GitHub Issue close failed for #%s (HTTP %d): %s",
+                                        issue_num,
+                                        patch_resp.status_code,
+                                        patch_resp.text[:200],
+                                    )
+                else:
+                    logging.warning(
+                        "GitHub Issues list failed (HTTP %d): %s",
+                        search_resp.status_code,
+                        search_resp.text[:200],
+                    )
                 if not already_open:
                     post_resp = client.post(
                         f"https://api.github.com/repos/{repo}/issues",
@@ -449,6 +479,12 @@ def _send_daily_pick_email(top_pick: dict[str, Any], pick_date: str) -> list[str
                     )
                     if post_resp.status_code in (200, 201):
                         triggered.append("github_issue_email")
+                    else:
+                        logging.warning(
+                            "GitHub daily-pick issue creation failed (HTTP %d): %s",
+                            post_resp.status_code,
+                            post_resp.text[:200],
+                        )
         except Exception as exc:
             logging.warning(f"Failed to post GitHub issue email: {exc}")
 
@@ -491,6 +527,8 @@ def _dispatch_readiness_alerts(
     brier: float | None,
     base_brier: float | None,
     is_test: bool = False,
+    *,
+    enable_github_issues: bool | None = None,
 ) -> list[str]:
     """
     Sends alerts via:
@@ -501,7 +539,7 @@ def _dispatch_readiness_alerts(
     triggered: list[str] = []
     repo = os.getenv("GITHUB_REPOSITORY", "Drewks/nba-betting-intelligence")
     owner = repo.split("/")[0] if "/" in repo else "Drewks"
-    gh_token = _resolve_github_token()
+    gh_token = _resolve_github_token() if _github_issue_notifications_enabled(enable_github_issues) else ""
 
     prefix = "[PRUEBA DE ALERTA] " if is_test else ""
     issue_title = f"🟢🚨 {prefix}¡Modelo NBA Betting Intelligence LISTO para {tier_label}! (8/8 Criterios Superados)"
@@ -526,7 +564,7 @@ def _dispatch_readiness_alerts(
         f"3. **Si estás en Nivel 2 (Banca Completa)**: Usa Quarter-Kelly con tope estricto de **`1.0%` de tu banca por apuesta** y máximo **3 selecciones por jornada**.\n"
     )
 
-    if gh_token and repo:
+    if _github_issue_notifications_enabled(enable_github_issues) and gh_token and repo:
         try:
             headers = {
                 "Authorization": f"Bearer {gh_token}",
@@ -544,6 +582,12 @@ def _dispatch_readiness_alerts(
                         if tier_label in str(item.get("title", "")):
                             already_open = True
                             break
+                else:
+                    logging.warning(
+                        "GitHub Issues list failed during readiness check (HTTP %d): %s",
+                        search_resp.status_code,
+                        search_resp.text[:200],
+                    )
                 if not already_open:
                     post_resp = client.post(
                         f"https://api.github.com/repos/{repo}/issues",
@@ -555,6 +599,12 @@ def _dispatch_readiness_alerts(
                     )
                     if post_resp.status_code in (200, 201):
                         triggered.append("github_issue_email")
+                    else:
+                        logging.warning(
+                            "GitHub readiness issue creation failed (HTTP %d): %s",
+                            post_resp.status_code,
+                            post_resp.text[:200],
+                        )
         except Exception as exc:
             logging.warning(f"Handled exception in notifier (line 548): {exc}")
 

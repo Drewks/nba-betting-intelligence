@@ -12,7 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
@@ -274,6 +274,7 @@ def main() -> None:
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "main": {k: v for k, v in result.items() if k != "bets"},
         "main_bets": result.get("bets", []),
         "sensitivity": {k: v["betting"] for k, v in (sensitivity or {}).items()},

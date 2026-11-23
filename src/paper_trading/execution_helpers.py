@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 import uuid
 
-from src.config import load_config
+from src.config import ExecutionConfig, load_config
 from src.prediction.ev_calculator import optimize_simultaneous_kelly_portfolio
 
 
@@ -199,8 +199,10 @@ def check_candidate_edge_and_model_guards(
     cand: dict[str, Any],
     *,
     min_ev_threshold: float,
+    execution_cfg: ExecutionConfig | None = None,
 ) -> tuple[str, str] | None:
     """Evaluates pre-duplicate model, odds, disagreement, steam, conformal, and meta-label gates."""
+    ex_cfg = execution_cfg or load_config().execution
     game_id = cand["game_id"]
     market = cand["market"]
     dec_odds = float(cand.get("decimal_odds_used") or 0.0)
@@ -212,10 +214,10 @@ def check_candidate_edge_and_model_guards(
         return ("INVALID_ODDS_OR_PROB", "Missing calibrated probability or invalid decimal odds")
     if ev_unit <= min_ev_threshold:
         return ("EV_BELOW_THRESHOLD", f"EV {ev_pct:.2f}% <= threshold {min_ev_threshold * 100:.2f}%")
-    if str(game_id).startswith("ESPN_") and ev_unit > 0.45:
+    if str(game_id).startswith("ESPN_") and ev_unit > ex_cfg.max_plausible_ev_unit:
         return (
             "UNVERIFIED_INJURY_OR_LINEUP_OUTLIER",
-            f"Extreme EV ({ev_pct:.2f}%) indicates likely star injury/rest not in team-level features; skipped.",
+            f"Extreme EV ({ev_pct:.2f}% > {ex_cfg.max_plausible_ev_unit * 100:.1f}%) indicates likely star injury/rest not in team-level features; skipped.",
         )
 
     disagreement = cand.get("model_market_disagreement")
@@ -237,24 +239,24 @@ def check_candidate_edge_and_model_guards(
             "EXCESSIVE_LONGSHOT_VARIANCE",
             f"Moneyline odds {dec_odds:.2f} (> {float(ml_max_odds):.2f} max cap); skipped to protect bankroll and CLV.",
         )
-    if dec_odds > 3.50 and ev_pct < 15.0:
+    if dec_odds > ex_cfg.longshot_odds_threshold and ev_pct < ex_cfg.longshot_min_ev_pct:
         return (
             "EXCESSIVE_LONGSHOT_VARIANCE",
-            f"Longshot odds {dec_odds:.2f} (> 3.50) require EV >= 15.0% (observed: {ev_pct:.2f}%); skipped to protect bankroll.",
+            f"Longshot odds {dec_odds:.2f} (> {ex_cfg.longshot_odds_threshold:.2f}) require EV >= {ex_cfg.longshot_min_ev_pct:.1f}% (observed: {ev_pct:.2f}%); skipped to protect bankroll.",
         )
 
     steam_delta = float(cand.get("steam_delta") or 0.0)
-    if steam_delta <= -0.045:
+    if steam_delta <= ex_cfg.adverse_steam_threshold:
         return (
             "ADVERSE_SHARP_STEAM_MOVE",
-            f"Market fair probability moved {steam_delta * 100:.2f}% against this side since opening (<= -4.5%); skipped.",
+            f"Market fair probability moved {steam_delta * 100:.2f}% against this side since opening (<= {ex_cfg.adverse_steam_threshold * 100:.1f}%); skipped.",
         )
 
     conf_w = cand.get("conformal_width")
-    if conf_w is not None and float(conf_w) > 0.22:
+    if conf_w is not None and float(conf_w) > ex_cfg.max_conformal_width:
         return (
             "CONFORMAL_UNCERTAINTY_TOO_WIDE",
-            f"Venn-Abers conformal prediction interval width {float(conf_w):.3f} > 0.22; epistemic uncertainty too high.",
+            f"Venn-Abers conformal prediction interval width {float(conf_w):.3f} > {ex_cfg.max_conformal_width:.2f}; epistemic uncertainty too high.",
         )
 
     if cand.get("meta_label_pass") is False:

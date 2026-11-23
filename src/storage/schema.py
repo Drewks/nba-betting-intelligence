@@ -376,6 +376,18 @@ DDL_STATEMENTS = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS boxscore_fetch_failures (
+        game_id TEXT PRIMARY KEY,
+        http_status INTEGER,
+        error_message TEXT,
+        attempts INTEGER NOT NULL DEFAULT 1,
+        first_failed_at TEXT NOT NULL,
+        last_failed_at TEXT NOT NULL,
+        permanently_unavailable INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS player_boxscores (
         game_id TEXT NOT NULL,
         player_name TEXT NOT NULL,

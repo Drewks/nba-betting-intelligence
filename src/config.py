@@ -282,6 +282,8 @@ class SourcesConfig:
     peru_scrapers_enabled: bool = True
     peru_scraper_policy: str = "PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS"
     allowed_live_api_books: tuple[str, ...] = ("te_apuesto", "pinnacle", "betano")
+    sportradar_synergy_enabled: bool = False
+    github_issue_notifications_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -320,7 +322,7 @@ class EvidenceStakingConfig:
 
 @dataclass(frozen=True)
 class ExecutionConfig:
-    """Which observed quotes count as a price the system could actually have taken."""
+    """Which observed quotes count as a price the system could actually have taken and pre-bet risk guards."""
 
     # A quote older than this at decision time is not used for a bet (lines move; old prices are gone).
     max_quote_age_hours: float = 6.0
@@ -328,6 +330,12 @@ class ExecutionConfig:
     excluded_provider_markers: tuple[str, ...] = ("(Best of",)
     # Two-way markets with a larger margin are not bet (Te Apuesto ~9.9% vs Pinnacle ~3.2% observed).
     max_bookmaker_overround: float = 0.06
+    # Pre-bet operational safety guards (V8 defaults centralized from execution_helpers.py)
+    max_plausible_ev_unit: float = 0.45
+    longshot_odds_threshold: float = 3.50
+    longshot_min_ev_pct: float = 15.0
+    adverse_steam_threshold: float = -0.045
+    max_conformal_width: float = 0.22
 
 
 @dataclass(frozen=True)
@@ -552,6 +560,8 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         peru_scrapers_enabled=peru_scrapers_enabled,
         peru_scraper_policy=peru_scraper_policy,
         allowed_live_api_books=allowed_live_api_books,
+        sportradar_synergy_enabled=bool(src.get("sportradar_synergy_enabled", False)),
+        github_issue_notifications_enabled=bool(src.get("github_issue_notifications_enabled", False)),
     )
 
     ev_raw = raw.get("evaluation") or {}
@@ -596,6 +606,21 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         ),
         max_bookmaker_overround=_in_range(
             "execution.max_bookmaker_overround", ex_raw.get("max_bookmaker_overround", 0.06), 0.0, 0.25
+        ),
+        max_plausible_ev_unit=_in_range(
+            "execution.max_plausible_ev_unit", ex_raw.get("max_plausible_ev_unit", 0.45), 0.10, 2.00
+        ),
+        longshot_odds_threshold=_in_range(
+            "execution.longshot_odds_threshold", ex_raw.get("longshot_odds_threshold", 3.50), 1.50, 15.0
+        ),
+        longshot_min_ev_pct=_in_range(
+            "execution.longshot_min_ev_pct", ex_raw.get("longshot_min_ev_pct", 15.0), 0.0, 100.0
+        ),
+        adverse_steam_threshold=_in_range(
+            "execution.adverse_steam_threshold", ex_raw.get("adverse_steam_threshold", -0.045), -0.25, 0.0
+        ),
+        max_conformal_width=_in_range(
+            "execution.max_conformal_width", ex_raw.get("max_conformal_width", 0.22), 0.05, 1.00
         ),
     )
 
