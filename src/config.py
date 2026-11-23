@@ -30,6 +30,21 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class MarketAnchorScheduleConfig:
+    """Dev-calibrated (2024-25 & 2025-26) time-decaying model weight between opening and closing lines."""
+
+    enabled: bool = False
+    horizon_hours: float = 12.0
+    decay_power: float = 1.0
+    moneyline_open_weight: float = 0.28
+    moneyline_close_weight: float = 0.11
+    total_points_open_weight: float = 0.30
+    total_points_close_weight: float = 0.00
+    spread_open_weight: float = 0.24
+    spread_close_weight: float = 0.02
+
+
+@dataclass(frozen=True)
 class ModelConfig:
     version_id: str
     ewma_alpha_slow: float
@@ -41,6 +56,7 @@ class ModelConfig:
     moneyline_model_weight: float | None = None
     moneyline_max_disagreement: float | None = None
     moneyline_max_odds: float | None = None
+    anchor_schedule: MarketAnchorScheduleConfig = field(default_factory=MarketAnchorScheduleConfig)
 
 
 @dataclass(frozen=True)
@@ -183,6 +199,7 @@ class HybridAllocationConfig:
     moneyline_weight: float = 0.30
     max_totals_per_matchday: int = 2
     max_moneyline_per_matchday: int = 1
+    allocation_mode: str = "static_caps"
 
 
 @dataclass(frozen=True)
@@ -464,6 +481,27 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     ml_mw_raw = m.get("moneyline_model_weight")
     ml_md_raw = m.get("moneyline_max_disagreement")
     ml_mo_raw = m.get("moneyline_max_odds")
+    sched_raw = m.get("market_anchor_schedule") or {}
+    anchor_schedule = MarketAnchorScheduleConfig(
+        enabled=bool(sched_raw.get("enabled", False)),
+        horizon_hours=_in_range("market_anchor_schedule.horizon_hours", sched_raw.get("horizon_hours", 12.0), 1.0, 48.0),
+        decay_power=_in_range("market_anchor_schedule.decay_power", sched_raw.get("decay_power", 1.0), 0.25, 4.0),
+        moneyline_open_weight=_in_range("market_anchor_schedule.moneyline_open_weight", sched_raw.get("moneyline_open_weight", 0.28), 0.0, 0.60),
+        moneyline_close_weight=_in_range("market_anchor_schedule.moneyline_close_weight", sched_raw.get("moneyline_close_weight", 0.11), 0.0, 0.60),
+        total_points_open_weight=_in_range("market_anchor_schedule.total_points_open_weight", sched_raw.get("total_points_open_weight", 0.30), 0.0, 0.60),
+        total_points_close_weight=_in_range("market_anchor_schedule.total_points_close_weight", sched_raw.get("total_points_close_weight", 0.00), 0.0, 0.60),
+        spread_open_weight=_in_range("market_anchor_schedule.spread_open_weight", sched_raw.get("spread_open_weight", 0.24), 0.0, 0.60),
+        spread_close_weight=_in_range("market_anchor_schedule.spread_close_weight", sched_raw.get("spread_close_weight", 0.02), 0.0, 0.60),
+    )
+    for mkt_lbl, op_w, cl_w in (
+        ("moneyline", anchor_schedule.moneyline_open_weight, anchor_schedule.moneyline_close_weight),
+        ("total_points", anchor_schedule.total_points_open_weight, anchor_schedule.total_points_close_weight),
+        ("spread", anchor_schedule.spread_open_weight, anchor_schedule.spread_close_weight),
+    ):
+        if cl_w > op_w:
+            raise ConfigError(
+                f"market_anchor_schedule.{mkt_lbl}_close_weight ({cl_w}) cannot exceed {mkt_lbl}_open_weight ({op_w})"
+            )
     model = ModelConfig(
         version_id=str(_require(m, "version_id", "model")),
         ewma_alpha_slow=_in_range("ewma_alpha_slow", _require(m, "ewma_alpha_slow", "model"), 0.001, 0.5),
@@ -488,6 +526,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         moneyline_max_odds=(
             _in_range("moneyline_max_odds", ml_mo_raw, 1.05, 50.0) if ml_mo_raw is not None else None
         ),
+        anchor_schedule=anchor_schedule,
     )
     staking_mode = str(_require(r, "staking_mode", "risk_management"))
     if staking_mode not in ("fractional_kelly", "flat"):
@@ -644,12 +683,18 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     # Optional hybrid_allocation section
     hyb_raw = raw.get("hybrid_allocation")
     if hyb_raw:
+        alloc_mode = str(hyb_raw.get("allocation_mode", "static_caps"))
+        if alloc_mode not in ("static_caps", "evidence_guided"):
+            raise ConfigError(
+                f"hybrid_allocation.allocation_mode must be 'static_caps' or 'evidence_guided', got {alloc_mode!r}"
+            )
         hybrid_allocation = HybridAllocationConfig(
             enabled=bool(hyb_raw.get("enabled", True)),
             totals_weight=_in_range("totals_weight", hyb_raw.get("totals_weight", 0.70), 0.0, 1.0),
             moneyline_weight=_in_range("moneyline_weight", hyb_raw.get("moneyline_weight", 0.30), 0.0, 1.0),
             max_totals_per_matchday=int(_in_range("max_totals_per_matchday", hyb_raw.get("max_totals_per_matchday", 2), 0, 10)),
             max_moneyline_per_matchday=int(_in_range("max_moneyline_per_matchday", hyb_raw.get("max_moneyline_per_matchday", 1), 0, 10)),
+            allocation_mode=alloc_mode,
         )
     else:
         hybrid_allocation = HybridAllocationConfig()

@@ -2,6 +2,9 @@ name: NBA Betting Intelligence — Cloud Auto-Trading & Calibration (S/100 Virtu
 
 on:
   schedule:
+    # 0. Apertura Temprana de Mercado (compensa retrasos de cron GitHub y captura líneas >= 6h pre-tipoff):
+    # 11:15 UTC -> 06:15 AM Perú
+    - cron: "15 11 * * *"
     # 1. Apertura de Mercado (Cuotas observadas ESPN + Bookmakers):
     # 15:15 UTC -> 10:15 AM Perú
     - cron: "15 15 * * *"
@@ -123,7 +126,7 @@ jobs:
               echo "⏱️ [CRON RETRASADO >=14 UTC] Ejecutando además ventana matutina para no perder apertura."
               uv run python scripts/run_automated_scheduler.py --run-now morning
             fi
-          elif [ "$SCHEDULE" = "15 15 * * *" ]; then
+          elif [ "$SCHEDULE" = "15 11 * * *" ] || [ "$SCHEDULE" = "15 15 * * *" ]; then
             if [ "$UTC_HOUR" -ge 21 ] || [ "$UTC_HOUR" -lt 4 ]; then
               echo "⏱️ [CRON MATUTINO RETRASADO A PRE-TIPOFF] Promoviendo a ventana Sniper + Paper Trading."
               uv run python scripts/run_automated_scheduler.py --run-now sniper

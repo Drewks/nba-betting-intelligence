@@ -286,6 +286,49 @@ def market_anchored_probability(
     return round(w * float(model_prob) + (1.0 - w) * float(market_prob), 6)
 
 
+def resolve_market_anchor_weight(
+    market: str,
+    *,
+    hours_to_tipoff: float | None,
+    fallback_weight: float,
+    moneyline_weight: float | None = None,
+    schedule: Any = None,
+) -> float:
+    """
+    Resolves per-market model anchor weight using optional Bayesian time decay from opening lines
+    toward efficient closing lines:
+        tau = clip(hours_to_tipoff / horizon_hours, 0, 1)
+        w = w_close + (w_open - w_close) * (tau ** decay_power)
+    """
+    base_w = float(moneyline_weight) if (market == "moneyline" and moneyline_weight is not None) else float(fallback_weight)
+    if schedule is None or not bool(getattr(schedule, "enabled", False)) or hours_to_tipoff is None:
+        return round(max(0.0, min(1.0, base_w)), 6)
+
+    bounds_by_market: dict[str, tuple[float, float]] = {
+        "moneyline": (
+            float(getattr(schedule, "moneyline_open_weight", base_w)),
+            float(getattr(schedule, "moneyline_close_weight", base_w)),
+        ),
+        "total_points": (
+            float(getattr(schedule, "total_points_open_weight", base_w)),
+            float(getattr(schedule, "total_points_close_weight", base_w)),
+        ),
+        "spread": (
+            float(getattr(schedule, "spread_open_weight", base_w)),
+            float(getattr(schedule, "spread_close_weight", base_w)),
+        ),
+    }
+    if market not in bounds_by_market:
+        return round(max(0.0, min(1.0, base_w)), 6)
+
+    w_open, w_close = bounds_by_market[market]
+    horizon = max(1e-6, float(getattr(schedule, "horizon_hours", 12.0)))
+    power = float(getattr(schedule, "decay_power", 1.0))
+    tau = max(0.0, min(1.0, float(hours_to_tipoff) / horizon))
+    w_eff = w_close + (w_open - w_close) * (tau ** power)
+    return round(max(0.0, min(1.0, float(w_eff))), 6)
+
+
 _CALIBRATED_WEIGHTS_CACHE: dict[str, float] | None = None
 
 

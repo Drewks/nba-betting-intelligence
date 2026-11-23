@@ -21,6 +21,16 @@ model:
   moneyline_model_weight: 0.30       # Market-specific ML anchor weight
   moneyline_max_disagreement: 0.15   # Market-specific ML max model-vs-market disagreement
   moneyline_max_odds: 2.80           # Policy ML decimal odds cap (mitigates longshot tail traps; not holdout-validated)
+  market_anchor_schedule:            # Dev-only (2024-25/2025-26, n=2003) Bayesian decay open -> close
+    enabled: true
+    horizon_hours: 12.0
+    decay_power: 1.0
+    moneyline_open_weight: 0.28
+    moneyline_close_weight: 0.11
+    total_points_open_weight: 0.30
+    total_points_close_weight: 0.00
+    spread_open_weight: 0.24
+    spread_close_weight: 0.02
 
 risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
   virtual_bankroll_initial_pen: 100.00
@@ -90,9 +100,9 @@ evaluation:
   development_seasons: ["2024-25", "2025-26"]
   holdout_season: "2026-27"
   # Lower bound: 9 distinct backtest reports were published before the freeze (EV 5% / 2%, ML odds cap,
-  # EWMA re-tunes, margin and box-score variants); +1 for the 2026-11-17 Pinnacle-margin (3.2%) run.
-  # Using 3 understated the multiple-testing correction.
-  trials_evaluated_count: 10
+  # EWMA re-tunes, margin and box-score variants); +1 for the 2026-11-17 Pinnacle-margin (3.2%) run;
+  # +1 for the dev-only (2024-25/2025-26) time-decaying market anchor schedule calibration.
+  trials_evaluated_count: 11
   frozen_protocol_id: "V8_FROZEN_2026_11_15"
   # 2026-27 was visible in every published report before the freeze, so it is NOT an untouched holdout.
   season_holdout_contaminated: true
@@ -135,12 +145,13 @@ sub_bankroll_combinadas:             # Sub-bankroll independiente para SGP y com
   max_parlays_per_matchday: 2
   min_compound_ev_pct: 6.0
 
-hybrid_allocation:                   # Política de asignación 70% Totales / 30% Moneyline
+hybrid_allocation:                   # Política de asignación por mercado (evidencia CLV + compatibilidad 70/30)
   enabled: true
   totals_weight: 0.70
   moneyline_weight: 0.30
   max_totals_per_matchday: 2
   max_moneyline_per_matchday: 1
+  allocation_mode: "evidence_guided" # "evidence_guided" | "static_caps" — ranks and caps markets dynamically by shadow CLV evidence
 
 clv_meta_labeling:                   # V8 Phase 3: Calibración empírica CLV Meta-Labeling (pre-bet only, zero lookahead)
   enabled: false

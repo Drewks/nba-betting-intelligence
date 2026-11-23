@@ -281,6 +281,9 @@ def check_candidate_caps_and_duplicates(
     hybrid_allocation_enabled: bool,
     max_moneyline_per_matchday: int,
     max_totals_per_matchday: int,
+    allocation_mode: str = "static_caps",
+    day_market_counts: dict[str, int] | None = None,
+    market_evidence_verdict: str | None = None,
 ) -> tuple[str, str] | None:
     """Checks DB duplicates, per-game anti-correlation limits, matchday cap, and hybrid allocation."""
     game_id = cand["game_id"]
@@ -322,15 +325,25 @@ def check_candidate_caps_and_duplicates(
         return ("MATCHDAY_CAP_REACHED", f"Matchday cap of {max_selections_per_matchday} selections reached")
 
     if hybrid_allocation_enabled:
-        if market == "moneyline" and day_ml_count >= max_moneyline_per_matchday:
-            return (
-                "MARKET_CAP_REACHED",
-                f"Matchday cap of {max_moneyline_per_matchday} moneyline pick(s) reached (70/30 hybrid allocation)",
-            )
-        if market == "total_points" and day_totals_count >= max_totals_per_matchday:
-            if day_ml_count > 0 or day_count >= max_selections_per_matchday:
+        if allocation_mode == "evidence_guided":
+            if market_evidence_verdict == "NO_EDGE":
+                fallback_cnt = day_totals_count if market == "total_points" else (day_ml_count if market == "moneyline" else 0)
+                current_mkt_count = (day_market_counts or {}).get(market, fallback_cnt)
+                if current_mkt_count >= 1:
+                    return (
+                        "MARKET_CAP_REACHED",
+                        f"Market '{market}' is in NO_EDGE CLV verdict; capped at 1 selection/day (evidence-guided allocation)",
+                    )
+        else:
+            if market == "moneyline" and day_ml_count >= max_moneyline_per_matchday:
                 return (
                     "MARKET_CAP_REACHED",
-                    f"Matchday cap of {max_totals_per_matchday} total_points pick(s) reached (70/30 hybrid allocation)",
+                    f"Matchday cap of {max_moneyline_per_matchday} moneyline pick(s) reached (70/30 hybrid allocation)",
                 )
+            if market == "total_points" and day_totals_count >= max_totals_per_matchday:
+                if day_ml_count > 0 or day_count >= max_selections_per_matchday:
+                    return (
+                        "MARKET_CAP_REACHED",
+                        f"Matchday cap of {max_totals_per_matchday} total_points pick(s) reached (70/30 hybrid allocation)",
+                    )
     return None
