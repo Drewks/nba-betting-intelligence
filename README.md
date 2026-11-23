@@ -20,12 +20,12 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
 | Historial inmutable + Manifiesto por ejecución | ✅ | Triggers SQLite, `audit_row_registry`, tabla append-only `run_manifests` (`commit_sha`, `config_hash`, versiones, calibradores, semillas) y `Shadow Signal Ledger` (`shadow_candidates`). |
 | Restauración del historial borrado el 2026-11-09 | ✅ | Migración `2026_11_09_003` (bundle con checksum en `data/recovery/`), cada acción en `audit_repairs`. |
 | Gestión de riesgo (`config/model_config.yaml`) | ✅ | Única fuente de verdad: **Kelly fraccional 25% (`kelly_fraction: 0.25`)**, **EV mínimo 2.0% (`min_ev_threshold: 0.02`)**, tope `S/ 10.00` (`max_stake_pen: 10.00`, máx. `10%` banca), mín. `S/ 1.00`, máx. `3` selecciones/jornada, máx. `30%` exposición. |
-| Métricas, Holdout y Bonferroni | ✅ | Fail-closed; probabilidades separadas (`raw_model`, `calibrated_model`, `market_fair`, `market_anchored`), `holdout_season: 2026-27` intacto, corrección Bonferroni (`trials_evaluated_count: 3`) y estimador cronológico de cierre (`TotalsClosingEstimator`). |
+| Métricas, Holdout y Bonferroni | ✅ | Fail-closed; probabilidades separadas (`raw_model`, `calibrated_model`, `market_fair`, `market_anchored`), `holdout_season: 2026-27` intacto, corrección Bonferroni (`trials_evaluated_count: 11`) y estimador cronológico de cierre (`TotalsClosingEstimator`). |
 | CLV & Shadow Signal Ledger | ✅ | `100·(cuota × p_cierre_sin_margen − 1)`, cierre Pinnacle preferido; todas las señales `+EV` (incluidas bloqueadas por `min_ev` / `min_stake` / tope diario) quedan en `shadow_candidates` (1u hipotética) sin tocar la banca S/100. |
 | Injury Sniper | 🟡 | Ancla en el mercado; solo cambios de estado NUEVOS (vs. snapshot previo) mueven la probabilidad. Tabla de impacto aún sin calibrar. |
 | Casas peruanas (`Betano` & `RETAbet`) | 🟡 | Política explícita `sources.peru_scraper_policy: PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS`: solo JSON endpoints públicos de lectura sin evasión antibot Cloudflare/Shape; Playwright local desacoplado de GitHub Actions. |
 | Player Props & Sub-Bankroll Combinadas | ⛔ | **Deshabilitado por configuración** (`allow_player_props_betting: false`, `allow_parlays: false` en `config/model_config.yaml`; módulo `src/prediction/props/` cuarentenado) — bloqueo fail-closed salvo habilitación explícita. |
-| Asignación Híbrida (`70% Totales / 30% Moneyline`) | ✅ | Configurada en `config/model_config.yaml` (`hybrid_allocation`: máx. `2` Totales y `1` Moneyline por jornada dentro del tope de `3`). |
+| Asignación Híbrida (`evidence_guided` / `70%–30%`) | ✅ | Configurada en `config/model_config.yaml` (`hybrid_allocation.allocation_mode: evidence_guided`): limita a `1` selección/día los mercados en `NO_EDGE` permitiendo hasta `3`/día en mercados con evidencia activa o pendiente (`max_totals_per_matchday: 2`, `max_moneyline_per_matchday: 1` como respaldo en modo `static_caps`). |
 | Backtest con cuotas históricas reales | ✅ | `scripts/run_real_odds_backtest.py`: walk-forward cronológico del modelo contra el consenso real de apertura/cierre (datos gratuitos CC BY 4.0) y holdout OOS sin ajuste previo. |
 | Hiperparámetros optimizados | ⚪ | El estudio Optuna anterior tenía fuga del resultado (inválido). Se usan priors documentados en `config/model_config.yaml` hasta re-optimizar con holdout limpio. |
 
@@ -36,12 +36,13 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
 > [!IMPORTANT]
 > Todos los límites numéricos operativos se leen exclusivamente de [`config/model_config.yaml`](config/model_config.yaml) (`model.version_id: model_f_ensemble_v8`). Ninguna documentación ni reporte debe redefinir estos umbrales manualmente.
 
-1. **Benchmark = mercado sin margen**: la calibración del modelo (`raw_model_probability`, `calibrated_model_probability`) se compara contra `market_fair_probability` exactamente sobre los mismos partidos antes de cualquier anclaje (`market_anchor_model_weight: 0.30`).
-2. **Política de Stake y EV mínimo**:
+1. **Benchmark = mercado sin margen**: la calibración del modelo (`raw_model_probability`, `calibrated_model_probability`) se compara contra `market_fair_probability` exactamente sobre los mismos partidos antes del anclaje dinámico al mercado (`market_anchor_schedule` con decaimiento apertura→cierre; peso base `market_anchor_model_weight: 0.30`).
+2. **Política de Stake, EV mínimo y Cuota de APIs**:
    - `kelly_fraction`: `0.25` (**25% Quarter-Kelly fraccional**).
    - `min_ev_threshold`: `0.02` (**EV mínimo ≥ 2.0%**; si `EV < 2.0%`, el stake es `S/ 0.00`).
    - Límites por apuesta y jornada: `min_stake_pen: 1.00`, `max_stake_pen: 10.00`, `max_stake_bankroll_fraction: 0.10`, `max_selections_per_matchday: 3`, `max_portfolio_exposure_pct: 0.30`.
    - `allow_player_props_betting`: `false` | `allow_parlays`: `false` (bloqueo fail-closed en código y DB).
+   - Conservación de cuota TheOddsAPI: `the_odds_api_regions: eu`, `the_odds_api_markets: h2h,totals`, caché en proceso `300s` (omitiendo días ya `FINAL` y ciclos `settle`).
 3. **Solo cuotas observadas**: ninguna cuota estimada, derivada o sintética puede generar una apuesta (`betting_allowed_source_types: ["OBSERVED"]`).
 4. **Fuente única de verdad DB (`state-live` vs `main`) e inmutabilidad**:
    - `origin/state-live:data/nba_intelligence.sqlite3` es la **única fuente de verdad viva de producción** (actualizada por `.github/workflows/nba_cloud_automation.yml`).

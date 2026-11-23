@@ -397,6 +397,13 @@ def _send_daily_pick_email(
     repo = os.getenv("GITHUB_REPOSITORY", "Drewks/nba-betting-intelligence")
     owner = repo.split("/")[0] if "/" in repo else "Drewks"
     gh_token = _resolve_github_token() if _github_issue_notifications_enabled(enable_github_issues) else ""
+    try:
+        src_cfg = load_config().sources
+        odds_region = src_cfg.the_odds_api_regions
+        synergy_suffix = " + Synergy Basketball NBA" if src_cfg.sportradar_synergy_enabled else ""
+    except Exception:
+        odds_region = "eu"
+        synergy_suffix = ""
 
     partido = top_pick["partido"]
     mercado = top_pick["mercado"]
@@ -412,7 +419,7 @@ def _send_daily_pick_email(
     body_md = (
         f"Hola @{owner},\n\n"
         f"Aquí tienes tu **ÚNICO Pick Diario NBA de Mayor Probabilidad de Acierto** seleccionado por el motor "
-        f"(combinando **ESPN V2 + TheOddsAPI 25 Casas + Sportradar NBA v8 + Synergy Basketball NBA**):\n\n"
+        f"(combinando **ESPN V2 + TheOddsAPI ({odds_region}) + Sportradar NBA v8{synergy_suffix}**):\n\n"
         f"### 🏆 Selección #1 Más Probable del Día (`{pick_date}`)\n\n"
         f"| Campo | Detalle |\n"
         f"| :--- | :--- |\n"

@@ -2,10 +2,10 @@ name: NBA Closing-Line Capture (CLV measurement)
 
 # CLV is measured against the closing line. The regular cycles end at 23:35 UTC, up to 3.5 h before
 # late tip-offs, so the "close" was taken while the line was still moving. This job captures the
-# observed quotes of games starting in the next 45 minutes and promotes them to closing lines.
+# observed quotes of games starting in the next 25 minutes and promotes them to closing lines.
 #
 # GitHub's high-frequency cron did not fire for this workflow after it was created, so the job is also
-# started when a main cycle finishes (workflow_run, event-driven) and loops every 10 minutes while games
+# started when a main cycle finishes (workflow_run, event-driven) and loops every 15 minutes while games
 # start within the next 4 hours. The cron entries stay as extra coverage.
 on:
   schedule:

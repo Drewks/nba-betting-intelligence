@@ -97,7 +97,7 @@ class PlaywrightAuthorizedScraper:
         except Exception as exc:
             logger.warning(f"Failed to fetch ESPN NBA RSS news: {exc}")
 
-        # 1b. Merge official Sportradar NBA v8 injury documents & Synergy Basketball NBA profiles when configured
+        # 1b. Merge official Sportradar NBA v8 injury documents when configured
         try:
             sr_ctx = SportradarAdapter().fetch_league_intelligence_context()
             documents.extend(sr_ctx.get("injury_documents", [])[:90])

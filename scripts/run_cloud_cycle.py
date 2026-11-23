@@ -239,8 +239,8 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             prev_d = (datetime.strptime(d_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
             if prev_d not in et_aligned_dates:
                 et_aligned_dates.append(prev_d)
-        except Exception:
-            pass
+        except ValueError as exc:
+            logger.debug("Ignoring malformed date %r in ET alignment: %s", d_str, exc)
     dates_to_ingest = sorted(et_aligned_dates)
 
     router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10, enrich_with_the_odds_api=(mode != "settle_and_calibrate"))])

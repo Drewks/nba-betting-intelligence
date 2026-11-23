@@ -169,7 +169,9 @@ class InjurySniperMonitor:
         max_stake_pen: float | None = None,
     ) -> None:
         self.db = db
-        self.max_stake_pen = float(max_stake_pen if max_stake_pen is not None else load_config().risk.max_stake_pen)
+        cfg = load_config()
+        self.max_stake_pen = float(max_stake_pen if max_stake_pen is not None else cfg.risk.max_stake_pen)
+        self.max_conformal_width = float(cfg.execution.max_conformal_width)
         self.espn_adapter = espn_adapter or ESPNPublicAdapter()
         self.playwright_scraper = playwright_scraper or PlaywrightAuthorizedScraper()
         self.sportradar_adapter = sportradar_adapter
@@ -264,7 +266,9 @@ class InjurySniperMonitor:
             conf_w = float(opp.get("conformal_width") or 0.10)
 
             # Sniper Trigger Gate: Positive Lower-Bound EV and reasonable uncertainty width
-            max_w = max_conformal_width if max_conformal_width is not None else (0.22 if getattr(self.calibrator, "is_fitted", False) else 0.32)
+            max_w = max_conformal_width if max_conformal_width is not None else (
+                self.max_conformal_width if getattr(self.calibrator, "is_fitted", False) else 0.32
+            )
             if lb_ev_pct >= (self.min_ev_threshold * 100.0) and conf_w <= max_w:
                 # Calculate optimal Kelly stake
                 cand_for_kelly = [{

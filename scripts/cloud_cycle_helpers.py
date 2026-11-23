@@ -471,9 +471,10 @@ def evaluate_scheduled_slate_candidates(
             opp["uncertainty_std"] = unc
             opp["overtime_prob"] = row_tot_pred.get("overtime_prob", 0.05)
             opp["blowout_prob"] = row_tot_pred.get("blowout_prob", 0.12)
+            final_eff_weight = float(opp.get("effective_model_weight", eff_weight))
             opp["emitted_at"] = pred_ts
             opp["hours_to_tipoff"] = round(hours_to_tipoff, 3)
-            opp["effective_model_weight"] = eff_weight
+            opp["effective_model_weight"] = final_eff_weight
             if mkt == "moneyline" and moneyline_max_odds is not None:
                 opp["moneyline_max_odds"] = moneyline_max_odds
 
@@ -492,7 +493,7 @@ def evaluate_scheduled_slate_candidates(
                 {
                     **row_feats,
                     "hours_to_tipoff": round(hours_to_tipoff, 3),
-                    "effective_model_weight": eff_weight,
+                    "effective_model_weight": final_eff_weight,
                 },
             )
             game_opps.append(opp)

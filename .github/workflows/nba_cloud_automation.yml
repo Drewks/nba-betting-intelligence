@@ -86,6 +86,11 @@ jobs:
                 git checkout "${STATE_BASE_SHA}" -- "${state_path}"
               fi
             done
+            while IFS= read -r csv_path; do
+              if [ -n "${csv_path}" ]; then
+                git checkout "${STATE_BASE_SHA}" -- "${csv_path}"
+              fi
+            done < <(git ls-tree -r --name-only "${STATE_BASE_SHA}" -- data/raw/ | grep -E '^data/raw/market_consensus_.*\.csv$' || true)
           fi
           echo "STATE_BASE_SHA=${STATE_BASE_SHA}" >> "$GITHUB_ENV"
 

@@ -27,7 +27,7 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 from src.backtesting.backtester import WalkForwardBacktester
 from src.ingestion.live_peru_scraper import LivePeruOddsScraper
 from src.ingestion.peru_scraper import PeruLiveOddsScraper
-from src.paper_trading.engine import PaperTradingEngine
+from src.paper_trading.engine import build_production_engine
 from src.reporting.reporter import export_bets_and_tracking_dashboard
 from src.storage.db import DatabaseManager
 
@@ -109,7 +109,7 @@ def main() -> None:
 
     if not args.dry_run:
         # Regenerate tracking dashboard with metrics COMPUTED from the database (never hardcoded).
-        metrics = WalkForwardBacktester(db, PaperTradingEngine(db, exclude_synthetic=True)).compute_comprehensive_metrics(
+        metrics = WalkForwardBacktester(db, build_production_engine(db)).compute_comprehensive_metrics(
             model_comparison_records=[]
         )
         export_bets_and_tracking_dashboard(

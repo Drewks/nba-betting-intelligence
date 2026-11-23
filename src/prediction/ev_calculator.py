@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 import itertools
 import json
+import logging
 import math
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,8 @@ from scipy.optimize import minimize
 
 from src.calibration.calibrator import conformal_lower_bound_ev
 from src.validation.validator import DataValidationError, validate_odds_record
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_implied_prob_gross(decimal_odds: float) -> float:
@@ -382,8 +385,8 @@ def _get_clv_meta_labeling_weights() -> dict[str, float]:
                     "adverse_steam_threshold": cfg.clv_meta_labeling.adverse_steam_threshold,
                     "min_p_clv_threshold": cfg.clv_meta_labeling.min_p_clv_threshold,
                 })
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Using default CLV meta-labeling weights: %s", exc)
 
     _CALIBRATED_WEIGHTS_CACHE = weights
     return weights
@@ -491,12 +494,13 @@ def evaluate_market_opportunity(
     market_prob = market_consensus_prob if market_consensus_prob is not None else p_fair
     disagreement = (p_cond_model - float(market_prob)) if market_prob is not None else None
 
-    eff_weight = float(model_weight)
+    eff_weight = max(0.0, float(model_weight))
     s_delta = float(steam_delta or 0.0)
-    if market_prob is not None and s_delta != 0.0:
-        # Adverse steam (>= 2.5% move against our selection): shift weight toward sharp market
+    if market_prob is not None and s_delta != 0.0 and eff_weight > 0.0:
+        # Adverse steam (>= 2.5% move against our selection): shift weight toward sharp market.
+        # Never increase weight above the scheduled anchor (especially when P2 decays weights < 0.15).
         if s_delta <= -0.025:
-            eff_weight = max(0.15, eff_weight - 0.08)
+            eff_weight = max(0.0, eff_weight - 0.08)
         # Confirming steam (>= 2.0% move toward our selection when model also favors this side)
         elif s_delta >= 0.020 and p_cond_model > float(market_prob):
             eff_weight = min(0.42, eff_weight + 0.04)
@@ -581,6 +585,7 @@ def evaluate_market_opportunity(
         "ev_unit": ev_metrics["ev_unit"],
         "ev_pct": ev_metrics["ev_pct"],
         "model_version_id": model_version_id,
+        "effective_model_weight": round(eff_weight, 6),
         "model_market_disagreement": round(float(disagreement), 6) if disagreement is not None else None,
         "max_model_market_disagreement": max_disagreement,
         "steam_delta": round(s_delta, 6),
