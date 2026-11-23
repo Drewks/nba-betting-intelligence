@@ -36,6 +36,7 @@ from src.prediction.ev_calculator import (
     compute_line_steam,
     compute_market_consensus,
     evaluate_market_opportunity,
+    resolve_market_anchor_weight,
     select_best_line_shopping_candidates,
 )
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
@@ -203,7 +204,9 @@ def evaluate_scheduled_slate_candidates(
     run_manifest_id: str = cal_bundle["run_manifest_id"]
 
     candidates_by_matchday: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    execution_cfg = load_config().execution
+    cfg_full = load_config()
+    execution_cfg = cfg_full.execution
+    anchor_schedule = cfg_full.model.anchor_schedule
     decision_dt = parse_iso_utc(now_str)
     decision_ts = decision_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     scheduled_games = db.fetch_all(
@@ -231,6 +234,7 @@ def evaluate_scheduled_slate_candidates(
         # The decision is made now: its timestamp is the wall clock, never a time in the future.
         if decision_dt >= start_dt:
             continue
+        hours_to_tipoff = max(0.0, (start_dt - decision_dt).total_seconds() / 3600.0)
         game_odds = _pair_valid_pretip_quotes(
             raw_game_odds,
             start_dt,
@@ -436,7 +440,13 @@ def evaluate_scheduled_slate_candidates(
                     }
                 )
 
-            eff_weight = moneyline_weight if (mkt == "moneyline" and moneyline_weight is not None) else market_anchor_weight
+            eff_weight = resolve_market_anchor_weight(
+                mkt,
+                hours_to_tipoff=hours_to_tipoff,
+                fallback_weight=market_anchor_weight,
+                moneyline_weight=moneyline_weight,
+                schedule=anchor_schedule,
+            )
             eff_dis = moneyline_max_disagreement if (mkt == "moneyline" and moneyline_max_disagreement is not None) else MAX_MODEL_MARKET_DISAGREEMENT
             opp = evaluate_market_opportunity(
                 estimated_prob=cal_p,
@@ -462,6 +472,8 @@ def evaluate_scheduled_slate_candidates(
             opp["overtime_prob"] = row_tot_pred.get("overtime_prob", 0.05)
             opp["blowout_prob"] = row_tot_pred.get("blowout_prob", 0.12)
             opp["emitted_at"] = pred_ts
+            opp["hours_to_tipoff"] = round(hours_to_tipoff, 3)
+            opp["effective_model_weight"] = eff_weight
             if mkt == "moneyline" and moneyline_max_odds is not None:
                 opp["moneyline_max_odds"] = moneyline_max_odds
 
@@ -472,7 +484,17 @@ def evaluate_scheduled_slate_candidates(
                 round(float(line_v), 2) if line_v is not None else None,
                 str(opp["odds_captured_at"]),
             )
-            pred_meta_by_quote[quote_key] = (pred_id, model_f.version_id, raw_p, unc, row_feats)
+            pred_meta_by_quote[quote_key] = (
+                pred_id,
+                model_f.version_id,
+                raw_p,
+                unc,
+                {
+                    **row_feats,
+                    "hours_to_tipoff": round(hours_to_tipoff, 3),
+                    "effective_model_weight": eff_weight,
+                },
+            )
             game_opps.append(opp)
 
         for opp in select_best_line_shopping_candidates(game_opps):

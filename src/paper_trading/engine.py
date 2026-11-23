@@ -68,12 +68,14 @@ class PaperTradingEngine:
         hybrid_allocation_enabled: bool = False,
         max_totals_per_matchday: int = 2,
         max_moneyline_per_matchday: int = 1,
+        allocation_mode: str = "static_caps",
         risk_config: RiskConfig | None = None,
     ) -> None:
         self.is_backtest = is_backtest
         self.hybrid_allocation_enabled = bool(hybrid_allocation_enabled)
         self.max_totals_per_matchday = int(max_totals_per_matchday)
         self.max_moneyline_per_matchday = int(max_moneyline_per_matchday)
+        self.allocation_mode = str(allocation_mode)
         self.max_portfolio_exposure_pct = max_portfolio_exposure_pct
         self.kelly_fraction = float(kelly_fraction)
         self.min_stake_pen = float(min_stake_pen)
@@ -166,6 +168,22 @@ class PaperTradingEngine:
             self._evidence_cache = cache
         verdict = (cache.get(market) or {}).get("verdict")
         return cfg.multiplier(verdict), verdict
+
+    def _resolve_allocation_evidence(self, market: str) -> tuple[float, str | None]:
+        """Resolves `(rank_multiplier, clv_verdict)` for evidence-guided cross-market allocation."""
+        if self.is_backtest:
+            return 1.0, None
+        cache = self._evidence_cache
+        if cache is None:
+            from src.paper_trading.shadow_ledger import clv_evidence_by_market
+
+            cache = clv_evidence_by_market(self.db)
+            self._evidence_cache = cache
+        verdict = (cache.get(market) or {}).get("verdict")
+        cfg = self.evidence_staking
+        if cfg is not None and cfg.enabled:
+            return cfg.multiplier(verdict), verdict
+        return (0.5 if verdict == "NO_EDGE" else 1.0), verdict
 
     def compute_contextual_stake_pen(
         self,
@@ -295,6 +313,15 @@ class PaperTradingEngine:
             max_stake_pen=self.max_stake_pen,
             get_bankroll_fn=self.get_bankroll_state,
         )
+        if self.hybrid_allocation_enabled and self.allocation_mode == "evidence_guided" and not self.dynamic_conviction_staking:
+            sorted_candidates = sorted(
+                sorted_candidates,
+                key=lambda c: (
+                    float(c.get("ev_unit", -999.0)) * self._resolve_allocation_evidence(str(c.get("market") or ""))[0],
+                    float(c.get("ev_unit", -999.0)),
+                ),
+                reverse=True,
+            )
 
         placed_bets: list[dict[str, Any]] = []
         no_bet_decisions: list[dict[str, Any]] = []
@@ -308,8 +335,11 @@ class PaperTradingEngine:
             "SELECT market, COUNT(*) AS cnt FROM simulated_bets WHERE matchday_date = ? GROUP BY market",
             (matchday_date,),
         )
-        day_totals_count = sum(int(r["cnt"]) for r in existing_market_rows if r.get("market") == "total_points")
-        day_ml_count = sum(int(r["cnt"]) for r in existing_market_rows if r.get("market") == "moneyline")
+        day_market_counts: dict[str, int] = {
+            str(r["market"]): int(r["cnt"]) for r in existing_market_rows if r.get("market")
+        }
+        day_totals_count = day_market_counts.get("total_points", 0)
+        day_ml_count = day_market_counts.get("moneyline", 0)
         selected_game_markets: set[tuple[str, str]] = set()
         selected_games: set[str] = set()
 
@@ -328,6 +358,11 @@ class PaperTradingEngine:
 
             edge_block = check_candidate_edge_and_model_guards(cand, min_ev_threshold=self.min_ev_threshold)
             if edge_block is None:
+                mkt_verdict = (
+                    self._resolve_allocation_evidence(market)[1]
+                    if (self.hybrid_allocation_enabled and self.allocation_mode == "evidence_guided")
+                    else None
+                )
                 edge_block = check_candidate_caps_and_duplicates(
                     self.db,
                     cand,
@@ -341,6 +376,9 @@ class PaperTradingEngine:
                     hybrid_allocation_enabled=self.hybrid_allocation_enabled,
                     max_moneyline_per_matchday=self.max_moneyline_per_matchday,
                     max_totals_per_matchday=self.max_totals_per_matchday,
+                    allocation_mode=self.allocation_mode,
+                    day_market_counts=day_market_counts,
+                    market_evidence_verdict=mkt_verdict,
                 )
             if edge_block is not None:
                 no_bet_decisions.append(
@@ -501,6 +539,7 @@ class PaperTradingEngine:
             )
 
             day_count += 1
+            day_market_counts[market] = day_market_counts.get(market, 0) + 1
             if market == "total_points":
                 day_totals_count += 1
             elif market == "moneyline":
@@ -697,6 +736,7 @@ def build_production_engine(db: DatabaseManager) -> PaperTradingEngine:
         hybrid_allocation_enabled=hyb.enabled,
         max_totals_per_matchday=hyb.max_totals_per_matchday,
         max_moneyline_per_matchday=hyb.max_moneyline_per_matchday,
+        allocation_mode=hyb.allocation_mode,
     )
     engine.evidence_staking = cfg.evidence_staking
     return engine
