@@ -47,6 +47,20 @@ def canonical_provider_name(name: str) -> str:
     return _PROVIDER_ALIASES.get(" ".join(name.split()).lower(), name)
 
 
+def _has_upcoming_events(payload: dict[str, Any], now_utc: str) -> bool:
+    """Returns True only when the ESPN scoreboard payload contains at least one non-completed pre-tipoff event."""
+    for event in payload.get("events", []):
+        comp = (event.get("competitions") or [{}])[0]
+        state = str(((comp.get("status") or {}).get("type") or {}).get("state") or "").strip().lower()
+        if state == "post":
+            continue
+        raw_date = str(event.get("date") or "")
+        start_time = (raw_date[:-1] + ":00Z") if (len(raw_date) == 17 and raw_date.endswith("Z")) else raw_date
+        if state == "pre" or (start_time and start_time > now_utc):
+            return True
+    return False
+
+
 class ESPNPublicAdapter(BaseNBADataAdapter):
     """
     V2 Structured Adapter for ESPN's public NBA API + optional TheOddsAPI multi-bookmaker enrichment.
@@ -255,7 +269,11 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             raise AdapterUnavailableError(f"ESPNPublicAdapter request failed: {exc}") from exc
 
         multi_book_odds: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
-        if self.enrich_with_the_odds_api and self.odds_api_helper.is_configured():
+        if (
+            self.enrich_with_the_odds_api
+            and self.odds_api_helper.is_configured()
+            and _has_upcoming_events(payload, now_utc)
+        ):
             multi_book_odds = self.odds_api_helper.fetch_multi_book_odds_by_matchup(now_utc)
 
         sr_context = SportradarAdapter().fetch_league_intelligence_context()

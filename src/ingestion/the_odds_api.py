@@ -12,11 +12,13 @@ import json
 import logging
 import os
 from pathlib import Path
+import time
 from typing import Any
 import urllib.error
 import urllib.request
 import numpy as np
 
+from src.config import load_config
 from src.ingestion.normalizer import normalize_team_code
 
 logger = logging.getLogger(__name__)
@@ -52,17 +54,42 @@ class TheOddsAPIAdapter:
     provider_name = "the_odds_api_v4_lineshopper"
     _DISABLED_KEY_FINGERPRINTS: set[str] = set()
     _LAST_REMAINING_REQUESTS: int | None = None
+    _RESPONSE_CACHE: dict[tuple[str, str, str], tuple[float, dict[tuple[str, str, str], list[dict[str, Any]]]]] = {}
 
-    def __init__(self, api_key: str | None = None, timeout_seconds: int = 10) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        timeout_seconds: int = 10,
+        *,
+        regions: str | None = None,
+        markets: str | None = None,
+        cache_ttl_seconds: int | None = None,
+    ) -> None:
         _load_dotenv_if_present()
         self.api_key = (api_key or os.getenv("THE_ODDS_API_KEY") or "").strip()
         self.timeout_seconds = timeout_seconds
+        try:
+            src_cfg = load_config().sources
+            default_regions = src_cfg.the_odds_api_regions
+            default_markets = src_cfg.the_odds_api_markets
+            default_ttl = src_cfg.the_odds_api_cache_ttl_seconds
+        except Exception:
+            default_regions, default_markets, default_ttl = "eu", "h2h,totals", 300
+        self.regions = (regions if regions is not None else default_regions).strip() or "eu"
+        self.markets = (markets if markets is not None else default_markets).strip() or "h2h,totals"
+        self.cache_ttl_seconds = max(0, int(default_ttl if cache_ttl_seconds is None else cache_ttl_seconds))
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clears the in-process HTTP response TTL cache."""
+        cls._RESPONSE_CACHE.clear()
 
     @classmethod
     def reset_circuit_breaker(cls) -> None:
-        """Clears per-process circuit-breaker state (primarily for tests or key rotation)."""
+        """Clears per-process circuit-breaker and cache state (primarily for tests or key rotation)."""
         cls._DISABLED_KEY_FINGERPRINTS.clear()
         cls._LAST_REMAINING_REQUESTS = None
+        cls._RESPONSE_CACHE.clear()
 
     def _key_fingerprint(self) -> str:
         return hashlib.sha256(self.api_key.encode("utf-8")).hexdigest()[:12]
@@ -72,7 +99,7 @@ class TheOddsAPIAdapter:
 
     def fetch_multi_book_odds_by_matchup(self, now_utc: str) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
         """
-        Fetches live decimal odds across US & EU bookmakers (including Pinnacle, FanDuel, DraftKings, BetMGM)
+        Fetches live decimal odds across configured bookmaker regions/markets
         and returns a mapping keyed by (matchday_date, away_team_code, home_team_code).
         """
         if not self.api_key:
@@ -83,9 +110,19 @@ class TheOddsAPIAdapter:
             logger.debug("TheOddsAPI circuit breaker open for key %s; skipping call.", key_fp)
             return {}
 
+        cache_key = (key_fp, self.regions, self.markets)
+        if self.cache_ttl_seconds > 0:
+            cached_entry = self._RESPONSE_CACHE.get(cache_key)
+            if cached_entry is not None:
+                cached_ts, cached_map = cached_entry
+                age_sec = time.monotonic() - cached_ts
+                if age_sec <= self.cache_ttl_seconds:
+                    logger.debug("TheOddsAPI cache hit (age=%.1fs); saved API quota.", age_sec)
+                    return {k: [dict(item) for item in v] for k, v in cached_map.items()}
+
         url = (
             f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/"
-            f"?apiKey={self.api_key}&regions=us,eu&markets=h2h,totals&oddsFormat=decimal"
+            f"?apiKey={self.api_key}&regions={self.regions}&markets={self.markets}&oddsFormat=decimal"
         )
         try:
             req = urllib.request.Request(
@@ -315,5 +352,11 @@ class TheOddsAPIAdapter:
                             },
                         ]
                     )
+
+        if self.cache_ttl_seconds > 0:
+            type(self)._RESPONSE_CACHE[cache_key] = (
+                time.monotonic(),
+                {k: [dict(item) for item in v] for k, v in by_matchup.items()},
+            )
 
         return by_matchup

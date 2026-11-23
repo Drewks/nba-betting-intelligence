@@ -301,6 +301,9 @@ class SourcesConfig:
     allowed_live_api_books: tuple[str, ...] = ("te_apuesto", "pinnacle", "betano")
     sportradar_synergy_enabled: bool = False
     github_issue_notifications_enabled: bool = False
+    the_odds_api_regions: str = "eu"
+    the_odds_api_markets: str = "h2h,totals"
+    the_odds_api_cache_ttl_seconds: int = 300
 
 
 @dataclass(frozen=True)
@@ -594,6 +597,22 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     allowed_live_api_books = tuple(
         str(b).strip().lower() for b in (src.get("allowed_live_api_books") or ["te_apuesto", "pinnacle", "betano"])
     )
+    odds_regions_raw = str(src.get("the_odds_api_regions", "eu")).strip().lower() or "eu"
+    region_tokens = [tok.strip() for tok in odds_regions_raw.split(",") if tok.strip()]
+    if not region_tokens or any(tok not in {"us", "us2", "uk", "eu", "au"} for tok in region_tokens):
+        raise ConfigError(f"sources.the_odds_api_regions has invalid region list: {odds_regions_raw!r}")
+    odds_markets_raw = str(src.get("the_odds_api_markets", "h2h,totals")).strip().lower() or "h2h,totals"
+    market_tokens = [tok.strip() for tok in odds_markets_raw.split(",") if tok.strip()]
+    if not market_tokens or any(tok not in {"h2h", "spreads", "totals"} for tok in market_tokens):
+        raise ConfigError(f"sources.the_odds_api_markets has invalid market list: {odds_markets_raw!r}")
+    odds_cache_ttl = int(
+        _in_range(
+            "sources.the_odds_api_cache_ttl_seconds",
+            src.get("the_odds_api_cache_ttl_seconds", 300),
+            0,
+            3600,
+        )
+    )
     sources_cfg = SourcesConfig(
         betting_allowed_source_types=allowed,
         peru_scrapers_enabled=peru_scrapers_enabled,
@@ -601,6 +620,9 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         allowed_live_api_books=allowed_live_api_books,
         sportradar_synergy_enabled=bool(src.get("sportradar_synergy_enabled", False)),
         github_issue_notifications_enabled=bool(src.get("github_issue_notifications_enabled", False)),
+        the_odds_api_regions=",".join(region_tokens),
+        the_odds_api_markets=",".join(market_tokens),
+        the_odds_api_cache_ttl_seconds=odds_cache_ttl,
     )
 
     ev_raw = raw.get("evaluation") or {}

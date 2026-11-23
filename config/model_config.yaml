@@ -95,6 +95,11 @@ sources:
   sportradar_synergy_enabled: false
   # Cloud runs use least-privilege `contents: write` (T-018) with Telegram alerts; opt-in only with token scope.
   github_issue_notifications_enabled: false
+  # TheOddsAPI v4 quota conservation: `eu` keeps sharp exchanges/books (Pinnacle, Matchbook, Betfair,
+  # Coolbet, Marathon Bet, 888sport) at 2 credits/call (vs 4 with us,eu); ESPN still provides DraftKings free.
+  the_odds_api_regions: "eu"
+  the_odds_api_markets: "h2h,totals"
+  the_odds_api_cache_ttl_seconds: 300
 
 evaluation:
   development_seasons: ["2024-25", "2025-26"]

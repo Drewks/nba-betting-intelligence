@@ -243,7 +243,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             pass
     dates_to_ingest = sorted(et_aligned_dates)
 
-    router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10)])
+    router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10, enrich_with_the_odds_api=(mode != "settle_and_calibrate"))])
     ingested_dates: list[str] = []
     for dt_str in dates_to_ingest:
         try:
