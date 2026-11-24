@@ -256,7 +256,7 @@ def summarize_backtest_results(
             for k, f in (
                 ("model_raw", "raw_home"),
                 ("model_calibrated", "cal_home"),
-                ("model_anchored_30_70", "anchored_home"),
+                ("model_anchored_production", "anchored_home"),
                 ("market_open", "open_home"),
                 ("market_close", "close_home"),
             )
@@ -267,7 +267,7 @@ def summarize_backtest_results(
             out["totals_quality_at_open_line"] = {
                 "model_raw": score_probabilities([r["raw_over"] for r in tot], yt),
                 "model_calibrated": score_probabilities([r["cal_over"] for r in tot], yt),
-                "model_anchored_30_70": score_probabilities([r["anchored_over"] for r in tot], yt),
+                "model_anchored_production": score_probabilities([r["anchored_over"] for r in tot], yt),
                 "market_open_assumed_0.5": score_probabilities([0.5] * len(tot), yt),
                 "market_close_normal_approx": score_probabilities([r["close_over_at_open_line"] for r in tot], yt),
             }
@@ -371,6 +371,65 @@ def summarize_backtest_results(
     return out
 
 
+_ANCHOR_MARKET_LABELS: tuple[tuple[str, str], ...] = (
+    ("moneyline", "moneyline"),
+    ("total_points", "totales"),
+    ("spread", "spread"),
+)
+
+
+def _fmt_weight(value: Any) -> str:
+    return f"{float(value):.2f}" if value is not None else "base"
+
+
+def _fmt_weight_range(values: list[float]) -> str:
+    lo, hi = min(values), max(values)
+    return _fmt_weight(lo) if abs(hi - lo) < 1e-12 else f"{_fmt_weight(lo)}–{_fmt_weight(hi)}"
+
+
+def render_market_anchor(cfg: dict[str, Any]) -> tuple[str, str | None]:
+    """
+    Configuration-line text with the effective model weights and the anchor schedule the decisions used, and
+    the assumption bullet that documents them. Results without a `market_anchor` block predate the schedule.
+    """
+    anchor = cfg.get("market_anchor")
+    if not anchor:
+        return f"peso fijo del modelo `{cfg.get('model_weight')}`", None
+    eff = anchor.get("effective_model_weights") or {}
+    sched = anchor.get("schedule") or {}
+    hours = anchor.get("decision_hours_to_tipoff")
+    hours_txt = f"`{float(hours):.1f} h` antes del inicio" if hours is not None else "horas hasta el inicio n/d"
+    eff_txt = ", ".join(
+        f"{label} `{_fmt_weight_range([float(w) for w in eff[mkt]])}`" for mkt, label in _ANCHOR_MARKET_LABELS if eff.get(mkt)
+    )
+    if sched.get("enabled"):
+        bounds = ", ".join(
+            f"{label} `{_fmt_weight(sched[mkt].get('open_weight'))}→{_fmt_weight(sched[mkt].get('close_weight'))}`"
+            for mkt, label in _ANCHOR_MARKET_LABELS
+            if isinstance(sched.get(mkt), dict)
+        )
+        sched_txt = (
+            f"calendario `market_anchor_schedule` (`horizon_hours={float(sched.get('horizon_hours', 0.0)):g}`, "
+            f"`decay_power={float(sched.get('decay_power', 0.0)):g}`; peso apertura→cierre: {bounds})"
+        )
+        timing = (
+            "La fuente no publica la hora de la línea de apertura: se asume publicada al menos "
+            f"{hours_txt} (≥ `horizon_hours`), así que el calendario da sus pesos de apertura."
+        )
+    else:
+        sched_txt = f"calendario `market_anchor_schedule` desactivado (peso base `{anchor.get('fallback_model_weight')}`)"
+        timing = "El calendario está desactivado: los pesos no dependen de la hora."
+    decision_fn = str(anchor.get("decision_function") or "evaluate_scheduled_market_opportunity").rsplit(".", 1)[-1]
+    segment = f"pesos efectivos del modelo a la apertura ({hours_txt}): {eff_txt or 'n/d'} | {sched_txt}"
+    assumption = (
+        f"- Anclaje modelo/mercado con la función de decisión de producción (`{decision_fn}`): mismo calendario, "
+        "mismo manejo de steam y mismas guardas previas a la apuesta de `config.execution` (EV plausible máximo, "
+        f"cuotas largas, ancho conformal). {timing} Steam = 0: al decidir solo se conoce la línea de apertura "
+        "(usar el cierre sería información futura)."
+    )
+    return segment, assumption
+
+
 def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None = None) -> str:
     """Renders Spanish audit-ready Markdown summary for real consensus odds backtest."""
     cfg = result["config"]
@@ -379,6 +438,7 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         if cfg.get("moneyline_max_odds") is not None
         else ""
     )
+    anchor_txt, anchor_assumption = render_market_anchor(cfg)
     lines = [
         "# Backtest con cuotas reales (consenso de apertura/cierre, sin margen)",
         "",
@@ -386,7 +446,7 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         f"- {result['data_attribution']}",
         f"- Periodo de prueba desde `{cfg['start_date']}` | partidos con mercado emparejado: `{cfg['test_games']}`",
         f"- Reentrenamiento cada `{cfg['retrain_every_days']}` días | margen supuesto `{cfg['vig_assumption'] * 100:.1f}%` | "
-        f"peso del modelo `{cfg['model_weight']}` | EV mínimo `{cfg['min_ev'] * 100:.0f}%`{ml_cap_txt}",
+        f"{anchor_txt} | EV mínimo `{cfg['min_ev'] * 100:.0f}%`{ml_cap_txt}",
         "",
         "## 1. Calidad probabilística fuera de muestra (todos los partidos)",
         "",
@@ -516,4 +576,6 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         "- Totales: la línea principal de apertura es la más cercana a 50/50 (p=0.50); el cierre a esa línea se aproxima con un modelo normal (σ=18).",
         "- Las features usan solo partidos que empezaron antes del primer partido de la jornada; los calibradores y el estimador de cierre solo observaciones previas en desarrollo.",
     ]
+    if anchor_assumption:
+        lines.append(anchor_assumption)
     return "\n".join(lines) + "\n"

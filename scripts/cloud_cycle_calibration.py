@@ -16,8 +16,13 @@ from src.calibration.calibrator import (
     VennAbersConformalInterval,
     compute_reliability_curve,
 )
+from src.config import load_config
 from src.models.statistical_models import BaselineModel, EnsembleStackingModel
-from src.prediction.ev_calculator import compute_market_consensus
+from src.prediction.ev_calculator import (
+    compute_line_steam,
+    compute_market_consensus,
+    evaluate_scheduled_market_opportunity,
+)
 from src.validation.validator import parse_iso_utc
 
 
@@ -142,6 +147,67 @@ def _pair_valid_pretip_quotes(
     return paired
 
 
+def _parse_utc_or_none(value: Any) -> datetime | None:
+    try:
+        return parse_iso_utc(str(value))
+    except Exception:
+        return None
+
+
+def _same_line(a: Any, b: Any) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    return round(float(a), 2) == round(float(b), 2)
+
+
+def _latest_paired_quote(
+    paired: list[dict[str, Any]], market: str, selection: str, line_value: float | None
+) -> dict[str, Any] | None:
+    """Most recent paired quote of one side (the quote a decision with that consensus would be taken on)."""
+    matches = [
+        q
+        for q in paired
+        if q["market"] == market and str(q["selection"]).upper() == selection and _same_line(q.get("line_value"), line_value)
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda q: (parse_iso_utc(str(q["captured_at"])), str(q.get("provider") or "")))
+
+
+def _anchored_oos_probability(
+    obs: dict[str, Any],
+    key: str,
+    model_prob: float | None,
+    uncertainty_std: float,
+    *,
+    game_start_time: str,
+    model_version_id: str,
+    market_anchor_weight: float,
+    moneyline_weight: float | None,
+    anchor_schedule: Any,
+) -> tuple[float | None, float | None]:
+    """`(anchored probability, effective model weight)` from the production decision rule, or `(None, None)`."""
+    quote = obs.get(f"quote_{key}")
+    market_prob = obs.get(f"market_{key}")
+    if model_prob is None or market_prob is None or quote is None:
+        return None, None
+    opp = evaluate_scheduled_market_opportunity(
+        estimated_prob=float(model_prob),
+        uncertainty_std=float(uncertainty_std),
+        odds_record=quote,
+        game_start_time=game_start_time,
+        model_version_id=model_version_id,
+        hours_to_tipoff=obs["hours_to_tipoff"],
+        market_anchor_weight=market_anchor_weight,
+        moneyline_weight=moneyline_weight,
+        anchor_schedule=anchor_schedule,
+        simulated_prediction_time=obs["decision_ts"],
+        market_consensus_prob=float(market_prob),
+        steam_delta=float(obs.get(f"steam_{key}") or 0.0),
+    )
+    return float(opp["market_anchored_probability"]), float(opp["effective_model_weight"])
+
+
 def build_walk_forward_oos_comparisons_for_active_model(
     db: Any,
     all_final_games: list[dict[str, Any]],
@@ -151,12 +217,20 @@ def build_walk_forward_oos_comparisons_for_active_model(
     market_anchor_weight: float,
     moneyline_weight: float | None,
     retrain_every_matchdays: int = 12,
+    anchor_schedule: Any = None,
 ) -> list[dict[str, Any]]:
     """
     Reconstructs strictly out-of-sample expanding-window walk-forward comparisons for the
     frozen `model_version_id` vs `BaselineModel` vs observed `v_observed_odds_snapshots`
     market consensus when zero resolved post-m012 predictions exist in DB yet.
+
+    Market-anchored probabilities come from the production decision rule
+    (`evaluate_scheduled_market_opportunity`, `anchor_schedule` defaulting to `config.model.anchor_schedule`).
+    Each game is decided when its newest paired pre-tip quote was captured, the earliest moment its market
+    consensus was known: the weight is the schedule's at that many hours before tip-off, and steam uses the
+    snapshots captured up to then. `market_anchor_weight` / `moneyline_weight` are the schedule's fallbacks.
     """
+    schedule = anchor_schedule if anchor_schedule is not None else load_config().model.anchor_schedule
     eligible = sorted(
         [
             g
@@ -206,12 +280,28 @@ def build_walk_forward_oos_comparisons_for_active_model(
             if k[0] == "spread" and k[1] == "HOME" and k[2] is not None
         ]
         sp_choice = max(sp_candidates, key=lambda x: x[2]) if sp_candidates else None
+        tot_line = float(tot_choice[0]) if tot_choice else None
+        sp_line = float(sp_choice[0]) if sp_choice else None
+        # Decision time = capture of the newest paired quote; steam only sees snapshots known by then.
+        newest = max(paired, key=lambda q: parse_iso_utc(str(q["captured_at"])))
+        decision_dt = parse_iso_utc(str(newest["captured_at"]))
+        steam_map = compute_line_steam(
+            [r for r in q_rows if (cap := _parse_utc_or_none(r.get("captured_at"))) is not None and cap <= decision_dt]
+        )
         obs_summary_by_game[gid] = {
             "market_ml": float(ml_entry["p_market"]) if ml_entry else None,
-            "tot_line": float(tot_choice[0]) if tot_choice else None,
+            "tot_line": tot_line,
             "market_tot": float(tot_choice[1]["p_market"]) if tot_choice else None,
-            "sp_line": float(sp_choice[0]) if sp_choice else None,
+            "sp_line": sp_line,
             "market_sp": float(sp_choice[1]["p_market"]) if sp_choice else None,
+            "decision_ts": str(newest["captured_at"]),
+            "hours_to_tipoff": max(0.0, (start_dt - decision_dt).total_seconds() / 3600.0),
+            "quote_ml": _latest_paired_quote(paired, "moneyline", "HOME", None),
+            "quote_tot": _latest_paired_quote(paired, "total_points", "OVER", tot_line) if tot_line is not None else None,
+            "quote_sp": _latest_paired_quote(paired, "spread", "HOME", sp_line) if sp_line is not None else None,
+            "steam_ml": (steam_map.get(("moneyline", "HOME")) or {}).get("steam_delta", 0.0),
+            "steam_tot": (steam_map.get(("total_points", "OVER")) or {}).get("steam_delta", 0.0),
+            "steam_sp": (steam_map.get(("spread", "HOME")) or {}).get("steam_delta", 0.0),
         }
 
     obs_indices = [idx for idx, g in enumerate(eligible) if str(g["game_id"]) in obs_summary_by_game and idx >= 120]
@@ -234,8 +324,12 @@ def build_walk_forward_oos_comparisons_for_active_model(
     cal_sp_hist: list[dict[str, Any]] = []
     comparison_records: list[dict[str, Any]] = []
 
-    ml_w = float(moneyline_weight if moneyline_weight is not None else market_anchor_weight)
-    tot_w = float(market_anchor_weight)
+    anchor_policy: dict[str, Any] = {
+        "model_version_id": model_version_id,
+        "market_anchor_weight": float(market_anchor_weight),
+        "moneyline_weight": moneyline_weight,
+        "anchor_schedule": schedule,
+    }
     models_fitted = False
 
     for d_idx, m_date in enumerate(matchdays):
@@ -271,7 +365,8 @@ def build_walk_forward_oos_comparisons_for_active_model(
             home_won = 1 if home_pts > away_pts else 0
 
             pred_a_ml = float(base_model.predict_moneyline(g, prior_games)["p_home"])
-            raw_ml = float(ens_model.predict_moneyline(g, prior_games)["p_home"])
+            ens_ml = ens_model.predict_moneyline(g, prior_games)
+            raw_ml = float(ens_ml["p_home"])
             day_ml_updates.append(
                 {"game_start_time": g["game_start_time"], "raw_probability": raw_ml, "outcome": home_won}
             )
@@ -284,40 +379,46 @@ def build_walk_forward_oos_comparisons_for_active_model(
             mkt_sp = obs.get("market_sp")
 
             cal_ml = float(ml_cal.transform_single(raw_ml)) if ml_cal.is_fitted else None
-            anch_ml = (
-                round(ml_w * cal_ml + (1.0 - ml_w) * mkt_ml, 6)
-                if (cal_ml is not None and mkt_ml is not None)
-                else None
+            anch_ml, w_ml = _anchored_oos_probability(
+                obs, "ml", cal_ml, float(ens_ml.get("uncertainty_std", 0.0)),
+                game_start_time=g["game_start_time"], **anchor_policy,
             )
 
-            pred_a_tot = raw_tot = cal_tot = anch_tot = None
+            pred_a_tot = raw_tot = cal_tot = anch_tot = w_tot = None
             over_hit = 0
             has_obs_tot = False
             if tot_line is not None and abs(total_pts - tot_line) > 1e-9:
                 has_obs_tot = True
                 over_hit = 1 if total_pts > tot_line else 0
                 pred_a_tot = float(base_model.predict_total_points(g, prior_games, tot_line)["p_over"])
-                raw_tot = float(ens_model.predict_total_points(g, prior_games, tot_line)["p_over"])
+                ens_tot = ens_model.predict_total_points(g, prior_games, tot_line)
+                raw_tot = float(ens_tot["p_over"])
                 day_tot_updates.append(
                     {"game_start_time": g["game_start_time"], "raw_probability": raw_tot, "outcome": over_hit}
                 )
                 if tot_cal.is_fitted:
                     cal_tot = float(tot_cal.transform_single(raw_tot))
-                    if mkt_tot is not None:
-                        anch_tot = round(tot_w * cal_tot + (1.0 - tot_w) * mkt_tot, 6)
+                    # Decisive-outcome scoring (pushes are excluded above), so no push mass in the blend.
+                    anch_tot, w_tot = _anchored_oos_probability(
+                        obs, "tot", cal_tot, float(ens_tot.get("uncertainty_std", 0.0)),
+                        game_start_time=g["game_start_time"], **anchor_policy,
+                    )
 
-            raw_sp = cal_sp = anch_sp = None
+            raw_sp = cal_sp = anch_sp = w_sp = None
             spread_hit: int | None = None
             if sp_line is not None and abs((home_pts - away_pts) + sp_line) > 1e-9:
                 spread_hit = 1 if (home_pts - away_pts + sp_line) > 0.0 else 0
-                raw_sp = float(ens_model.predict_spread(g, prior_games, sp_line)["p_cover_home"])
+                ens_sp = ens_model.predict_spread(g, prior_games, sp_line)
+                raw_sp = float(ens_sp["p_cover_home"])
                 day_sp_updates.append(
                     {"game_start_time": g["game_start_time"], "raw_probability": raw_sp, "outcome": spread_hit}
                 )
                 if sp_cal.is_fitted:
                     cal_sp = float(sp_cal.transform_single(raw_sp))
-                    if mkt_sp is not None:
-                        anch_sp = round(tot_w * cal_sp + (1.0 - tot_w) * mkt_sp, 6)
+                    anch_sp, w_sp = _anchored_oos_probability(
+                        obs, "sp", cal_sp, float(ens_sp.get("uncertainty_std", 0.0)),
+                        game_start_time=g["game_start_time"], **anchor_policy,
+                    )
 
             if cal_ml is not None:
                 comparison_records.append(
@@ -345,6 +446,10 @@ def build_walk_forward_oos_comparisons_for_active_model(
                         "model_cal_sp": cal_sp,
                         "market_sp": mkt_sp,
                         "model_anchored_sp": anch_sp,
+                        "anchor_hours_to_tipoff": obs.get("hours_to_tipoff"),
+                        "model_anchor_weight_ml": w_ml,
+                        "model_anchor_weight_tot": w_tot,
+                        "model_anchor_weight_sp": w_sp,
                     }
                 )
 

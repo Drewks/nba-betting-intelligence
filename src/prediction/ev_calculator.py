@@ -597,6 +597,90 @@ def evaluate_market_opportunity(
     }
 
 
+def evaluate_scheduled_market_opportunity(
+    estimated_prob: float,
+    uncertainty_std: float,
+    odds_record: dict[str, Any],
+    game_start_time: str,
+    model_version_id: str,
+    *,
+    hours_to_tipoff: float | None,
+    market_anchor_weight: float,
+    moneyline_weight: float | None,
+    anchor_schedule: Any,
+    max_disagreement: float = MAX_MODEL_MARKET_DISAGREEMENT,
+    moneyline_max_disagreement: float | None = None,
+    moneyline_max_odds: float | None = None,
+    simulated_prediction_time: str | None = None,
+    market_consensus_prob: float | None = None,
+    steam_delta: float = 0.0,
+    conformal_interval: dict[str, float] | None = None,
+    p_push: float = 0.0,
+    raw_model_prob: float | None = None,
+) -> dict[str, Any]:
+    """
+    The production decision rule for one quote. The live cycle (`scripts/cloud_cycle_helpers.py`), the
+    real-odds backtest and the fallback out-of-sample comparisons all call it, so they evaluate one policy:
+      1. model weight from `anchor_schedule` at `hours_to_tipoff` (`resolve_market_anchor_weight`;
+         `market_anchor_weight` / `moneyline_weight` only apply when the schedule is off or has no entry),
+      2. the market-specific model/market disagreement limit,
+      3. steam modulation, market anchoring, EV and conformal lower bound (`evaluate_market_opportunity`).
+    Production passes `config.model.anchor_schedule`. The result adds `scheduled_model_weight` (before steam),
+    `hours_to_tipoff` and, for moneyline, the `moneyline_max_odds` cap read by the pre-bet guards.
+    """
+    market = str(odds_record.get("market") or "")
+    scheduled_weight = resolve_market_anchor_weight(
+        market,
+        hours_to_tipoff=hours_to_tipoff,
+        fallback_weight=market_anchor_weight,
+        moneyline_weight=moneyline_weight,
+        schedule=anchor_schedule,
+    )
+    eff_disagreement = (
+        moneyline_max_disagreement
+        if (market == "moneyline" and moneyline_max_disagreement is not None)
+        else max_disagreement
+    )
+    opp = evaluate_market_opportunity(
+        estimated_prob=estimated_prob,
+        uncertainty_std=uncertainty_std,
+        odds_record=odds_record,
+        game_start_time=game_start_time,
+        model_version_id=model_version_id,
+        simulated_prediction_time=simulated_prediction_time,
+        market_consensus_prob=market_consensus_prob,
+        model_weight=scheduled_weight,
+        max_disagreement=eff_disagreement,
+        steam_delta=steam_delta,
+        conformal_interval=conformal_interval,
+        p_push=p_push,
+        raw_model_prob=raw_model_prob,
+    )
+    opp["scheduled_model_weight"] = scheduled_weight
+    opp["hours_to_tipoff"] = round(float(hours_to_tipoff), 3) if hours_to_tipoff is not None else None
+    if market == "moneyline" and moneyline_max_odds is not None:
+        opp["moneyline_max_odds"] = moneyline_max_odds
+    return opp
+
+
+def describe_market_anchor_schedule(schedule: Any) -> dict[str, Any]:
+    """Report view of a market anchor schedule: the attributes `resolve_market_anchor_weight` reads."""
+    enabled = schedule is not None and bool(getattr(schedule, "enabled", False))
+    out: dict[str, Any] = {"enabled": enabled}
+    if schedule is None:
+        return out
+    out["horizon_hours"] = float(getattr(schedule, "horizon_hours", 12.0))
+    out["decay_power"] = float(getattr(schedule, "decay_power", 1.0))
+    for market in ("moneyline", "total_points", "spread"):
+        open_w = getattr(schedule, f"{market}_open_weight", None)
+        close_w = getattr(schedule, f"{market}_close_weight", None)
+        out[market] = {
+            "open_weight": float(open_w) if open_w is not None else None,
+            "close_weight": float(close_w) if close_w is not None else None,
+        }
+    return out
+
+
 def _cand_odds(c: dict[str, Any]) -> float:
     return float(c.get("decimal_odds_used") or c.get("decimal_odds") or 0.0)
 

@@ -203,8 +203,6 @@ def check_candidate_edge_and_model_guards(
 ) -> tuple[str, str] | None:
     """Evaluates pre-duplicate model, odds, disagreement, steam, conformal, and meta-label gates."""
     ex_cfg = execution_cfg or load_config().execution
-    game_id = cand["game_id"]
-    market = cand["market"]
     dec_odds = float(cand.get("decimal_odds_used") or 0.0)
     cal_prob = cand.get("calibrated_probability")
     ev_unit = float(cand.get("ev_unit", -1.0))
@@ -214,6 +212,35 @@ def check_candidate_edge_and_model_guards(
         return ("INVALID_ODDS_OR_PROB", "Missing calibrated probability or invalid decimal odds")
     if ev_unit <= min_ev_threshold:
         return ("EV_BELOW_THRESHOLD", f"EV {ev_pct:.2f}% <= threshold {min_ev_threshold * 100:.2f}%")
+    risk_block = check_candidate_risk_guards(cand, execution_cfg=ex_cfg)
+    if risk_block is not None:
+        return risk_block
+
+    if cand.get("meta_label_pass") is False:
+        return (
+            cand.get("meta_label_reason") or "NEGATIVE_EXPECTED_CLV",
+            f"Meta-labeling model predicts negative Closing Line Value (P(CLV > 0) = {float(cand.get('p_positive_clv') or 0.0):.2f}); skipped to protect edge.",
+        )
+    return None
+
+
+def check_candidate_risk_guards(
+    cand: dict[str, Any],
+    *,
+    execution_cfg: ExecutionConfig | None = None,
+) -> tuple[str, str] | None:
+    """
+    Pre-bet risk guards that do not depend on the EV threshold: implausible EV, model/market disagreement,
+    moneyline odds cap, long-shot EV floor, adverse steam and conformal width (`config.execution`).
+    Shared by the production engine and the real-odds backtest.
+    """
+    ex_cfg = execution_cfg or load_config().execution
+    game_id = cand["game_id"]
+    market = cand["market"]
+    dec_odds = float(cand.get("decimal_odds_used") or 0.0)
+    ev_unit = float(cand.get("ev_unit", -1.0))
+    ev_pct = float(cand.get("ev_pct", -100.0))
+
     if str(game_id).startswith("ESPN_") and ev_unit > ex_cfg.max_plausible_ev_unit:
         return (
             "UNVERIFIED_INJURY_OR_LINEUP_OUTLIER",
@@ -257,12 +284,6 @@ def check_candidate_edge_and_model_guards(
         return (
             "CONFORMAL_UNCERTAINTY_TOO_WIDE",
             f"Venn-Abers conformal prediction interval width {float(conf_w):.3f} > {ex_cfg.max_conformal_width:.2f}; epistemic uncertainty too high.",
-        )
-
-    if cand.get("meta_label_pass") is False:
-        return (
-            cand.get("meta_label_reason") or "NEGATIVE_EXPECTED_CLV",
-            f"Meta-labeling model predicts negative Closing Line Value (P(CLV > 0) = {float(cand.get('p_positive_clv') or 0.0):.2f}); skipped to protect edge.",
         )
     return None
 

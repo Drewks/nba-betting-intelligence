@@ -223,7 +223,9 @@ def main() -> None:
         "retrain_every_days": args.retrain_every,
         "history_lag_days": args.history_lag_days,
         "boxscores": boxscores,
-        "model_weight": cfg.model.market_anchor_model_weight,
+        # Same anchoring policy as production: the schedule decides the weight; these are its fallbacks.
+        "anchor_schedule": cfg.model.anchor_schedule,
+        "market_anchor_weight": cfg.model.market_anchor_model_weight,
         "max_disagreement": cfg.model.max_model_market_disagreement,
         "min_ev": cfg.risk.min_ev_threshold,
         "max_bets_per_day": cfg.risk.max_selections_per_matchday,
