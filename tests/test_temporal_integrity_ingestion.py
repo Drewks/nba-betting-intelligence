@@ -567,3 +567,21 @@ def test_audit_report_shows_temporal_integrity_line() -> None:
     )
     line = next(ln for ln in md.splitlines() if "Integridad temporal de ingestión" in ln)
     assert "ÍNTEGRO" in line and "`123`" in line and "cierres `6`" in line and "ACTIVOS" in line
+
+
+def test_quotes_are_stamped_after_the_feed_responds_not_at_call_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A request that starts just before tip-off and returns after it must not emit pre-tip-stamped quotes."""
+    tip = datetime(2026, 11, 25, 0, 30, tzinfo=timezone.utc)
+    clock = iter([tip - timedelta(seconds=2), tip + timedelta(seconds=3)])  # call entry, then response arrival
+
+    class _Clock(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> datetime:  # type: ignore[override]
+            return next(clock)
+
+    state: dict[str, Any] = {"payload": _scoreboard(_event(EV_ID, "STATUS_SCHEDULED", "pre", tip)), "box": {}}
+    adapter = _espn_adapter(monkeypatch, state)
+    monkeypatch.setattr("src.ingestion.espn.datetime", _Clock)
+    raw = adapter.fetch_games_and_odds()
+    assert raw["odds"] == []
+    assert raw["games"][0]["features_available_at"] == _iso(tip + timedelta(seconds=3))

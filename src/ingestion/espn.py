@@ -318,6 +318,12 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         ):
             multi_book_odds = self.odds_api_helper.fetch_multi_book_odds_by_matchup(now_utc)
 
+        if as_of_utc is None:
+            # Stamp (and check tip-off against) the moment the responses arrived, not the call entry: a
+            # request started just before tip-off can return in-game prices after it.
+            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            now_dt = parse_iso_utc(now_utc)
+
         sr_context = SportradarAdapter().fetch_league_intelligence_context()
         sr_injuries = sr_context.get("injury_penalties", {})
         sr_splits = sr_context.get("team_splits", {})
