@@ -520,6 +520,68 @@ def test_real_odds_backtest_pipeline_runs_walk_forward_without_lookahead() -> No
         assert bet["ev_unit"] > 0.05 and bet["kelly_stake_pen"] <= 3.0
 
 
+def test_real_odds_backtest_skips_side_without_bettable_price(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    At a 6% margin an opening home probability of 0.96 prices HOME at 1 / (0.96 * 1.06) = 0.98 <= 1.0, which used to
+    abort the whole backtest in validate_odds_record. HOME is now never evaluated (no bet, candidate or shadow row),
+    AWAY is quoted without a counterpart price, and the game stays in the full-slate quality series.
+    """
+    import src.backtesting.real_odds_backtest as rob
+    from src.backtesting.real_odds_metrics import render_markdown
+    from tests.helpers import connect_readonly_prod_db
+
+    conn = connect_readonly_prod_db()
+    games = [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM games WHERE season = '2024-25' AND status = 'FINAL' ORDER BY game_start_time LIMIT 220"
+        ).fetchall()
+    ]
+    conn.close()
+    market_path = Path(__file__).resolve().parent.parent / "data" / "raw" / "market_consensus_2024-25.csv"
+    market_rows = rob.load_market_rows([market_path])
+    day = games[160]["matchday_date"]
+    matched = rob.match_market_to_games(market_rows, games)
+    target = next(
+        g
+        for g in games
+        if g["matchday_date"] == day and str(g["game_start_time"])[:10] == day and g["game_id"] in matched
+    )
+    tid = target["game_id"]
+    rows = [{**m, "open_home_win_prob": 0.96} if m is matched[tid] else m for m in market_rows]
+    assert rob._price(0.96, 0.06) <= 1.0
+
+    quoted: list[dict[str, Any]] = []
+    real_evaluate = rob.evaluate_scheduled_market_opportunity
+
+    def _recording_evaluate(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        quoted.append(dict(kwargs["odds_record"]))
+        return real_evaluate(*args, **kwargs)
+
+    monkeypatch.setattr(rob, "evaluate_scheduled_market_opportunity", _recording_evaluate)
+    res = rob.run_real_odds_backtest(games, rows, start_date=day, end_date=day, vig=0.06)
+
+    assert res["config"]["unpriceable_sides_skipped"] == 1
+    target_ml = {o["selection"]: o for o in quoted if o["game_id"] == tid and o["market"] == "moneyline"}
+    assert set(target_ml) == {"AWAY"}
+    assert target_ml["AWAY"]["decimal_odds"] == pytest.approx(rob._price(0.04, 0.06))
+    assert target_ml["AWAY"]["counterpart_decimal_odds"] is None
+    assert all(o["decimal_odds"] > 1.0 for o in quoted)
+    assert all(o["counterpart_decimal_odds"] is None or o["counterpart_decimal_odds"] > 1.0 for o in quoted)
+    assert not any(b["game_id"] == tid and b["market"] == "moneyline" and b["selection"] == "HOME" for b in res["bets"])
+    assert all(b["decimal_odds"] > 1.0 for b in res["bets"])
+
+    n_games = res["config"]["test_games"]
+    assert res["full_slate_evaluation"]["games_count"] == n_games
+    assert all(score["n"] == n_games for score in res["moneyline_quality"].values())
+
+    md = render_markdown(res, {"6.0%": res})
+    assert "Lados sin precio apostable (cuota justa / (1 + margen) ≤ 1.00): `1`" in md
+    assert "Lados sin precio apostable omitidos: margen 6.0%: `1`" in md
+    clean = {**res, "config": {**res["config"], "unpriceable_sides_skipped": 0}}
+    assert "Lados sin precio apostable" not in render_markdown(clean, {"6.0%": clean})
+
+
 # 12. Box-score features are leakage-free and feed the ensemble adjustment
 def _bx_game(i: int, home: str, away: str, hs: int, as_: int, status: str = "FINAL") -> dict[str, Any]:
     start = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=i)

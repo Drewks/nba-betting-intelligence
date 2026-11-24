@@ -447,6 +447,14 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
         f"- Periodo de prueba desde `{cfg['start_date']}` | partidos con mercado emparejado: `{cfg['test_games']}`",
         f"- Reentrenamiento cada `{cfg['retrain_every_days']}` días | margen supuesto `{cfg['vig_assumption'] * 100:.1f}%` | "
         f"{anchor_txt} | EV mínimo `{cfg['min_ev'] * 100:.0f}%`{ml_cap_txt}",
+    ]
+    unpriceable = int(cfg.get("unpriceable_sides_skipped") or 0)
+    if unpriceable:
+        lines.append(
+            f"- Lados sin precio apostable (cuota justa / (1 + margen) ≤ 1.00): `{unpriceable}`, sin apuesta, "
+            "candidato ni shadow; sus partidos siguen en la sección 1"
+        )
+    lines += [
         "",
         "## 1. Calidad probabilística fuera de muestra (todos los partidos)",
         "",
@@ -501,6 +509,16 @@ def render_markdown(result: dict[str, Any], sensitivity: dict[str, Any] | None =
                     f"| {vig_label} | `{mk}` | {v['bets']} | {v['won']} | {v['roi_flat_pct']}% {_ci(v.get('roi_ci95'))} | "
                     f"{v['mean_clv_pct']}% {_ci(v.get('clv_ci95'))} |"
                 )
+        skipped_by_vig = {
+            vig_label: int((res.get("config") or {}).get("unpriceable_sides_skipped") or 0)
+            for vig_label, res in sensitivity.items()
+        }
+        if any(skipped_by_vig.values()):
+            lines += [
+                "",
+                "- Lados sin precio apostable omitidos: "
+                + " | ".join(f"margen {k}: `{n}`" for k, n in skipped_by_vig.items() if n),
+            ]
     sig = result.get("line_movement_signal") or {}
     if sig:
         lines += [
