@@ -105,10 +105,11 @@ def pair_valid_pretip_quotes(
 
 @dataclass(frozen=True)
 class DecisionTimeMarket:
-    """The market known at one decision time: consensus of the quotes that could be taken, and line steam."""
+    """The market known at one decision time: takeable quotes, their de-vigged consensus, and line steam."""
 
     consensus: dict[tuple[str, str, float | None], dict[str, Any]]
     steam: dict[tuple[str, str], dict[str, float]]
+    takeable_quotes: tuple[dict[str, Any], ...] = ()
 
     def consensus_prob(self, market: str, selection: str, line_value: float | None) -> float | None:
         """De-vigged consensus for one side, looked up as the live cycle does (exact line, then rounded)."""
@@ -148,4 +149,8 @@ def decision_time_market(
         excluded_provider_markers=execution_cfg.excluded_provider_markers,
         max_overround=execution_cfg.max_bookmaker_overround,
     )
-    return DecisionTimeMarket(consensus=compute_market_consensus(takeable), steam=compute_line_steam(known))
+    return DecisionTimeMarket(
+        consensus=compute_market_consensus(takeable),
+        steam=compute_line_steam(known),
+        takeable_quotes=tuple(takeable),
+    )

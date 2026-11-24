@@ -269,9 +269,10 @@ def test_walk_forward_and_production_compute_identical_anchored_probabilities(
     )
     walk_forward = engine.candidates
 
-    # Every pre-game quote is decided with the production schedule, at the time production decided.
+    # Only takeable pre-game quotes are evaluated as candidates, matching production's quote set 1-for-1,
+    # while the full pre-decision snapshot history is retained in `decision_time_market` for steam.
     assert skipped == 0
-    assert len(calls) == len(walk_forward) == sum(1 for r in odds_rows if not r["is_closing_line"])
+    assert len(calls) == len(walk_forward) == len(production)
     hours = (_START_DT - decision_dt).total_seconds() / 3600.0
     for kwargs in calls:
         assert kwargs["anchor_schedule"] == cfg.model.anchor_schedule
@@ -279,6 +280,7 @@ def test_walk_forward_and_production_compute_identical_anchored_probabilities(
         assert kwargs["simulated_prediction_time"] == _iso(decision_dt)
 
     wf_by_quote = {_quote_key(w): w for w in walk_forward}
+    assert set(wf_by_quote) == {_quote_key(p) for p in production}
     for prod in production:
         label = f"{scenario}: {prod['odds_provider']} {prod['market']}/{prod['selection']}"
         wf = wf_by_quote[_quote_key(prod)]
@@ -300,12 +302,7 @@ def test_walk_forward_and_production_compute_identical_anchored_probabilities(
             schedule=cfg.model.anchor_schedule,
         ), label
 
-    # Quotes production would not take are still read against production's market for their side.
     prod_by_side = {_side_key(p): p for p in production}
-    for wf in walk_forward:
-        prod = prod_by_side.get(_side_key(wf))
-        if prod is not None:
-            assert wf["market_anchored_probability"] == pytest.approx(prod["market_anchored_probability"], abs=1e-9), wf
 
     # The comparison record the walk-forward metrics are built from carries production's probabilities.
     (record,) = records

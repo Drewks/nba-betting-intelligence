@@ -336,6 +336,10 @@ def run_walk_forward_simulation(
             pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
             hours_to_tipoff = max(0.0, (start_dt - pred_dt).total_seconds() / 3600.0)
             validate_game_record(g, simulated_prediction_time=pred_ts)
+            for o in game_odds:
+                validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
+            market = decision_time_market(game_odds, start_dt, pred_dt, execution_cfg=cfg.execution)
+            takeable_ids = {str(q["odds_id"]) for q in market.takeable_quotes}
 
             feats = build_pregame_features(g, prior_final_games, market="total_points")
             pred_a_ml = model_a.predict_moneyline(g, prior_final_games)
@@ -349,8 +353,10 @@ def run_walk_forward_simulation(
             va_home_int = ml_va.predict_interval(raw_p_home)
 
             tot_line_odds = [o for o in game_odds if o["market"] == "total_points" and o.get("line_value") is not None]
-            has_obs_total = len(tot_line_odds) > 0
-            line_val = float(tot_line_odds[0]["line_value"]) if has_obs_total else None
+            takeable_tot_odds = [o for o in tot_line_odds if str(o["odds_id"]) in takeable_ids]
+            scored_tot_odds = takeable_tot_odds or tot_line_odds
+            has_obs_total = len(scored_tot_odds) > 0
+            line_val = float(scored_tot_odds[0]["line_value"]) if has_obs_total else None
 
             pred_a_tot = model_a.predict_total_points(g, prior_final_games, line_val) if line_val is not None else None
             pred_e_tot = model_e.predict_total_points(g, prior_final_games, line_val) if line_val is not None else None
@@ -360,7 +366,9 @@ def run_walk_forward_simulation(
             cal_p_over = float(tot_calibrator.transform_single(raw_p_over)) if raw_p_over is not None else None
 
             tot_eval_cache: dict[float, dict[str, Any]] = {}
-            for o in tot_line_odds:
+            for o in market.takeable_quotes:
+                if o["market"] != "total_points" or o.get("line_value") is None:
+                    continue
                 lv_k = round(float(o["line_value"]), 2)
                 if lv_k not in tot_eval_cache:
                     p_tot_k = model_f.predict_total_points(g, prior_final_games, lv_k)
@@ -378,8 +386,12 @@ def run_walk_forward_simulation(
                     }
 
             sp_odds = [o for o in game_odds if o["market"] == "spread" and o.get("line_value") is not None]
+            takeable_sp_odds = [o for o in sp_odds if str(o["odds_id"]) in takeable_ids]
+            scored_sp_odds = takeable_sp_odds or sp_odds
             sp_eval_cache: dict[float, dict[str, Any]] = {}
-            for o in sp_odds:
+            for o in (*scored_sp_odds[:1], *(q for q in market.takeable_quotes if q["market"] == "spread")):
+                if o.get("line_value") is None:
+                    continue
                 h_line_k = round(float(o["line_value"]) if o["selection"] == "HOME" else -float(o["line_value"]), 2)
                 if h_line_k not in sp_eval_cache:
                     p_sp_k = model_f.predict_spread(g, prior_final_games, h_line_k)
@@ -400,14 +412,16 @@ def run_walk_forward_simulation(
             market_p_over = anchored_p_over = None
             market_p_sp_home = anchored_p_sp_home = None
             first_sp_line: float | None = (
-                round(float(sp_odds[0]["line_value"]) if sp_odds[0]["selection"] == "HOME" else -float(sp_odds[0]["line_value"]), 2)
-                if sp_odds
+                round(
+                    float(scored_sp_odds[0]["line_value"])
+                    if scored_sp_odds[0]["selection"] == "HOME"
+                    else -float(scored_sp_odds[0]["line_value"]),
+                    2,
+                )
+                if scored_sp_odds
                 else None
             )
-            for o in game_odds:
-                validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
-            market = decision_time_market(game_odds, start_dt, pred_dt, execution_cfg=cfg.execution)
-            for o in game_odds:
+            for o in market.takeable_quotes:
                 mkt = o["market"]
                 sel = o["selection"]
                 row_p_push = 0.0
