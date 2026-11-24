@@ -25,6 +25,21 @@ def _odds_integrity_line(oi: dict[str, Any]) -> str:
     )
 
 
+def _temporal_integrity_line(ti: dict[str, Any]) -> str:
+    """Game rows written after tip-off that claim pre-game availability, and quotes stamped before their fetch."""
+    if not ti:
+        return "- **Integridad temporal de ingestión (filas tras el tip-off / cuotas retrofechadas)**: `n/d`"
+    return (
+        f"- **Integridad temporal de ingestión**: `{'ÍNTEGRO' if ti.get('passed') else 'VIOLACIÓN'}` — "
+        f"partidos ingeridos tras el tip-off con `features_available_at` previo al tip-off sin reparación auditada: "
+        f"`{ti.get('unrecorded_post_tipoff_games', 0)}` (registrados en `audit_repairs`: "
+        f"`{ti.get('recorded_post_tipoff_games', 0)}`); cuotas con `captured_at` anterior a su descarga sin "
+        f"registro y cuarentena: `{ti.get('unresolved_backdated_odds', 0)}` (detectadas `{ti.get('backdated_odds', 0)}`, "
+        f"cierres `{ti.get('backdated_closing_lines', 0)}`); triggers de congelamiento temporal: "
+        f"`{'ACTIVOS' if ti.get('temporal_freeze_triggers_active') else 'AUSENTES'}`"
+    )
+
+
 def _clv_evidence_text(ev: dict[str, Any]) -> str:
     """One line on what the shadow-ledger CLV sample supports (edge / no edge / inconclusive)."""
     if not ev or ev.get("verdict") == "INSUFFICIENT_SAMPLE" or ev.get("ci95_pct") is None:
@@ -113,6 +128,7 @@ def generate_audit_report(
             f" — faltantes por tabla: `{(audit_result.get('history_integrity') or {}).get('missing_rows_by_table', {})}`"
         ),
         _odds_integrity_line(audit_result.get("odds_and_decision_integrity") or {}),
+        _temporal_integrity_line(audit_result.get("temporal_ingestion_integrity") or {}),
         f"- **Inconsistencias del ledger**: `{audit_result.get('ledger_issues_count', 'n/d')}`",
         f"- **Reproducibilidad**: `{repro_note}`",
         "",

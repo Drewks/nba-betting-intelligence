@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from src.storage.migrations import run_migrations
-from src.storage.schema import DDL_STATEMENTS, VIEW_DDL
+from src.storage.schema import BACKDATED_ODDS_TRIGGER_DDL, DDL_STATEMENTS, VIEW_DDL
+from src.validation.validator import parse_iso_utc
 
 VALID_SOURCE_TYPES: frozenset[str] = frozenset({"OBSERVED", "DERIVED", "SYNTHETIC"})
 
@@ -162,6 +163,12 @@ class DatabaseManager:
             # Numbered, audited migrations (history restoration, quarantine sweep, ...)
             run_migrations(conn)
 
+            # Like the DDL triggers above, the backdated-capture trigger is ensured on every start. It can only
+            # exist once `odds_snapshots.fetched_at` does (migration 016), and a rebuild of the table drops it.
+            odds_cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(odds_snapshots)").fetchall()}
+            if "fetched_at" in odds_cols:
+                conn.execute(BACKDATED_ODDS_TRIGGER_DDL)
+
             # Derived views are always recreated so existing databases get the latest definitions.
             for view_name in reversed(list(VIEW_DDL)):
                 conn.execute(f"DROP VIEW IF EXISTS {view_name}")
@@ -188,6 +195,8 @@ class DatabaseManager:
         Single write path for odds_snapshots. Provenance is mandatory: callers MUST declare
         `source_type` explicitly (OBSERVED / DERIVED / SYNTHETIC). The column has a legacy
         DEFAULT 'OBSERVED' in old databases, so relying on the default is forbidden here.
+        `fetched_at` (optional) is the moment the quote was fetched; a quote is never stored with a
+        `captured_at` earlier than it (a backdated stamp).
         Returns True if a new row was inserted (False if the odds_id already existed).
         """
         source_type = odds.get("source_type")
@@ -195,6 +204,12 @@ class DatabaseManager:
             raise ValueError(
                 f"insert_odds_snapshot requires explicit source_type in {sorted(VALID_SOURCE_TYPES)}; "
                 f"got {source_type!r} for odds_id={odds.get('odds_id')!r}"
+            )
+        fetched_at = odds.get("fetched_at")
+        if fetched_at is not None and parse_iso_utc(str(odds["captured_at"])) < parse_iso_utc(str(fetched_at)):
+            raise ValueError(
+                f"BACKDATED_CAPTURE: odds_id={odds.get('odds_id')!r} captured_at {odds['captured_at']!r} precedes "
+                f"the moment it was fetched ({fetched_at!r})"
             )
         params = (
             odds["odds_id"],
@@ -208,12 +223,13 @@ class DatabaseManager:
             odds["captured_at"],
             int(odds.get("is_closing_line", 0)),
             source_type,
+            fetched_at,
         )
         sql = """
             INSERT OR IGNORE INTO odds_snapshots (
                 odds_id, game_id, provider, market, selection, line_value,
-                decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line, source_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                decimal_odds, counterpart_decimal_odds, captured_at, is_closing_line, source_type, fetched_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         if conn is not None:
             return conn.execute(sql, params).rowcount > 0

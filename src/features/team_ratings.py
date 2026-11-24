@@ -15,6 +15,7 @@ finished before each game's tip-off:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 import json
 from pathlib import Path
@@ -294,12 +295,18 @@ def compute_pregame_team_ratings(games: list[dict[str, Any]]) -> dict[str, dict[
     return out
 
 
-def apply_pregame_team_ratings(db: Any) -> int:
+def apply_pregame_team_ratings(db: Any, live_profiles: Mapping[str, Mapping[str, Any]] | None = None) -> int:
     """
     Recomputes and persists leakage-free pre-game ratings for every real (non-synthetic) game.
     For SCHEDULED games enriched with live ESPN/Sportradar injury & Synergy context, preserves
     a bounded, zero-mean-shift acute net-rating delta while enforcing accurate schedule rest days.
+
+    `live_profiles` maps game_id -> the live adapter's rating estimates fetched before tip-off in this cycle
+    (`NBADataScoutAgent.ingest_and_validate_dataset(...)["pregame_live_profiles"]`). Ingestion never rewrites
+    a stored row, so these fresh estimates, not the previously blended values stored in the row, drive the
+    acute delta; a game without one falls back to its stored values.
     """
+    profiles = live_profiles or {}
     games = db.fetch_all(
         """
         SELECT game_id, game_start_time, home_team, away_team, status, home_score, away_score,
@@ -317,17 +324,17 @@ def apply_pregame_team_ratings(db: Any) -> int:
         g = games_by_id.get(gid, {})
         h_off, h_def, h_pace = r["home_off_rtg"], r["home_def_rtg"], r["home_pace"]
         a_off, a_def, a_pace = r["away_off_rtg"], r["away_def_rtg"], r["away_pace"]
+        live = profiles.get(gid) or g
 
         # If SCHEDULED and enriched by live adapter, blend bounded acute injury/Synergy net delta
         # symmetrically into off/def so total points expectation is never artificially depressed
         if (
             g.get("status") == "SCHEDULED"
             and g.get("source_provider") == "espn_v2_syndicate_enriched"
-            and g.get("home_off_rtg") is not None
-            and g.get("away_off_rtg") is not None
+            and all(live.get(k) is not None for k in ("home_off_rtg", "home_def_rtg", "away_off_rtg", "away_def_rtg"))
         ):
-            live_net_diff = (float(g["home_off_rtg"]) - float(g["home_def_rtg"])) - (
-                float(g["away_off_rtg"]) - float(g["away_def_rtg"])
+            live_net_diff = (float(live["home_off_rtg"]) - float(live["home_def_rtg"])) - (
+                float(live["away_off_rtg"]) - float(live["away_def_rtg"])
             )
             hist_net_diff = (h_off - h_def) - (a_off - a_def)
             acute_delta = max(-4.0, min(4.0, 0.20 * (live_net_diff - hist_net_diff)))

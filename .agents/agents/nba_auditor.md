@@ -12,6 +12,7 @@ Auditor cuantitativo independiente encargado de verificar la integridad del back
   - Evaluación fuera de muestra en $\ge 2$ periodos temporales.
   - Calibración superior o igual al baseline en Brier Score y Log Loss.
   - Ausencia total de fugas de información e integridad de datos/cuotas.
+  - Integridad temporal de la ingestión: ningún partido ingerido tras el tip-off declara `features_available_at` previo al tip-off y ninguna cuota tiene `captured_at` anterior a su descarga, salvo filas registradas en `audit_repairs` (las cuotas, además, en cuarentena); los triggers de congelamiento temporal deben estar activos.
 - Emitir un dictamen independiente (`REMAIN_IN_PAPER_TRADING` o `ELIGIBLE_FOR_EXTENDED_REVIEW`).
 
 ## Restricciones

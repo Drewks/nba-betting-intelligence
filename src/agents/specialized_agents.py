@@ -33,19 +33,38 @@ from src.ingestion.normalizer import NBA_TEAMS
 from src.paper_trading.engine import PaperTradingEngine
 from src.storage.db import DatabaseManager
 from src.validation.validator import (
+    LIVE_STATUSES,
     RESULT_STATUSES,
     DataValidationError,
     detect_duplicates,
     parse_iso_utc,
     validate_essential_features,
     validate_game_record,
+    validate_odds_fetch_provenance,
     validate_odds_record,
     validate_result_record,
 )
 
+# Pre-game rating estimates of the live adapter. The latest pre-tip values feed the acute injury/synergy
+# blend of `apply_pregame_team_ratings`; they are never written over an already stored row.
+PREGAME_PROFILE_COLUMNS: tuple[str, ...] = (
+    "home_off_rtg",
+    "home_def_rtg",
+    "home_pace",
+    "away_off_rtg",
+    "away_def_rtg",
+    "away_pace",
+)
+
 
 class NBADataScoutAgent:
-    """Agente 1: nba_data_scout — Ingestión, normalización, procedencia y validación temporal."""
+    """
+    Agente 1: nba_data_scout — Ingestión, normalización, procedencia y validación temporal.
+
+    A stored game row is the audit trail of what was known and when: once a game is stored, ingestion
+    only applies status/score transitions (and a re-scheduled tip-off while the stored tip-off is still
+    ahead). Its pre-game features, `features_available_at` and `ingested_at` are never replaced.
+    """
 
     agent_name = "nba_data_scout"
 
@@ -115,6 +134,9 @@ class NBADataScoutAgent:
                 (code, meta["full_name"], meta["conference"], meta["division"], now_utc),
             )
 
+        # The moment this fetch starts: no quote of the bundle can have been fetched before it.
+        fetch_started_at = as_of_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        fetch_started_dt = parse_iso_utc(fetch_started_at)
         raw_bundle = router.fetch_with_failover(date_str=date_str, as_of_utc=as_of_utc)
         raw_games = raw_bundle["games"]
         raw_odds = raw_bundle["odds"]
@@ -124,14 +146,24 @@ class NBADataScoutAgent:
 
         validated_games: list[dict[str, Any]] = []
         discarded_games: list[dict[str, str]] = []
+        in_progress_games: list[dict[str, str]] = []
         valid_game_start_map: dict[str, str] = {}
+        live_game_ids: set[str] = set()
+        pregame_live_profiles: dict[str, dict[str, Any]] = {}
 
         results_applied = 0
+        schedule_corrections = 0
+        frozen_existing_games = 0
         for g in raw_games:
+            gid = str(g.get("game_id"))
             try:
                 status = str(g.get("status", ""))
                 existing = self.db.fetch_one(
-                    "SELECT status, home_score, away_score FROM games WHERE game_id = ?",
+                    """
+                    SELECT game_id, status, game_start_time, home_score, away_score,
+                           features_available_at, ingested_at
+                    FROM games WHERE game_id = ?
+                    """,
                     (g.get("game_id"),),
                 )
                 if status in RESULT_STATUSES:
@@ -143,26 +175,57 @@ class NBADataScoutAgent:
                         validate_essential_features(g, "moneyline")
                         validate_essential_features(g, "total_points")
                         self._insert_game_row(g)
-                else:
-                    if existing and existing["status"] in RESULT_STATUSES:
+                elif existing:
+                    if existing["status"] in RESULT_STATUSES:
                         raise DataValidationError(
                             f"Status regression blocked for {g.get('game_id')}: stored {existing['status']} "
                             f"cannot revert to {status}"
                         )
-                    if existing and existing.get("features_available_at"):
-                        g["features_available_at"] = existing["features_available_at"]
+                    # Already stored: features, features_available_at and ingested_at stay as first stored.
+                    frozen_existing_games += 1
+                    schedule_corrections += self._apply_schedule_correction(g, existing, fetch_started_dt)
+                    if status in LIVE_STATUSES:
+                        live_game_ids.add(gid)
+                        in_progress_games.append(
+                            {"game_id": gid, "reason": f"{status}: stored pre-game row left unchanged"}
+                        )
+                        continue
+                    profile = self._pregame_live_profile(g, fetch_started_dt)
+                    if profile is not None:
+                        pregame_live_profiles[gid] = profile
+                elif status in LIVE_STATUSES:
+                    # First seen under way: no pre-game snapshot exists, so nothing is stored. The game is
+                    # stored when its result arrives, with its real (post-tip) ingestion time.
+                    live_game_ids.add(gid)
+                    in_progress_games.append(
+                        {"game_id": gid, "reason": f"{status}: first seen under way, no pre-game row stored"}
+                    )
+                    continue
+                else:
                     validate_game_record(g)
                     validate_essential_features(g, "moneyline")
                     validate_essential_features(g, "total_points")
                     self._insert_game_row(g)
-                validated_games.append(g)
-                valid_game_start_map[g["game_id"]] = g["game_start_time"]
+                    profile = self._pregame_live_profile(g, fetch_started_dt)
+                    if profile is not None:
+                        pregame_live_profiles[gid] = profile
+                stored = self.db.fetch_one("SELECT * FROM games WHERE game_id = ?", (g.get("game_id"),)) or g
+                validated_games.append(stored)
+                valid_game_start_map[str(stored["game_id"])] = str(stored["game_start_time"])
             except Exception as exc:
-                discarded_games.append({"game_id": str(g.get("game_id")), "reason": str(exc)})
+                discarded_games.append({"game_id": gid, "reason": str(exc)})
 
         validated_odds: list[dict[str, Any]] = []
         rejected_odds: list[dict[str, str]] = []
         for o in raw_odds:
+            if str(o.get("game_id", "")) in live_game_ids:
+                rejected_odds.append(
+                    {
+                        "odds_id": str(o.get("odds_id")),
+                        "reason": "Parent game is under way in the feed: quotes fetched after tip-off are never stored",
+                    }
+                )
+                continue
             g_start = valid_game_start_map.get(o.get("game_id", ""))
             if not g_start:
                 existing_game = self.db.fetch_one(
@@ -176,6 +239,7 @@ class NBADataScoutAgent:
                 rejected_odds.append({"odds_id": str(o.get("odds_id")), "reason": "Parent game missing or invalid"})
                 continue
             try:
+                validate_odds_fetch_provenance(o, fetch_started_at)
                 validate_odds_record(o, g_start)
                 self.db.insert_odds_snapshot(o)
                 validated_odds.append(o)
@@ -188,16 +252,66 @@ class NBADataScoutAgent:
             "validated_games": validated_games,
             "validated_odds": validated_odds,
             "discarded_games": discarded_games,
+            "in_progress_games": in_progress_games,
             "rejected_odds": rejected_odds,
             "duplicate_games_detected": len(dup_games),
             "duplicate_odds_detected": len(dup_odds),
             "results_applied": results_applied,
+            "frozen_existing_games": frozen_existing_games,
+            "schedule_corrections": schedule_corrections,
+            # Fresh pre-tip estimates of SCHEDULED games, for `apply_pregame_team_ratings(live_profiles=...)`.
+            "pregame_live_profiles": pregame_live_profiles,
         }
 
+    @staticmethod
+    def _pregame_live_profile(g: dict[str, Any], fetch_started_dt: datetime) -> dict[str, Any] | None:
+        """The feed's pre-game rating estimates of a SCHEDULED game fetched strictly before tip-off, else None."""
+        if str(g.get("status") or "") != "SCHEDULED":
+            return None
+        try:
+            start_dt = parse_iso_utc(str(g.get("game_start_time") or ""))
+            if fetch_started_dt >= start_dt or parse_iso_utc(str(g.get("features_available_at") or "")) >= start_dt:
+                return None
+            validate_essential_features(g, "moneyline")
+            validate_essential_features(g, "total_points")
+        except DataValidationError:
+            return None
+        return {col: g.get(col) for col in PREGAME_PROFILE_COLUMNS}
+
+    def _apply_schedule_correction(
+        self, g: dict[str, Any], existing: dict[str, Any], fetch_started_dt: datetime
+    ) -> int:
+        """
+        Follows a re-scheduled tip-off of a stored SCHEDULED game while its stored tip-off is still ahead, so an
+        earlier tip-off stops pre-game decisions in time. No other column changes, and once the stored tip-off
+        has passed the schedule is history and is left as it is. Returns 1 if the start time was updated.
+        """
+        new_start = str(g.get("game_start_time") or "")
+        old_start = str(existing.get("game_start_time") or "")
+        if not new_start or new_start == old_start or existing.get("status") != "SCHEDULED":
+            return 0
+        try:
+            new_dt = parse_iso_utc(new_start)
+            old_dt = parse_iso_utc(old_start)
+        except DataValidationError:
+            return 0
+        if new_dt == old_dt or old_dt <= fetch_started_dt:
+            return 0
+        with self.db.connect() as conn:
+            cur = conn.execute(
+                "UPDATE games SET game_start_time = ? WHERE game_id = ? AND status = 'SCHEDULED' AND game_start_time = ?",
+                (new_start, existing["game_id"], old_start),
+            )
+            changed = int(cur.rowcount > 0)
+        if changed:
+            logger.warning("Tip-off of %s re-scheduled by the feed: %s -> %s", existing["game_id"], old_start, new_start)
+        return changed
+
     def _insert_game_row(self, g: dict[str, Any]) -> None:
+        """Stores a game seen for the first time (never replaces a stored row)."""
         self.db.execute_insert(
             """
-            INSERT OR REPLACE INTO games (
+            INSERT INTO games (
                 game_id, season, matchday_date, game_start_time, home_team, away_team,
                 status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
                 away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
@@ -479,8 +593,18 @@ class NBAAuditorAgent:
             and odds_integrity["decision_timestamp_violations"]["post_fix"] == 0
         )
 
-        integrity_errors = 0 if (bankroll_reconciled and immutability_verified and history_intact and odds_intact) else 1
-        # 5. Deterministic reproducibility verification:
+        # 6. Temporal integrity of the stored trail: no game row written at/after tip-off may claim pre-game
+        #    availability and no quote may be stamped before it was fetched, unless recorded as an audited
+        #    repair (backdated quotes must also be quarantined); the temporal-freeze triggers must be active.
+        temporal_integrity = self._verify_temporal_ingestion_integrity()
+        temporal_intact = bool(temporal_integrity["passed"])
+
+        integrity_errors = (
+            0
+            if (bankroll_reconciled and immutability_verified and history_intact and odds_intact and temporal_intact)
+            else 1
+        )
+        # 7. Deterministic reproducibility verification:
         #    verifies bit-identical model probabilities (within 1e-12) across two independent runs
         #    with identical inputs/seeds and checks calibrated_weights.json + schema.sql hashes.
         repro_check = self._verify_reproducibility()
@@ -510,6 +634,7 @@ class NBAAuditorAgent:
             "ledger_issues_count": len(ledger_issues),
             "history_integrity": history,
             "odds_and_decision_integrity": odds_integrity,
+            "temporal_ingestion_integrity": temporal_integrity,
             "reproducibility_verified": reproducibility_verified,
             "reproducibility_diagnostic": repro_check,
             "reproducibility_note": repro_check["note"],
@@ -681,6 +806,13 @@ class NBAAuditorAgent:
             "unquarantined_examples": visible[:10],
             "decision_timestamp_violations": ts,
         }
+
+    def _verify_temporal_ingestion_integrity(self) -> dict[str, Any]:
+        """Post-tip-off ingested games and backdated quotes not recorded as audited repairs (see temporal_integrity)."""
+        from src.validation.temporal_integrity import summarize_temporal_integrity
+
+        with self.db.connect() as conn:
+            return summarize_temporal_integrity(conn)
 
     def _verify_and_register_history(self) -> dict[str, Any]:
         """

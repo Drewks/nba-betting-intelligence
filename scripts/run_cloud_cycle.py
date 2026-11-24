@@ -245,9 +245,13 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
 
     router = DataSourceRouter([ESPNPublicAdapter(timeout_seconds=10, enrich_with_the_odds_api=(mode != "settle_and_calibrate"))])
     ingested_dates: list[str] = []
+    # Stored games are never rewritten by ingestion; the feed's fresh pre-tip estimates of this cycle are
+    # handed to the ratings step instead (they drive the acute injury/synergy blend).
+    pregame_live_profiles: dict[str, dict[str, Any]] = {}
     for dt_str in dates_to_ingest:
         try:
-            scout.ingest_and_validate_dataset(router, date_str=dt_str)
+            ingest_res = scout.ingest_and_validate_dataset(router, date_str=dt_str)
+            pregame_live_profiles.update(ingest_res.get("pregame_live_profiles") or {})
             ingested_dates.append(dt_str)
         except Exception as exc:
             logger.warning(f"Ingestion failed for date {dt_str}: {exc}")
@@ -283,7 +287,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             backfill_espn_history(db, date(2024, 10, 22), (now_dt - timedelta(days=1)).date())
         except Exception as exc:
             logger.error(f"Historical ESPN backfill failed: {exc}", exc_info=True)
-    apply_pregame_team_ratings(db)
+    apply_pregame_team_ratings(db, live_profiles=pregame_live_profiles)
 
     all_final_games = db.fetch_all(
         "SELECT * FROM v_observed_games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time ASC"
