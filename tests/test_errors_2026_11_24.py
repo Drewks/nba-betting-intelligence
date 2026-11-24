@@ -230,6 +230,6 @@ def test_pages_deploy_waits_for_the_artifact_and_retries_once() -> None:
     assert retry["id"] == "deployment_retry"
     assert retry["if"] == "steps.deployment.outcome == 'failure'"
     assert "steps.deployment_retry.outputs.page_url" in job["environment"]["url"]
-    # deploy-pages lists the run's artifacts with this same token, so the wait step needs no extra
-    # permission (the least-privilege set is pinned by test_t018_workflows_least_privilege_and_ci_branch_gate).
-    assert "actions" not in job["permissions"]
+    # The wait step lists the run's artifacts, which needs read access to Actions on a private
+    # repository (the full least-privilege set is pinned by test_t018_workflows_least_privilege_and_ci_branch_gate).
+    assert job["permissions"].get("actions") == "read"

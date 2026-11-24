@@ -234,6 +234,8 @@ jobs:
       contents: read
       pages: write
       id-token: write
+      # Read-only: step 3b lists this run's artifacts (the endpoint needs it on a private repository).
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - name: 1. Descargar artefacto web actualizado del ciclo
@@ -263,12 +265,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          err_file="${RUNNER_TEMP:-/tmp}/pages_artifact_poll.err"
+          warned=0
           for attempt in $(seq 1 18); do
-            count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?name=github-pages" --jq '.total_count' 2>/dev/null || true)"
-            case "${count}" in ''|*[!0-9]*) count=0 ;; esac
-            if [ "${count}" -ge 1 ]; then
-              echo "Artefacto github-pages listado (consulta ${attempt})."
-              exit 0
+            if count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?name=github-pages" --jq '.total_count' 2>"${err_file}")"; then
+              case "${count}" in ''|*[!0-9]*) count=0 ;; esac
+              if [ "${count}" -ge 1 ]; then
+                echo "Artefacto github-pages listado (consulta ${attempt})."
+                exit 0
+              fi
+            elif [ "${warned}" = "0" ]; then
+              echo "::warning::No se pudo consultar la lista de artefactos: $(head -c 300 "${err_file}" | tr '\n' ' ')"
+              warned=1
             fi
             sleep 5
           done
