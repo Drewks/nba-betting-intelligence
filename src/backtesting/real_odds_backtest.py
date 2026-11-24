@@ -11,9 +11,13 @@ Protocol (mirrors production as closely as the data allows):
   2. For every matchday the production ensemble is trained only on games that started before the
      matchday's first tip-off (retrained every `retrain_every_days`); the probability calibrator and
      the Venn-Abers interval are fitted only on earlier out-of-sample predictions.
-  3. Decisions are taken at the OPENING consensus price with the production rules
-     (`evaluate_market_opportunity` with market anchoring, EV threshold, model/market disagreement
-     guard, long-shot guard, conformal-width guard, CLV meta-label, one bet per game, top-3 per day).
+  3. Decisions are taken at the OPENING consensus price with production's decision function
+     (`evaluate_scheduled_market_opportunity`: market anchor schedule, steam handling, EV) and production's
+     pre-bet guards (`check_candidate_edge_and_model_guards`: EV threshold, implausible EV, model/market
+     disagreement, moneyline odds cap, long-shot floor, adverse steam, conformal width, CLV meta-label),
+     then one bet per game and top-3 per day. The data has no opening timestamp: the opening line is taken
+     to be quoted at least `horizon_hours` before tip-off, so the schedule gives its open weights. Only the
+     opening line is known at decision time, so steam is 0 (the closing line would be lookahead).
   4. Bets are graded with the real result; CLV is measured against the CLOSING no-vig consensus.
   5. Evaluates `development` vs untouched `holdout_season` (`2026-27`), Bonferroni multiple-testing
      p-values, full-slate signal, `uncapped_shadow`, and chronological `totals_clv_targeted`.
@@ -23,6 +27,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import csv
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import io
 import math
@@ -47,19 +52,29 @@ from src.features.boxscore_features import attach_boxscore_features
 from src.features.team_ratings import compute_pregame_team_ratings, is_synthetic_game_id
 from src.ingestion.normalizer import normalize_team_code
 from src.models.statistical_models import EnsembleStackingModel
+from src.paper_trading.execution_helpers import check_candidate_edge_and_model_guards, check_candidate_risk_guards
 from src.paper_trading.staking import fractional_kelly_stake
-from src.prediction.ev_calculator import evaluate_market_opportunity
+from src.prediction.ev_calculator import (
+    compute_line_steam,
+    describe_market_anchor_schedule,
+    evaluate_scheduled_market_opportunity,
+)
 from src.prediction.totals_closing import TotalsClosingEstimator, fit_totals_closing_estimator
 from src.validation.validator import parse_iso_utc
 
 __all__ = [
     "DATA_ATTRIBUTION",
     "DATA_SOURCES",
+    "DECISION_LEAD_HOURS",
     "MATCH_TOLERANCE_HOURS",
     "TOTAL_SIGMA",
+    "OpeningPriceDecisionPolicy",
     "download_market_csvs",
+    "evaluate_opening_price_side",
     "load_market_rows",
     "match_market_to_games",
+    "opening_line_hours_to_tipoff",
+    "opening_quote_record",
     "render_markdown",
     "run_real_odds_backtest",
 ]
@@ -75,6 +90,9 @@ DATA_ATTRIBUTION = (
 )
 TOTAL_SIGMA = 18.0
 MATCH_TOLERANCE_HOURS = 12.0
+# Decision timestamp of every simulated bet: this many hours before its tip-off (the previous matchday's
+# games are final by then; the model only knows games that started before the matchday's first tip-off).
+DECISION_LEAD_HOURS = 6.0
 
 
 def download_market_csvs(
@@ -170,6 +188,102 @@ def _price(fair_prob: float, vig: float) -> float:
     return round(1.0 / (max(1e-6, fair_prob) * (1.0 + vig)), 4)
 
 
+def opening_line_hours_to_tipoff(anchor_schedule: Any) -> float:
+    """
+    Hours before tip-off at which a bet at the opening price is taken. The source publishes no timestamp for
+    the opening line; opening lines are posted well before tip-off, so the line is assumed to be quoted at
+    least `horizon_hours` before it (never later than the decision time). At that distance the production
+    schedule is at tau = 1 and gives its open weights.
+    """
+    # Same default horizon as `resolve_market_anchor_weight`.
+    horizon = float(getattr(anchor_schedule, "horizon_hours", 12.0)) if anchor_schedule is not None else 0.0
+    return max(horizon, DECISION_LEAD_HOURS)
+
+
+def opening_quote_record(
+    game_id: str,
+    game_start_time: str,
+    market: str,
+    selection: str,
+    line_value: float | None,
+    p_open: float,
+    *,
+    vig: float,
+    hours_to_tipoff: float,
+) -> dict[str, Any]:
+    """Two-way quote at the opening no-vig consensus plus the assumed margin, stamped when the line opened."""
+    captured = parse_iso_utc(game_start_time) - timedelta(hours=hours_to_tipoff)
+    return {
+        "odds_id": f"BT_{game_id}_{market}_{selection}",
+        "game_id": game_id,
+        "provider": "consensus_open",
+        "market": market,
+        "selection": selection,
+        "line_value": line_value,
+        "decimal_odds": _price(p_open, vig),
+        "counterpart_decimal_odds": _price(1.0 - p_open, vig),
+        "captured_at": captured.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+
+@dataclass(frozen=True)
+class OpeningPriceDecisionPolicy:
+    """Production decision parameters as the backtest applies them at the opening price."""
+
+    model_version_id: str
+    anchor_schedule: Any
+    market_anchor_weight: float
+    moneyline_weight: float | None
+    max_disagreement: float
+    moneyline_max_disagreement: float | None
+    moneyline_max_odds: float | None
+    vig: float
+    hours_to_tipoff: float
+
+
+def evaluate_opening_price_side(
+    policy: OpeningPriceDecisionPolicy,
+    quote: dict[str, Any],
+    *,
+    game_start_time: str,
+    decision_ts: str,
+    calibrated_prob: float,
+    raw_model_prob: float,
+    market_prob: float,
+    p_push: float,
+    conformal_interval: dict[str, Any] | None,
+    steam_delta: float,
+) -> dict[str, Any]:
+    """
+    Production decision (`evaluate_scheduled_market_opportunity`) for one side at the opening price: the
+    no-vig opening consensus is the market probability and the model weight is the schedule's at
+    `policy.hours_to_tipoff`. Adds `calibrated_probability` (the market-anchored probability the engine
+    stakes on), the field the production pre-bet guards read.
+    """
+    opp = evaluate_scheduled_market_opportunity(
+        estimated_prob=float(np.clip(calibrated_prob, 0.001, 0.999)),
+        raw_model_prob=float(np.clip(raw_model_prob, 0.001, 0.999)),
+        uncertainty_std=0.05,
+        odds_record=quote,
+        game_start_time=game_start_time,
+        model_version_id=policy.model_version_id,
+        hours_to_tipoff=policy.hours_to_tipoff,
+        market_anchor_weight=policy.market_anchor_weight,
+        moneyline_weight=policy.moneyline_weight,
+        anchor_schedule=policy.anchor_schedule,
+        max_disagreement=policy.max_disagreement,
+        moneyline_max_disagreement=policy.moneyline_max_disagreement,
+        moneyline_max_odds=policy.moneyline_max_odds,
+        simulated_prediction_time=decision_ts,
+        market_consensus_prob=market_prob,
+        steam_delta=steam_delta,
+        conformal_interval=conformal_interval,
+        p_push=p_push,
+    )
+    opp["calibrated_probability"] = opp["estimated_probability"]
+    return opp
+
+
 def _close_over_prob_at_line(close_total: float | None, close_over_prob: float | None, line: float) -> float | None:
     if close_total is None or close_over_prob is None:
         return None
@@ -243,7 +357,7 @@ def run_real_odds_backtest(
     end_date: str | None = None,
     retrain_every_days: int = 7,
     vig: float = 0.045,
-    model_weight: float = 0.30,
+    market_anchor_weight: float | None = None,
     min_ev: float = 0.05,
     max_disagreement: float = 0.15,
     max_bets_per_day: int = 3,
@@ -262,8 +376,17 @@ def run_real_odds_backtest(
     holdout_season: str | None = None,
     trials_evaluated_count: int | None = None,
     frozen_protocol_id: str | None = None,
+    anchor_schedule: Any = None,
 ) -> dict[str, Any]:
-    """Walk-forward backtest against consensus opening/closing lines with zero lookahead leakage."""
+    """
+    Walk-forward backtest against consensus opening/closing lines with zero lookahead leakage.
+
+    The model/market blend is production's: `anchor_schedule` (default `config.model.anchor_schedule`) resolved
+    at the opening line's hours to tip-off. `market_anchor_weight` (default `config.model.market_anchor_model_weight`)
+    and `moneyline_model_weight` are only the fallbacks the schedule leaves to them, as in production; pass a
+    disabled `MarketAnchorScheduleConfig` to evaluate fixed weights. `moneyline_max_odds=None` applies the
+    configured cap, as production's guards do.
+    """
     app_cfg = load_config()
     eval_cfg = app_cfg.evaluation
     exec_cfg = app_cfg.execution
@@ -272,6 +395,23 @@ def run_real_odds_backtest(
     eff_trials = int(trials_evaluated_count) if trials_evaluated_count is not None else int(eval_cfg.trials_evaluated_count)
     eff_protocol = str(frozen_protocol_id) if frozen_protocol_id is not None else str(eval_cfg.frozen_protocol_id)
     active_model_version = app_cfg.model.version_id
+    schedule = anchor_schedule if anchor_schedule is not None else app_cfg.model.anchor_schedule
+    fallback_weight = (
+        float(market_anchor_weight) if market_anchor_weight is not None else float(app_cfg.model.market_anchor_model_weight)
+    )
+    eff_ml_max_odds = moneyline_max_odds if moneyline_max_odds is not None else app_cfg.model.moneyline_max_odds
+    policy = OpeningPriceDecisionPolicy(
+        model_version_id=active_model_version,
+        anchor_schedule=schedule,
+        market_anchor_weight=fallback_weight,
+        moneyline_weight=moneyline_model_weight,
+        max_disagreement=max_disagreement,
+        moneyline_max_disagreement=moneyline_max_disagreement,
+        moneyline_max_odds=eff_ml_max_odds,
+        vig=vig,
+        hours_to_tipoff=opening_line_hours_to_tipoff(schedule),
+    )
+    weights_used: dict[str, set[float]] = defaultdict(set)
 
     real = [g for g in games if not is_synthetic_game_id(g.get("game_id"))]
     real.sort(key=lambda g: (str(g["game_start_time"]), str(g["game_id"])))
@@ -344,7 +484,7 @@ def run_real_odds_backtest(
             m = market_by_game[g["game_id"]]
             season_val = str(m["season"])
             start_dt = parse_iso_utc(g["game_start_time"])
-            decision_ts = (start_dt - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            decision_ts = (start_dt - timedelta(hours=DECISION_LEAD_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
             p_open_home = float(np.clip(m["open_home_win_prob"], 0.01, 0.99))
             p_close_home = float(np.clip(m["close_home_win_prob"], 0.01, 0.99))
 
@@ -353,7 +493,6 @@ def run_real_odds_backtest(
             va_home = ml_va.predict_interval(raw_home)
             home_won = 1 if int(g["home_score"]) > int(g["away_score"]) else 0
 
-            ml_mw = moneyline_model_weight if moneyline_model_weight is not None else model_weight
             rec: dict[str, Any] = {
                 "game_id": g["game_id"],
                 "season": season_val,
@@ -361,7 +500,7 @@ def run_real_odds_backtest(
                 "home_won": home_won,
                 "raw_home": raw_home,
                 "cal_home": cal_home,
-                "anchored_home": ml_mw * cal_home + (1.0 - ml_mw) * p_open_home,
+                "anchored_home": None,  # production decision for the HOME side, set below
                 "open_home": p_open_home,
                 "close_home": p_close_home,
             }
@@ -408,15 +547,13 @@ def run_real_odds_backtest(
                 cal_over = float(cal_res["cal_prob"])
                 va_over = cal_res["va_interval"] or tot_va.predict_interval(raw_over)
                 p_close_over = _close_over_prob_at_line(m.get("close_total"), m.get("close_over_prob"), float(line))
-                non_push_tot = float(cal_res["non_push"])
-                anchored_over = non_push_tot * (model_weight * float(cal_res["cal_cond"]) + (1.0 - model_weight) * 0.5)
                 rec.update(
                     {
                         "total_line": float(line),
                         "total_result": tot_result,
                         "raw_over": raw_over,
                         "cal_over": cal_over,
-                        "anchored_over": anchored_over,
+                        "anchored_over": None,  # production decision for the OVER side, set below
                         "p_push_tot": p_push_tot,
                         "close_over_at_open_line": p_close_over,
                         "close_total_line": m.get("close_total"),
@@ -465,48 +602,48 @@ def run_real_odds_backtest(
                                 "expected_move_pts": clv_sig["expected_move_pts"],
                             }
                         )
-            day_records.append((g, rec))
+            # Quotes known at decision time: only the opening line, so production's steam rule yields 0 here
+            # (the closing line is after the decision and would be lookahead).
+            quotes = [
+                opening_quote_record(
+                    g["game_id"],
+                    g["game_start_time"],
+                    market,
+                    sel,
+                    ln,
+                    p_open,
+                    vig=vig,
+                    hours_to_tipoff=policy.hours_to_tipoff,
+                )
+                for market, sel, ln, _cal, p_open, *_rest in sides
+            ]
+            steam_map = compute_line_steam(quotes)
 
             best_shadow_by_mkt: dict[str, dict[str, Any]] = {}
-            for market, sel, ln, cal_p, p_open, p_close, conf, result, p_push_s, raw_s in sides:
-                price = _price(p_open, vig)
-                counter = _price(1.0 - p_open, vig)
-                eff_mw = moneyline_model_weight if (market == "moneyline" and moneyline_model_weight is not None) else model_weight
-                eff_md = moneyline_max_disagreement if (market == "moneyline" and moneyline_max_disagreement is not None) else max_disagreement
-                odds_record = {
-                    "odds_id": f"BT_{g['game_id']}_{market}_{sel}",
-                    "game_id": g["game_id"],
-                    "provider": "consensus_open",
-                    "market": market,
-                    "selection": sel,
-                    "line_value": ln,
-                    "decimal_odds": price,
-                    "counterpart_decimal_odds": counter,
-                    "captured_at": decision_ts,
-                }
-                opp = evaluate_market_opportunity(
-                    estimated_prob=float(np.clip(cal_p, 0.001, 0.999)),
-                    raw_model_prob=float(np.clip(raw_s, 0.001, 0.999)),
-                    uncertainty_std=0.05,
-                    odds_record=odds_record,
+            for (market, sel, ln, cal_p, p_open, p_close, conf, result, p_push_s, raw_s), quote in zip(
+                sides, quotes, strict=True
+            ):
+                price = float(quote["decimal_odds"])
+                opp = evaluate_opening_price_side(
+                    policy,
+                    quote,
                     game_start_time=g["game_start_time"],
-                    model_version_id=active_model_version,
-                    simulated_prediction_time=decision_ts,
-                    market_consensus_prob=p_open,
-                    model_weight=eff_mw,
-                    max_disagreement=eff_md,
-                    conformal_interval=conf,
+                    decision_ts=decision_ts,
+                    calibrated_prob=cal_p,
+                    raw_model_prob=raw_s,
+                    market_prob=p_open,
                     p_push=p_push_s,
+                    conformal_interval=conf,
+                    steam_delta=float((steam_map.get((market, sel)) or {}).get("steam_delta", 0.0)),
                 )
+                weights_used[market].add(float(opp["effective_model_weight"]))
+                if (market, sel) == ("moneyline", "HOME"):
+                    rec["anchored_home"] = float(opp["market_anchored_probability"])
+                elif (market, sel) == ("total_points", "OVER"):
+                    rec["anchored_over"] = float(opp["market_anchored_probability"])
                 ev = float(opp["ev_unit"])
-                hard_block = (
-                    abs(float(opp.get("model_market_disagreement") or 0.0)) > eff_md
-                    or ev > exec_cfg.max_plausible_ev_unit
-                    or (market == "moneyline" and moneyline_max_odds is not None and price > moneyline_max_odds)
-                    or (price > exec_cfg.longshot_odds_threshold and ev < (exec_cfg.longshot_min_ev_pct / 100.0))
-                    or (conf.get("width") is not None and float(conf["width"]) > exec_cfg.max_conformal_width)
-                )
-                if ev > 0.0 and not hard_block:
+                # Production pre-bet guards (src/paper_trading/execution_helpers.py, `config.execution`).
+                if ev > 0.0 and check_candidate_risk_guards(opp, execution_cfg=exec_cfg) is None:
                     sh_mult = (price - 1.0) if result == "WON" else (-1.0 if result == "LOST" else 0.0)
                     sh_row = {
                         "game_id": g["game_id"],
@@ -526,14 +663,7 @@ def run_real_odds_backtest(
                     if prev_sh is None or ev > prev_sh["ev_unit"]:
                         best_shadow_by_mkt[market] = sh_row
 
-                reason = None
-                if ev <= min_ev:
-                    reason = "EV_BELOW_THRESHOLD"
-                elif hard_block:
-                    reason = "RISK_OR_MODEL_GUARD"
-                elif opp.get("meta_label_pass") is False:
-                    reason = "NEGATIVE_EXPECTED_CLV"
-                if reason is None:
+                if check_candidate_edge_and_model_guards(opp, min_ev_threshold=min_ev, execution_cfg=exec_cfg) is None:
                     candidates.append(
                         {
                             "game_id": g["game_id"],
@@ -544,12 +674,18 @@ def run_real_odds_backtest(
                             "line_value": ln,
                             "decimal_odds": price,
                             "anchored_prob": float(opp["estimated_probability"]),
+                            "calibrated_model_probability": float(opp["calibrated_model_probability"]),
+                            "p_push": p_push_s,
+                            "hours_to_tipoff": opp["hours_to_tipoff"],
+                            "scheduled_model_weight": float(opp["scheduled_model_weight"]),
+                            "effective_model_weight": float(opp["effective_model_weight"]),
                             "ev_unit": ev,
                             "p_open": p_open,
                             "p_close": p_close,
                             "result": result,
                         }
                     )
+            day_records.append((g, rec))
             uncapped_shadow_bets.extend(best_shadow_by_mkt.values())
 
         chosen: list[dict[str, Any]] = []
@@ -621,14 +757,25 @@ def run_real_odds_backtest(
             "end_date": end_date,
             "retrain_every_days": retrain_every_days,
             "vig_assumption": vig,
-            "model_weight": model_weight,
+            "market_anchor": {
+                "decision_function": (
+                    f"{evaluate_scheduled_market_opportunity.__module__}.{evaluate_scheduled_market_opportunity.__qualname__}"
+                ),
+                "schedule": describe_market_anchor_schedule(schedule),
+                "fallback_model_weight": fallback_weight,
+                "moneyline_fallback_model_weight": moneyline_model_weight,
+                "decision_hours_to_tipoff": policy.hours_to_tipoff,
+                "hours_to_tipoff_basis": "opening_line_quoted_at_least_horizon_hours_before_tipoff",
+                "steam_basis": "quotes_known_at_decision_opening_line_only",
+                # Weights the decisions actually used (after steam modulation), per market.
+                "effective_model_weights": {mkt: sorted(ws) for mkt, ws in sorted(weights_used.items())},
+            },
             "min_ev": min_ev,
             "history_lag_days": history_lag_days,
             "max_disagreement": max_disagreement,
             "max_bets_per_day": max_bets_per_day,
-            "moneyline_model_weight": moneyline_model_weight,
             "moneyline_max_disagreement": moneyline_max_disagreement,
-            "moneyline_max_odds": moneyline_max_odds,
+            "moneyline_max_odds": eff_ml_max_odds,
             "kelly": {
                 "fraction": kelly_fraction,
                 "min_stake": kelly_min_stake,

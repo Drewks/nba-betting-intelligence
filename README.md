@@ -66,6 +66,9 @@ uv run python scripts/run_real_odds_backtest.py --db $env:TEMP/nba_audit_work.sq
   (`nba-closing-lines-ats-2024-25`, `nba-closing-lines-ats-2025-26`, `nba-odds-2026-27`), licencia **CC BY 4.0**.
 - Protocolo: evaluación walk-forward estrictamente cronológica; decide al precio de **apertura** con `config/model_config.yaml`
   y mide **CLV contra el cierre**, separando Brier/LogLoss/ECE en raw, calibrado, mercado y anclado.
+- Misma política que producción: cada decisión pasa por `evaluate_scheduled_market_opportunity` (calendario
+  `market_anchor_schedule`, steam) y por las guardas de `config.execution`. La fuente no fecha la apertura: se asume
+  publicada al menos `horizon_hours` antes del inicio (pesos de apertura) y el steam es 0 (el cierre sería información futura).
 
 ## 🚀 Ejecución y Comandos
 

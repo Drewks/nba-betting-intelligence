@@ -519,6 +519,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             now_str,
             market_anchor_weight=MARKET_ANCHOR_MODEL_WEIGHT,
             moneyline_weight=MONEYLINE_MODEL_WEIGHT,
+            anchor_schedule=_MODEL_CFG.anchor_schedule,
         )
         metrics = bt.compute_comprehensive_metrics(
             model_comparison_records=oos_records,

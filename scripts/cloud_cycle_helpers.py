@@ -35,8 +35,7 @@ from src.prediction.ev_calculator import (
     MAX_MODEL_MARKET_DISAGREEMENT,
     compute_line_steam,
     compute_market_consensus,
-    evaluate_market_opportunity,
-    resolve_market_anchor_weight,
+    evaluate_scheduled_market_opportunity,
     select_best_line_shopping_candidates,
 )
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
@@ -440,24 +439,22 @@ def evaluate_scheduled_slate_candidates(
                     }
                 )
 
-            eff_weight = resolve_market_anchor_weight(
-                mkt,
-                hours_to_tipoff=hours_to_tipoff,
-                fallback_weight=market_anchor_weight,
-                moneyline_weight=moneyline_weight,
-                schedule=anchor_schedule,
-            )
-            eff_dis = moneyline_max_disagreement if (mkt == "moneyline" and moneyline_max_disagreement is not None) else MAX_MODEL_MARKET_DISAGREEMENT
-            opp = evaluate_market_opportunity(
+            # Same decision rule as the real-odds backtest and the fallback OOS comparisons (parity-tested).
+            opp = evaluate_scheduled_market_opportunity(
                 estimated_prob=cal_p,
                 uncertainty_std=unc,
                 odds_record=o,
                 game_start_time=g["game_start_time"],
                 model_version_id=model_f.version_id,
+                hours_to_tipoff=hours_to_tipoff,
+                market_anchor_weight=market_anchor_weight,
+                moneyline_weight=moneyline_weight,
+                anchor_schedule=anchor_schedule,
+                max_disagreement=MAX_MODEL_MARKET_DISAGREEMENT,
+                moneyline_max_disagreement=moneyline_max_disagreement,
+                moneyline_max_odds=moneyline_max_odds,
                 simulated_prediction_time=pred_ts,
                 market_consensus_prob=cons_p,
-                model_weight=eff_weight,
-                max_disagreement=eff_dis,
                 steam_delta=s_delta,
                 conformal_interval=conf_int,
                 p_push=p_push_val,
@@ -471,12 +468,8 @@ def evaluate_scheduled_slate_candidates(
             opp["uncertainty_std"] = unc
             opp["overtime_prob"] = row_tot_pred.get("overtime_prob", 0.05)
             opp["blowout_prob"] = row_tot_pred.get("blowout_prob", 0.12)
-            final_eff_weight = float(opp.get("effective_model_weight", eff_weight))
+            final_eff_weight = float(opp["effective_model_weight"])
             opp["emitted_at"] = pred_ts
-            opp["hours_to_tipoff"] = round(hours_to_tipoff, 3)
-            opp["effective_model_weight"] = final_eff_weight
-            if mkt == "moneyline" and moneyline_max_odds is not None:
-                opp["moneyline_max_odds"] = moneyline_max_odds
 
             quote_key = (
                 str(opp["odds_provider"]),
