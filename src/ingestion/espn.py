@@ -9,7 +9,7 @@ V2 Structured Adapter for ESPN's public NBA API + optional TheOddsAPI multi-book
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import json
 import logging
 import math
@@ -32,7 +32,7 @@ from src.ingestion.normalizer import (
 )
 from src.ingestion.sportradar import SportradarAdapter
 from src.ingestion.the_odds_api import TheOddsAPIAdapter
-from src.validation.validator import parse_iso_utc
+from src.validation.validator import IN_PROGRESS_STATUS, parse_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +41,48 @@ logger = logging.getLogger(__name__)
 # consensus count one book twice and split its quote history.
 _PROVIDER_ALIASES: dict[str, str] = {"draft kings": "DraftKings"}
 
+# ESPN status types of a game that is under way (any `in` state is treated the same way).
+_ESPN_LIVE_STATUS_NAMES: frozenset[str] = frozenset(
+    {
+        "STATUS_IN_PROGRESS",
+        "STATUS_HALFTIME",
+        "STATUS_END_PERIOD",
+        "STATUS_END_OF_PERIOD",
+        "STATUS_OVERTIME",
+    }
+)
+
 
 def canonical_provider_name(name: str) -> str:
     """Maps known aliases of a book to one label (new rows only; stored history is never rewritten)."""
     return _PROVIDER_ALIASES.get(" ".join(name.split()).lower(), name)
+
+
+def map_espn_status(status_obj: dict[str, Any] | None) -> str:
+    """
+    Maps an ESPN competition status to the system's game status.
+
+    - Final, postponed and cancelled games are results (ESPN spells the last one `STATUS_CANCELED`).
+    - In progress, halftime and end of period (or any `in` state) map to `IN_PROGRESS`: a non-bettable,
+      feed-only status that ingestion never stores, so a game under way can never look `SCHEDULED`.
+    - Only a pre-game status maps to `SCHEDULED`. Any other status reported for an event that is not
+      pre-game (e.g. forfeit, abandoned) is treated as `IN_PROGRESS` as well. A missing status keeps the
+      historical default (`SCHEDULED`); ingestion still checks tip-off before storing anything.
+    """
+    type_obj = (status_obj or {}).get("type") or {}
+    name = str(type_obj.get("name") or "").strip().upper()
+    state = str(type_obj.get("state") or "").strip().lower()
+    if "POSTPONED" in name:
+        return "POSTPONED"
+    if "CANCEL" in name:
+        return "CANCELLED"
+    if "FINAL" in name:
+        return "FINAL"
+    if name in _ESPN_LIVE_STATUS_NAMES or state in ("in", "post"):
+        return IN_PROGRESS_STATUS
+    if state == "pre" or name in ("", "STATUS_SCHEDULED"):
+        return "SCHEDULED"
+    return IN_PROGRESS_STATUS
 
 
 def _has_upcoming_events(payload: dict[str, Any], now_utc: str) -> bool:
@@ -256,6 +294,10 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
         as_of_utc: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         now_utc = as_of_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            now_dt: datetime | None = parse_iso_utc(now_utc)
+        except Exception:
+            now_dt = None  # unknown fetch time: no quote can be shown to precede tip-off, none is emitted
         url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
         if date_str:
             compact_date = date_str.replace("-", "")
@@ -275,6 +317,12 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             and _has_upcoming_events(payload, now_utc)
         ):
             multi_book_odds = self.odds_api_helper.fetch_multi_book_odds_by_matchup(now_utc)
+
+        if as_of_utc is None:
+            # Stamp (and check tip-off against) the moment the responses arrived, not the call entry: a
+            # request started just before tip-off can return in-game prices after it.
+            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            now_dt = parse_iso_utc(now_utc)
 
         sr_context = SportradarAdapter().fetch_league_intelligence_context()
         sr_injuries = sr_context.get("injury_penalties", {})
@@ -311,15 +359,36 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 game_start_time = raw_date
 
             matchday_date = game_start_time[:10]
-            status_name = comp.get("status", {}).get("type", {}).get("name", "STATUS_SCHEDULED")
-            if "FINAL" in status_name:
-                status = "FINAL"
-            elif "POSTPONED" in status_name:
-                status = "POSTPONED"
-            elif "CANCELLED" in status_name:
-                status = "CANCELLED"
-            else:
-                status = "SCHEDULED"
+            status = map_espn_status(comp.get("status"))
+            game_id = f"ESPN_{ev_id}_{matchday_date}_{away_code}_AT_{home_code}"
+
+            start_dt_val: datetime | None = None
+            try:
+                start_dt_val = parse_iso_utc(game_start_time) if game_start_time else None
+            except Exception:
+                start_dt_val = None
+
+            if status == IN_PROGRESS_STATUS:
+                # A game under way: nothing computed now is pre-game information, so no summary or box
+                # score is fetched and no quote is emitted. Ingestion keeps the stored pre-game row as is.
+                games_out.append(
+                    {
+                        "game_id": game_id,
+                        "season": season_label,
+                        "matchday_date": matchday_date,
+                        "game_start_time": game_start_time,
+                        "home_team": home_code,
+                        "away_team": away_code,
+                        "status": status,
+                        "home_score": None,
+                        "away_score": None,
+                        "features_available_at": now_utc,
+                        "source_provider": self.provider_name,
+                        "ingested_at": now_utc,
+                        "result_recorded_at": None,
+                    }
+                )
+                continue
 
             home_score = None
             away_score = None
@@ -329,8 +398,6 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                     away_score = int(away_comp.get("score", 0))
                 except (ValueError, TypeError):
                     pass
-
-            game_id = f"ESPN_{ev_id}_{matchday_date}_{away_code}_AT_{home_code}"
 
             ctx = self._fetch_event_summary_context(ev_id)
             inj_penalties = ctx["injury_penalties"]
@@ -381,19 +448,10 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             h_rest = self._compute_team_rest_days(home_code, matchday_date)
             a_rest = self._compute_team_rest_days(away_code, matchday_date)
 
-            start_dt_val = None
+            # The feature snapshot is computed now, so it is available from the ingestion time on. A game
+            # first seen after tip-off therefore carries a post-tip availability and can never pass as a
+            # pre-game snapshot (the former "tip-off − 2 h" stamp claimed a time before the real capture).
             feat_avail = now_utc
-            if game_start_time:
-                try:
-                    start_dt_val = parse_iso_utc(game_start_time)
-                    # The pre-game feature snapshot is computed now, so for an upcoming game its
-                    # availability is the ingestion time (a "tip-off − 2 h" stamp is a time in the
-                    # future and was being reused as the decision timestamp). Games already under way
-                    # or finished keep the historical "tip-off − 2 h" convention.
-                    if parse_iso_utc(now_utc) >= start_dt_val:
-                        feat_avail = (start_dt_val - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                except Exception:
-                    feat_avail = now_utc
 
             games_out.append(
                 {
@@ -421,18 +479,12 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                 }
             )
 
-            # Ingest odds snapshots with strict pre-game temporal consistency
-            if start_dt_val is not None:
-                try:
-                    now_dt = parse_iso_utc(now_utc)
-                    if now_dt >= start_dt_val:
-                        odds_captured_at = (start_dt_val - timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                    else:
-                        odds_captured_at = now_utc
-                except Exception:
-                    odds_captured_at = now_utc
-            else:
-                odds_captured_at = now_utc
+            # Quotes are only emitted for a game that has not started, stamped with the moment they were
+            # fetched. A quote fetched at or after tip-off (or for a game that is not pre-game) is dropped,
+            # never stamped with an earlier time (the former "tip-off − 15 min" stamp backdated in-game prices).
+            if status != "SCHEDULED" or start_dt_val is None or now_dt is None or now_dt >= start_dt_val:
+                continue
+            odds_captured_at = now_utc
 
             lookup_key = (matchday_date, away_code, home_code)
             if lookup_key in multi_book_odds:
@@ -453,6 +505,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                             "decimal_odds": scraped_quote["decimal_odds"],
                             "counterpart_decimal_odds": scraped_quote.get("counterpart_decimal_odds"),
                             "captured_at": odds_captured_at,
+                            "fetched_at": now_utc,
                             "is_closing_line": 0,
                             "source_type": scraped_quote.get("source_type", "OBSERVED"),
                         }
@@ -484,6 +537,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                     "decimal_odds": h_dec,
                                     "counterpart_decimal_odds": a_dec,
                                     "captured_at": captured_at,
+                                    "fetched_at": now_utc,
                                     "is_closing_line": 0,
                                     "source_type": "OBSERVED",
                                 }
@@ -499,6 +553,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                     "decimal_odds": a_dec,
                                     "counterpart_decimal_odds": h_dec,
                                     "captured_at": captured_at,
+                                    "fetched_at": now_utc,
                                     "is_closing_line": 0,
                                     "source_type": "OBSERVED",
                                 }
@@ -528,6 +583,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                     "decimal_odds": o_dec,
                                     "counterpart_decimal_odds": u_dec,
                                     "captured_at": captured_at,
+                                    "fetched_at": now_utc,
                                     "is_closing_line": 0,
                                     "source_type": "OBSERVED",
                                 }
@@ -543,6 +599,7 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                                     "decimal_odds": u_dec,
                                     "counterpart_decimal_odds": o_dec,
                                     "captured_at": captured_at,
+                                    "fetched_at": now_utc,
                                     "is_closing_line": 0,
                                     "source_type": "OBSERVED",
                                 }

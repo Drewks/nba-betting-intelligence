@@ -92,6 +92,9 @@ def backfill(db: DatabaseManager, start: date, end: date, workers: int = 8) -> d
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     before = (db.fetch_one("SELECT COUNT(*) AS c FROM games") or {"c": 0})["c"]
     with db.connect() as conn:
+        # Historical replay rows: `features_available_at` = tip-off − 2 h is the simulated decision time of
+        # the walk-forward replay (ratings are recomputed from earlier results only), not a capture claim.
+        # Games already stored (e.g. ingested live) are never re-inserted.
         conn.executemany(
             """
             INSERT OR IGNORE INTO games (
@@ -99,14 +102,16 @@ def backfill(db: DatabaseManager, start: date, end: date, workers: int = 8) -> d
                 status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
                 away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
                 features_available_at, source_provider, ingested_at, result_recorded_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'FINAL', ?, ?, 114.5, 114.5, 99.5, 114.5, 114.5, 99.5, 3, 3,
-                      ?, 'espn_history_backfill', ?, ?)
+            )
+            SELECT ?, ?, ?, ?, ?, ?, 'FINAL', ?, ?, 114.5, 114.5, 99.5, 114.5, 114.5, 99.5, 3, 3,
+                   ?, 'espn_history_backfill', ?, ?
+            WHERE NOT EXISTS (SELECT 1 FROM games WHERE game_id = ?)
             """,
             [
                 (
                     g["game_id"], g["season"], g["matchday_date"], g["game_start_time"],
                     g["home_team"], g["away_team"], g["home_score"], g["away_score"],
-                    g["features_available_at"], now_str, g["result_recorded_at"],
+                    g["features_available_at"], now_str, g["result_recorded_at"], g["game_id"],
                 )
                 for g in games.values()
             ],

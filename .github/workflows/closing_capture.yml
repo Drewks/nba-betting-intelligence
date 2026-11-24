@@ -83,7 +83,9 @@ jobs:
             wait_for_main_cycle || { echo "El ciclo principal no termina; salto esta iteración."; sleep 60; continue; }
             git fetch --depth=1 origin state-live
             BASE="$(git rev-parse origin/state-live)"
-            git checkout "${BASE}" -- data/nba_intelligence.sqlite3
+            # Decompresses BASE's data/nba_intelligence.sqlite3.gz (or the uncompressed file of a commit from
+            # before the compression) and stops the loop unless PRAGMA integrity_check returns ok.
+            python3 -m src.storage.state_live restore "${BASE}"
             UPCOMING="$(uv run python scripts/capture_closing_odds.py --count-upcoming "$HORIZON_MINUTES" | tail -n 1)"
             echo "Partidos que empiezan en los próximos ${HORIZON_MINUTES} min: ${UPCOMING}"
             if [ "${UPCOMING}" = "0" ]; then
@@ -94,11 +96,12 @@ jobs:
             uv run python -c "from src.storage.db import DatabaseManager; DatabaseManager('data/nba_intelligence.sqlite3').checkpoint(truncate=True)"
             FP_AFTER="$(uv run python scripts/capture_closing_odds.py --fingerprint | tail -n 1)"
             # Opening the database rewrites its bytes, so a byte diff is not a data change: push only when
-            # the capture added rows, otherwise every iteration would add another 44 MB to state-live.
+            # the capture added rows, otherwise every iteration would push another copy of the database.
             if [ "${FP_BEFORE}" != "${FP_AFTER}" ]; then
               # Replace only the database in state-live's own tree, and never push over a main cycle.
+              # stage writes data/nba_intelligence.sqlite3.gz (gzip -6 -n) and drops the uncompressed file.
               git read-tree "${BASE}"
-              git add -f data/nba_intelligence.sqlite3
+              python3 -m src.storage.state_live stage
               TREE_SHA="$(git write-tree)"
               git fetch --depth=1 origin state-live
               if [ "$(git rev-parse origin/state-live)" = "${BASE}" ] && [ "$(main_cycle_busy)" = "0" ]; then

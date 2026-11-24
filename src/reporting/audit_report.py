@@ -9,6 +9,7 @@ from importlib.metadata import PackageNotFoundError, version as pkg_version
 from typing import Any
 
 from src.config import load_config
+from src.storage.state_live import LIVE_SOURCE_OF_TRUTH
 
 
 def _odds_integrity_line(oi: dict[str, Any]) -> str:
@@ -22,6 +23,21 @@ def _odds_integrity_line(oi: dict[str, Any]) -> str:
         f"cuotas copiadas entre partidos sin cuarentena: `{oi.get('unquarantined_copied_quotes', 0)}` "
         f"(detectadas `{oi.get('copied_live_quotes', 0)}`); decisiones fechadas después de su ciclo: "
         f"`{ts.get('post_fix', 0)}` (heredadas previas al arreglo: `{ts.get('legacy', 0)}`)"
+    )
+
+
+def _temporal_integrity_line(ti: dict[str, Any]) -> str:
+    """Game rows written after tip-off that claim pre-game availability, and quotes stamped before their fetch."""
+    if not ti:
+        return "- **Integridad temporal de ingestión (filas tras el tip-off / cuotas retrofechadas)**: `n/d`"
+    return (
+        f"- **Integridad temporal de ingestión**: `{'ÍNTEGRO' if ti.get('passed') else 'VIOLACIÓN'}` — "
+        f"partidos ingeridos tras el tip-off con `features_available_at` previo al tip-off sin reparación auditada: "
+        f"`{ti.get('unrecorded_post_tipoff_games', 0)}` (registrados en `audit_repairs`: "
+        f"`{ti.get('recorded_post_tipoff_games', 0)}`); cuotas con `captured_at` anterior a su descarga sin "
+        f"registro y cuarentena: `{ti.get('unresolved_backdated_odds', 0)}` (detectadas `{ti.get('backdated_odds', 0)}`, "
+        f"cierres `{ti.get('backdated_closing_lines', 0)}`); triggers de congelamiento temporal: "
+        f"`{'ACTIVOS' if ti.get('temporal_freeze_triggers_active') else 'AUSENTES'}`"
     )
 
 
@@ -73,7 +89,7 @@ def generate_audit_report(
     db_provenance = (
         f"{db_role.get('active_role')} (`live: {db_role.get('live_source_of_truth')}` | `main: {db_role.get('main_branch_db_policy')}`)"
         if isinstance(db_role, dict) and db_role.get("active_role")
-        else "`origin/state-live:data/nba_intelligence.sqlite3` (viva) | `main` congelada para CI"
+        else f"`{LIVE_SOURCE_OF_TRUTH}` (viva) | `main` congelada para CI"
     )
     shadow_info = audit_result.get("shadow_ledger") or {}
     shadow_txt = (
@@ -113,6 +129,7 @@ def generate_audit_report(
             f" — faltantes por tabla: `{(audit_result.get('history_integrity') or {}).get('missing_rows_by_table', {})}`"
         ),
         _odds_integrity_line(audit_result.get("odds_and_decision_integrity") or {}),
+        _temporal_integrity_line(audit_result.get("temporal_ingestion_integrity") or {}),
         f"- **Inconsistencias del ledger**: `{audit_result.get('ledger_issues_count', 'n/d')}`",
         f"- **Reproducibilidad**: `{repro_note}`",
         "",

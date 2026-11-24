@@ -11,6 +11,7 @@ Ingeniero de datos deportivos encargado de la recopilación, normalización y va
 - Normalizar nombres, abreviaturas de los 30 equipos NBA, temporadas e identificadores canónicos.
 - Detectar registros duplicados, incompletos, cuotas inválidas ($\le 1.0$) o contradictorias.
 - Verificar rigurosamente que cada dato y cuota utilizada estaba disponible antes del inicio del partido (`available_at < game_start_time`).
+- Un partido ya almacenado nunca se reinserta: solo se aplican transiciones de estado/marcador (y un tip-off reprogramado mientras el almacenado sigue por delante); sus features, `features_available_at` e `ingested_at` no cambian. Los estados ESPN en curso, descanso y fin de periodo se mapean a `IN_PROGRESS` (solo del feed: nunca se almacena ni es apostable). Las cuotas descargadas desde el tip-off se descartan: nunca se sellan con una hora anterior a su descarga (`fetched_at`).
 
 ## Restricciones
 - Prohibido inventar valores cuando falte una fuente; debe marcar el campo como no disponible (`DATA_UNAVAILABLE`) y bloquear la predicción si falta una variable esencial.

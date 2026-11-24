@@ -170,6 +170,8 @@ def run_walk_forward_simulation(
 
     with db.connect() as conn:
         for g in sorted_games:
+            # Only games not stored yet are inserted: a stored row is never re-inserted or replaced
+            # (the games temporal-freeze triggers reject a different copy of a started game).
             conn.execute(
                 """
                 INSERT OR IGNORE INTO games (
@@ -177,7 +179,9 @@ def run_walk_forward_simulation(
                     status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
                     away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
                     features_available_at, source_provider, ingested_at, result_recorded_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                )
+                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                WHERE NOT EXISTS (SELECT 1 FROM games WHERE game_id = ?)
                 """,
                 (
                     g["game_id"],
@@ -201,6 +205,7 @@ def run_walk_forward_simulation(
                     g["source_provider"],
                     g["ingested_at"],
                     g.get("result_recorded_at"),
+                    g["game_id"],
                 ),
             )
 

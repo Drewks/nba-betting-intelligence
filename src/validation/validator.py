@@ -61,11 +61,25 @@ def parse_iso_utc(ts_str: str) -> datetime:
     return dt
 
 
+RESULT_STATUSES: frozenset[str] = frozenset({"FINAL", "POSTPONED", "CANCELLED"})
+
+# A game the feed reports as under way (in progress, halftime, end of a period). It is a feed-only status:
+# it is never stored in `games` (whose CHECK constraint does not allow it) and never bettable. Ingestion
+# leaves the stored pre-game row untouched until the result arrives.
+IN_PROGRESS_STATUS = "IN_PROGRESS"
+LIVE_STATUSES: frozenset[str] = frozenset({IN_PROGRESS_STATUS})
+
+
 def validate_game_record(
     game: dict[str, Any],
     simulated_prediction_time: str | None = None,
 ) -> dict[str, Any]:
     """Validates a game dictionary and verifies zero temporal leakage."""
+    if str(game.get("status") or "") in LIVE_STATUSES:
+        raise DataValidationError(
+            f"Game {game.get('game_id')} is in progress (status {game.get('status')!r}): "
+            "a live game is never a pre-game record"
+        )
     required_keys = [
         "game_id",
         "season",
@@ -109,9 +123,6 @@ def validate_game_record(
             )
 
     return game
-
-
-RESULT_STATUSES: frozenset[str] = frozenset({"FINAL", "POSTPONED", "CANCELLED"})
 
 
 def validate_result_record(game: dict[str, Any]) -> dict[str, Any]:
@@ -234,6 +245,33 @@ def validate_odds_record(
                 f"captured_at ({odds.get('captured_at')}) > prediction_time ({simulated_prediction_time})"
             )
 
+    return odds
+
+
+def validate_odds_fetch_provenance(odds: dict[str, Any], fetch_started_at: str) -> dict[str, Any]:
+    """
+    Checks the capture timestamp of a quote against the moment it was fetched.
+
+    `fetched_at` (when the adapter declares it) is the wall-clock moment the quote was fetched. A quote can
+    never be stamped earlier than that moment (`captured_at < fetched_at` is a backdated stamp, e.g. the
+    removed "tip-off − 15 min" convention for quotes fetched after tip-off), and the fetch itself cannot
+    precede `fetch_started_at`, the moment the caller started the fetch. Quotes without `fetched_at`
+    carry no fetch record and are left to the other checks.
+    """
+    fetched_raw = odds.get("fetched_at")
+    if not fetched_raw:
+        return odds
+    fetched_dt = parse_iso_utc(str(fetched_raw))
+    if fetched_dt < parse_iso_utc(fetch_started_at):
+        raise TemporalLeakageError(
+            f"Quote {odds.get('odds_id')} declares fetched_at ({fetched_raw}) before the fetch started "
+            f"({fetch_started_at})"
+        )
+    if parse_iso_utc(str(odds.get("captured_at", ""))) < fetched_dt:
+        raise TemporalLeakageError(
+            f"BACKDATED_CAPTURE: quote {odds.get('odds_id')} captured_at ({odds.get('captured_at')}) precedes "
+            f"the moment it was fetched ({fetched_raw})"
+        )
     return odds
 
 

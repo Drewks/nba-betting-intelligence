@@ -39,7 +39,10 @@ def test_workflow_runs_tests_before_restoring_live_state() -> None:
     names = [str(s.get("name", "")) for s in steps]
     run_text = [str(s.get("run", "")) for s in steps]
     test_idx = next(i for i, r in enumerate(run_text) if "uv run pytest" in r)
-    restore_idx = next(i for i, r in enumerate(run_text) if "state-live" in r and "git checkout" in r)
+    # Since 2026-11-24 the live database is decompressed from state-live's .gz instead of checked out
+    restore_idx = next(
+        i for i, r in enumerate(run_text) if "state-live" in r and "src.storage.state_live restore" in r
+    )
     cycle_idx = next(i for i, n in enumerate(names) if "Ciclo de Inteligencia" in n)
     assert test_idx < restore_idx < cycle_idx
 
