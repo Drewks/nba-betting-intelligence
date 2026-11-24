@@ -40,6 +40,24 @@ def _load_dotenv_if_present() -> None:
 _load_dotenv_if_present()
 
 
+# Characters Telegram's legacy Markdown treats as markup outside an entity.
+_MARKDOWN_CONTROL_CHARS = ("_", "*", "`", "[")
+
+
+def escape_markdown(value: Any) -> str:
+    """
+    Escapes dynamic text placed OUTSIDE a Markdown entity (inside `code` or *bold* Telegram reads the
+    text literally, so values there need nothing). Game ids (ESPN_401910036_2026-11-24_MEM_AT_CHA),
+    markets (total_points) and provider labels ([LIVE_API]) carry these characters: outside an entity
+    every '_' opens or closes italics, so an odd count leaves an entity open and Telegram rejects the
+    whole message with HTTP 400 "Can't find end of the entity".
+    """
+    text = str(value)
+    for ch in _MARKDOWN_CONTROL_CHARS:
+        text = text.replace(ch, "\\" + ch)
+    return text
+
+
 class TelegramAlertBot:
     """
     Automated Telegram notification dispatcher for NBA Betting Intelligence.
@@ -190,10 +208,13 @@ class TelegramAlertBot:
             cat = leg.get("category", "")
             sel = leg.get("selection", "")
             line = leg.get("line", "")
-            legs_text += f"  {i}. {p_n} {cat} {sel} {line}\n"
+            legs_text += f"  {i}. {escape_markdown(f'{p_n} {cat} {sel} {line}')}\n"
 
         if not legs_text:
-            legs_text = f"  • {sgp.get('player_name', 'Player')} + {sgp.get('game_selection', 'Selection')}\n"
+            legs_text = (
+                f"  • {escape_markdown(sgp.get('player_name', 'Player'))} + "
+                f"{escape_markdown(sgp.get('game_selection', 'Selection'))}\n"
+            )
 
         msg = (
             f"🔥 *[COMBO ALPHA S/50] (SGP Cópulas Correlacionadas {num_legs}-Legs)*\n"
@@ -230,7 +251,7 @@ class TelegramAlertBot:
             leg_p_str = f"{float(leg_p_raw) * 100.0:.1f}%" if leg_p_raw is not None else "N/A"
             leg_odds_raw = leg.get("odds")
             leg_odds_str = f"{float(leg_odds_raw):.2f}" if leg_odds_raw is not None and float(leg_odds_raw) > 1.0 else "N/A"
-            legs_text += f"  {i}. {desc} @ `{leg_odds_str}` (Prob: `{leg_p_str}`)\n"
+            legs_text += f"  {i}. {escape_markdown(desc)} @ `{leg_odds_str}` (Prob: `{leg_p_str}`)\n"
 
         msg = (
             f"🔥 *[COMBO ALPHA S/50] (Parlay de Alta Consistencia)*\n"
@@ -296,10 +317,10 @@ class TelegramAlertBot:
             f"💰 *ARBITRAJE LIBRE DE RIESGO (SUREBET PERÚ)*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⚡ *Retorno Matemático Garantizado!*\n"
-            f"🏦 *Apuesta 1:* {b_a}\n"
+            f"🏦 *Apuesta 1:* {escape_markdown(b_a)}\n"
             f"  • Selección: *{sel_a}* @ `{odds_a_str}`\n"
             f"  • Inversión: *S/ {stake_a:.2f} PEN*\n"
-            f"🏦 *Apuesta 2:* {b_b}\n"
+            f"🏦 *Apuesta 2:* {escape_markdown(b_b)}\n"
             f"  • Selección: *{sel_b}* @ `{odds_b_str}`\n"
             f"  • Inversión: *S/ {stake_b:.2f} PEN*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -366,7 +387,7 @@ class TelegramAlertBot:
             line = item.get("line_value") or ""
             sel = item.get("selection") or ""
             target = f"{cat} {sel} {line}".strip()
-            detail_line = f"  {i}. {icon} {desc} {target} ({sign_item}S/ {pnl_item:.2f})\n"
+            detail_line = f"  {i}. {icon} {escape_markdown(desc)} {escape_markdown(target)} ({sign_item}S/ {pnl_item:.2f})\n"
             items_detail += detail_line
 
         if total_count > 8:
@@ -383,7 +404,7 @@ class TelegramAlertBot:
             p_detail = ""
             for sp in s_parlays:
                 s_icon = "✅" if sp.get("status") == "WON" else ("❌" if sp.get("status") == "LOST" else "⏸️")
-                p_detail += f"    • {s_icon} `{sp.get('parlay_id')}`: {sp.get('summary', '')} ({sp.get('net_profit_pen', 0):+.2f} PEN)\n"
+                p_detail += f"    • {s_icon} `{sp.get('parlay_id')}`: {escape_markdown(sp.get('summary', ''))} ({sp.get('net_profit_pen', 0):+.2f} PEN)\n"
 
             parlay_section = (
                 f"\n🔥 *Sub-Bankroll Combinadas (S/ 50.00 PEN — Alpha Lab):*\n"
