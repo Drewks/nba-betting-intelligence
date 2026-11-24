@@ -319,6 +319,8 @@ def persist_closing_lines_for_games(
                         "decimal_odds": s["decimal_odds"],
                         "counterpart_decimal_odds": s["counterpart_decimal_odds"],
                         "captured_at": s["captured_at"],
+                        # A closing line is a copy of an earlier capture: it keeps that capture's fetch moment.
+                        "fetched_at": dict(s).get("fetched_at"),
                         "is_closing_line": 1,
                         "source_type": s["source_type"],
                     },

@@ -19,6 +19,14 @@ import sqlite3
 from typing import Any
 
 from src.validation.odds_integrity import find_copied_live_quotes
+from src.validation.temporal_integrity import (
+    LEGACY_BACKDATED_ODDS_OFFSET_MINUTES,
+    QUARANTINE_REASON_BACKDATED_ODDS,
+    REPAIR_ACTION_BACKDATED_ODDS,
+    REPAIR_ACTION_POST_TIPOFF_GAME,
+    find_backdated_odds,
+    find_post_tipoff_ingested_games,
+)
 from src.storage.migrations_v1 import (
     RECOVERY_BUNDLE_PATH,
     RESTORE_PROBE_GAME_ID,
@@ -52,6 +60,9 @@ __all__ = [
     "m011_reconcile_observed_ledger_and_player_boxscores",
     "m012_separate_prob_semantics_spread_and_manifests",
     "m013_add_shadow_candidates_and_version_indexes",
+    "m014_quarantine_misattributed_same_pair_quotes",
+    "m015_add_boxscore_fetch_failures",
+    "m016_freeze_pregame_timestamps_and_record_backdated_rows",
     "run_migrations",
 ]
 
@@ -802,6 +813,139 @@ def m015_add_boxscore_fetch_failures(
     return {"action": "boxscore_fetch_failures_created"}
 
 
+def m016_freeze_pregame_timestamps_and_record_backdated_rows(
+    conn: sqlite3.Connection,
+    migration_id: str,
+) -> dict[str, Any]:
+    """
+    Temporal integrity of the stored trail (AGENTS.md principle 3).
+
+    Until 2026-11-24 the data scout re-inserted stored games with INSERT OR REPLACE whenever the feed reported
+    them with a non-final status (ESPN in-progress statuses were mapped to SCHEDULED), so rows were replaced
+    during the game with values computed then, `ingested_at` became a time after tip-off and
+    `features_available_at` was backdated to tip-off − 2 h. Quotes fetched after tip-off were stamped
+    tip-off − 15 min. Both writes were removed from ingestion. This migration:
+
+    1. Adds `odds_snapshots.fetched_at` (the moment a quote was fetched; NULL for legacy rows).
+    2. Installs the temporal-freeze triggers: `features_available_at` / `ingested_at` of a started game cannot
+       change (UPDATE or INSERT OR REPLACE), and no quote can be stored with `captured_at` before `fetched_at`.
+       The rating columns stay writable: `apply_pregame_team_ratings` recomputes them every cycle.
+    3. Records every affected row through `audit_repairs`. Nothing is deleted or rewritten: the original
+       pre-game values were overwritten and cannot be recovered, and predictions keep their own feature
+       snapshot. Backdated quotes (and their closing-line copies) are quarantined, so no decision,
+       closing-line promotion or CLV uses an in-game price stamped as a pre-game one.
+    """
+    from src.storage.schema import BACKDATED_ODDS_TRIGGER_DDL, DDL_STATEMENTS
+
+    odds_cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(odds_snapshots)").fetchall()}
+    column_added = "fetched_at" not in odds_cols
+    if column_added:
+        conn.execute("ALTER TABLE odds_snapshots ADD COLUMN fetched_at TEXT")
+
+    for ddl in DDL_STATEMENTS:
+        if "prevent_started_game_temporal_" in ddl:
+            conn.execute(ddl)
+    conn.execute(BACKDATED_ODDS_TRIGGER_DDL)
+
+    already_games = {
+        str(r[0])
+        for r in conn.execute(
+            "SELECT row_pk FROM audit_repairs WHERE table_name = 'games' AND action = ?",
+            (REPAIR_ACTION_POST_TIPOFF_GAME,),
+        ).fetchall()
+    }
+    games_recorded = 0
+    games_with_predictions = 0
+    for g in find_post_tipoff_ingested_games(conn):
+        if str(g["game_id"]) in already_games:
+            continue
+        games_with_predictions += int(int(g["predictions"] or 0) > 0)
+        _log_repair(
+            conn,
+            migration_id,
+            "games",
+            g["game_id"],
+            REPAIR_ACTION_POST_TIPOFF_GAME,
+            (
+                f"ingested_at {g['ingested_at']} is {g['ingested_minutes_after_tipoff']} min after tip-off "
+                f"{g['game_start_time']} while features_available_at {g['features_available_at']} precedes it: the "
+                "pre-game row was replaced after tip-off (or first stored after tip-off with a 'tip-off - 2 h' "
+                "stamp). The original pre-game values cannot be recovered; the row is kept as is and frozen. "
+                f"status={g['status']}, predictions={g['predictions']} (each keeps its own feature snapshot), "
+                f"bets={g['bets']}."
+            ),
+        )
+        games_recorded += 1
+
+    already_odds = {
+        str(r[0])
+        for r in conn.execute(
+            "SELECT row_pk FROM audit_repairs WHERE table_name = 'odds_snapshots' AND action = ?",
+            (REPAIR_ACTION_BACKDATED_ODDS,),
+        ).fetchall()
+    }
+    now = _now()
+    odds_recorded = 0
+    closing_recorded = 0
+    odds_quarantined = 0
+    for o in find_backdated_odds(conn):
+        if str(o["odds_id"]) in already_odds:
+            continue
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO quarantined_odds (odds_id, reason, quarantined_at) VALUES (?, ?, ?)",
+            (o["odds_id"], QUARANTINE_REASON_BACKDATED_ODDS, now),
+        )
+        odds_quarantined += int(cur.rowcount > 0)
+        is_close = int(o["is_closing_line"] or 0) == 1
+        closing_recorded += int(is_close)
+        if o["fetched_at"]:
+            evidence = f"captured_at {o['captured_at']} precedes its recorded fetch moment {o['fetched_at']}"
+        else:
+            evidence = (
+                f"captured_at {o['captured_at']} = tip-off {o['game_start_time']} - "
+                f"{LEGACY_BACKDATED_ODDS_OFFSET_MINUTES} min: the ESPN adapter stamped quotes it fetched at or "
+                "after tip-off with this time"
+            )
+        _log_repair(
+            conn,
+            migration_id,
+            "odds_snapshots",
+            o["odds_id"],
+            REPAIR_ACTION_BACKDATED_ODDS,
+            (
+                f"{evidence} ({o['signature']}). "
+                f"{'Closing-line copy' if is_close else 'Quote'} of {o['provider']} {o['market']} {o['selection']} "
+                f"@ {o['decimal_odds']}; first registered by the auditor at {o['first_registered_at'] or 'n/a'}. "
+                f"Kept unchanged and quarantined ({QUARANTINE_REASON_BACKDATED_ODDS}): excluded from decisions, "
+                "closing-line promotion and CLV."
+            ),
+        )
+        odds_recorded += 1
+
+    _log_repair(
+        conn,
+        migration_id,
+        "games",
+        "TEMPORAL_FREEZE",
+        "INSTALL_TEMPORAL_FREEZE_TRIGGERS",
+        (
+            "Installed triggers freezing features_available_at/ingested_at of started games (UPDATE and "
+            "INSERT OR REPLACE) and rejecting quotes captured before they were fetched; "
+            f"{'added' if column_added else 'kept'} odds_snapshots.fetched_at. Recorded {games_recorded} games "
+            f"ingested after tip-off ({games_with_predictions} with predictions) and {odds_recorded} backdated "
+            f"quotes ({closing_recorded} closing lines, {odds_quarantined} newly quarantined)."
+        ),
+    )
+    return {
+        "fetched_at_column_added": column_added,
+        "post_tipoff_games_recorded": games_recorded,
+        "post_tipoff_games_with_predictions": games_with_predictions,
+        "backdated_odds_recorded": odds_recorded,
+        "backdated_closing_lines_recorded": closing_recorded,
+        "backdated_odds_quarantined": odds_quarantined,
+    }
+
+
 MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]] = [
     ("2026_11_09_001_add_odds_source_type", m001_add_odds_source_type),
     ("2026_11_09_002_drop_unique_prediction_dedup_index", m002_drop_unique_prediction_dedup_index),
@@ -818,6 +962,10 @@ MIGRATIONS: list[tuple[str, Callable[[sqlite3.Connection, str], dict[str, Any]]]
     ("2026_11_15_013_add_shadow_candidates_and_version_indexes", m013_add_shadow_candidates_and_version_indexes),
     ("2026_11_16_014_quarantine_misattributed_same_pair_quotes", m014_quarantine_misattributed_same_pair_quotes),
     ("2026_11_23_015_add_boxscore_fetch_failures", m015_add_boxscore_fetch_failures),
+    (
+        "2026_11_24_016_freeze_pregame_timestamps_and_record_backdated_rows",
+        m016_freeze_pregame_timestamps_and_record_backdated_rows,
+    ),
 ]
 
 
