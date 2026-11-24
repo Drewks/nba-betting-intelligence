@@ -775,7 +775,9 @@ def test_t018_workflows_least_privilege_and_ci_branch_gate() -> None:
     assert cycle_perms == {"contents": "write"}
     assert "issues" not in cycle_perms
     pages_perms = jobs["deploy-pages"]["permissions"]
-    assert pages_perms == {"contents": "read", "pages": "write", "id-token": "write"}
+    # actions: read (read-only) lets the job confirm the run lists the Pages artifact before deploying
+    # (2026-11-24: deploy-pages failed when the artifact list lagged behind the upload).
+    assert pages_perms == {"contents": "read", "pages": "write", "id-token": "write", "actions": "read"}
 
     auto_raw = (PROJECT_ROOT / ".github" / "workflows" / "nba_cloud_automation.yml").read_text(encoding="utf-8")
     assert "git push origin main" not in auto_raw

@@ -9,6 +9,7 @@ from importlib.metadata import PackageNotFoundError, version as pkg_version
 from typing import Any
 
 from src.config import load_config
+from src.storage.state_live import LIVE_SOURCE_OF_TRUTH
 
 
 def _odds_integrity_line(oi: dict[str, Any]) -> str:
@@ -88,7 +89,7 @@ def generate_audit_report(
     db_provenance = (
         f"{db_role.get('active_role')} (`live: {db_role.get('live_source_of_truth')}` | `main: {db_role.get('main_branch_db_policy')}`)"
         if isinstance(db_role, dict) and db_role.get("active_role")
-        else "`origin/state-live:data/nba_intelligence.sqlite3` (viva) | `main` congelada para CI"
+        else f"`{LIVE_SOURCE_OF_TRUTH}` (viva) | `main` congelada para CI"
     )
     shadow_info = audit_result.get("shadow_ledger") or {}
     shadow_txt = (

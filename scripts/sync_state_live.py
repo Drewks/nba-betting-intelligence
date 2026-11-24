@@ -2,6 +2,9 @@
 Synchronizes and verifies the live production SQLite database from `origin/state-live`
 into an isolated runtime path without mutating the tracked frozen CI baseline on `main`.
 
+state-live stores the database gzip-compressed as `data/nba_intelligence.sqlite3.gz`; it is
+decompressed with the same code the workflows use (`src/storage/state_live.py`).
+
 Usage:
   uv run python scripts/sync_state_live.py
   uv run python scripts/sync_state_live.py --out C:/Temp/state_live.sqlite3 --apply-migrations
@@ -10,7 +13,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,6 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.storage.db import DatabaseManager
+from src.storage.state_live import LIVE_DB_PATH, LIVE_SOURCE_OF_TRUTH, restore_live_db
 
 
 def extract_state_live_db(
@@ -35,9 +38,13 @@ def extract_state_live_db(
     fetch: bool = True,
     allow_tracked_overwrite: bool = False,
 ) -> dict[str, Any]:
-    """Extracts `data/nba_intelligence.sqlite3` from `origin/state-live` as binary bytes."""
+    """
+    Writes the live database of `origin/state-live` to `out_path`: `data/nba_intelligence.sqlite3.gz`
+    decompressed (or the uncompressed file of a commit from before the compression). Raises unless the
+    result passes `PRAGMA integrity_check`.
+    """
     resolved_out = Path(out_path).resolve()
-    tracked_main_db = (repo_root / "data" / "nba_intelligence.sqlite3").resolve()
+    tracked_main_db = (repo_root / LIVE_DB_PATH).resolve()
     if resolved_out == tracked_main_db and not allow_tracked_overwrite:
         raise RuntimeError(
             "Refusing to overwrite tracked `data/nba_intelligence.sqlite3` on `main`; "
@@ -67,23 +74,14 @@ def extract_state_live_db(
         raise RuntimeError(f"Unable to resolve {remote_ref}: {proc_sha.stderr.strip()}")
     commit_sha = proc_sha.stdout.strip()
 
-    proc_blob = subprocess.run(
-        ["git", "show", f"{remote_ref}:data/nba_intelligence.sqlite3"],
-        cwd=str(repo_root),
-        capture_output=True,
-        check=False,
-    )
-    if proc_blob.returncode != 0 or not proc_blob.stdout:
-        raise RuntimeError(f"git show {remote_ref}:data/nba_intelligence.sqlite3 failed")
-
-    resolved_out.parent.mkdir(parents=True, exist_ok=True)
-    resolved_out.write_bytes(proc_blob.stdout)
+    restored = restore_live_db(commit_sha, resolved_out, repo_root=repo_root)
     return {
         "source_ref": remote_ref,
         "source_commit_sha": commit_sha,
+        "source_path": restored["source_path"],
         "output_path": str(resolved_out),
-        "size_bytes": len(proc_blob.stdout),
-        "sha256": hashlib.sha256(proc_blob.stdout).hexdigest(),
+        "size_bytes": restored["size_bytes"],
+        "sha256": restored["sha256"],
     }
 
 
@@ -125,7 +123,7 @@ def inspect_sqlite_summary(db_path: Path, *, apply_migrations: bool = False) -> 
         "observed_settled_bets_count": settled_bets,
         "shadow_candidates_count": shadow_count,
         "latest_migration_id": str(latest_mig[0]) if latest_mig else None,
-        "live_source_of_truth": "origin/state-live:data/nba_intelligence.sqlite3",
+        "live_source_of_truth": LIVE_SOURCE_OF_TRUTH,
         "main_branch_db_policy": "FROZEN_CI_BASELINE",
     }
 

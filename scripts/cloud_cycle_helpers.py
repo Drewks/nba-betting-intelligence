@@ -39,6 +39,7 @@ from src.prediction.ev_calculator import (
     resolve_market_anchor_weight,
     select_best_line_shopping_candidates,
 )
+from src.storage.state_live import LIVE_SOURCE_OF_TRUTH
 from src.validation.validator import parse_iso_utc, validate_game_record, validate_odds_record
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ def determine_database_role(
     return {
         "active_role": role,
         "db_path": str(target_db_path),
-        "live_source_of_truth": "origin/state-live:data/nba_intelligence.sqlite3",
+        "live_source_of_truth": LIVE_SOURCE_OF_TRUTH,
         "main_branch_db_policy": "FROZEN_CI_BASELINE",
     }
 

@@ -45,9 +45,10 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
    - Conservación de cuota TheOddsAPI: `the_odds_api_regions: eu`, `the_odds_api_markets: h2h,totals`, caché en proceso `300s` (omitiendo días ya `FINAL` y ciclos `settle`).
 3. **Solo cuotas observadas**: ninguna cuota estimada, derivada o sintética puede generar una apuesta (`betting_allowed_source_types: ["OBSERVED"]`).
 4. **Fuente única de verdad DB (`state-live` vs `main`) e inmutabilidad**:
-   - `origin/state-live:data/nba_intelligence.sqlite3` es la **única fuente de verdad viva de producción** (actualizada por `.github/workflows/nba_cloud_automation.yml`).
+   - `origin/state-live:data/nba_intelligence.sqlite3.gz` es la **única fuente de verdad viva de producción** (actualizada por `.github/workflows/nba_cloud_automation.yml`).
+   - Se guarda comprimida con `gzip -6 -n` porque GitHub rechaza archivos de más de 100 MB (el 2026-11-24 la base ocupaba 59.9 MB y crecía ~14 MB por semana; comprimida, 7.9 MB). Cada workflow la descomprime en `data/nba_intelligence.sqlite3` y se detiene si `PRAGMA integrity_check` no devuelve `ok` ([`src/storage/state_live.py`](src/storage/state_live.py)).
    - `data/nba_intelligence.sqlite3` en `main` permanece congelada como línea base de CI (`.github/workflows/ci.yml` falla si un PR modifica ese archivo).
-   - Para extraer e inspeccionar la DB viva en local sin ensuciar `main`, ejecuta:
+   - Para extraer (descomprimir) e inspeccionar la DB viva en local sin ensuciar `main`, ejecuta:
      ```powershell
      uv run python scripts/sync_state_live.py --apply-migrations
      ```

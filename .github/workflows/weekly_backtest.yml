@@ -37,7 +37,9 @@ jobs:
           git checkout -B main origin/main
           git fetch --depth=1 origin state-live
           STATE_BASE_SHA="$(git rev-parse origin/state-live)"
-          git checkout "${STATE_BASE_SHA}" -- data/nba_intelligence.sqlite3
+          # System python3 (uv is installed in step 2): decompresses data/nba_intelligence.sqlite3.gz (or the
+          # uncompressed file of a commit from before the compression) and fails unless integrity_check is ok.
+          python3 -m src.storage.state_live restore "${STATE_BASE_SHA}"
           if git cat-file -e "${STATE_BASE_SHA}:data/evaluation/real_odds_backtest.json" 2>/dev/null; then
             git checkout "${STATE_BASE_SHA}" -- data/evaluation/real_odds_backtest.json
           fi

@@ -75,8 +75,11 @@ jobs:
           if git ls-remote --exit-code --heads origin state-live >/dev/null 2>&1; then
             git fetch --depth=1 origin state-live
             STATE_BASE_SHA="$(git rev-parse origin/state-live)"
+            # The audit database is stored as data/nba_intelligence.sqlite3.gz. This decompresses it (or the
+            # uncompressed file of a commit from before the compression) into data/nba_intelligence.sqlite3
+            # and stops the cycle unless PRAGMA integrity_check returns ok.
+            python3 -m src.storage.state_live restore "${STATE_BASE_SHA}"
             for state_path in \
-              data/nba_intelligence.sqlite3 \
               data/evaluation/dispatched_telegram_alerts.json \
               data/evaluation/telegram_last_update_id.txt \
               data/visual_rag/latest_visual_context.json \
@@ -180,10 +183,15 @@ jobs:
         run: |
           git config user.name "nba-intelligence-bot"
           git config user.email "nba-intelligence-bot@users.noreply.github.com"
-          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/visual_rag/latest_visual_context.json data/nba_intelligence.sqlite3 data/evaluation/*.json reports/*.md reports/dashboard.html docs/.nojekyll docs/index.html NBA/
+          # GitHub rejects files over 100 MB, so the database (checkpointed in 6b) is stored as
+          # data/nba_intelligence.sqlite3.gz (gzip -6 -n: no name or timestamp, so an unchanged database keeps
+          # its blob for the no-change check below). stage also drops the uncompressed file from the index,
+          # so this commit removes it from state-live.
+          python3 -m src.storage.state_live stage
+          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/visual_rag/latest_visual_context.json data/evaluation/*.json reports/*.md reports/dashboard.html docs/.nojekyll docs/index.html NBA/
           TREE_SHA="$(git write-tree)"
           if [ -n "${STATE_BASE_SHA:-}" ] && git diff --quiet "${STATE_BASE_SHA}" "${TREE_SHA}" -- \
-            data/nba_intelligence.sqlite3 SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv \
+            data/nba_intelligence.sqlite3.gz SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv \
             data/readiness_status.json data/visual_rag/latest_visual_context.json \
             data/evaluation reports docs NBA; then
             echo "Sin cambios nuevos de estado para confirmar en state-live."
@@ -202,12 +210,16 @@ jobs:
             fi
           fi
 
+      # The same .gz that step 7 stored (gunzip it to get the database). Already compressed, so it is not
+      # zipped again; a missing file fails the step instead of silently skipping the backup.
       - name: 7c. Respaldo temporal de SQLite vivo (7 días)
         uses: actions/upload-artifact@v4
         with:
           name: nba-state-live-db-backup
-          path: data/nba_intelligence.sqlite3
+          path: data/nba_intelligence.sqlite3.gz
           retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
 
       - name: 7a. Subir artefacto web actualizado para GitHub Pages
         uses: actions/upload-artifact@v4
@@ -229,11 +241,13 @@ jobs:
     needs: run-nba-intelligence-cycle
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     permissions:
       contents: read
       pages: write
       id-token: write
+      # Read-only: step 3b lists this run's artifacts (the endpoint needs it on a private repository).
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - name: 1. Descargar artefacto web actualizado del ciclo
@@ -255,6 +269,50 @@ jobs:
         with:
           path: 'docs/'
 
+      # deploy-pages looks the artifact up in this run's artifact list right after the upload, and that
+      # list can lag behind: in runs #124 and #125 (2026-11-24) it still showed 2 of the 3 artifacts
+      # 0.3-0.4 s after "github-pages" was finalized, so the deploy failed with 'No artifacts named
+      # "github-pages" were found'. Wait until the list shows it, and retry the deploy once.
+      - name: 3b. Esperar a que la corrida liste el artefacto de Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          err_file="${RUNNER_TEMP:-/tmp}/pages_artifact_poll.err"
+          warned=0
+          for attempt in $(seq 1 18); do
+            if count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?name=github-pages" --jq '.total_count' 2>"${err_file}")"; then
+              case "${count}" in ''|*[!0-9]*) count=0 ;; esac
+              if [ "${count}" -ge 1 ]; then
+                echo "Artefacto github-pages listado (consulta ${attempt})."
+                exit 0
+              fi
+            elif [ "${warned}" = "0" ]; then
+              echo "::warning::No se pudo consultar la lista de artefactos: $(head -c 300 "${err_file}" | tr '\n' ' ')"
+              warned=1
+            fi
+            sleep 5
+          done
+          echo "::warning::La corrida todavía no lista el artefacto github-pages tras 90 s; se intenta el despliegue igual."
+
       - name: 4. Desplegar en vivo en GitHub Pages
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4
+
+      - name: 4a. Esperar antes de reintentar el despliegue
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          echo "::warning::El despliegue de Pages falló; se reintenta una vez en 30 s."
+          sleep 30
+
+      - name: 4b. Reintentar el despliegue en GitHub Pages
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+
+      # This job only runs after run-nba-intelligence-cycle succeeded, so a failure here never means the
+      # paper-trading cycle or the state-live save failed.
+      - name: 5. Aclarar qué falló
+        if: failure()
+        run: |
+          echo "::error::Falló la publicación del tablero en GitHub Pages. El ciclo de paper trading y el guardado en state-live terminaron bien (este job solo corre cuando run-nba-intelligence-cycle termina bien)."
