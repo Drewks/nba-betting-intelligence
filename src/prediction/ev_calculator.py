@@ -620,7 +620,8 @@ def evaluate_scheduled_market_opportunity(
 ) -> dict[str, Any]:
     """
     The production decision rule for one quote. The live cycle (`scripts/cloud_cycle_helpers.py`), the
-    real-odds backtest and the fallback out-of-sample comparisons all call it, so they evaluate one policy:
+    real-odds backtest, the fallback out-of-sample comparisons and the orchestrator's walk-forward simulation
+    (`src/backtesting/walk_forward_helpers.py`) all call it, so they evaluate one policy:
       1. model weight from `anchor_schedule` at `hours_to_tipoff` (`resolve_market_anchor_weight`;
          `market_anchor_weight` / `moneyline_weight` only apply when the schedule is off or has no entry),
       2. the market-specific model/market disagreement limit,

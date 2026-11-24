@@ -440,7 +440,8 @@ def evaluate_scheduled_slate_candidates(
                     }
                 )
 
-            # Same decision rule as the real-odds backtest and the fallback OOS comparisons (parity-tested).
+            # Same decision rule as the real-odds backtest, the fallback OOS comparisons and the orchestrator's
+            # walk-forward simulation (parity-tested).
             opp = evaluate_scheduled_market_opportunity(
                 estimated_prob=cal_p,
                 uncertainty_std=unc,

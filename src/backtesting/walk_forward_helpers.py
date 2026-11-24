@@ -25,7 +25,8 @@ from src.models.statistical_models import (
     TotalPointsModel,
 )
 from src.paper_trading.engine import PaperTradingEngine
-from src.prediction.ev_calculator import evaluate_market_opportunity
+from src.prediction.ev_calculator import MAX_MODEL_MARKET_DISAGREEMENT, evaluate_scheduled_market_opportunity
+from src.prediction.market_quotes import decision_time_market
 from src.storage.db import DatabaseManager
 from src.validation.validator import (
     parse_iso_utc,
@@ -164,7 +165,25 @@ def run_walk_forward_simulation(
     games: list[dict[str, Any]],
     odds: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
-    """Executes chronological walk-forward training, calibration, prediction, and settlement."""
+    """
+    Executes chronological walk-forward training, calibration, prediction, and settlement.
+
+    Every quote is decided with the production decision rule (`evaluate_scheduled_market_opportunity`, as
+    `scripts/cloud_cycle_helpers.py` calls it, parity-tested): the `config.model.anchor_schedule` weight at the
+    hours between the decision time (`pred_ts`) and tip-off, then steam modulation and anchoring to the market
+    consensus. Consensus and steam come from `decision_time_market`: the quotes a bet could have been taken at
+    when deciding, and the snapshots captured up to then; closing lines and later snapshots are never read.
+    """
+    # Production's decision policy; no fallback, a default would evaluate a policy that is not running.
+    cfg = load_config()
+    anchor_policy: dict[str, Any] = {
+        "anchor_schedule": cfg.model.anchor_schedule,
+        "market_anchor_weight": cfg.model.market_anchor_model_weight,
+        "moneyline_weight": cfg.model.moneyline_model_weight,
+        "max_disagreement": MAX_MODEL_MARKET_DISAGREEMENT,
+        "moneyline_max_disagreement": cfg.model.moneyline_max_disagreement,
+        "moneyline_max_odds": cfg.model.moneyline_max_odds,
+    }
     sorted_games = sorted(games, key=lambda g: g["game_start_time"])
     skipped_unpredictable_games = 0
 
@@ -224,11 +243,7 @@ def run_walk_forward_simulation(
     model_c = PointMarginModel("model_c_point_margin_v1")
     model_d = TotalPointsModel("model_d_total_points_v1")
     model_e = AdvancedGBMModel("model_e_lightgbm_v1")
-    try:
-        active_ensemble_id = load_config().model.version_id
-    except Exception:
-        active_ensemble_id = "model_f_ensemble_v8"
-    model_f = EnsembleStackingModel(active_ensemble_id)
+    model_f = EnsembleStackingModel(cfg.model.version_id)
 
     ml_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
     tot_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
@@ -319,6 +334,7 @@ def run_walk_forward_simulation(
                 skipped_unpredictable_games += 1
                 continue
             pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            hours_to_tipoff = max(0.0, (start_dt - pred_dt).total_seconds() / 3600.0)
             validate_game_record(g, simulated_prediction_time=pred_ts)
 
             feats = build_pregame_features(g, prior_final_games, market="total_points")
@@ -390,6 +406,8 @@ def run_walk_forward_simulation(
             )
             for o in game_odds:
                 validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
+            market = decision_time_market(game_odds, start_dt, pred_dt, execution_cfg=cfg.execution)
+            for o in game_odds:
                 mkt = o["market"]
                 sel = o["selection"]
                 row_p_push = 0.0
@@ -414,16 +432,21 @@ def run_walk_forward_simulation(
                     unc = se["pred"]["uncertainty_std"]
                     conf_int = se["va"] if sel == "HOME" else _flip_conformal_interval(se["va"])
 
-                opp = evaluate_market_opportunity(
+                # Same decision rule as the live cycle (tests/test_walk_forward_production_parity.py).
+                opp = evaluate_scheduled_market_opportunity(
                     estimated_prob=cal_p,
                     raw_model_prob=raw_p,
                     uncertainty_std=unc,
                     odds_record=o,
                     game_start_time=g["game_start_time"],
                     model_version_id=model_f.version_id,
+                    hours_to_tipoff=hours_to_tipoff,
                     simulated_prediction_time=pred_ts,
+                    market_consensus_prob=market.consensus_prob(mkt, sel, o.get("line_value")),
+                    steam_delta=market.steam_delta(mkt, sel),
                     conformal_interval=conf_int,
                     p_push=row_p_push,
+                    **anchor_policy,
                 )
 
                 pred_id = f"PRED_{model_f.version_id}_{o['odds_id']}"
