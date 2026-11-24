@@ -494,13 +494,26 @@ def run_walk_forward_simulation(
                 opp["calibrated_probability"] = opp["market_anchored_probability"]
                 opp["emitted_at"] = pred_ts
                 matchday_candidates.append(opp)
+                # The comparison record scores the first quoted total and spread lines (`line_val`,
+                # `first_sp_line`): read its market and anchored probabilities at those lines too.
                 if mkt == "moneyline" and sel == "HOME" and opp.get("implied_prob_fair") is not None:
                     market_p_home = float(opp["implied_prob_fair"])
                     anchored_p_home = float(opp["market_anchored_probability"])
-                elif mkt == "total_points" and sel == "OVER" and opp.get("implied_prob_fair") is not None:
+                elif (
+                    mkt == "total_points"
+                    and sel == "OVER"
+                    and opp.get("implied_prob_fair") is not None
+                    and line_val is not None
+                    and round(float(o["line_value"]), 2) == round(line_val, 2)
+                ):
                     market_p_over = float(opp["implied_prob_fair"])
                     anchored_p_over = float(opp["market_anchored_probability"])
-                elif mkt == "spread" and sel == "HOME" and opp.get("implied_prob_fair") is not None:
+                elif (
+                    mkt == "spread"
+                    and sel == "HOME"
+                    and opp.get("implied_prob_fair") is not None
+                    and round(float(o["line_value"]), 2) == first_sp_line
+                ):
                     market_p_sp_home = float(opp["implied_prob_fair"])
                     anchored_p_sp_home = float(opp["market_anchored_probability"])
 

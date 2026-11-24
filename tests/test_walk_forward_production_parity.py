@@ -107,11 +107,25 @@ def _quotes_production_would_not_take() -> tuple[datetime, list[Quote]]:
     ]
 
 
+def _total_and_spread_lines_move() -> tuple[datetime, list[Quote]]:
+    """The total (224.5 -> 226.5) and the spread (-3.5 -> -4.5) move; both lines are still takeable at the decision."""
+    decision = _START_DT - _TIP_LEAD
+    opening, latest = decision - timedelta(hours=5), decision - timedelta(minutes=30)
+    return decision, [
+        *_two_way("PIN_TOT_OPEN", _PIN, "total_points", 224.5, 1.92, 1.92, opening),
+        *_two_way("PIN_SP_OPEN", _PIN, "spread", -3.5, 1.93, 1.93, opening),
+        *_two_way("PIN_ML", _PIN, "moneyline", None, 1.80, 2.10, latest),
+        *_two_way("PIN_TOT", _PIN, "total_points", 226.5, 1.95, 1.90, latest),
+        *_two_way("PIN_SP", _PIN, "spread", -4.5, 1.95, 1.91, latest),
+    ]
+
+
 _SCENARIOS: dict[str, Callable[[], tuple[datetime, list[Quote]]]] = {
     "two_hours_before_tip": _two_hours_before_tip,
     "decided_at_newest_quote": _decided_at_newest_quote,
     "steam_then_closing_move": _steam_then_closing_move,
     "quotes_production_would_not_take": _quotes_production_would_not_take,
+    "total_and_spread_lines_move": _total_and_spread_lines_move,
 }
 
 
@@ -312,6 +326,33 @@ def test_walk_forward_and_production_compute_identical_anchored_probabilities(
         "market_fair_probability"
     ]
     assert abs(fixed - ml_home["market_anchored_probability"]) > 1e-3
+
+
+def test_comparison_record_reads_its_probabilities_at_the_line_it_scores(tmp_path: Path) -> None:
+    """When the line moves, the record's probabilities stay those of the line its outcome is scored at."""
+    decision_dt, quotes = _total_and_spread_lines_move()
+    odds_rows = _odds_rows(quotes)
+    prod_by_side = {_side_key(p): p for p in _production_decisions(tmp_path, odds_rows, decision_dt)}
+    db = DatabaseManager(tmp_path / "walk_forward.sqlite3")
+    (record,), _closing_rows, _skipped = run_walk_forward_simulation(
+        db, PaperTradingEngine(db, is_backtest=True), warmup_matchdays=0, retrain_every_matchdays=1,
+        games=[_game("FINAL")], odds=odds_rows,
+    )
+
+    # The outcomes are scored at the first quoted lines: total 224.5 (216 points: UNDER), spread -3.5 (BOS +8).
+    assert (record["over_hit"], record["spread_hit"]) == (0, 1)
+    for market, side, line, suffix in (("total_points", "OVER", 224.5, "tot"), ("spread", "HOME", -3.5, "sp")):
+        prod = prod_by_side[(market, side, line)]
+        assert record[f"model_cal_{suffix}"] == pytest.approx(prod["calibrated_model_probability"], abs=1e-9), market
+        assert record[f"model_anchored_{suffix}"] == pytest.approx(prod["market_anchored_probability"], abs=1e-9), market
+        assert record[f"market_{suffix}"] == pytest.approx(prod["market_fair_probability"], abs=1e-9), market
+    # The latest lines' probabilities, which the record carried before, belong to other events.
+    for stale_side, scored_side in (
+        (("total_points", "OVER", 226.5), ("total_points", "OVER", 224.5)),
+        (("spread", "HOME", -4.5), ("spread", "HOME", -3.5)),
+    ):
+        moved = prod_by_side[stale_side]["market_anchored_probability"] - prod_by_side[scored_side]["market_anchored_probability"]
+        assert abs(moved) > 1e-3, stale_side
 
 
 def test_orchestrator_walk_forward_metrics_score_the_production_probabilities(tmp_path: Path) -> None:
