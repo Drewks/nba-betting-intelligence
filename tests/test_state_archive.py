@@ -383,6 +383,7 @@ def test_archive_reconstruct_and_verify_window_end_to_end(tmp_path: Path, git_en
             "games: started game G_STARTED rewrote",
         ),
         ("drop_immutable_table", "DROP TABLE predictions;", "predictions: table missing"),
+        ("drop_games_table", "DROP TABLE games;", "games: table missing from the newer snapshot"),
     ],
 )
 def test_archive_fails_closed_on_immutable_tampering_without_uploading_or_advancing(

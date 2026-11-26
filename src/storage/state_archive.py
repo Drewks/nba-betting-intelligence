@@ -279,8 +279,11 @@ def verify_immutable_continuity(
                 violations.append(f"{table}: primary key columns missing {list(rule.pk)}")
                 continue
             violations += _table_violations(conn, table, rule, common)
-        if "games" in old_tables and "games" in new_tables and older_taken_at:
-            violations += _game_violations(conn, older_taken_at)
+        if "games" in old_tables:
+            if "games" not in new_tables:
+                violations.append("games: table missing from the newer snapshot")
+            elif older_taken_at:
+                violations += _game_violations(conn, older_taken_at)
     finally:
         conn.close()
     return violations
@@ -309,6 +312,12 @@ def _table_violations(conn: sqlite3.Connection, table: str, rule: TableRule, com
 
 
 def _game_violations(conn: sqlite3.Connection, older_taken_at: str) -> list[str]:
+    old_cols = _columns(conn, "old", "games")
+    new_cols = set(_columns(conn, "main", "games"))
+    if "game_id" not in old_cols or "game_start_time" not in old_cols:
+        return []
+    if "game_id" not in new_cols:
+        return ["games: primary key column missing ['game_id']"]
     started = "datetime(o.game_start_time) <= datetime(?)"
     rows = conn.execute(
         f"SELECT o.game_id FROM old.games o WHERE {started} "
@@ -316,8 +325,6 @@ def _game_violations(conn: sqlite3.Connection, older_taken_at: str) -> list[str]
         (older_taken_at,),
     ).fetchall()
     out = [f"games: started game {r[0]} deleted" for r in rows]
-    old_cols = _columns(conn, "old", "games")
-    new_cols = set(_columns(conn, "main", "games"))
     dropped = [c for c in GAME_FROZEN_AFTER_START if c in old_cols and c not in new_cols]
     if dropped:
         out.append(f"games: frozen columns dropped {dropped}")
