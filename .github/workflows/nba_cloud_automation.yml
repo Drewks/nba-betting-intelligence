@@ -195,6 +195,7 @@ jobs:
             data/readiness_status.json data/visual_rag/latest_visual_context.json \
             data/evaluation reports docs NBA; then
             echo "Sin cambios nuevos de estado para confirmar en state-live."
+            STATE_LIVE_HEAD_SHA="${STATE_BASE_SHA}"
           else
             if [ -n "${STATE_BASE_SHA:-}" ]; then
               git fetch --depth=1 origin state-live
@@ -208,7 +209,9 @@ jobs:
               NEW_COMMIT="$(git commit-tree "$TREE_SHA" -m 'chore(auto-cycle): bootstrap inicial state-live de paper trading S/100 y calibración [skip ci]')"
               git push origin "${NEW_COMMIT}:refs/heads/state-live"
             fi
+            STATE_LIVE_HEAD_SHA="${NEW_COMMIT}"
           fi
+          echo "STATE_LIVE_HEAD_SHA=${STATE_LIVE_HEAD_SHA}" >> "$GITHUB_ENV"
 
       # The same .gz that step 7 stored (gunzip it to get the database). Already compressed, so it is not
       # zipped again; a missing file fails the step instead of silently skipping the backup.
@@ -220,6 +223,14 @@ jobs:
           retention-days: 7
           compression-level: 0
           if-no-files-found: error
+
+      # Daily immutable archive: one snapshot per UTC day in GitHub Release `db-archive` (never clobbered)
+      # plus append-only manifest & continuity audit on `state-history` (fast-forward only, contents: write).
+      - name: 7d. Archivar snapshot diario inmutable (db-archive + state-history)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 -m src.storage.state_archive archive --ref "${STATE_LIVE_HEAD_SHA:-origin/state-live}"
 
       - name: 7a. Subir artefacto web actualizado para GitHub Pages
         uses: actions/upload-artifact@v4
