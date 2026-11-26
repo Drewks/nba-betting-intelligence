@@ -38,41 +38,63 @@ from tests.helpers import PROJECT_ROOT
 
 
 class FakeReleaseStore:
-    """In-memory / directory-backed stand-in for GitHub Release `db-archive` (never clobbers)."""
+    """In-memory / directory-backed stand-in for GitHub Release `db-archive` (with rotation, never clobbers)."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, max_assets: int = 900) -> None:
+        self.base_root = root
         self.root = root / "release_assets"
+        self.max_assets = max_assets
         self.created = False
+        self.created_tags: set[str] = set()
         self.uploads: list[str] = []
         self.timestamps: dict[str, str] = {}
 
-    def ensure_release(self) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.created = True
+    def _dir_for(self, tag: str | None = None) -> Path:
+        t = tag or RELEASE_TAG
+        return self.root if t == RELEASE_TAG else self.base_root / f"release_assets_{t}"
 
-    def asset_timestamps(self) -> dict[str, str]:
-        if not self.root.exists():
+    def ensure_release(self, tag: str | None = None) -> None:
+        t = tag or RELEASE_TAG
+        self._dir_for(t).mkdir(parents=True, exist_ok=True)
+        self.created = True
+        self.created_tags.add(t)
+
+    def asset_timestamps(self, tag: str | None = None) -> dict[str, str]:
+        d = self._dir_for(tag)
+        if not d.exists():
             return {}
         return {
             p.name: self.timestamps.get(p.name, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
-            for p in self.root.iterdir()
+            for p in d.iterdir()
             if p.is_file()
         }
 
-    def asset_names(self) -> set[str]:
-        return set(self.asset_timestamps())
+    def asset_names(self, tag: str | None = None) -> set[str]:
+        return set(self.asset_timestamps(tag))
 
-    def upload(self, path: Path) -> None:
-        self.ensure_release()
-        dest = self.root / path.name
+    def select_upload_tag(self, name: str) -> tuple[str, dict[str, str]]:
+        index = 1
+        while True:
+            t = RELEASE_TAG if index == 1 else f"{RELEASE_TAG}-{index}"
+            if not self._dir_for(t).exists():
+                return t, {}
+            assets = self.asset_timestamps(t)
+            if name in assets or len(assets) < self.max_assets:
+                return t, assets
+            index += 1
+
+    def upload(self, path: Path, tag: str | None = None) -> None:
+        t = tag or RELEASE_TAG
+        self.ensure_release(t)
+        dest = self._dir_for(t) / path.name
         if dest.exists():
             raise StateArchiveError(f"refusing to overwrite existing asset {path.name}")
         shutil.copyfile(path, dest)
-        self.uploads.append(path.name)
+        self.uploads.append(f"{t}/{path.name}")
         self.timestamps.setdefault(path.name, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
-    def download(self, name: str, dest_dir: Path) -> Path:
-        src = self.root / name
+    def download(self, name: str, dest_dir: Path, tag: str | None = None) -> Path:
+        src = self._dir_for(tag) / name
         if not src.is_file():
             raise StateArchiveError(f"missing asset {name}")
         dest = dest_dir / name
@@ -799,23 +821,34 @@ def test_verify_window_fails_closed_when_empty_or_invalid_days(tmp_path: Path, g
 
 def test_gh_release_store_uses_target_main_never_clobbers_and_paginates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     calls: list[list[str]] = []
+    created_releases: set[str] = set()
 
     def fake_run(cmd: list[str], **_kw: Any) -> subprocess.CompletedProcess[str]:
         calls.append(cmd)
         if cmd[:3] == ["gh", "release", "view"] and "tagName" in cmd:
+            tag = cmd[3]
+            if tag in created_releases:
+                return subprocess.CompletedProcess(cmd, 0, stdout=f'{{"tagName":"{tag}"}}\n', stderr="")
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="release not found")
+        if cmd[:3] == ["gh", "release", "create"]:
+            created_releases.add(cmd[3])
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[:3] == ["gh", "release", "view"] and "apiUrl" in cmd:
+            tag = cmd[3]
+            rid = "42" if tag == RELEASE_TAG else "43"
             return subprocess.CompletedProcess(
-                cmd, 0, stdout="https://api.github.com/repos/Drewks/nba-betting-intelligence/releases/42\n", stderr=""
+                cmd, 0, stdout=f"https://api.github.com/repos/Drewks/nba-betting-intelligence/releases/{rid}\n", stderr=""
             )
         if cmd[:3] == ["gh", "api", "--paginate"]:
-            return subprocess.CompletedProcess(
-                cmd, 0, stdout="nba_intelligence-2026-11-24.sqlite3.gz\t2026-11-24T23:55:00Z\n", stderr=""
-            )
+            if "/releases/42/" in cmd[3]:
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="nba_intelligence-2026-11-24.sqlite3.gz\t2026-11-24T23:55:00Z\n", stderr=""
+                )
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    store = GhReleaseStore(tag=RELEASE_TAG, repo_root=tmp_path)
+    store = GhReleaseStore(tag=RELEASE_TAG, repo_root=tmp_path, max_assets=1)
     store.ensure_release()
     create_cmd = next(c for c in calls if c[:3] == ["gh", "release", "create"])
     assert "--target" in create_cmd and create_cmd[create_cmd.index("--target") + 1] == "main"
@@ -827,11 +860,73 @@ def test_gh_release_store_uses_target_main_never_clobbers_and_paginates(monkeypa
     assert names == {"nba_intelligence-2026-11-24.sqlite3.gz"}
     assert any("--paginate" in c for c in calls)
 
+    # With max_assets=1 and db-archive already holding 1 asset, select_upload_tag rotates to db-archive-2
+    next_tag, next_assets = store.select_upload_tag("nba_intelligence-2026-11-25.sqlite3.gz")
+    assert next_tag == f"{RELEASE_TAG}-2" and next_assets == {}
+
     dummy = tmp_path / "nba_intelligence-2026-11-25.sqlite3.gz"
     dummy.write_bytes(b"gz")
-    store.upload(dummy)
+    store.upload(dummy, tag=next_tag)
     upload_cmd = next(c for c in calls if c[:3] == ["gh", "release", "upload"])
+    assert upload_cmd[3] == f"{RELEASE_TAG}-2"
     assert "--clobber" not in upload_cmd
+
+
+def test_release_rotation_across_multiple_buckets_reconstruct_and_verify_window(
+    tmp_path: Path, git_env: None
+) -> None:
+    work, _ = _init_repo_pair(tmp_path)
+    store = FakeReleaseStore(tmp_path, max_assets=2)
+    history = HistoryBranch(repo_root=work)
+
+    current_db = _seed_day1_db(tmp_path / "rot_day0.sqlite3")
+    expected_tags = {
+        "2026-11-21": "db-archive",
+        "2026-11-22": "db-archive",
+        "2026-11-23": "db-archive-2",
+        "2026-11-24": "db-archive-2",
+        "2026-11-25": "db-archive-3",
+    }
+    saved_bytes: dict[str, bytes] = {}
+    for idx, (snap_date, expected_tag) in enumerate(expected_tags.items(), start=1):
+        day_db = tmp_path / f"rot_{snap_date}.sqlite3"
+        shutil.copyfile(current_db, day_db)
+        mgr = DatabaseManager(day_db)
+        with mgr.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO odds_snapshots (
+                    odds_id, game_id, provider, market, selection, line_value, decimal_odds,
+                    counterpart_decimal_odds, captured_at, is_closing_line, source_type, fetched_at
+                ) VALUES (?, 'G_FUTURE', 'pinnacle', 'moneyline', 'HOME', NULL, 1.95, 1.95,
+                          ?, 0, 'OBSERVED', ?)
+                """,
+                (f"O_ROT_{idx}", f"{snap_date}T12:00:00Z", f"{snap_date}T12:00:00Z"),
+            )
+        mgr.checkpoint(truncate=True)
+        current_db = day_db
+        saved_bytes[snap_date] = day_db.read_bytes()
+        gz = _gz(day_db, tmp_path / f"rot_{snap_date}.sqlite3.gz")
+        m = archive_snapshot(
+            gz,
+            snap_date,
+            source_commit=f"sha_{idx}",
+            committed_at=f"{snap_date}T12:05:00Z",
+            store=store,
+            history=history,
+        )
+        assert m["release_tag"] == expected_tag
+
+    # Reconstruct every date across all 3 release buckets and verify full window continuity
+    for snap_date, raw in saved_bytes.items():
+        out = tmp_path / f"rebuilt_{snap_date}.sqlite3"
+        reconstruct(snap_date, out, store=store, history=history)
+        assert out.read_bytes() == raw
+
+    report = verify_window(30, store=store, history=history, today=date(2026, 11, 26))
+    assert report["ok"] is True
+    assert report["snapshots"] == list(expected_tags)
+    assert len(report["pairs"]) == 4
 
 
 def test_cli_stdlib_only_and_date_validation(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

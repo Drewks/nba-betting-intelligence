@@ -48,6 +48,7 @@ from src.storage.state_live import LIVE_DB_GZ_PATH, StateLiveError, check_integr
 
 RELEASE_TAG = "db-archive"
 RELEASE_TARGET = "main"
+MAX_ASSETS_PER_RELEASE = 900  # rotate before GitHub's 1,000-asset release limit
 HISTORY_BRANCH = "state-history"
 MANIFEST_SCHEMA = 1
 _MAX_REPORTED = 20
@@ -356,18 +357,28 @@ def decompress(gz_path: Path, out_path: Path) -> tuple[int, str]:
 
 # ------------------------------------------------------------------------------------------------ release store
 class ReleaseStore(Protocol):
-    def ensure_release(self) -> None: ...
-    def asset_names(self) -> set[str]: ...
-    def asset_timestamps(self) -> dict[str, str]: ...
-    def upload(self, path: Path) -> None: ...
-    def download(self, name: str, dest_dir: Path) -> Path: ...
+    def ensure_release(self, tag: str | None = None) -> None: ...
+    def asset_names(self, tag: str | None = None) -> set[str]: ...
+    def asset_timestamps(self, tag: str | None = None) -> dict[str, str]: ...
+    def select_upload_tag(self, name: str) -> tuple[str, dict[str, str]]: ...
+    def upload(self, path: Path, tag: str | None = None) -> None: ...
+    def download(self, name: str, dest_dir: Path, tag: str | None = None) -> Path: ...
 
 
 class GhReleaseStore:
-    """GitHub Release `db-archive` through the `gh` CLI (GH_TOKEN with `contents: write`)."""
+    """GitHub Release `db-archive` (rotating to `db-archive-2`, ...) through the `gh` CLI (`contents: write`)."""
 
-    def __init__(self, tag: str = RELEASE_TAG, repo_root: Path = Path("."), target: str = RELEASE_TARGET) -> None:
-        self.tag, self.root, self.target = tag, repo_root, target
+    def __init__(
+        self,
+        tag: str = RELEASE_TAG,
+        repo_root: Path = Path("."),
+        target: str = RELEASE_TARGET,
+        max_assets: int = MAX_ASSETS_PER_RELEASE,
+    ) -> None:
+        self.tag, self.root, self.target, self.max_assets = tag, repo_root, target, max_assets
+
+    def _tag_for_index(self, index: int) -> str:
+        return self.tag if index == 1 else f"{self.tag}-{index}"
 
     def _gh(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         proc = subprocess.run(["gh", *args], cwd=self.root, capture_output=True, text=True, check=False)
@@ -375,28 +386,45 @@ class GhReleaseStore:
             raise StateArchiveError(f"gh {' '.join(args)} failed: {proc.stderr.strip()}")
         return proc
 
-    def ensure_release(self) -> None:
-        if self._gh("release", "view", self.tag, "--json", "tagName", check=False).returncode == 0:
+    def _release_exists(self, tag: str) -> bool:
+        proc = self._gh("release", "view", tag, "--json", "tagName", check=False)
+        if proc.returncode == 0:
+            return True
+        if "not found" in proc.stderr.lower():
+            return False
+        raise StateArchiveError(f"gh release view {tag} failed: {proc.stderr.strip()}")
+
+    def ensure_release(self, tag: str | None = None) -> None:
+        release_tag = tag or self.tag
+        if self._release_exists(release_tag):
             return
         notes = (
             "Daily immutable snapshots of the live paper-trading audit database (state-live). "
             f"The SHA-256 of every asset and its continuity check are committed on the `{HISTORY_BRANCH}` branch."
         )
+        title = (
+            "NBA state-live daily database archive"
+            if release_tag == self.tag
+            else f"NBA state-live daily database archive ({release_tag})"
+        )
         self._gh(
             "release",
             "create",
-            self.tag,
+            release_tag,
             "--target",
             self.target,
             "--title",
-            "NBA state-live daily database archive",
+            title,
             "--notes",
             notes,
             "--latest=false",
         )
 
-    def asset_timestamps(self) -> dict[str, str]:
-        api_url = self._gh("release", "view", self.tag, "--json", "apiUrl", "--jq", ".apiUrl").stdout.strip()
+    def asset_timestamps(self, tag: str | None = None) -> dict[str, str]:
+        release_tag = tag or self.tag
+        if not self._release_exists(release_tag):
+            return {}
+        api_url = self._gh("release", "view", release_tag, "--json", "apiUrl", "--jq", ".apiUrl").stdout.strip()
         if not api_url:
             return {}
         out = self._gh(
@@ -414,14 +442,28 @@ class GhReleaseStore:
                     timestamps[name.strip()] = created_at.strip()
         return timestamps
 
-    def asset_names(self) -> set[str]:
-        return set(self.asset_timestamps())
+    def asset_names(self, tag: str | None = None) -> set[str]:
+        return set(self.asset_timestamps(tag))
 
-    def upload(self, path: Path) -> None:
-        self._gh("release", "upload", self.tag, str(path))  # never --clobber: an asset is written once
+    def select_upload_tag(self, name: str) -> tuple[str, dict[str, str]]:
+        """Returns the release tag that either already holds `name` or has room below `max_assets`."""
+        index = 1
+        while True:
+            release_tag = self._tag_for_index(index)
+            if not self._release_exists(release_tag):
+                return release_tag, {}
+            assets = self.asset_timestamps(release_tag)
+            if name in assets or len(assets) < self.max_assets:
+                return release_tag, assets
+            index += 1
 
-    def download(self, name: str, dest_dir: Path) -> Path:
-        self._gh("release", "download", self.tag, "--pattern", name, "--dir", str(dest_dir))
+    def upload(self, path: Path, tag: str | None = None) -> None:
+        release_tag = tag or self.tag
+        self._gh("release", "upload", release_tag, str(path))  # never --clobber: an asset is written once
+
+    def download(self, name: str, dest_dir: Path, tag: str | None = None) -> Path:
+        release_tag = tag or self.tag
+        self._gh("release", "download", release_tag, "--pattern", name, "--dir", str(dest_dir))
         downloaded = dest_dir / name
         if not downloaded.is_file():
             raise StateArchiveError(f"release asset {name} was not downloaded into {dest_dir}")
@@ -497,7 +539,13 @@ def asset_name(snapshot_date: str) -> str:
 
 
 def build_manifest(
-    gz_path: Path, db_path: Path, snapshot_date: str, *, source_commit: str, committed_at: str
+    gz_path: Path,
+    db_path: Path,
+    snapshot_date: str,
+    *,
+    source_commit: str,
+    committed_at: str,
+    release_tag: str = RELEASE_TAG,
 ) -> dict[str, Any]:
     _validate_snapshot_date(snapshot_date)
     _validate_iso_timestamp(committed_at)
@@ -509,7 +557,7 @@ def build_manifest(
         "archived_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source_commit": source_commit,
         "source_committed_at": committed_at,
-        "release_tag": RELEASE_TAG,
+        "release_tag": release_tag,
         "asset_name": asset_name(snapshot_date),
         "gz_size_bytes": gz_size,
         "gz_sha256": gz_sha,
@@ -521,7 +569,8 @@ def build_manifest(
 
 def _fetch_asset(store: ReleaseStore, manifest: dict[str, Any], workdir: Path) -> Path:
     """Downloads and fully verifies a snapshot; returns the decompressed database path."""
-    gz = store.download(str(manifest["asset_name"]), workdir)
+    tag = str(manifest.get("release_tag") or RELEASE_TAG)
+    gz = store.download(str(manifest["asset_name"]), workdir, tag=tag)
     gz_size, gz_sha = _sha256_file(gz)
     if gz_sha != manifest["gz_sha256"] or gz_size != manifest["gz_size_bytes"]:
         raise StateArchiveError(f"{gz.name}: SHA-256 or size differs from the manifest")
@@ -560,11 +609,12 @@ def archive_snapshot(
     tip = history.fetch()
     path = f"snapshots/{snapshot_date}.json"
     existing = history.read(tip, path)
-    store.ensure_release()
     if existing is not None:
         manifest = json.loads(existing)
-        if manifest["asset_name"] not in store.asset_names():
-            raise StateArchiveError(f"{path} exists but its asset {manifest['asset_name']} is missing from {RELEASE_TAG}")
+        release_tag = str(manifest.get("release_tag") or RELEASE_TAG)
+        store.ensure_release(release_tag)
+        if manifest["asset_name"] not in store.asset_names(release_tag):
+            raise StateArchiveError(f"{path} exists but its asset {manifest['asset_name']} is missing from {release_tag}")
         with tempfile.TemporaryDirectory() as tmp:
             _fetch_asset(store, manifest, Path(tmp))
         return {**manifest, "skipped": True}
@@ -580,7 +630,7 @@ def archive_snapshot(
         previous = [d for d in all_dates if d < snapshot_date]
         later = [d for d in all_dates if d > snapshot_date]
         name = asset_name(snapshot_date)
-        existing_assets = store.asset_timestamps()
+        release_tag, existing_assets = store.select_upload_tag(name)
         asset_exists = name in existing_assets
 
         target_gz = gz_path
@@ -596,13 +646,13 @@ def archive_snapshot(
             asset_ts = existing_assets.get(name, "").strip()
             if not asset_ts:
                 raise StateArchiveError(
-                    f"existing asset {name} in {RELEASE_TAG} has no upload timestamp; "
+                    f"existing asset {name} in {release_tag} has no upload timestamp; "
                     "cannot verify started-game freeze cutoff safely"
                 )
             _validate_iso_timestamp(asset_ts)
             existing_dir = work / "existing_asset"
             existing_dir.mkdir()
-            existing_gz = store.download(name, existing_dir)
+            existing_gz = store.download(name, existing_dir, tag=release_tag)
             existing_size, existing_sha = _sha256_file(existing_gz)
             cur_size, cur_sha = _sha256_file(gz_path)
             if existing_sha != cur_sha or existing_size != cur_size:
@@ -629,7 +679,12 @@ def archive_snapshot(
                 target_committed_at = asset_ts
 
         manifest = build_manifest(
-            target_gz, target_db, snapshot_date, source_commit=target_commit, committed_at=target_committed_at
+            target_gz,
+            target_db,
+            snapshot_date,
+            source_commit=target_commit,
+            committed_at=target_committed_at,
+            release_tag=release_tag,
         )
         if recovered_superseded:
             manifest["recovered_from_existing_asset"] = True
@@ -653,12 +708,16 @@ def archive_snapshot(
                 raise ContinuityViolationError(later[0], later_found)
         manifest["continuity"] = continuity
         if not asset_exists:
+            store.ensure_release(release_tag)
             upload = work / name
             shutil.copyfile(gz_path, upload)
-            store.upload(upload)
+            store.upload(upload, tag=release_tag)
     ledger = (history.read(tip, "ledger.jsonl") or "").rstrip("\n")
     line = json.dumps(
-        {k: manifest[k] for k in ("snapshot_date", "asset_name", "gz_sha256", "sqlite_sha256", "source_commit")}
+        {
+            k: manifest[k]
+            for k in ("snapshot_date", "release_tag", "asset_name", "gz_sha256", "sqlite_sha256", "source_commit")
+        }
         | {"continuity_ok": continuity["ok"]},
         sort_keys=True,
     )
