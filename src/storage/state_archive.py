@@ -588,22 +588,21 @@ def archive_snapshot(
 
         if asset_exists:
             # Recovery path: a previous run uploaded the immutable asset but failed before pushing `state-history`.
-            # If the existing asset matches byte-for-byte, adopt it directly; if a later same-day cycle already
-            # advanced `state-live`, verify the existing asset is intact and a lawful ancestor of `db`, then record
-            # its manifest without ever overwriting the Release asset.
+            # Always require a trustworthy upload timestamp on the existing asset so the started-game freeze cutoff
+            # is never weakened on a later retry (including cross-midnight retries with `--date`).
+            asset_ts = existing_assets.get(name, "").strip()
+            if not asset_ts:
+                raise StateArchiveError(
+                    f"existing asset {name} in {RELEASE_TAG} has no upload timestamp; "
+                    "cannot verify started-game freeze cutoff safely"
+                )
+            _validate_iso_timestamp(asset_ts)
             existing_dir = work / "existing_asset"
             existing_dir.mkdir()
             existing_gz = store.download(name, existing_dir)
             existing_size, existing_sha = _sha256_file(existing_gz)
             cur_size, cur_sha = _sha256_file(gz_path)
             if existing_sha != cur_sha or existing_size != cur_size:
-                asset_ts = existing_assets.get(name, "").strip()
-                if not asset_ts:
-                    raise StateArchiveError(
-                        f"existing asset {name} in {RELEASE_TAG} has no upload timestamp; "
-                        "cannot verify started-game freeze cutoff safely"
-                    )
-                _validate_iso_timestamp(asset_ts)
                 existing_db = existing_dir / "existing.sqlite3"
                 decompress(existing_gz, existing_db)
                 try:
@@ -623,6 +622,8 @@ def archive_snapshot(
                 target_commit = f"recovered-asset:{existing_sha[:12]}"
                 target_committed_at = recovered_at
                 recovered_superseded = True
+            elif asset_ts[:10] <= snapshot_date and _parse_iso_timestamp(asset_ts) > _parse_iso_timestamp(committed_at):
+                target_committed_at = asset_ts
 
         manifest = build_manifest(
             target_gz, target_db, snapshot_date, source_commit=target_commit, committed_at=target_committed_at

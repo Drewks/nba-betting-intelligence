@@ -665,6 +665,27 @@ def test_orphan_recovery_uses_asset_upload_timestamp_and_fails_closed_when_missi
             history=history,
         )
 
+    # Matching orphan retried on a later UTC day with `--date` still preserves the upload timestamp cutoff
+    store.timestamps[asset_name("2026-11-25")] = "2026-11-25T14:00:00Z"
+    m_match = archive_snapshot(
+        orphan_gz,
+        "2026-11-25",
+        source_commit="reused_sha",
+        committed_at="2026-11-25T09:30:00Z",
+        store=store,
+        history=history,
+    )
+    assert m_match["source_committed_at"] == "2026-11-25T14:00:00Z"
+    with pytest.raises(ContinuityViolationError, match="games: started game G_ORPHAN_TIP rewrote"):
+        archive_snapshot(
+            rewritten_gz,
+            "2026-11-26",
+            source_commit="next_day_sha",
+            committed_at="2026-11-26T06:00:00Z",
+            store=store,
+            history=history,
+        )
+
 
 def test_freeze_cutoff_uses_archived_at_for_same_day_reused_state_live_commit(tmp_path: Path, git_env: None) -> None:
     work, _ = _init_repo_pair(tmp_path)
