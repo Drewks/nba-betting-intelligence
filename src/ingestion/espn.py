@@ -316,7 +316,9 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             and self.odds_api_helper.is_configured()
             and _has_upcoming_events(payload, now_utc)
         ):
-            multi_book_odds = self.odds_api_helper.fetch_multi_book_odds_by_matchup(now_utc)
+            # Pass `as_of_utc` (`None` on live runs) so TheOddsAPI stamps the cache entry with its actual HTTP
+            # response time rather than the pre-ESPN call-entry clock.
+            multi_book_odds = self.odds_api_helper.fetch_multi_book_odds_by_matchup(as_of_utc)
 
         if as_of_utc is None:
             # Stamp (and check tip-off against) the moment the responses arrived, not the call entry: a
@@ -510,8 +512,12 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                     # A quote served from TheOddsAPI's in-process TTL cache was observed by an earlier HTTP fetch:
                     # it keeps that fetch's time as both capture and fetch moment (never re-stamped as newer).
                     from_cache = bool(scraped_quote.get("from_ttl_cache"))
-                    q_captured = str(scraped_quote.get("captured_at") or odds_captured_at) if from_cache else odds_captured_at
-                    q_fetched = q_captured if from_cache else now_utc
+                    q_fetched = (
+                        str(scraped_quote.get("fetched_at") or scraped_quote.get("captured_at") or odds_captured_at)
+                        if from_cache
+                        else now_utc
+                    )
+                    q_captured = str(scraped_quote.get("captured_at") or q_fetched) if from_cache else odds_captured_at
                     try:
                         if parse_iso_utc(q_captured) >= start_dt_val:
                             continue

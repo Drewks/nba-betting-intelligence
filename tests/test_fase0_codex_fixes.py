@@ -264,3 +264,104 @@ def test_cached_quotes_are_stored_with_their_original_fetch_time(tmp_path: Path,
     assert res["rejected_odds"] == []
     stored = db.fetch_all("SELECT captured_at, fetched_at FROM odds_snapshots ORDER BY selection")
     assert [(r["captured_at"], r["fetched_at"]) for r in stored] == [(cached_at, cached_at)] * 2
+
+
+def test_near_ttl_cache_hit_uses_actual_http_fetch_time_not_pre_request_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Regression for PR #59 Codex P2 finding: if the initial ESPN + TheOddsAPI HTTP calls take longer than a
+    later run's ESPN call, a monotonic cache hit near the TTL boundary must not be rejected by provenance.
+    """
+    import src.agents.specialized_agents as agents_mod
+    import src.ingestion.espn as espn_mod
+    import src.ingestion.the_odds_api as odds_mod
+
+    TheOddsAPIAdapter.reset_circuit_breaker()
+    try:
+        ttl = int(load_config().sources.the_odds_api_cache_ttl_seconds)
+        t0 = datetime(2026, 11, 26, 17, 0, 0, tzinfo=timezone.utc)
+        tip = t0 + timedelta(hours=5)
+        clock = {"elapsed": 0.0}
+
+        class _FakeDatetime(datetime):
+            @classmethod
+            def now(cls, tz: Any = None) -> datetime:
+                return t0 + timedelta(seconds=clock["elapsed"])
+
+        monkeypatch.setattr(agents_mod, "datetime", _FakeDatetime)
+        monkeypatch.setattr(espn_mod, "datetime", _FakeDatetime)
+        monkeypatch.setattr(odds_mod, "datetime", _FakeDatetime)
+        monkeypatch.setattr(odds_mod.time, "monotonic", lambda: 1000.0 + clock["elapsed"])
+
+        espn_payload = _scoreboard(_event("401950020", "STATUS_SCHEDULED", "pre", tip, home="BOS", away="MIA"))
+        odds_payload = _odds_api_payload(_iso(tip))
+        espn_calls = 0
+        odds_calls = 0
+
+        class _JsonResp:
+            def __init__(self, body: Any, headers: dict[str, str] | None = None) -> None:
+                self._raw = json.dumps(body).encode("utf-8")
+                self.headers = headers or {}
+
+            def read(self) -> bytes:
+                return self._raw
+
+            def __enter__(self) -> _JsonResp:
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+        def _fake_urlopen(req: Any, timeout: int = 10) -> _JsonResp:
+            nonlocal espn_calls, odds_calls
+            _ = timeout
+            url = str(getattr(req, "full_url", req))
+            if "site.api.espn.com" in url:
+                espn_calls += 1
+                # First run's ESPN request is slow (10s); second run's ESPN request is fast (1s).
+                clock["elapsed"] += 10.0 if espn_calls == 1 else 1.0
+                return _JsonResp(espn_payload)
+            if "api.the-odds-api.com" in url:
+                odds_calls += 1
+                # Initial TheOddsAPI HTTP request takes 5s -> completes at t0 + 15s.
+                clock["elapsed"] += 5.0
+                return _JsonResp(odds_payload, headers={"x-requests-used": "1", "x-requests-remaining": "400"})
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+        monkeypatch.setattr("src.ingestion.espn.SportradarAdapter.fetch_league_intelligence_context", lambda _self: {})
+
+        adapter = espn_mod.ESPNPublicAdapter(timeout_seconds=1, enrich_with_the_odds_api=True)
+        adapter.odds_api_helper = TheOddsAPIAdapter(api_key="NEAR_TTL_BOUNDARY_KEY_123", cache_ttl_seconds=ttl)
+        monkeypatch.setattr(
+            adapter,
+            "_fetch_event_summary_context",
+            lambda _ev_id: {
+                "injury_penalties": {},
+                "referee_total_adj": 0.0,
+                "referee_hca_adj": 0.0,
+                "team_box_stats": {},
+                "lineup_synergy_details": {},
+            },
+        )
+        monkeypatch.setattr(adapter, "_compute_team_rest_days", lambda _code, _date: 2)
+
+        db1 = DatabaseManager(tmp_path / "run1.sqlite3")
+        res1 = NBADataScoutAgent(db1).ingest_and_validate_dataset(DataSourceRouter([adapter]))
+        assert res1["rejected_odds"] == []
+        assert len(res1["validated_odds"]) == 2
+        assert odds_calls == 1
+
+        # Second run starts at t0 + 15s + (ttl - 2s): past t0 + ttl, but still within ttl of the real HTTP fetch.
+        clock["elapsed"] = 15.0 + ttl - 2.0
+        db2 = DatabaseManager(tmp_path / "run2.sqlite3")
+        res2 = NBADataScoutAgent(db2).ingest_and_validate_dataset(DataSourceRouter([adapter]))
+        assert odds_calls == 1, "expected a valid monotonic TTL cache hit"
+        assert res2["rejected_odds"] == []
+        assert len(res2["validated_odds"]) == 2
+        expected_fetch_iso = _iso(t0 + timedelta(seconds=15))
+        stored = db2.fetch_all("SELECT captured_at, fetched_at FROM odds_snapshots ORDER BY selection")
+        assert [(r["captured_at"], r["fetched_at"]) for r in stored] == [(expected_fetch_iso, expected_fetch_iso)] * 2
+    finally:
+        TheOddsAPIAdapter.reset_circuit_breaker()
