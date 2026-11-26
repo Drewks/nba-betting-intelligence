@@ -25,7 +25,8 @@ from src.models.statistical_models import (
     TotalPointsModel,
 )
 from src.paper_trading.engine import PaperTradingEngine
-from src.prediction.ev_calculator import evaluate_market_opportunity
+from src.prediction.ev_calculator import MAX_MODEL_MARKET_DISAGREEMENT, evaluate_scheduled_market_opportunity
+from src.prediction.market_quotes import decision_time_market
 from src.storage.db import DatabaseManager
 from src.validation.validator import (
     parse_iso_utc,
@@ -164,7 +165,25 @@ def run_walk_forward_simulation(
     games: list[dict[str, Any]],
     odds: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
-    """Executes chronological walk-forward training, calibration, prediction, and settlement."""
+    """
+    Executes chronological walk-forward training, calibration, prediction, and settlement.
+
+    Every quote is decided with the production decision rule (`evaluate_scheduled_market_opportunity`, as
+    `scripts/cloud_cycle_helpers.py` calls it, parity-tested): the `config.model.anchor_schedule` weight at the
+    hours between the decision time (`pred_ts`) and tip-off, then steam modulation and anchoring to the market
+    consensus. Consensus and steam come from `decision_time_market`: the quotes a bet could have been taken at
+    when deciding, and the snapshots captured up to then; closing lines and later snapshots are never read.
+    """
+    # Production's decision policy; no fallback, a default would evaluate a policy that is not running.
+    cfg = load_config()
+    anchor_policy: dict[str, Any] = {
+        "anchor_schedule": cfg.model.anchor_schedule,
+        "market_anchor_weight": cfg.model.market_anchor_model_weight,
+        "moneyline_weight": cfg.model.moneyline_model_weight,
+        "max_disagreement": MAX_MODEL_MARKET_DISAGREEMENT,
+        "moneyline_max_disagreement": cfg.model.moneyline_max_disagreement,
+        "moneyline_max_odds": cfg.model.moneyline_max_odds,
+    }
     sorted_games = sorted(games, key=lambda g: g["game_start_time"])
     skipped_unpredictable_games = 0
 
@@ -224,11 +243,7 @@ def run_walk_forward_simulation(
     model_c = PointMarginModel("model_c_point_margin_v1")
     model_d = TotalPointsModel("model_d_total_points_v1")
     model_e = AdvancedGBMModel("model_e_lightgbm_v1")
-    try:
-        active_ensemble_id = load_config().model.version_id
-    except Exception:
-        active_ensemble_id = "model_f_ensemble_v8"
-    model_f = EnsembleStackingModel(active_ensemble_id)
+    model_f = EnsembleStackingModel(cfg.model.version_id)
 
     ml_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
     tot_calibrator = ProbabilityCalibrator(method="auto", min_samples_logistic=25, min_samples_isotonic=100)
@@ -319,7 +334,12 @@ def run_walk_forward_simulation(
                 skipped_unpredictable_games += 1
                 continue
             pred_ts = pred_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            hours_to_tipoff = max(0.0, (start_dt - pred_dt).total_seconds() / 3600.0)
             validate_game_record(g, simulated_prediction_time=pred_ts)
+            for o in game_odds:
+                validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
+            market = decision_time_market(game_odds, start_dt, pred_dt, execution_cfg=cfg.execution)
+            takeable_ids = {str(q["odds_id"]) for q in market.takeable_quotes}
 
             feats = build_pregame_features(g, prior_final_games, market="total_points")
             pred_a_ml = model_a.predict_moneyline(g, prior_final_games)
@@ -333,8 +353,10 @@ def run_walk_forward_simulation(
             va_home_int = ml_va.predict_interval(raw_p_home)
 
             tot_line_odds = [o for o in game_odds if o["market"] == "total_points" and o.get("line_value") is not None]
-            has_obs_total = len(tot_line_odds) > 0
-            line_val = float(tot_line_odds[0]["line_value"]) if has_obs_total else None
+            takeable_tot_odds = [o for o in tot_line_odds if str(o["odds_id"]) in takeable_ids]
+            scored_tot_odds = takeable_tot_odds or tot_line_odds
+            has_obs_total = len(scored_tot_odds) > 0
+            line_val = float(scored_tot_odds[0]["line_value"]) if has_obs_total else None
 
             pred_a_tot = model_a.predict_total_points(g, prior_final_games, line_val) if line_val is not None else None
             pred_e_tot = model_e.predict_total_points(g, prior_final_games, line_val) if line_val is not None else None
@@ -344,7 +366,9 @@ def run_walk_forward_simulation(
             cal_p_over = float(tot_calibrator.transform_single(raw_p_over)) if raw_p_over is not None else None
 
             tot_eval_cache: dict[float, dict[str, Any]] = {}
-            for o in tot_line_odds:
+            for o in market.takeable_quotes:
+                if o["market"] != "total_points" or o.get("line_value") is None:
+                    continue
                 lv_k = round(float(o["line_value"]), 2)
                 if lv_k not in tot_eval_cache:
                     p_tot_k = model_f.predict_total_points(g, prior_final_games, lv_k)
@@ -362,8 +386,12 @@ def run_walk_forward_simulation(
                     }
 
             sp_odds = [o for o in game_odds if o["market"] == "spread" and o.get("line_value") is not None]
+            takeable_sp_odds = [o for o in sp_odds if str(o["odds_id"]) in takeable_ids]
+            scored_sp_odds = takeable_sp_odds or sp_odds
             sp_eval_cache: dict[float, dict[str, Any]] = {}
-            for o in sp_odds:
+            for o in (*scored_sp_odds[:1], *(q for q in market.takeable_quotes if q["market"] == "spread")):
+                if o.get("line_value") is None:
+                    continue
                 h_line_k = round(float(o["line_value"]) if o["selection"] == "HOME" else -float(o["line_value"]), 2)
                 if h_line_k not in sp_eval_cache:
                     p_sp_k = model_f.predict_spread(g, prior_final_games, h_line_k)
@@ -384,12 +412,16 @@ def run_walk_forward_simulation(
             market_p_over = anchored_p_over = None
             market_p_sp_home = anchored_p_sp_home = None
             first_sp_line: float | None = (
-                round(float(sp_odds[0]["line_value"]) if sp_odds[0]["selection"] == "HOME" else -float(sp_odds[0]["line_value"]), 2)
-                if sp_odds
+                round(
+                    float(scored_sp_odds[0]["line_value"])
+                    if scored_sp_odds[0]["selection"] == "HOME"
+                    else -float(scored_sp_odds[0]["line_value"]),
+                    2,
+                )
+                if scored_sp_odds
                 else None
             )
-            for o in game_odds:
-                validate_odds_record(o, g["game_start_time"], simulated_prediction_time=pred_ts)
+            for o in market.takeable_quotes:
                 mkt = o["market"]
                 sel = o["selection"]
                 row_p_push = 0.0
@@ -414,16 +446,21 @@ def run_walk_forward_simulation(
                     unc = se["pred"]["uncertainty_std"]
                     conf_int = se["va"] if sel == "HOME" else _flip_conformal_interval(se["va"])
 
-                opp = evaluate_market_opportunity(
+                # Same decision rule as the live cycle (tests/test_walk_forward_production_parity.py).
+                opp = evaluate_scheduled_market_opportunity(
                     estimated_prob=cal_p,
                     raw_model_prob=raw_p,
                     uncertainty_std=unc,
                     odds_record=o,
                     game_start_time=g["game_start_time"],
                     model_version_id=model_f.version_id,
+                    hours_to_tipoff=hours_to_tipoff,
                     simulated_prediction_time=pred_ts,
+                    market_consensus_prob=market.consensus_prob(mkt, sel, o.get("line_value")),
+                    steam_delta=market.steam_delta(mkt, sel),
                     conformal_interval=conf_int,
                     p_push=row_p_push,
+                    **anchor_policy,
                 )
 
                 pred_id = f"PRED_{model_f.version_id}_{o['odds_id']}"
@@ -471,13 +508,26 @@ def run_walk_forward_simulation(
                 opp["calibrated_probability"] = opp["market_anchored_probability"]
                 opp["emitted_at"] = pred_ts
                 matchday_candidates.append(opp)
+                # The comparison record scores the first quoted total and spread lines (`line_val`,
+                # `first_sp_line`): read its market and anchored probabilities at those lines too.
                 if mkt == "moneyline" and sel == "HOME" and opp.get("implied_prob_fair") is not None:
                     market_p_home = float(opp["implied_prob_fair"])
                     anchored_p_home = float(opp["market_anchored_probability"])
-                elif mkt == "total_points" and sel == "OVER" and opp.get("implied_prob_fair") is not None:
+                elif (
+                    mkt == "total_points"
+                    and sel == "OVER"
+                    and opp.get("implied_prob_fair") is not None
+                    and line_val is not None
+                    and round(float(o["line_value"]), 2) == round(line_val, 2)
+                ):
                     market_p_over = float(opp["implied_prob_fair"])
                     anchored_p_over = float(opp["market_anchored_probability"])
-                elif mkt == "spread" and sel == "HOME" and opp.get("implied_prob_fair") is not None:
+                elif (
+                    mkt == "spread"
+                    and sel == "HOME"
+                    and opp.get("implied_prob_fair") is not None
+                    and round(float(o["line_value"]), 2) == first_sp_line
+                ):
                     market_p_sp_home = float(opp["implied_prob_fair"])
                     anchored_p_sp_home = float(opp["market_anchored_probability"])
 

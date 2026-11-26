@@ -23,6 +23,8 @@ from src.prediction.ev_calculator import (
     compute_market_consensus,
     evaluate_scheduled_market_opportunity,
 )
+# Moved to src so the walk-forward simulation selects quotes as the live cycle does; the old name stays.
+from src.prediction.market_quotes import pair_valid_pretip_quotes as _pair_valid_pretip_quotes
 from src.validation.validator import parse_iso_utc
 
 
@@ -63,88 +65,6 @@ def compute_totals_line_band_telemetry(rows: list[dict[str, Any]]) -> dict[str, 
             "brier_score": round(brier, 5),
         }
     return out
-
-
-def _pair_valid_pretip_quotes(
-    raw_game_odds: list[dict[str, Any]],
-    start_dt: datetime,
-    *,
-    decision_dt: datetime | None = None,
-    max_quote_age_hours: float | None = None,
-    excluded_provider_markers: tuple[str, ...] = (),
-    max_overround: float | None = None,
-) -> list[dict[str, Any]]:
-    """
-    Extracts complete two-sided pre-tipoff observed pairs grouped by `(provider, market, canonical_line)`.
-
-    For live decisions (`decision_dt` set) only quotes that existed at the decision time and are at most
-    `max_quote_age_hours` old are used, and providers whose label contains an excluded marker (e.g.
-    "(Best of" aggregates that pair the best price of one book with another book's counterpart) are
-    skipped: those prices are not a quote any single book offered. Two-way markets whose overround
-    exceeds `max_overround` are dropped: at a ~10% margin no realistic edge survives.
-    """
-    latest_by_key: dict[tuple[str, str, float | None, str], tuple[datetime, dict[str, Any]]] = {}
-    for o in raw_game_odds:
-        try:
-            cap_dt = parse_iso_utc(str(o["captured_at"]))
-            dec_val = float(o.get("decimal_odds") or 0.0)
-        except Exception:
-            continue
-        if cap_dt >= start_dt or dec_val <= 1.0:
-            continue
-        if any(marker in str(o.get("provider") or "") for marker in excluded_provider_markers):
-            continue
-        if decision_dt is not None:
-            if cap_dt > decision_dt:
-                continue
-            if max_quote_age_hours is not None and (decision_dt - cap_dt).total_seconds() > max_quote_age_hours * 3600.0:
-                continue
-        mkt_str = str(o["market"])
-        sel_u = str(o["selection"]).upper()
-        raw_lv = o.get("line_value")
-        lv_key: float | None
-        if mkt_str == "moneyline":
-            if raw_lv is not None or sel_u not in ("HOME", "AWAY"):
-                continue
-            lv_key = None
-        elif mkt_str == "total_points":
-            if raw_lv is None or sel_u not in ("OVER", "UNDER"):
-                continue
-            lv_key = round(float(raw_lv), 2)
-            if lv_key <= 50.0:
-                continue
-        elif mkt_str == "spread":
-            if raw_lv is None or sel_u not in ("HOME", "AWAY") or abs(float(raw_lv)) > 45.0:
-                continue
-            lv_key = round(float(raw_lv) if sel_u == "HOME" else -float(raw_lv), 2)
-        else:
-            continue
-        key_t = (str(o["provider"]), mkt_str, lv_key, sel_u)
-        prev = latest_by_key.get(key_t)
-        if prev is None or cap_dt >= prev[0]:
-            latest_by_key[key_t] = (cap_dt, o)
-
-    sides_by_market = {
-        "moneyline": ("HOME", "AWAY"),
-        "total_points": ("OVER", "UNDER"),
-        "spread": ("HOME", "AWAY"),
-    }
-    paired: list[dict[str, Any]] = []
-    for mkt_name, (side_a, side_b) in sides_by_market.items():
-        prov_lines = sorted({(k[0], k[2]) for k in latest_by_key if k[1] == mkt_name})
-        for prov, lv_key in prov_lines:
-            entry_a = latest_by_key.get((prov, mkt_name, lv_key, side_a))
-            entry_b = latest_by_key.get((prov, mkt_name, lv_key, side_b))
-            if not entry_a or not entry_b:
-                continue
-            row_a, row_b = entry_a[1], entry_b[1]
-            if max_overround is not None:
-                overround = 1.0 / float(row_a["decimal_odds"]) + 1.0 / float(row_b["decimal_odds"]) - 1.0
-                if overround > max_overround:
-                    continue
-            paired.append({**row_a, "counterpart_decimal_odds": float(row_b["decimal_odds"])})
-            paired.append({**row_b, "counterpart_decimal_odds": float(row_a["decimal_odds"])})
-    return paired
 
 
 def _parse_utc_or_none(value: Any) -> datetime | None:

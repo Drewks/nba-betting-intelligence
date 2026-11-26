@@ -18,6 +18,9 @@ Protocol (mirrors production as closely as the data allows):
      then one bet per game and top-3 per day. The data has no opening timestamp: the opening line is taken
      to be quoted at least `horizon_hours` before tip-off, so the schedule gives its open weights. Only the
      opening line is known at decision time, so steam is 0 (the closing line would be lookahead).
+     A side whose price `1 / (p_open * (1 + vig))` is <= 1.0 has no bettable price: it gets no bet,
+     candidate or uncapped-shadow evaluation (counted in `config.unpriceable_sides_skipped`), the
+     opposite side is quoted without a counterpart price, and the game stays in the quality series.
   4. Bets are graded with the real result; CLV is measured against the CLOSING no-vig consensus.
   5. Evaluates `development` vs untouched `holdout_season` (`2026-27`), Bonferroni multiple-testing
      p-values, full-slate signal, `uncapped_shadow`, and chronological `totals_clv_targeted`.
@@ -58,6 +61,8 @@ from src.prediction.ev_calculator import (
     compute_line_steam,
     describe_market_anchor_schedule,
     evaluate_scheduled_market_opportunity,
+    market_anchored_probability,
+    resolve_market_anchor_weight,
 )
 from src.prediction.totals_closing import TotalsClosingEstimator, fit_totals_closing_estimator
 from src.validation.validator import parse_iso_utc
@@ -188,6 +193,12 @@ def _price(fair_prob: float, vig: float) -> float:
     return round(1.0 / (max(1e-6, fair_prob) * (1.0 + vig)), 4)
 
 
+def _bettable_price(fair_prob: float, vig: float) -> float | None:
+    """`_price`, or None when the margin pushes it to <= 1.0 (fair_prob >= 1 / (1 + vig)): no bettable price."""
+    price = _price(fair_prob, vig)
+    return price if price > 1.0 else None
+
+
 def opening_line_hours_to_tipoff(anchor_schedule: Any) -> float:
     """
     Hours before tip-off at which a bet at the opening price is taken. The source publishes no timestamp for
@@ -211,7 +222,7 @@ def opening_quote_record(
     vig: float,
     hours_to_tipoff: float,
 ) -> dict[str, Any]:
-    """Two-way quote at the opening no-vig consensus plus the assumed margin, stamped when the line opened."""
+    """Opening quote at the no-vig consensus plus margin (counterpart None when the opposite side is <= 1.0)."""
     captured = parse_iso_utc(game_start_time) - timedelta(hours=hours_to_tipoff)
     return {
         "odds_id": f"BT_{game_id}_{market}_{selection}",
@@ -221,7 +232,7 @@ def opening_quote_record(
         "selection": selection,
         "line_value": line_value,
         "decimal_odds": _price(p_open, vig),
-        "counterpart_decimal_odds": _price(1.0 - p_open, vig),
+        "counterpart_decimal_odds": _bettable_price(1.0 - p_open, vig),
         "captured_at": captured.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
@@ -447,6 +458,7 @@ def run_real_odds_backtest(
     bets: list[dict[str, Any]] = []
     uncapped_shadow_bets: list[dict[str, Any]] = []
     totals_clv_bets: list[dict[str, Any]] = []
+    unpriceable_sides = 0
     kelly_bankroll = initial_bankroll
     last_train: datetime | None = None
 
@@ -602,27 +614,59 @@ def run_real_odds_backtest(
                                 "expected_move_pts": clv_sig["expected_move_pts"],
                             }
                         )
-            # Quotes known at decision time: only the opening line, so production's steam rule yields 0 here
-            # (the closing line is after the decision and would be lookahead).
-            quotes = [
-                opening_quote_record(
-                    g["game_id"],
-                    g["game_start_time"],
-                    market,
-                    sel,
-                    ln,
-                    p_open,
-                    vig=vig,
+            # Quality-series anchored probabilities depend only on the opening consensus and schedule, so a game
+            # stays in the full-slate quality series even if one side's vigged price is <= 1.0 (unbettable).
+            rec["anchored_home"] = market_anchored_probability(
+                float(np.clip(cal_home, 0.001, 0.999)),
+                p_open_home,
+                resolve_market_anchor_weight(
+                    "moneyline",
                     hours_to_tipoff=policy.hours_to_tipoff,
+                    fallback_weight=policy.market_anchor_weight,
+                    moneyline_weight=policy.moneyline_weight,
+                    schedule=policy.anchor_schedule,
+                ),
+            )
+            if "cal_over" in rec:
+                rec["anchored_over"] = market_anchored_probability(
+                    float(np.clip(float(rec["cal_over"]), 0.001, 0.999)),
+                    0.5,
+                    resolve_market_anchor_weight(
+                        "total_points",
+                        hours_to_tipoff=policy.hours_to_tipoff,
+                        fallback_weight=policy.market_anchor_weight,
+                        moneyline_weight=policy.moneyline_weight,
+                        schedule=policy.anchor_schedule,
+                    ),
                 )
-                for market, sel, ln, _cal, p_open, *_rest in sides
-            ]
-            steam_map = compute_line_steam(quotes)
+
+            # Quotes known at decision time: only bettable opening sides (`price > 1.0`), so production's steam
+            # rule yields 0 here (the closing line is after the decision and would be lookahead).
+            priceable_sides: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+            for side in sides:
+                market, sel, ln, _cal, p_open, *_rest = side
+                if _bettable_price(p_open, vig) is None:
+                    unpriceable_sides += 1
+                    continue
+                priceable_sides.append(
+                    (
+                        side,
+                        opening_quote_record(
+                            g["game_id"],
+                            g["game_start_time"],
+                            market,
+                            sel,
+                            ln,
+                            p_open,
+                            vig=vig,
+                            hours_to_tipoff=policy.hours_to_tipoff,
+                        ),
+                    )
+                )
+            steam_map = compute_line_steam([q for _, q in priceable_sides])
 
             best_shadow_by_mkt: dict[str, dict[str, Any]] = {}
-            for (market, sel, ln, cal_p, p_open, p_close, conf, result, p_push_s, raw_s), quote in zip(
-                sides, quotes, strict=True
-            ):
+            for (market, sel, ln, cal_p, p_open, p_close, conf, result, p_push_s, raw_s), quote in priceable_sides:
                 price = float(quote["decimal_odds"])
                 opp = evaluate_opening_price_side(
                     policy,
@@ -785,6 +829,7 @@ def run_real_odds_backtest(
             "market_rows": len(market_rows),
             "matched_games": len(market_by_game),
             "test_games": len(test_games),
+            "unpriceable_sides_skipped": unpriceable_sides,
             "boxscore_features": bool(boxscores),
             "evaluation": {
                 "development_seasons": list(eff_dev_seasons),
