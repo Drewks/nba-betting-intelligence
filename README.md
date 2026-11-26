@@ -44,9 +44,22 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
    - `allow_player_props_betting`: `false` | `allow_parlays`: `false` (bloqueo fail-closed en código y DB).
    - Conservación de cuota TheOddsAPI: `the_odds_api_regions: eu`, `the_odds_api_markets: h2h,totals`, caché en proceso `300s` (omitiendo días ya `FINAL` y ciclos `settle`).
 3. **Solo cuotas observadas**: ninguna cuota estimada, derivada o sintética puede generar una apuesta (`betting_allowed_source_types: ["OBSERVED"]`).
-4. **Fuente única de verdad DB (`state-live` vs `main`) e inmutabilidad**:
+4. **Fuente única de verdad DB (`state-live` vs `main`), archivo histórico diario (`db-archive` + `state-history`) e inmutabilidad**:
    - `origin/state-live:data/nba_intelligence.sqlite3.gz` es la **única fuente de verdad viva de producción** (actualizada por `.github/workflows/nba_cloud_automation.yml`).
    - Se guarda comprimida con `gzip -6 -n` porque GitHub rechaza archivos de más de 100 MB (el 2026-11-24 la base ocupaba 59.9 MB y crecía ~14 MB por semana; comprimida, 7.9 MB). Cada workflow la descomprime en `data/nba_intelligence.sqlite3` y se detiene si `PRAGMA integrity_check` no devuelve `ok` ([`src/storage/state_live.py`](src/storage/state_live.py)).
+   - **Archivo diario inmutable (`db-archive` + `origin/state-history`)**: dado que `state-live` reescribe su commit con `--force-with-lease` y los respaldos de Actions expiran en 7 días, el paso `7d` archiva un snapshot inmutable por día UTC mediante [`src/storage/state_archive.py`](src/storage/state_archive.py) (solo biblioteca estándar, solo permiso `contents: write`):
+     - Binario `nba_intelligence-YYYY-MM-DD.sqlite3.gz` en el GitHub Release `db-archive` (sin `--clobber`: escrito una sola vez).
+     - Manifiesto `snapshots/YYYY-MM-DD.json` (SHA-256 del `.gz`, SHA-256 de SQLite, conteos/hashes por tabla y verificación de continuidad fila a fila) y línea en `ledger.jsonl` en la rama append-only `origin/state-history` (solo fast-forward, nunca `--force`). Falla en cerrado ante cualquier borrado o alteración de tablas inmutables (`odds_snapshots`, `quarantined_odds`, `predictions`, `decision_log`, `bankroll_ledger`, `run_manifests`, `schema_migrations`, `audit_repairs`, `audit_row_registry`, `parlay_bankroll_ledger`, apuestas liquidadas y timestamps de partidos iniciados).
+     ```bash
+     # Archivar snapshot del día UTC actual desde state-live (idempotente por día)
+     python3 -m src.storage.state_archive archive --ref origin/state-live
+
+     # Reconstruir y verificar criptográficamente la base de cualquier fecha archivada
+     python3 -m src.storage.state_archive reconstruct YYYY-MM-DD --out /tmp/nba_YYYY-MM-DD.sqlite3
+
+     # Verificar reconstrucción y continuidad inmutable en una ventana móvil de 30 días
+     python3 -m src.storage.state_archive verify-window --days 30
+     ```
    - `data/nba_intelligence.sqlite3` en `main` permanece congelada como línea base de CI (`.github/workflows/ci.yml` falla si un PR modifica ese archivo).
    - Para extraer (descomprimir) e inspeccionar la DB viva en local sin ensuciar `main`, ejecuta:
      ```powershell
