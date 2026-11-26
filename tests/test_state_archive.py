@@ -470,16 +470,120 @@ def test_corrupt_release_asset_or_missing_asset_fails_closed(tmp_path: Path, git
             history=history,
         )
 
-    # Existing asset without manifest -> refuses to overwrite
+    # Existing mismatched asset without manifest -> refuses to overwrite
     orphan = store.root / asset_name("2026-11-25")
-    orphan.write_bytes(day1_gz.read_bytes())
+    orphan.write_bytes(gzip.compress(_evolve_to_day2(day1_db, tmp_path / "d2_other.sqlite3").read_bytes(), mtime=0))
     asset_file.write_bytes(original)
-    with pytest.raises(StateArchiveError, match="refusing to overwrite"):
+    with pytest.raises(StateArchiveError, match="different sha256.*refusing to overwrite"):
         archive_snapshot(
             day1_gz,
             "2026-11-25",
             source_commit="2222222",
             committed_at="2026-11-25T12:00:00Z",
+            store=store,
+            history=history,
+        )
+
+
+def test_archive_recovers_manifest_by_adopting_matching_existing_asset(
+    tmp_path: Path, git_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work, _ = _init_repo_pair(tmp_path)
+    store = FakeReleaseStore(tmp_path)
+    history = HistoryBranch(repo_root=work)
+
+    day1_db = _seed_day1_db(tmp_path / "d1.sqlite3")
+    day1_gz = _gz(day1_db, tmp_path / "d1.sqlite3.gz")
+
+    # Simulate Release upload succeeding while history.append push fails
+    real_append = history.append
+
+    def fail_once(*_args: Any, **_kwargs: Any) -> str:
+        raise StateArchiveError("simulated transient push failure")
+
+    monkeypatch.setattr(history, "append", fail_once)
+    with pytest.raises(StateArchiveError, match="simulated transient push failure"):
+        archive_snapshot(
+            day1_gz,
+            "2026-11-24",
+            source_commit="1111111",
+            committed_at="2026-11-24T12:00:00Z",
+            store=store,
+            history=history,
+        )
+    assert asset_name("2026-11-24") in store.asset_names()
+    assert history.fetch() is None
+    assert len(store.uploads) == 1
+
+    # Retry with the same snapshot adopts the existing asset (no re-upload) and commits the manifest
+    monkeypatch.setattr(history, "append", real_append)
+    m = archive_snapshot(
+        day1_gz,
+        "2026-11-24",
+        source_commit="1111111",
+        committed_at="2026-11-24T12:00:00Z",
+        store=store,
+        history=history,
+    )
+    assert m["asset_name"] == asset_name("2026-11-24")
+    assert len(store.uploads) == 1
+    assert history.fetch() is not None
+    out = tmp_path / "recovered.sqlite3"
+    reconstruct("2026-11-24", out, store=store, history=history)
+    assert out.read_bytes() == day1_db.read_bytes()
+
+
+def test_freeze_cutoff_uses_archived_at_for_same_day_reused_state_live_commit(tmp_path: Path, git_env: None) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    work, _ = _init_repo_pair(tmp_path)
+    store = FakeReleaseStore(tmp_path)
+    history = HistoryBranch(repo_root=work)
+
+    now = datetime.now(timezone.utc)
+    today_str = now.date().isoformat()
+    tomorrow_str = (now.date() + timedelta(days=1)).isoformat()
+    # Commit happened 3h ago, game tipped off 1h ago (after commit, BEFORE archive time `now`)
+    commit_before_tip = (now - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    tip_between_commit_and_archive = (now - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ingested_before = (now - timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    db1 = _seed_day1_db(tmp_path / "reuse1.sqlite3")
+    mgr = DatabaseManager(db1)
+    with mgr.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, features_available_at, source_provider, ingested_at
+            ) VALUES ('G_BETWEEN', '2026-27', ?, ?, 'NYK', 'MIL', 'SCHEDULED', ?, 'espn', ?)
+            """,
+            (today_str, tip_between_commit_and_archive, ingested_before, ingested_before),
+        )
+    mgr.checkpoint(truncate=True)
+    gz1 = _gz(db1, tmp_path / "reuse1.sqlite3.gz")
+    archive_snapshot(
+        gz1,
+        today_str,
+        source_commit="reused_sha",
+        committed_at=commit_before_tip,
+        store=store,
+        history=history,
+    )
+
+    # Rewriting G_BETWEEN's ingested_at on the next day MUST fail closed because archived_at > tip-off
+    db2_bad = _tamper_db(
+        db1,
+        tmp_path / "reuse2_bad.sqlite3",
+        f"UPDATE games SET ingested_at = '{now.strftime('%Y-%m-%dT%H:%M:%SZ')}' WHERE game_id = 'G_BETWEEN';",
+    )
+    gz2_bad = _gz(db2_bad, tmp_path / "reuse2_bad.sqlite3.gz")
+    with pytest.raises(ContinuityViolationError, match="games: started game G_BETWEEN rewrote"):
+        archive_snapshot(
+            gz2_bad,
+            tomorrow_str,
+            source_commit="next_sha",
+            committed_at=(now + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             store=store,
             history=history,
         )

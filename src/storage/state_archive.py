@@ -136,12 +136,38 @@ def _validate_snapshot_date(snapshot_date: str) -> str:
     return snapshot_date
 
 
-def _validate_iso_timestamp(ts: str) -> str:
+def _parse_iso_timestamp(ts: str) -> datetime:
     try:
-        datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except ValueError as exc:
         raise StateArchiveError(f"invalid ISO-8601 timestamp {ts!r}") from exc
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+def _validate_iso_timestamp(ts: str) -> str:
+    _parse_iso_timestamp(ts)
     return ts
+
+
+def _freeze_cutoff(manifest: dict[str, Any]) -> str | None:
+    """
+    Timestamp at which started games in `manifest` were already frozen.
+
+    For a live same-day archive (including no-change workflow runs that reuse an older state-live SHA),
+    any game that tipped off by `archived_at` was already started when the snapshot was observed.
+    For a historical backfill (`archived_at` on a later UTC date than `snapshot_date`), `source_committed_at`
+    is when the snapshot was actually taken.
+    """
+    committed_at = manifest.get("source_committed_at")
+    archived_at = manifest.get("archived_at")
+    snap_date = str(manifest.get("snapshot_date") or "")
+    if not archived_at:
+        return str(committed_at) if committed_at else None
+    if snap_date and str(archived_at)[:10] > snap_date and committed_at:
+        return str(committed_at)
+    if not committed_at:
+        return str(archived_at)
+    return str(archived_at) if _parse_iso_timestamp(str(archived_at)) >= _parse_iso_timestamp(str(committed_at)) else str(committed_at)
 
 
 def _sha256_file(path: Path) -> tuple[int, str]:
@@ -500,7 +526,7 @@ def archive_snapshot(
             prev_dir = work / "previous"
             prev_dir.mkdir()
             prev_db = _fetch_asset(store, prev_manifest, prev_dir)
-            found = verify_immutable_continuity(prev_db, db, older_taken_at=prev_manifest.get("source_committed_at"))
+            found = verify_immutable_continuity(prev_db, db, older_taken_at=_freeze_cutoff(prev_manifest))
             continuity = {"previous_snapshot": previous[-1], "ok": not found, "violations": found}
             if found and not allow_violations:
                 raise ContinuityViolationError(previous[-1], found)
@@ -509,16 +535,27 @@ def archive_snapshot(
             next_dir = work / "next"
             next_dir.mkdir()
             next_db = _fetch_asset(store, next_manifest, next_dir)
-            later_found = verify_immutable_continuity(db, next_db, older_taken_at=committed_at)
+            later_found = verify_immutable_continuity(db, next_db, older_taken_at=_freeze_cutoff(manifest))
             if later_found and not allow_violations:
                 raise ContinuityViolationError(later[0], later_found)
         manifest["continuity"] = continuity
         name = asset_name(snapshot_date)
         if name in store.asset_names():
-            raise StateArchiveError(f"{name} already exists in {RELEASE_TAG} without a manifest; refusing to overwrite it")
-        upload = work / name
-        shutil.copyfile(gz_path, upload)
-        store.upload(upload)
+            # Recovery path: a previous run uploaded the asset but failed before pushing `state-history`.
+            # Verify the existing immutable asset matches byte-for-byte and adopt it without overwriting.
+            existing_dir = work / "existing_asset"
+            existing_dir.mkdir()
+            existing_gz = store.download(name, existing_dir)
+            existing_size, existing_sha = _sha256_file(existing_gz)
+            if existing_sha != manifest["gz_sha256"] or existing_size != manifest["gz_size_bytes"]:
+                raise StateArchiveError(
+                    f"{name} already exists in {RELEASE_TAG} with different sha256 "
+                    f"({existing_sha[:12]} != {manifest['gz_sha256'][:12]}); refusing to overwrite it"
+                )
+        else:
+            upload = work / name
+            shutil.copyfile(gz_path, upload)
+            store.upload(upload)
     ledger = (history.read(tip, "ledger.jsonl") or "").rstrip("\n")
     line = json.dumps(
         {k: manifest[k] for k in ("snapshot_date", "asset_name", "gz_sha256", "sqlite_sha256", "source_commit")}
@@ -576,7 +613,7 @@ def verify_window(days: int, *, store: ReleaseStore, history: HistoryBranch, tod
             workdir.mkdir()
             db = _fetch_asset(store, manifest, workdir)
             if prev is not None:
-                found = verify_immutable_continuity(prev[2], db, older_taken_at=prev[3].get("source_committed_at"))
+                found = verify_immutable_continuity(prev[2], db, older_taken_at=_freeze_cutoff(prev[3]))
                 report["pairs"].append({"older": prev[0], "newer": d, "violations": found})
                 report["ok"] = report["ok"] and not found
                 shutil.rmtree(prev[1], ignore_errors=True)
