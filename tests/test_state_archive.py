@@ -470,11 +470,12 @@ def test_corrupt_release_asset_or_missing_asset_fails_closed(tmp_path: Path, git
             history=history,
         )
 
-    # Existing mismatched asset without manifest -> refuses to overwrite
+    # Existing tampered/incompatible orphan asset without manifest -> fails closed (never overwrites)
     orphan = store.root / asset_name("2026-11-25")
-    orphan.write_bytes(gzip.compress(_evolve_to_day2(day1_db, tmp_path / "d2_other.sqlite3").read_bytes(), mtime=0))
+    tampered_orphan = _tamper_db(day1_db, tmp_path / "orphan_bad.sqlite3", "UPDATE odds_snapshots SET decimal_odds = 9.99 WHERE odds_id = 'O_1';")
+    orphan.write_bytes(gzip.compress(tampered_orphan.read_bytes(), mtime=0))
     asset_file.write_bytes(original)
-    with pytest.raises(StateArchiveError, match="different sha256.*refusing to overwrite"):
+    with pytest.raises(ContinuityViolationError, match="odds_snapshots: row .* modified"):
         archive_snapshot(
             day1_gz,
             "2026-11-25",
@@ -485,7 +486,7 @@ def test_corrupt_release_asset_or_missing_asset_fails_closed(tmp_path: Path, git
         )
 
 
-def test_archive_recovers_manifest_by_adopting_matching_existing_asset(
+def test_archive_recovers_manifest_for_matching_and_superseded_same_day_orphan_assets(
     tmp_path: Path, git_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     work, _ = _init_repo_pair(tmp_path)
@@ -495,7 +496,7 @@ def test_archive_recovers_manifest_by_adopting_matching_existing_asset(
     day1_db = _seed_day1_db(tmp_path / "d1.sqlite3")
     day1_gz = _gz(day1_db, tmp_path / "d1.sqlite3.gz")
 
-    # Simulate Release upload succeeding while history.append push fails
+    # Case 1: Release upload succeeds while history.append push fails, retry has byte-identical gz
     real_append = history.append
 
     def fail_once(*_args: Any, **_kwargs: Any) -> str:
@@ -515,7 +516,6 @@ def test_archive_recovers_manifest_by_adopting_matching_existing_asset(
     assert history.fetch() is None
     assert len(store.uploads) == 1
 
-    # Retry with the same snapshot adopts the existing asset (no re-upload) and commits the manifest
     monkeypatch.setattr(history, "append", real_append)
     m = archive_snapshot(
         day1_gz,
@@ -526,11 +526,67 @@ def test_archive_recovers_manifest_by_adopting_matching_existing_asset(
         history=history,
     )
     assert m["asset_name"] == asset_name("2026-11-24")
+    assert m["source_commit"] == "1111111"
     assert len(store.uploads) == 1
-    assert history.fetch() is not None
-    out = tmp_path / "recovered.sqlite3"
+    out = tmp_path / "recovered_day1.sqlite3"
     reconstruct("2026-11-24", out, store=store, history=history)
     assert out.read_bytes() == day1_db.read_bytes()
+
+    # Case 2: Day 2 cycle 1 uploads asset `day2_early`, push fails; cycle 2 updates state-live lawfully
+    # to `day2_late` and retries -> adopts `day2_early` without overwriting and records its manifest!
+    day2_early_db = _evolve_to_day2(day1_db, tmp_path / "d2_early.sqlite3")
+    day2_early_gz = _gz(day2_early_db, tmp_path / "d2_early.sqlite3.gz")
+    monkeypatch.setattr(history, "append", fail_once)
+    with pytest.raises(StateArchiveError, match="simulated transient push failure"):
+        archive_snapshot(
+            day2_early_gz,
+            "2026-11-25",
+            source_commit="2222222",
+            committed_at="2026-11-25T10:00:00Z",
+            store=store,
+            history=history,
+        )
+    assert asset_name("2026-11-25") in store.asset_names()
+    assert len(store.uploads) == 2
+
+    # Later same-day cycle adds another lawful odds snapshot
+    day2_late_db = tmp_path / "d2_late.sqlite3"
+    shutil.copyfile(day2_early_db, day2_late_db)
+    mgr = DatabaseManager(day2_late_db)
+    with mgr.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO odds_snapshots (
+                odds_id, game_id, provider, market, selection, line_value, decimal_odds,
+                counterpart_decimal_odds, captured_at, is_closing_line, source_type, fetched_at
+            ) VALUES ('O_3', 'G_FUTURE', 'pinnacle', 'moneyline', 'HOME', NULL, 1.74, 2.18,
+                      '2026-11-25T16:00:00Z', 0, 'OBSERVED', '2026-11-25T16:00:00Z')
+            """
+        )
+    mgr.checkpoint(truncate=True)
+    day2_late_gz = _gz(day2_late_db, tmp_path / "d2_late.sqlite3.gz")
+
+    monkeypatch.setattr(history, "append", real_append)
+    m2 = archive_snapshot(
+        day2_late_gz,
+        "2026-11-25",
+        source_commit="3333333",
+        committed_at="2026-11-25T16:05:00Z",
+        store=store,
+        history=history,
+    )
+    assert m2["recovered_from_existing_asset"] is True
+    assert m2["source_commit"].startswith("recovered-asset:")
+    assert m2["gz_sha256"] == hashlib.sha256(day2_early_gz.read_bytes()).hexdigest()
+    assert len(store.uploads) == 2  # existing immutable Release asset was NOT overwritten
+    out2 = tmp_path / "recovered_day2.sqlite3"
+    reconstruct("2026-11-25", out2, store=store, history=history)
+    assert out2.read_bytes() == day2_early_db.read_bytes()
+
+    # Subsequent verify_window passes across Day 1 -> recovered Day 2
+    report = verify_window(30, store=store, history=history, today=date(2026, 11, 26))
+    assert report["ok"] is True
+    assert report["snapshots"] == ["2026-11-24", "2026-11-25"]
 
 
 def test_freeze_cutoff_uses_archived_at_for_same_day_reused_state_live_commit(tmp_path: Path, git_env: None) -> None:

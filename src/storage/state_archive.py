@@ -155,19 +155,51 @@ def _freeze_cutoff(manifest: dict[str, Any]) -> str | None:
 
     For a live same-day archive (including no-change workflow runs that reuse an older state-live SHA),
     any game that tipped off by `archived_at` was already started when the snapshot was observed.
-    For a historical backfill (`archived_at` on a later UTC date than `snapshot_date`), `source_committed_at`
-    is when the snapshot was actually taken.
+    For a historical backfill (`archived_at` on a later UTC date than `snapshot_date`) or a manifest
+    recovered from an earlier same-day Release asset, `source_committed_at` reflects when that snapshot
+    was actually taken.
     """
     committed_at = manifest.get("source_committed_at")
     archived_at = manifest.get("archived_at")
     snap_date = str(manifest.get("snapshot_date") or "")
     if not archived_at:
         return str(committed_at) if committed_at else None
+    if manifest.get("recovered_from_existing_asset") and committed_at:
+        return str(committed_at)
     if snap_date and str(archived_at)[:10] > snap_date and committed_at:
         return str(committed_at)
     if not committed_at:
         return str(archived_at)
     return str(archived_at) if _parse_iso_timestamp(str(archived_at)) >= _parse_iso_timestamp(str(committed_at)) else str(committed_at)
+
+
+def _db_latest_timestamp(db_path: Path) -> str | None:
+    """Best-effort latest ISO-8601 UTC write timestamp recorded inside `db_path` (for orphan asset recovery)."""
+    candidates: list[tuple[datetime, str]] = []
+    conn = _connect_ro(db_path)
+    try:
+        tables = {str(r[0]) for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        for table, col in (
+            ("run_manifests", "created_at"),
+            ("odds_snapshots", "captured_at"),
+            ("predictions", "emitted_at"),
+            ("simulated_bets", "settled_at"),
+            ("games", "ingested_at"),
+        ):
+            if table not in tables or col not in _columns(conn, "main", table):
+                continue
+            row = conn.execute(
+                f"SELECT MAX(datetime({_q(col)})) FROM {_q(table)} WHERE {_q(col)} IS NOT NULL"
+            ).fetchone()
+            if row and row[0]:
+                raw = str(row[0]).replace(" ", "T") + "Z"
+                try:
+                    candidates.append((_parse_iso_timestamp(raw), raw))
+                except StateArchiveError:
+                    continue
+    finally:
+        conn.close()
+    return max(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
 def _sha256_file(path: Path) -> tuple[int, str]:
@@ -516,17 +548,57 @@ def archive_snapshot(
             check_integrity(db)
         except StateLiveError as exc:
             raise StateArchiveError(str(exc)) from exc
-        manifest = build_manifest(gz_path, db, snapshot_date, source_commit=source_commit, committed_at=committed_at)
         all_dates = history.snapshot_dates(tip)
         previous = [d for d in all_dates if d < snapshot_date]
         later = [d for d in all_dates if d > snapshot_date]
+        name = asset_name(snapshot_date)
+        asset_exists = name in store.asset_names()
+
+        target_gz = gz_path
+        target_db = db
+        target_commit = source_commit
+        target_committed_at = committed_at
+        recovered_superseded = False
+
+        if asset_exists:
+            # Recovery path: a previous run uploaded the immutable asset but failed before pushing `state-history`.
+            # If the existing asset matches byte-for-byte, adopt it directly; if a later same-day cycle already
+            # advanced `state-live`, verify the existing asset is intact and a lawful ancestor of `db`, then record
+            # its manifest without ever overwriting the Release asset.
+            existing_dir = work / "existing_asset"
+            existing_dir.mkdir()
+            existing_gz = store.download(name, existing_dir)
+            existing_size, existing_sha = _sha256_file(existing_gz)
+            cur_size, cur_sha = _sha256_file(gz_path)
+            if existing_sha != cur_sha or existing_size != cur_size:
+                existing_db = existing_dir / "existing.sqlite3"
+                decompress(existing_gz, existing_db)
+                try:
+                    check_integrity(existing_db)
+                except StateLiveError as exc:
+                    raise StateArchiveError(f"existing asset {name} failed integrity check: {exc}") from exc
+                recovered_at = _db_latest_timestamp(existing_db) or committed_at
+                ancestor_violations = verify_immutable_continuity(existing_db, db, older_taken_at=recovered_at)
+                if ancestor_violations and not allow_violations:
+                    raise ContinuityViolationError(f"{snapshot_date} (existing asset {name})", ancestor_violations)
+                target_gz = existing_gz
+                target_db = existing_db
+                target_commit = f"recovered-asset:{existing_sha[:12]}"
+                target_committed_at = recovered_at
+                recovered_superseded = True
+
+        manifest = build_manifest(
+            target_gz, target_db, snapshot_date, source_commit=target_commit, committed_at=target_committed_at
+        )
+        if recovered_superseded:
+            manifest["recovered_from_existing_asset"] = True
         continuity: dict[str, Any] = {"previous_snapshot": None, "ok": True, "violations": []}
         if previous:
             prev_manifest = json.loads(history.read(tip, f"snapshots/{previous[-1]}.json") or "{}")
             prev_dir = work / "previous"
             prev_dir.mkdir()
             prev_db = _fetch_asset(store, prev_manifest, prev_dir)
-            found = verify_immutable_continuity(prev_db, db, older_taken_at=_freeze_cutoff(prev_manifest))
+            found = verify_immutable_continuity(prev_db, target_db, older_taken_at=_freeze_cutoff(prev_manifest))
             continuity = {"previous_snapshot": previous[-1], "ok": not found, "violations": found}
             if found and not allow_violations:
                 raise ContinuityViolationError(previous[-1], found)
@@ -535,24 +607,11 @@ def archive_snapshot(
             next_dir = work / "next"
             next_dir.mkdir()
             next_db = _fetch_asset(store, next_manifest, next_dir)
-            later_found = verify_immutable_continuity(db, next_db, older_taken_at=_freeze_cutoff(manifest))
+            later_found = verify_immutable_continuity(target_db, next_db, older_taken_at=_freeze_cutoff(manifest))
             if later_found and not allow_violations:
                 raise ContinuityViolationError(later[0], later_found)
         manifest["continuity"] = continuity
-        name = asset_name(snapshot_date)
-        if name in store.asset_names():
-            # Recovery path: a previous run uploaded the asset but failed before pushing `state-history`.
-            # Verify the existing immutable asset matches byte-for-byte and adopt it without overwriting.
-            existing_dir = work / "existing_asset"
-            existing_dir.mkdir()
-            existing_gz = store.download(name, existing_dir)
-            existing_size, existing_sha = _sha256_file(existing_gz)
-            if existing_sha != manifest["gz_sha256"] or existing_size != manifest["gz_size_bytes"]:
-                raise StateArchiveError(
-                    f"{name} already exists in {RELEASE_TAG} with different sha256 "
-                    f"({existing_sha[:12]} != {manifest['gz_sha256'][:12]}); refusing to overwrite it"
-                )
-        else:
+        if not asset_exists:
             upload = work / name
             shutil.copyfile(gz_path, upload)
             store.upload(upload)
