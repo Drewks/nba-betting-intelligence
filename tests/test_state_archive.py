@@ -1047,3 +1047,129 @@ def test_cloud_workflow_wires_step_7d_preserving_t018_permissions() -> None:
         step_7d["run"]
     )
     assert hashlib.sha256(LIVE_DB_GZ_PATH.encode()).hexdigest()  # sanity import check
+
+
+def test_pre_push_hook_new_orphan_branch_db_guard_and_deletions(tmp_path: Path, git_env: None) -> None:
+    """Regression test for `.githooks/pre-push` across orphan, new, existing, state-live, and delete pushes."""
+    work, remote = _init_repo_pair(tmp_path)
+    _git(work, "checkout", "-b", "main")
+    (work / "README.md").write_text("initial\n", encoding="utf-8")
+    db_file = work / "data" / "nba_intelligence.sqlite3"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    db_file.write_bytes(b"historical-sqlite-placeholder")
+    _git(work, "add", "README.md", "data/nba_intelligence.sqlite3")
+    _git(work, "commit", "-m", "initial commit with historical db")
+    _git(work, "push", "-u", "origin", "main")
+
+    # Install the repository's real pre-push hook into a temp hooks dir with LF + executable bit.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    hook_copy = hooks_dir / "pre-push"
+    hook_src = (PROJECT_ROOT / ".githooks" / "pre-push").read_bytes().replace(b"\r\n", b"\n")
+    hook_copy.write_bytes(hook_src)
+    hook_copy.chmod(0o755)
+    _git(work, "config", "core.hooksPath", str(hooks_dir))
+
+    def _run_push(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "push", "origin", *args],
+            cwd=work,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    # 1. Pushing a new orphan branch (`state-history`) while `main`'s working tree has
+    #    `data/nba_intelligence.sqlite3` must be ALLOWED (and subsequent append commits too).
+    history = HistoryBranch(repo_root=work)
+    tip1 = history.append(
+        None,
+        {"ledger.jsonl": '{"date":"2026-11-23"}\n', "snapshots/2026-11-23.json": '{"date":"2026-11-23"}\n'},
+        "archive: 2026-11-23",
+    )
+    assert _git(remote, "rev-parse", "refs/heads/state-history") == tip1
+    tip2 = history.append(
+        tip1,
+        {"ledger.jsonl": '{"date":"2026-11-23"}\n{"date":"2026-11-24"}\n', "snapshots/2026-11-24.json": "{}\n"},
+        "archive: 2026-11-24",
+    )
+    assert _git(remote, "rev-parse", "refs/heads/state-history") == tip2
+
+    # 2. Pushing a new orphan branch that DOES contain `data/nba_intelligence.sqlite3` must be REJECTED.
+    bad_history = HistoryBranch(repo_root=work, branch="bad-orphan")
+    with pytest.raises(StateArchiveError, match="Push REJECTED"):
+        bad_history.append(
+            None,
+            {"data/nba_intelligence.sqlite3": "tampered"},
+            "bad orphan with sqlite",
+        )
+    assert (
+        subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", "refs/heads/bad-orphan"],
+            cwd=remote,
+            check=False,
+        ).returncode
+        != 0
+    )
+
+    # 3. Pushing a new feature branch off `origin/main` that does NOT touch the DB must be ALLOWED,
+    #    and updating it cleanly must also be ALLOWED.
+    _git(work, "checkout", "-b", "feat/clean", "origin/main")
+    (work / "README.md").write_text("clean branch change\n", encoding="utf-8")
+    _git(work, "add", "README.md")
+    _git(work, "commit", "-m", "clean docs change")
+    res_clean_new = _run_push("feat/clean")
+    assert res_clean_new.returncode == 0, res_clean_new.stderr
+
+    (work / "README.md").write_text("second clean change\n", encoding="utf-8")
+    _git(work, "add", "README.md")
+    _git(work, "commit", "-m", "second clean change")
+    res_clean_update = _run_push("feat/clean")
+    assert res_clean_update.returncode == 0, res_clean_update.stderr
+
+    # 4. Pushing a new branch that genuinely modifies `data/nba_intelligence.sqlite3` must be REJECTED.
+    _git(work, "checkout", "-b", "feat/modify-db", "origin/main")
+    db_file.write_bytes(b"modified-sqlite-bytes")
+    _git(work, "add", "data/nba_intelligence.sqlite3")
+    _git(work, "commit", "-m", "accidental db commit")
+    res_bad_new = _run_push("feat/modify-db")
+    assert res_bad_new.returncode != 0
+    assert "Push REJECTED" in (res_bad_new.stdout + res_bad_new.stderr)
+    assert (
+        subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", "refs/heads/feat/modify-db"],
+            cwd=remote,
+            check=False,
+        ).returncode
+        != 0
+    )
+
+    # 5. Updating an existing branch with a commit modifying `data/nba_intelligence.sqlite3` must be REJECTED.
+    _git(work, "checkout", "feat/clean")
+    db_file.write_bytes(b"existing-branch-db-edit")
+    _git(work, "add", "data/nba_intelligence.sqlite3")
+    _git(work, "commit", "-m", "accidental db edit on existing branch")
+    res_bad_update = _run_push("feat/clean")
+    assert res_bad_update.returncode != 0
+    assert "Push REJECTED" in (res_bad_update.stdout + res_bad_update.stderr)
+
+    # 6. Pushing `state-live` with compressed `data/nba_intelligence.sqlite3.gz` must be ALLOWED.
+    _git(work, "checkout", "-b", "state-live", "origin/main")
+    gz_file = work / LIVE_DB_GZ_PATH
+    gz_file.write_bytes(b"gzipped-db-payload")
+    _git(work, "add", LIVE_DB_GZ_PATH)
+    _git(work, "commit", "-m", "state-live compressed db snapshot")
+    res_state_live = _run_push("state-live")
+    assert res_state_live.returncode == 0, res_state_live.stderr
+
+    # 7. Deleting a remote branch (`local_oid == 0000...`) must be ALLOWED.
+    res_delete = _run_push("--delete", "feat/clean")
+    assert res_delete.returncode == 0, res_delete.stderr
+    assert (
+        subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", "refs/heads/feat/clean"],
+            cwd=remote,
+            check=False,
+        ).returncode
+        != 0
+    )
