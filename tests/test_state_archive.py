@@ -458,7 +458,7 @@ def test_corrupt_release_asset_or_missing_asset_fails_closed(tmp_path: Path, git
         history=history,
     )
 
-    # Corrupt asset bytes in store -> SHA-256 mismatch on reconstruct
+    # Corrupt asset bytes in store -> SHA-256 mismatch on BOTH reconstruct AND idempotent archive skip
     asset_file = store.root / asset_name("2026-11-24")
     original = asset_file.read_bytes()
     asset_file.write_bytes(original[:-10] + b"CORRUPTED!")
@@ -467,6 +467,15 @@ def test_corrupt_release_asset_or_missing_asset_fails_closed(tmp_path: Path, git
     with pytest.raises(StateArchiveError, match="SHA-256"):
         reconstruct("2026-11-24", out, store=store, history=history)
     assert out.read_bytes() == b"keep-me"
+    with pytest.raises(StateArchiveError, match="SHA-256"):
+        archive_snapshot(
+            day1_gz,
+            "2026-11-24",
+            source_commit="1111111",
+            committed_at="2026-11-24T12:00:00Z",
+            store=store,
+            history=history,
+        )
 
     # Missing asset when manifest exists -> idempotency check fails closed
     asset_file.unlink()

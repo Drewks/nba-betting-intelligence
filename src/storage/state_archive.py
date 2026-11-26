@@ -562,6 +562,8 @@ def archive_snapshot(
         manifest = json.loads(existing)
         if manifest["asset_name"] not in store.asset_names():
             raise StateArchiveError(f"{path} exists but its asset {manifest['asset_name']} is missing from {RELEASE_TAG}")
+        with tempfile.TemporaryDirectory() as tmp:
+            _fetch_asset(store, manifest, Path(tmp))
         return {**manifest, "skipped": True}
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
