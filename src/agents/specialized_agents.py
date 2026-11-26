@@ -217,6 +217,14 @@ class NBADataScoutAgent:
 
         validated_odds: list[dict[str, Any]] = []
         rejected_odds: list[dict[str, str]] = []
+        # A TheOddsAPI quote served from the in-process TTL cache was fetched by an earlier call of this run,
+        # at most `the_odds_api_cache_ttl_seconds` before this fetch started.
+        try:
+            from src.config import load_config
+
+            cache_ttl_seconds = float(load_config().sources.the_odds_api_cache_ttl_seconds)
+        except Exception:
+            cache_ttl_seconds = 0.0
         for o in raw_odds:
             if str(o.get("game_id", "")) in live_game_ids:
                 rejected_odds.append(
@@ -239,7 +247,7 @@ class NBADataScoutAgent:
                 rejected_odds.append({"odds_id": str(o.get("odds_id")), "reason": "Parent game missing or invalid"})
                 continue
             try:
-                validate_odds_fetch_provenance(o, fetch_started_at)
+                validate_odds_fetch_provenance(o, fetch_started_at, max_cache_age_seconds=cache_ttl_seconds)
                 validate_odds_record(o, g_start)
                 self.db.insert_odds_snapshot(o)
                 validated_odds.append(o)

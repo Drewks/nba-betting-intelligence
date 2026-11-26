@@ -7,6 +7,7 @@ counterpart odds for accurate de-vigging and EV calculation.
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime, timezone
 import hashlib
 import json
 import logging
@@ -97,10 +98,35 @@ class TheOddsAPIAdapter:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
-    def fetch_multi_book_odds_by_matchup(self, now_utc: str) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
+    @staticmethod
+    def _filter_cached_for_now(
+        cached_map: dict[tuple[str, str, str], list[dict[str, Any]]], now_utc: str
+    ) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
+        """
+        A cached response re-checked against the caller's clock: events that have started since the fetch are
+        dropped (as a fresh fetch would drop them), and each quote keeps the `captured_at` of the HTTP fetch
+        that observed it, flagged `from_ttl_cache`, so a later caller never re-stamps an older price as new.
+        """
+        out: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        for key, quotes in cached_map.items():
+            live = [
+                {**item, "from_ttl_cache": True}
+                for item in quotes
+                if str(item.get("commence_time") or "") > now_utc
+            ]
+            if live:
+                out[key] = live
+        return out
+
+    def fetch_multi_book_odds_by_matchup(
+        self, now_utc: str | None = None
+    ) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
         """
         Fetches live decimal odds across configured bookmaker regions/markets
         and returns a mapping keyed by (matchday_date, away_team_code, home_team_code).
+
+        Pass `now_utc=None` on live runs so the adapter stamps responses and cache entries with the actual
+        UTC wall-clock time when the HTTP response arrived (aligned with the cache's monotonic timestamp).
         """
         if not self.api_key:
             return {}
@@ -118,7 +144,8 @@ class TheOddsAPIAdapter:
                 age_sec = time.monotonic() - cached_ts
                 if age_sec <= self.cache_ttl_seconds:
                     logger.debug("TheOddsAPI cache hit (age=%.1fs); saved API quota.", age_sec)
-                    return {k: [dict(item) for item in v] for k, v in cached_map.items()}
+                    check_now_utc = now_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    return self._filter_cached_for_now(cached_map, check_now_utc)
 
         url = (
             f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/"
@@ -167,11 +194,15 @@ class TheOddsAPIAdapter:
                 logger.warning("TheOddsAPI request failed: %s", sanitized)
             return {}
 
+        # Capture the monotonic cache clock and UTC stamp together right after the HTTP response arrives so
+        # every valid monotonic cache hit stays within `cache_ttl_seconds` of a later caller's fetch start.
+        fetched_mono = time.monotonic()
+        response_utc = now_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         by_matchup: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
 
         for ev in events:
             commence = ev.get("commence_time", "")
-            if not commence or commence <= now_utc:
+            if not commence or commence <= response_utc:
                 continue
             try:
                 home_code = normalize_team_code(ev.get("home_team", ""))
@@ -294,7 +325,9 @@ class TheOddsAPIAdapter:
                             "line_value": None,
                             "decimal_odds": round(best_home_odds, 4),
                             "counterpart_decimal_odds": round(h_counter, 4),
-                            "captured_at": now_utc,
+                            "captured_at": response_utc,
+                            "fetched_at": response_utc,
+                            "commence_time": commence,
                             "is_closing_line": 0,
                             "source_type": "OBSERVED",
                         },
@@ -305,7 +338,9 @@ class TheOddsAPIAdapter:
                             "line_value": None,
                             "decimal_odds": round(best_away_odds, 4),
                             "counterpart_decimal_odds": round(a_counter, 4),
-                            "captured_at": now_utc,
+                            "captured_at": response_utc,
+                            "fetched_at": response_utc,
+                            "commence_time": commence,
                             "is_closing_line": 0,
                             "source_type": "OBSERVED",
                         },
@@ -335,7 +370,9 @@ class TheOddsAPIAdapter:
                                 "line_value": float(chosen_line),
                                 "decimal_odds": round(float(t_info["best_over"]), 4),
                                 "counterpart_decimal_odds": round(float(over_cnt), 4),
-                                "captured_at": now_utc,
+                                "captured_at": response_utc,
+                                "fetched_at": response_utc,
+                                "commence_time": commence,
                                 "is_closing_line": 0,
                                 "source_type": "OBSERVED",
                             },
@@ -346,7 +383,9 @@ class TheOddsAPIAdapter:
                                 "line_value": float(chosen_line),
                                 "decimal_odds": round(float(t_info["best_under"]), 4),
                                 "counterpart_decimal_odds": round(float(under_cnt), 4),
-                                "captured_at": now_utc,
+                                "captured_at": response_utc,
+                                "fetched_at": response_utc,
+                                "commence_time": commence,
                                 "is_closing_line": 0,
                                 "source_type": "OBSERVED",
                             },
@@ -355,7 +394,7 @@ class TheOddsAPIAdapter:
 
         if self.cache_ttl_seconds > 0:
             type(self)._RESPONSE_CACHE[cache_key] = (
-                time.monotonic(),
+                fetched_mono,
                 {k: [dict(item) for item in v] for k, v in by_matchup.items()},
             )
 
