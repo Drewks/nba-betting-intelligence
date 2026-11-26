@@ -194,6 +194,18 @@ def _seed_day1_db(path: Path) -> Path:
                       '2026-11-24T00:00:00Z', '2026-11-24T00:00:00Z')
             """
         )
+        conn.execute(
+            """
+            INSERT INTO player_prop_picks (
+                prop_id, game_id, matchday_date, player_name, team, prop_category, line_value,
+                selection, decimal_odds, projected_mean, projected_std, model_prob,
+                conformal_p_low, conformal_p_high, ev_pct, ev_lower_bound_pct, stake_pen,
+                kelly_stake_pen, usage_bump_pct, rationale, emitted_at, status
+            ) VALUES ('PP_1', 'G_STARTED', '2026-11-24', 'Jayson Tatum', 'BOS', 'PTS', 26.5,
+                      'OVER', 1.91, 29.0, 5.2, 0.58, 0.52, 0.64, 10.8, 3.0, 1.5, 1.5, 0.0,
+                      'test prop', '2026-11-23T22:01:00Z', 'PENDING')
+            """
+        )
     db.checkpoint(truncate=True)
     return path
 
@@ -219,6 +231,11 @@ def _evolve_to_day2(day1_db: Path, day2_db: Path) -> Path:
         conn.execute(
             "UPDATE shadow_candidates SET status = 'WON', hypothetical_unit_profit = 1.05, "
             "settled_at = '2026-11-24T04:05:00Z' WHERE shadow_id = 'SH_1'"
+        )
+        conn.execute(
+            "UPDATE player_prop_picks SET status = 'WON', actual_stat = 31.0, net_profit_pen = 1.365, "
+            "bankroll_after_pen = 101.365, actual_result_summary = '31 PTS', settled_at = '2026-11-24T04:05:00Z' "
+            "WHERE prop_id = 'PP_1'"
         )
         conn.execute(
             """
@@ -356,6 +373,9 @@ def test_archive_reconstruct_and_verify_window_end_to_end(tmp_path: Path, git_en
         ("edit_bankroll", "UPDATE bankroll_ledger SET settled_bankroll_pen = 500.0 WHERE entry_id = 1;", "bankroll_ledger: row .* modified"),
         ("delete_quarantine", "DELETE FROM quarantined_odds WHERE odds_id = 'O_Q1';", "quarantined_odds: row .* deleted"),
         ("edit_pending_bet_odds", "UPDATE simulated_bets SET decimal_odds = 4.0 WHERE bet_id = 'B_1';", "simulated_bets: row .* modified"),
+        ("edit_pending_prop_odds", "UPDATE player_prop_picks SET decimal_odds = 2.50 WHERE prop_id = 'PP_1';", "player_prop_picks: row .* modified"),
+        ("edit_pending_prop_selection", "UPDATE player_prop_picks SET selection = 'UNDER' WHERE prop_id = 'PP_1';", "player_prop_picks: row .* modified"),
+        ("edit_pending_prop_stake", "UPDATE player_prop_picks SET stake_pen = 5.0 WHERE prop_id = 'PP_1';", "player_prop_picks: row .* modified"),
         ("delete_started_game", "DELETE FROM games WHERE game_id = 'G_STARTED';", "games: started game G_STARTED deleted"),
         (
             "rewrite_started_game_ts",

@@ -75,11 +75,14 @@ class TableRule:
     """How a table's rows may evolve between two snapshots."""
 
     pk: tuple[str, ...]
-    # Settle-once tables: columns frozen even while `status = 'PENDING'` (matching the table's update trigger);
-    # once a row is settled every column is frozen. Empty `status_column` means every column is always frozen.
-    pending_frozen: tuple[str, ...] = ()
+    # Settle-once tables: only `settlement_columns` may change while `status = 'PENDING'`; every other column
+    # (recorded selection, odds, stake, probabilities, timestamps) is frozen immediately, and once a row is
+    # settled every column is frozen. Empty `status_column` means every column is always frozen.
+    settlement_columns: tuple[str, ...] = ()
     status_column: str = ""
 
+
+_BET_SETTLEMENT_COLS = ("status", "net_profit_pen", "bankroll_after_pen", "actual_result_summary", "settled_at")
 
 IMMUTABLE_TABLES: dict[str, TableRule] = {
     "odds_snapshots": TableRule(("odds_id",)),
@@ -92,29 +95,12 @@ IMMUTABLE_TABLES: dict[str, TableRule] = {
     "audit_repairs": TableRule(("repair_id",)),
     "audit_row_registry": TableRule(("table_name", "row_pk")),
     "parlay_bankroll_ledger": TableRule(("entry_id",)),
-    "simulated_bets": TableRule(
-        ("bet_id",),
-        (
-            "decimal_odds",
-            "stake_pen",
-            "selection",
-            "line_value",
-            "prediction_id",
-            "emitted_at",
-            "estimated_prob",
-            "estimated_ev",
-        ),
-        "status",
-    ),
-    "parlay_bets": TableRule(
-        ("parlay_id",),
-        ("compound_odds", "stake_pen", "legs_json", "emitted_at", "strategy_type"),
-        "status",
-    ),
-    "player_prop_picks": TableRule(("prop_id",), (), "status"),
+    "simulated_bets": TableRule(("bet_id",), _BET_SETTLEMENT_COLS, "status"),
+    "parlay_bets": TableRule(("parlay_id",), _BET_SETTLEMENT_COLS, "status"),
+    "player_prop_picks": TableRule(("prop_id",), ("actual_stat", *_BET_SETTLEMENT_COLS), "status"),
     "shadow_candidates": TableRule(
         ("shadow_id",),
-        ("decimal_odds", "calibrated_probability", "ev_unit", "emitted_at", "market", "selection"),
+        ("closing_decimal_odds", "closing_fair_prob", "clv_pct", "status", "hypothetical_unit_profit", "settled_at"),
         "status",
     ),
 }
@@ -252,7 +238,8 @@ def _table_violations(conn: sqlite3.Connection, table: str, rule: TableRule, com
     ).fetchall()
     out += [f"{table}: row {list(r)} deleted" for r in missing]
     if rule.status_column and rule.status_column in common:
-        pending_cols = [c for c in rule.pending_frozen if c in common]
+        settlement = set(rule.settlement_columns)
+        pending_cols = [c for c in common if c not in settlement]
         cond = f"(o.{_q(rule.status_column)} IS NOT 'PENDING' AND ({_differs_sql(common)})) OR ({_differs_sql(pending_cols)})"
     else:
         cond = _differs_sql(common)
