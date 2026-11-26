@@ -248,26 +248,38 @@ def validate_odds_record(
     return odds
 
 
-def validate_odds_fetch_provenance(odds: dict[str, Any], fetch_started_at: str) -> dict[str, Any]:
+def validate_odds_fetch_provenance(
+    odds: dict[str, Any], fetch_started_at: str, *, max_cache_age_seconds: float = 0.0
+) -> dict[str, Any]:
     """
     Checks the capture timestamp of a quote against the moment it was fetched.
 
     `fetched_at` (when the adapter declares it) is the wall-clock moment the quote was fetched. A quote can
     never be stamped earlier than that moment (`captured_at < fetched_at` is a backdated stamp, e.g. the
     removed "tip-off − 15 min" convention for quotes fetched after tip-off), and the fetch itself cannot
-    precede `fetch_started_at`, the moment the caller started the fetch. Quotes without `fetched_at`
-    carry no fetch record and are left to the other checks.
+    precede `fetch_started_at`, the moment the caller started the fetch. The one exception is a quote the
+    adapter served from its in-process TTL cache (`from_ttl_cache`): it was fetched by an earlier HTTP call
+    of the same run, so it may precede `fetch_started_at` by at most `max_cache_age_seconds` (the configured
+    cache TTL), and only if it is stamped exactly at that earlier fetch (`captured_at == fetched_at`).
+    Quotes without `fetched_at` carry no fetch record and are left to the other checks.
     """
     fetched_raw = odds.get("fetched_at")
     if not fetched_raw:
         return odds
     fetched_dt = parse_iso_utc(str(fetched_raw))
-    if fetched_dt < parse_iso_utc(fetch_started_at):
-        raise TemporalLeakageError(
-            f"Quote {odds.get('odds_id')} declares fetched_at ({fetched_raw}) before the fetch started "
-            f"({fetch_started_at})"
+    captured_dt = parse_iso_utc(str(odds.get("captured_at", "")))
+    started_dt = parse_iso_utc(fetch_started_at)
+    if fetched_dt < started_dt:
+        cache_age = (started_dt - fetched_dt).total_seconds()
+        served_from_cache = (
+            bool(odds.get("from_ttl_cache")) and captured_dt == fetched_dt and cache_age <= max(0.0, max_cache_age_seconds)
         )
-    if parse_iso_utc(str(odds.get("captured_at", ""))) < fetched_dt:
+        if not served_from_cache:
+            raise TemporalLeakageError(
+                f"Quote {odds.get('odds_id')} declares fetched_at ({fetched_raw}) before the fetch started "
+                f"({fetch_started_at})"
+            )
+    if captured_dt < fetched_dt:
         raise TemporalLeakageError(
             f"BACKDATED_CAPTURE: quote {odds.get('odds_id')} captured_at ({odds.get('captured_at')}) precedes "
             f"the moment it was fetched ({fetched_raw})"

@@ -68,6 +68,12 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
 
 ---
 
+## 🔒 Regla de merge a `main`
+
+Todo PR exige el check `Lint, Type Check & Pytest Suite` en verde sobre la rama actualizada **y** todos los hilos de revisión resueltos (ruleset de `main`); además se espera a que termine la revisión automática de Codex antes de mergear. Si un PR cambia parámetros de decisión de `config/model_config.yaml`, no se dispara manualmente el ciclo de producción el mismo día.
+
+---
+
 ## 🧪 Backtest con cuotas reales (gratis)
 
 ```powershell
