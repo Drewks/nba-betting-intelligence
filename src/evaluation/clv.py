@@ -163,6 +163,8 @@ def get_recent_clv_governor_factor(
     effective_lookback = lookback if lookback is not None else (gov_cfg.lookback_bets if gov_cfg else 25)
     min_sample = gov_cfg.min_sample_size if gov_cfg else 4
 
+    # No SQL LIMIT: the lookback counts bets with a measurable CLV (an observed, non-outlier closing line),
+    # so settled bets without a close never take the place of older bets that have one.
     bets = db.fetch_all(
         f"""
         SELECT b.bet_id, b.game_id, b.market, b.selection, b.line_value, b.decimal_odds,
@@ -171,12 +173,10 @@ def get_recent_clv_governor_factor(
         LEFT JOIN predictions p ON b.prediction_id = p.prediction_id
         WHERE b.status IN ('WON', 'LOST', 'PUSH')
           AND {scope_predicate_sql}
-        ORDER BY b.settled_at DESC
-        LIMIT ?
-        """,
-        (effective_lookback,),
+        ORDER BY b.settled_at DESC, b.emitted_at DESC, b.bet_id DESC
+        """
     )
-    if not bets:
+    if not bets or effective_lookback <= 0:
         return 1.0, None
     closing_rows = db.fetch_all(
         """
@@ -191,6 +191,8 @@ def get_recent_clv_governor_factor(
         rec = compute_bet_clv(b, closing_index, b.get("odds_provider"))
         if rec is not None and not rec["is_outlier"]:
             clvs.append(float(rec["clv_ev_pct"]))
+            if len(clvs) >= effective_lookback:
+                break
     if len(clvs) < min_sample:
         return 1.0, None
     mean_clv = float(np.mean(clvs))

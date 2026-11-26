@@ -97,6 +97,26 @@ class TheOddsAPIAdapter:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
+    @staticmethod
+    def _filter_cached_for_now(
+        cached_map: dict[tuple[str, str, str], list[dict[str, Any]]], now_utc: str
+    ) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
+        """
+        A cached response re-checked against the caller's clock: events that have started since the fetch are
+        dropped (as a fresh fetch would drop them), and each quote keeps the `captured_at` of the HTTP fetch
+        that observed it, flagged `from_ttl_cache`, so a later caller never re-stamps an older price as new.
+        """
+        out: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        for key, quotes in cached_map.items():
+            live = [
+                {**item, "from_ttl_cache": True}
+                for item in quotes
+                if str(item.get("commence_time") or "") > now_utc
+            ]
+            if live:
+                out[key] = live
+        return out
+
     def fetch_multi_book_odds_by_matchup(self, now_utc: str) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
         """
         Fetches live decimal odds across configured bookmaker regions/markets
@@ -118,7 +138,7 @@ class TheOddsAPIAdapter:
                 age_sec = time.monotonic() - cached_ts
                 if age_sec <= self.cache_ttl_seconds:
                     logger.debug("TheOddsAPI cache hit (age=%.1fs); saved API quota.", age_sec)
-                    return {k: [dict(item) for item in v] for k, v in cached_map.items()}
+                    return self._filter_cached_for_now(cached_map, now_utc)
 
         url = (
             f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/"
@@ -295,6 +315,7 @@ class TheOddsAPIAdapter:
                             "decimal_odds": round(best_home_odds, 4),
                             "counterpart_decimal_odds": round(h_counter, 4),
                             "captured_at": now_utc,
+                            "commence_time": commence,
                             "is_closing_line": 0,
                             "source_type": "OBSERVED",
                         },
@@ -306,6 +327,7 @@ class TheOddsAPIAdapter:
                             "decimal_odds": round(best_away_odds, 4),
                             "counterpart_decimal_odds": round(a_counter, 4),
                             "captured_at": now_utc,
+                            "commence_time": commence,
                             "is_closing_line": 0,
                             "source_type": "OBSERVED",
                         },
@@ -336,6 +358,7 @@ class TheOddsAPIAdapter:
                                 "decimal_odds": round(float(t_info["best_over"]), 4),
                                 "counterpart_decimal_odds": round(float(over_cnt), 4),
                                 "captured_at": now_utc,
+                                "commence_time": commence,
                                 "is_closing_line": 0,
                                 "source_type": "OBSERVED",
                             },
@@ -347,6 +370,7 @@ class TheOddsAPIAdapter:
                                 "decimal_odds": round(float(t_info["best_under"]), 4),
                                 "counterpart_decimal_odds": round(float(under_cnt), 4),
                                 "captured_at": now_utc,
+                                "commence_time": commence,
                                 "is_closing_line": 0,
                                 "source_type": "OBSERVED",
                             },

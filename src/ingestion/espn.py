@@ -324,9 +324,15 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             now_dt = parse_iso_utc(now_utc)
 
-        sr_context = SportradarAdapter().fetch_league_intelligence_context()
-        sr_injuries = sr_context.get("injury_penalties", {})
-        sr_splits = sr_context.get("team_splits", {})
+        # Sportradar v8 standings and injuries are wall-clock snapshots (no as-of query), so they describe the
+        # league NOW: they are only fetched on a live run with an upcoming game, and only applied below to games
+        # that have not started. A replay (`as_of_utc`) or a past/started game never receives today's context.
+        sr_injuries: dict[str, float] = {}
+        sr_splits: dict[str, dict[str, Any]] = {}
+        if as_of_utc is None and _has_upcoming_events(payload, now_utc):
+            sr_context = SportradarAdapter().fetch_league_intelligence_context()
+            sr_injuries = sr_context.get("injury_penalties", {}) or {}
+            sr_splits = sr_context.get("team_splits", {}) or {}
 
         games_out: list[dict[str, Any]] = []
         odds_out: list[dict[str, Any]] = []
@@ -410,8 +416,15 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
             a_inj = max(inj_penalties.get(away_code, 0.0), sr_injuries.get(away_code, 0.0))
             h_box = team_box_stats.get(home_code)
             a_box = team_box_stats.get(away_code)
-            h_sr = sr_splits.get(home_code)
-            a_sr = sr_splits.get(away_code)
+            pregame_now = (
+                status == "SCHEDULED" and start_dt_val is not None and now_dt is not None and now_dt < start_dt_val
+            )
+            if not pregame_now:
+                # Wall-clock Sportradar context never describes a game that has already started.
+                h_inj = inj_penalties.get(home_code, 0.0)
+                a_inj = inj_penalties.get(away_code, 0.0)
+            h_sr = sr_splits.get(home_code) if pregame_now else None
+            a_sr = sr_splits.get(away_code) if pregame_now else None
             h_syn = lineup_synergy.get(home_code)
             a_syn = lineup_synergy.get(away_code)
 
@@ -494,22 +507,33 @@ class ESPNPublicAdapter(BaseNBADataAdapter):
                     line_v = scraped_quote.get("line_value")
                     p_name = scraped_quote.get("provider", "TheOddsAPI_LineShop")
                     tag_v = f"{line_v:.1f}" if line_v is not None else "ML"
-                    odds_out.append(
-                        {
-                            "odds_id": f"{game_id}_{m_type}_{sel_code}_{tag_v}_{p_name[:12].replace(' ', '_')}_{odds_captured_at[:16]}",
-                            "game_id": game_id,
-                            "provider": p_name,
-                            "market": m_type,
-                            "selection": sel_code,
-                            "line_value": line_v,
-                            "decimal_odds": scraped_quote["decimal_odds"],
-                            "counterpart_decimal_odds": scraped_quote.get("counterpart_decimal_odds"),
-                            "captured_at": odds_captured_at,
-                            "fetched_at": now_utc,
-                            "is_closing_line": 0,
-                            "source_type": scraped_quote.get("source_type", "OBSERVED"),
-                        }
-                    )
+                    # A quote served from TheOddsAPI's in-process TTL cache was observed by an earlier HTTP fetch:
+                    # it keeps that fetch's time as both capture and fetch moment (never re-stamped as newer).
+                    from_cache = bool(scraped_quote.get("from_ttl_cache"))
+                    q_captured = str(scraped_quote.get("captured_at") or odds_captured_at) if from_cache else odds_captured_at
+                    q_fetched = q_captured if from_cache else now_utc
+                    try:
+                        if parse_iso_utc(q_captured) >= start_dt_val:
+                            continue
+                    except Exception:
+                        continue
+                    quote_row: dict[str, Any] = {
+                        "odds_id": f"{game_id}_{m_type}_{sel_code}_{tag_v}_{p_name[:12].replace(' ', '_')}_{q_captured[:16]}",
+                        "game_id": game_id,
+                        "provider": p_name,
+                        "market": m_type,
+                        "selection": sel_code,
+                        "line_value": line_v,
+                        "decimal_odds": scraped_quote["decimal_odds"],
+                        "counterpart_decimal_odds": scraped_quote.get("counterpart_decimal_odds"),
+                        "captured_at": q_captured,
+                        "fetched_at": q_fetched,
+                        "is_closing_line": 0,
+                        "source_type": scraped_quote.get("source_type", "OBSERVED"),
+                    }
+                    if from_cache:
+                        quote_row["from_ttl_cache"] = True
+                    odds_out.append(quote_row)
             else:
                 for odds_entry in raw_odds_list:
                     provider_obj = odds_entry.get("provider") or {}
