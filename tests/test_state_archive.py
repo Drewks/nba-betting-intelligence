@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import gzip
 import hashlib
 import json
@@ -44,15 +44,23 @@ class FakeReleaseStore:
         self.root = root / "release_assets"
         self.created = False
         self.uploads: list[str] = []
+        self.timestamps: dict[str, str] = {}
 
     def ensure_release(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         self.created = True
 
-    def asset_names(self) -> set[str]:
+    def asset_timestamps(self) -> dict[str, str]:
         if not self.root.exists():
-            return set()
-        return {p.name for p in self.root.iterdir() if p.is_file()}
+            return {}
+        return {
+            p.name: self.timestamps.get(p.name, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+            for p in self.root.iterdir()
+            if p.is_file()
+        }
+
+    def asset_names(self) -> set[str]:
+        return set(self.asset_timestamps())
 
     def upload(self, path: Path) -> None:
         self.ensure_release()
@@ -61,6 +69,7 @@ class FakeReleaseStore:
             raise StateArchiveError(f"refusing to overwrite existing asset {path.name}")
         shutil.copyfile(path, dest)
         self.uploads.append(path.name)
+        self.timestamps.setdefault(path.name, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
     def download(self, name: str, dest_dir: Path) -> Path:
         src = self.root / name
@@ -533,10 +542,11 @@ def test_archive_recovers_manifest_for_matching_and_superseded_same_day_orphan_a
     reconstruct("2026-11-24", out, store=store, history=history)
     assert out.read_bytes() == day1_db.read_bytes()
 
-    # Case 2: Day 2 cycle 1 uploads asset `day2_early`, push fails; cycle 2 updates state-live lawfully
+    # Case 2: Day 2 cycle 1 uploads asset `day2_early` at 10:00Z, push fails; cycle 2 updates state-live lawfully
     # to `day2_late` and retries -> adopts `day2_early` without overwriting and records its manifest!
     day2_early_db = _evolve_to_day2(day1_db, tmp_path / "d2_early.sqlite3")
     day2_early_gz = _gz(day2_early_db, tmp_path / "d2_early.sqlite3.gz")
+    store.timestamps[asset_name("2026-11-25")] = "2026-11-25T10:00:00Z"
     monkeypatch.setattr(history, "append", fail_once)
     with pytest.raises(StateArchiveError, match="simulated transient push failure"):
         archive_snapshot(
@@ -590,9 +600,64 @@ def test_archive_recovers_manifest_for_matching_and_superseded_same_day_orphan_a
     assert report["snapshots"] == ["2026-11-24", "2026-11-25"]
 
 
-def test_freeze_cutoff_uses_archived_at_for_same_day_reused_state_live_commit(tmp_path: Path, git_env: None) -> None:
-    from datetime import datetime, timedelta, timezone
+def test_orphan_recovery_uses_asset_upload_timestamp_and_fails_closed_when_missing(
+    tmp_path: Path, git_env: None
+) -> None:
+    work, _ = _init_repo_pair(tmp_path)
+    store = FakeReleaseStore(tmp_path)
+    history = HistoryBranch(repo_root=work)
 
+    # Orphan asset uploaded at 14:00Z from a reused state-live DB whose latest in-DB timestamp is 10:00Z,
+    # while G_ORPHAN_TIP tipped off at 12:00Z (after in-DB max, BEFORE asset upload time!).
+    orphan_db = _seed_day1_db(tmp_path / "orphan.sqlite3")
+    mgr = DatabaseManager(orphan_db)
+    with mgr.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, features_available_at, source_provider, ingested_at
+            ) VALUES ('G_ORPHAN_TIP', '2026-27', '2026-11-25', '2026-11-25T12:00:00Z', 'CLE', 'CHI', 'SCHEDULED',
+                      '2026-11-25T09:00:00Z', 'espn', '2026-11-25T09:00:00Z')
+            """
+        )
+    mgr.checkpoint(truncate=True)
+    orphan_gz = _gz(orphan_db, tmp_path / "orphan.sqlite3.gz")
+    store.ensure_release()
+    shutil.copyfile(orphan_gz, store.root / asset_name("2026-11-25"))
+    store.timestamps[asset_name("2026-11-25")] = "2026-11-25T14:00:00Z"
+
+    # Later DB rewrites G_ORPHAN_TIP's ingested_at -> MUST fail closed because asset_ts (14:00Z) > tip-off (12:00Z)
+    rewritten_db = _tamper_db(
+        orphan_db,
+        tmp_path / "rewritten.sqlite3",
+        "UPDATE games SET ingested_at = '2026-11-25T15:00:00Z' WHERE game_id = 'G_ORPHAN_TIP';",
+    )
+    rewritten_gz = _gz(rewritten_db, tmp_path / "rewritten.sqlite3.gz")
+    with pytest.raises(ContinuityViolationError, match="games: started game G_ORPHAN_TIP rewrote"):
+        archive_snapshot(
+            rewritten_gz,
+            "2026-11-25",
+            source_commit="late_sha",
+            committed_at="2026-11-25T16:00:00Z",
+            store=store,
+            history=history,
+        )
+
+    # Missing upload timestamp on an orphan asset MUST fail closed
+    store.timestamps[asset_name("2026-11-25")] = ""
+    with pytest.raises(StateArchiveError, match="has no upload timestamp"):
+        archive_snapshot(
+            rewritten_gz,
+            "2026-11-25",
+            source_commit="late_sha",
+            committed_at="2026-11-25T16:00:00Z",
+            store=store,
+            history=history,
+        )
+
+
+def test_freeze_cutoff_uses_archived_at_for_same_day_reused_state_live_commit(tmp_path: Path, git_env: None) -> None:
     work, _ = _init_repo_pair(tmp_path)
     store = FakeReleaseStore(tmp_path)
     history = HistoryBranch(repo_root=work)
@@ -687,7 +752,9 @@ def test_gh_release_store_uses_target_main_never_clobbers_and_paginates(monkeypa
                 cmd, 0, stdout="https://api.github.com/repos/Drewks/nba-betting-intelligence/releases/42\n", stderr=""
             )
         if cmd[:3] == ["gh", "api", "--paginate"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout="nba_intelligence-2026-11-24.sqlite3.gz\n", stderr="")
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="nba_intelligence-2026-11-24.sqlite3.gz\t2026-11-24T23:55:00Z\n", stderr=""
+            )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -697,6 +764,8 @@ def test_gh_release_store_uses_target_main_never_clobbers_and_paginates(monkeypa
     assert "--target" in create_cmd and create_cmd[create_cmd.index("--target") + 1] == "main"
     assert "--latest=false" in create_cmd
 
+    timestamps = store.asset_timestamps()
+    assert timestamps == {"nba_intelligence-2026-11-24.sqlite3.gz": "2026-11-24T23:55:00Z"}
     names = store.asset_names()
     assert names == {"nba_intelligence-2026-11-24.sqlite3.gz"}
     assert any("--paginate" in c for c in calls)

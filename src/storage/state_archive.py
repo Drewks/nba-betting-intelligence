@@ -355,6 +355,7 @@ def decompress(gz_path: Path, out_path: Path) -> tuple[int, str]:
 class ReleaseStore(Protocol):
     def ensure_release(self) -> None: ...
     def asset_names(self) -> set[str]: ...
+    def asset_timestamps(self) -> dict[str, str]: ...
     def upload(self, path: Path) -> None: ...
     def download(self, name: str, dest_dir: Path) -> Path: ...
 
@@ -391,12 +392,27 @@ class GhReleaseStore:
             "--latest=false",
         )
 
-    def asset_names(self) -> set[str]:
+    def asset_timestamps(self) -> dict[str, str]:
         api_url = self._gh("release", "view", self.tag, "--json", "apiUrl", "--jq", ".apiUrl").stdout.strip()
         if not api_url:
-            return set()
-        out = self._gh("api", "--paginate", f"{api_url}/assets?per_page=100", "--jq", ".[].name").stdout
-        return {line.strip() for line in out.splitlines() if line.strip()}
+            return {}
+        out = self._gh(
+            "api",
+            "--paginate",
+            f"{api_url}/assets?per_page=100",
+            "--jq",
+            r'.[] | "\(.name)\t\(.created_at // "")"',
+        ).stdout
+        timestamps: dict[str, str] = {}
+        for line in out.splitlines():
+            if "\t" in line:
+                name, created_at = line.split("\t", 1)
+                if name.strip():
+                    timestamps[name.strip()] = created_at.strip()
+        return timestamps
+
+    def asset_names(self) -> set[str]:
+        return set(self.asset_timestamps())
 
     def upload(self, path: Path) -> None:
         self._gh("release", "upload", self.tag, str(path))  # never --clobber: an asset is written once
@@ -559,7 +575,8 @@ def archive_snapshot(
         previous = [d for d in all_dates if d < snapshot_date]
         later = [d for d in all_dates if d > snapshot_date]
         name = asset_name(snapshot_date)
-        asset_exists = name in store.asset_names()
+        existing_assets = store.asset_timestamps()
+        asset_exists = name in existing_assets
 
         target_gz = gz_path
         target_db = db
@@ -578,13 +595,24 @@ def archive_snapshot(
             existing_size, existing_sha = _sha256_file(existing_gz)
             cur_size, cur_sha = _sha256_file(gz_path)
             if existing_sha != cur_sha or existing_size != cur_size:
+                asset_ts = existing_assets.get(name, "").strip()
+                if not asset_ts:
+                    raise StateArchiveError(
+                        f"existing asset {name} in {RELEASE_TAG} has no upload timestamp; "
+                        "cannot verify started-game freeze cutoff safely"
+                    )
+                _validate_iso_timestamp(asset_ts)
                 existing_db = existing_dir / "existing.sqlite3"
                 decompress(existing_gz, existing_db)
                 try:
                     check_integrity(existing_db)
                 except StateLiveError as exc:
                     raise StateArchiveError(f"existing asset {name} failed integrity check: {exc}") from exc
-                recovered_at = _db_latest_timestamp(existing_db) or committed_at
+                db_latest = _db_latest_timestamp(existing_db)
+                if db_latest and _parse_iso_timestamp(db_latest) > _parse_iso_timestamp(asset_ts):
+                    recovered_at = db_latest
+                else:
+                    recovered_at = asset_ts
                 ancestor_violations = verify_immutable_continuity(existing_db, db, older_taken_at=recovered_at)
                 if ancestor_violations and not allow_violations:
                     raise ContinuityViolationError(f"{snapshot_date} (existing asset {name})", ancestor_violations)
