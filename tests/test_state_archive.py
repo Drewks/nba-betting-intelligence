@@ -215,6 +215,29 @@ def _seed_day1_db(path: Path) -> Path:
                       'test prop', '2026-11-23T22:01:00Z', 'PENDING')
             """
         )
+        conn.execute(
+            """
+            INSERT INTO injury_status_snapshots (
+                snapshot_id, game_id, captured_at, team, player_name, status, source
+            ) VALUES ('INJ_1', 'G_STARTED', '2026-11-23T21:00:00Z', 'BOS', 'Kristaps Porzingis', 'OUT', 'nba_official')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO calibration_logs (
+                eval_id, evaluated_at, model_version_id, market, sample_size,
+                brier_score, log_loss, ece, calibration_method, bins_json, promoted
+            ) VALUES ('CAL_1', '2026-11-23T20:00:00Z', 'mv_test', 'moneyline', 200,
+                      0.21, 0.61, 0.02, 'platt', '[]', 1)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO game_boxscores (
+                game_id, team_stats_json, players_json, source, fetched_at
+            ) VALUES ('G_STARTED', '{}', '[]', 'espn', '2026-11-24T04:00:00Z')
+            """
+        )
     db.checkpoint(truncate=True)
     return path
 
@@ -381,6 +404,10 @@ def test_archive_reconstruct_and_verify_window_end_to_end(tmp_path: Path, git_en
         ("delete_decision", "DELETE FROM decision_log WHERE decision_id = 'D_1';", "decision_log: row .* deleted"),
         ("edit_bankroll", "UPDATE bankroll_ledger SET settled_bankroll_pen = 500.0 WHERE entry_id = 1;", "bankroll_ledger: row .* modified"),
         ("delete_quarantine", "DELETE FROM quarantined_odds WHERE odds_id = 'O_Q1';", "quarantined_odds: row .* deleted"),
+        ("delete_injury_snapshot", "DELETE FROM injury_status_snapshots WHERE snapshot_id = 'INJ_1';", "injury_status_snapshots: row .* deleted"),
+        ("edit_injury_snapshot", "UPDATE injury_status_snapshots SET status = 'AVAILABLE' WHERE snapshot_id = 'INJ_1';", "injury_status_snapshots: row .* modified"),
+        ("edit_calibration_log", "UPDATE calibration_logs SET brier_score = 0.05 WHERE eval_id = 'CAL_1';", "calibration_logs: row .* modified"),
+        ("delete_game_boxscore", "DELETE FROM game_boxscores WHERE game_id = 'G_STARTED';", "game_boxscores: row .* deleted"),
         ("edit_pending_bet_odds", "UPDATE simulated_bets SET decimal_odds = 4.0 WHERE bet_id = 'B_1';", "simulated_bets: row .* modified"),
         ("edit_pending_prop_odds", "UPDATE player_prop_picks SET decimal_odds = 2.50 WHERE prop_id = 'PP_1';", "player_prop_picks: row .* modified"),
         ("edit_pending_prop_selection", "UPDATE player_prop_picks SET selection = 'UNDER' WHERE prop_id = 'PP_1';", "player_prop_picks: row .* modified"),

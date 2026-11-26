@@ -87,6 +87,9 @@ _BET_SETTLEMENT_COLS = ("status", "net_profit_pen", "bankroll_after_pen", "actua
 IMMUTABLE_TABLES: dict[str, TableRule] = {
     "odds_snapshots": TableRule(("odds_id",)),
     "quarantined_odds": TableRule(("odds_id",)),
+    "injury_status_snapshots": TableRule(("snapshot_id",)),
+    "game_boxscores": TableRule(("game_id",)),
+    "calibration_logs": TableRule(("eval_id",)),
     "predictions": TableRule(("prediction_id",)),
     "decision_log": TableRule(("decision_id",)),
     "bankroll_ledger": TableRule(("entry_id",)),
