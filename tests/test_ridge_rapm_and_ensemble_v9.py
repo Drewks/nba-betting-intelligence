@@ -519,7 +519,7 @@ def test_v9_version_promotion_and_submodel_isolation() -> None:
     load_config.cache_clear()
     cfg = load_config()
     assert cfg.model.version_id == "model_f_ensemble_v9"
-    assert cfg.evaluation.trials_evaluated_count == 12
+    assert cfg.evaluation.trials_evaluated_count == 20
     assert cfg.evaluation.frozen_protocol_id == "V9_FROZEN_2026_11_27"
 
     ens = EnsembleStackingModel()

@@ -202,7 +202,7 @@ def test_pairing_drops_high_margin_markets() -> None:
 def test_config_declares_contaminated_season_holdout_and_forward_holdout() -> None:
     cfg = load_config()
     assert cfg.evaluation.season_holdout_contaminated is True
-    assert cfg.evaluation.forward_holdout_start_utc == "2026-11-15T00:00:00Z"
+    assert cfg.evaluation.forward_holdout_start_utc == "2026-11-27T00:00:00Z"
     assert cfg.evaluation.trials_evaluated_count >= 9
     assert cfg.execution.max_quote_age_hours == 6.0
     assert "(Best of" in cfg.execution.excluded_provider_markers
