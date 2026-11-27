@@ -42,7 +42,7 @@ class TotalPointsModel:
 
     def __init__(
         self,
-        version_id: str = "model_d_total_points_v1",
+        version_id: str = "model_d_total_points_v9",
         default_total_std: float = 18.4,
         shared_ridge_rapm: RidgeEfficiencyRAPMModel | None = None,
     ) -> None:

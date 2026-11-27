@@ -663,9 +663,12 @@ def generate_bet_tracking_markdown(
     """Convenience helper that generates and returns the SEGUIMIENTO_APUESTAS.md content."""
     if metrics is None:
         from src.backtesting.backtester import WalkForwardBacktester
+        from src.config import load_config
         from src.paper_trading.engine import build_production_engine
 
-        metrics = WalkForwardBacktester(db, build_production_engine(db)).compute_comprehensive_metrics()
+        metrics = WalkForwardBacktester(db, build_production_engine(db)).compute_comprehensive_metrics(
+            model_version_id=load_config().model.version_id,
+        )
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_root = Path(tmp_dir)
         res = export_bets_and_tracking_dashboard(

@@ -334,8 +334,8 @@ class SourcesConfig:
 class EvaluationConfig:
     development_seasons: tuple[str, ...] = ("2024-25", "2025-26")
     holdout_season: str = "2026-27"
-    trials_evaluated_count: int = 3
-    frozen_protocol_id: str = "V8_FROZEN_2026_11_15"
+    trials_evaluated_count: int = 12
+    frozen_protocol_id: str = "V9_FROZEN_2026_11_27"
     # The 2026-27 games were part of every backtest published before the freeze (EV threshold, odds cap
     # and EWMA rates were chosen while looking at them), so they are not an untouched holdout.
     season_holdout_contaminated: bool = True
@@ -673,8 +673,8 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     ev_raw = raw.get("evaluation") or {}
     dev_seasons = tuple(str(s) for s in (ev_raw.get("development_seasons") or ["2024-25", "2025-26"]))
     holdout_season = str(ev_raw.get("holdout_season", "2026-27"))
-    trials_evaluated_count = max(1, int(ev_raw.get("trials_evaluated_count", 3)))
-    frozen_protocol_id = str(ev_raw.get("frozen_protocol_id", "V8_FROZEN_2026_11_15"))
+    trials_evaluated_count = max(1, int(ev_raw.get("trials_evaluated_count", 12)))
+    frozen_protocol_id = str(ev_raw.get("frozen_protocol_id", "V9_FROZEN_2026_11_27"))
     forward_start = str(ev_raw.get("forward_holdout_start_utc", "2026-11-15T00:00:00Z"))
     try:
         datetime.fromisoformat(forward_start.replace("Z", "+00:00"))

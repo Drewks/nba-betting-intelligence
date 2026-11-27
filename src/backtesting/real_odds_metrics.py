@@ -239,7 +239,7 @@ def summarize_backtest_results(
     development_seasons: tuple[str, ...] = ("2024-25", "2025-26"),
     holdout_season: str = "2026-27",
     trials_evaluated_count: int = 3,
-    frozen_protocol_id: str = "V8_FROZEN_2026_11_15",
+    frozen_protocol_id: str = "V9_FROZEN_2026_11_27",
     season_holdout_contaminated: bool = True,
     forward_holdout_start_utc: str | None = None,
 ) -> dict[str, Any]:

@@ -60,23 +60,33 @@ def _extract_market_probs(row: dict[str, Any] | None) -> tuple[float | None, flo
     return (raw, cal, mkt, anch)
 
 
-def reconstruct_comparison_records_from_db(db: DatabaseManager) -> list[dict[str, Any]]:
+def reconstruct_comparison_records_from_db(
+    db: DatabaseManager,
+    model_version_id: str | None = None,
+) -> list[dict[str, Any]]:
     """
     One record per real FINAL game using the LATEST observed pre-tip prediction of each market.
+    When `model_version_id` is provided, restricts strictly to that model version so legacy versions
+    (e.g. V8) are never mixed with the active version (e.g. V9).
     Explicitly separates raw model probability, calibrated model probability, fair de-vigged market
     probability, and market-anchored probability (F-008). Pre-m012 legacy rows leave
     calibrated_model_probability as None so market anchoring is never conflated with model calibration.
     """
+    version_clause = "AND p.model_version_id = ?" if model_version_id is not None else ""
+    params: tuple[Any, ...] = (model_version_id,) if model_version_id is not None else ()
     rows = db.fetch_all(
-        """
+        f"""
         WITH latest AS (
             SELECT p.*, ROW_NUMBER() OVER (
                 PARTITION BY p.game_id, p.market ORDER BY p.emitted_at DESC, p.prediction_id DESC
             ) AS rn
             FROM v_observed_predictions p
-            WHERE (p.market = 'moneyline' AND p.selection = 'HOME')
-               OR (p.market = 'total_points' AND p.selection = 'OVER')
-               OR (p.market = 'spread' AND p.selection = 'HOME')
+            WHERE (
+                (p.market = 'moneyline' AND p.selection = 'HOME')
+                OR (p.market = 'total_points' AND p.selection = 'OVER')
+                OR (p.market = 'spread' AND p.selection = 'HOME')
+            )
+            {version_clause}
         )
         SELECT l.game_id, l.market, l.raw_probability, l.calibrated_probability,
                l.raw_model_probability, l.calibrated_model_probability,
@@ -86,7 +96,8 @@ def reconstruct_comparison_records_from_db(db: DatabaseManager) -> list[dict[str
         FROM latest l JOIN games g ON g.game_id = l.game_id
         WHERE l.rn = 1 AND g.status = 'FINAL' AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
           AND l.game_id NOT LIKE 'SYN%'
-        """
+        """,
+        params,
     )
     by_game: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     for r in rows:

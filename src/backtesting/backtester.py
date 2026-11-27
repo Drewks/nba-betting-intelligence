@@ -98,13 +98,17 @@ class WalkForwardBacktester:
         metrics["skipped_unpredictable_games"] = skipped_unpredictable_games
         return metrics
 
-    def _reconstruct_comparison_records_from_db(self) -> list[dict[str, Any]]:
+    def _reconstruct_comparison_records_from_db(
+        self,
+        model_version_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Fail-closed DB reconstruction (T-021): pre-m012 legacy rows leave
         calibrated_model_probability as None so market anchoring is never conflated
-        with model calibration.
+        with model calibration. When `model_version_id` is supplied, strictly isolates
+        that model version from older versions in `v_observed_predictions`.
         """
-        return reconstruct_comparison_records_from_db(self.db)
+        return reconstruct_comparison_records_from_db(self.db, model_version_id=model_version_id)
 
     @staticmethod
     def _score(probs: list[float], outcomes: list[int], with_curve: bool = False) -> dict[str, Any]:
@@ -121,6 +125,7 @@ class WalkForwardBacktester:
         model_comparison_records: list[dict[str, Any]] | None = None,
         closing_rows: list[dict[str, Any]] | None = None,
         calibration_evaluation_source: str | None = None,
+        model_version_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Computes Section 10 & 11 metrics.
@@ -130,7 +135,9 @@ class WalkForwardBacktester:
         """
         used_db_reconstruction = not model_comparison_records
         if not model_comparison_records:
-            model_comparison_records = self._reconstruct_comparison_records_from_db()
+            model_comparison_records = self._reconstruct_comparison_records_from_db(
+                model_version_id=model_version_id
+            )
 
         production_scope = bool(getattr(self.paper_engine, "exclude_synthetic", False)) or not bool(
             getattr(self.paper_engine, "is_backtest", False)
@@ -420,18 +427,21 @@ class WalkForwardBacktester:
         model_comparison_records: list[dict[str, Any]] | None = None,
         closing_rows: list[dict[str, Any]] | None = None,
         calibration_evaluation_source: str | None = None,
+        model_version_id: str | None = None,
     ) -> dict[str, Any]:
         """Alias for compute_comprehensive_metrics (observed financial and statistical evaluation)."""
         return self.compute_comprehensive_metrics(
             model_comparison_records=model_comparison_records,
             closing_rows=closing_rows,
             calibration_evaluation_source=calibration_evaluation_source,
+            model_version_id=model_version_id,
         )
 
 
 def compute_financial_and_statistical_metrics(
     db: DatabaseManager,
     paper_engine: PaperTradingEngine | None = None,
+    model_version_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Computes observed financial and statistical metrics from v_observed_simulated_bets,
@@ -439,4 +449,4 @@ def compute_financial_and_statistical_metrics(
     """
     engine = paper_engine or PaperTradingEngine(db, exclude_synthetic=True)
     bt = WalkForwardBacktester(db, engine)
-    return bt.compute_comprehensive_metrics()
+    return bt.compute_comprehensive_metrics(model_version_id=model_version_id)

@@ -9,6 +9,7 @@ Comprehensive unit, temporal-integrity, determinism, and edge-case tests for the
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -24,7 +25,10 @@ from src.features.boxscore_features import (
 )
 from src.ingestion.boxscores import load_boxscores
 from src.models.ensemble import EnsembleStackingModel
+from src.models.gbm_model import AdvancedGBMModel
+from src.models.point_margin import PointMarginModel
 from src.models.ridge_rapm import RidgeEfficiencyRAPMModel
+from src.models.total_points import TotalPointsModel
 from tests.helpers import connect_readonly_prod_db
 
 
@@ -526,3 +530,284 @@ def test_v9_version_promotion_and_submodel_isolation() -> None:
     assert ens.model_e.version_id == "model_e_lightgbm_v9"
     assert ens.model_g.version_id == "model_g_ml_montecarlo_v9"
     assert ens.model_h.version_id == "model_h_ridge_rapm_v9"
+
+    # Standalone submodel defaults also match V9
+    assert PointMarginModel().version_id == "model_c_point_margin_v9"
+    assert TotalPointsModel().version_id == "model_d_total_points_v9"
+    assert AdvancedGBMModel().version_id == "model_e_lightgbm_v9"
+
+
+def test_reconstruct_comparison_records_strict_version_isolation(tmp_path: Path) -> None:
+    from src.backtesting.backtester import WalkForwardBacktester
+    from src.backtesting.walk_forward_helpers import reconstruct_comparison_records_from_db
+    from src.paper_trading.engine import PaperTradingEngine
+    from src.storage.db import DatabaseManager
+
+    db = DatabaseManager(tmp_path / "v8_v9_iso.sqlite3")
+    for ver in ("model_f_ensemble_v8", "model_f_ensemble_v9"):
+        db.execute_insert(
+            "INSERT INTO model_versions (model_version_id, model_family, market, train_start_date, train_end_date, trained_at, hyperparameters_json, approved_by) "
+            "VALUES (?, 'model_f_meta_ensemble', 'moneyline', '2026-01-01', '2026-11-27', '2026-11-27T00:00:00Z', '{}', 'test')",
+            (ver,),
+        )
+
+    games_spec = [
+        ("G_V8_ONLY", "2026-11-20", "2026-11-21T00:00:00Z", "BOS", "NYK", 118, 102, "model_f_ensemble_v8", 0.30, 0.30),
+        ("G_V9_ONLY", "2026-11-27", "2026-11-28T00:00:00Z", "DEN", "POR", 120, 105, "model_f_ensemble_v9", 0.85, 0.85),
+    ]
+    for idx, (gid, mdate, gtime, ht, at, hs, as_, ver, p_ml, p_tot) in enumerate(games_spec):
+        db.execute_insert(
+            """
+            INSERT INTO games (
+                game_id, season, matchday_date, game_start_time, home_team, away_team,
+                status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
+                away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
+                features_available_at, source_provider, ingested_at
+            ) VALUES (?, '2026-27', ?, ?, ?, ?, 'FINAL', ?, ?, 115.0, 111.0, 99.0, 113.0, 112.0, 98.5, 2, 2, '2026-11-19T12:00:00Z', 'espn', '2026-11-19T12:00:00Z')
+            """,
+            (gid, mdate, gtime, ht, at, hs, as_),
+        )
+        db.execute_insert(
+            """
+            INSERT INTO predictions (
+                prediction_id, game_id, market, selection, model_version_id, raw_probability,
+                calibrated_probability, uncertainty_std, implied_prob_gross, implied_prob_fair,
+                decimal_odds_used, odds_provider, odds_captured_at, ev_unit, ev_pct, emitted_at,
+                features_snapshot_json, raw_model_probability, calibrated_model_probability,
+                market_fair_probability, market_anchored_probability
+            ) VALUES (?, ?, 'moneyline', 'HOME', ?, ?, ?, 0.05, 0.52, 0.50, 1.95, 'Pinnacle', '2026-11-19T20:00:00Z', 0.02, 2.0, '2026-11-19T20:00:00Z', '{}', ?, ?, 0.50, ?)
+            """,
+            (f"PM_{idx}", gid, ver, p_ml, p_ml, p_ml, p_ml, p_ml),
+        )
+        db.execute_insert(
+            """
+            INSERT INTO predictions (
+                prediction_id, game_id, market, selection, line_value, model_version_id, raw_probability,
+                calibrated_probability, uncertainty_std, implied_prob_gross, implied_prob_fair,
+                decimal_odds_used, odds_provider, odds_captured_at, ev_unit, ev_pct, emitted_at,
+                features_snapshot_json, raw_model_probability, calibrated_model_probability,
+                market_fair_probability, market_anchored_probability
+            ) VALUES (?, ?, 'total_points', 'OVER', 218.5, ?, ?, ?, 0.05, 0.52, 0.50, 1.92, 'Pinnacle', '2026-11-19T20:00:00Z', 0.02, 2.0, '2026-11-19T20:00:00Z', '{}', ?, ?, 0.50, ?)
+            """,
+            (f"PT_{idx}", gid, ver, p_tot, p_tot, p_tot, p_tot, p_tot),
+        )
+
+    all_recs = reconstruct_comparison_records_from_db(db)
+    v9_recs = reconstruct_comparison_records_from_db(db, model_version_id="model_f_ensemble_v9")
+    v8_recs = reconstruct_comparison_records_from_db(db, model_version_id="model_f_ensemble_v8")
+    assert len(all_recs) == 2
+    assert [r["game_id"] for r in v9_recs] == ["G_V9_ONLY"]
+    assert [r["game_id"] for r in v8_recs] == ["G_V8_ONLY"]
+
+    bt = WalkForwardBacktester(db, PaperTradingEngine(db))
+    m_v9 = bt.compute_comprehensive_metrics(model_version_id="model_f_ensemble_v9", closing_rows=[])
+    assert m_v9["model_comparison_sample_size"] == 1
+    # V9 predicted 0.85 on winning home team (120-105, total 225 > 218.5) => Brier = (0.85 - 1.0)^2 = 0.0225
+    assert abs(float(m_v9["overall_brier_score"]) - 0.0225) < 1e-6
+
+    # Dashboard markdown fallback (metrics=None) must also isolate to active config version (never mixing V8)
+    from src.reporting.dashboard_export import generate_bet_tracking_markdown
+
+    md_out = generate_bet_tracking_markdown(db)
+    assert "Modelo 0.0225 vs Mercado 0.2500 (N=1)" in md_out
+
+
+def test_expected_lineup_shares_no_train_serving_skew_on_official_report() -> None:
+    core = [
+        ("Starter A", 36.0, 26.0, True),
+        ("Starter B", 34.0, 20.0, True),
+        ("Starter C", 32.0, 16.0, True),
+        ("Starter D", 30.0, 14.0, True),
+        ("Starter E", 28.0, 12.0, True),
+        ("Bench 1", 22.0, 10.0, False),
+        ("Bench 2", 20.0, 8.0, False),
+        ("Bench 3", 19.0, 6.0, False),
+        ("Bench 4", 19.0, 4.0, False),
+    ]
+    garbage = [
+        ("Garbage 1", 4.0, 1.0, False),
+        ("Garbage 2", 3.0, 1.0, False),
+        ("Garbage 3", 3.0, 0.0, False),
+    ]
+    opp = [
+        ("Opp A", 36.0, 22.0, True),
+        ("Opp B", 34.0, 18.0, True),
+        ("Opp C", 32.0, 16.0, True),
+        ("Opp D", 30.0, 14.0, True),
+        ("Opp E", 28.0, 12.0, True),
+        ("Opp F", 80.0, 24.0, False),
+    ]
+
+    games, boxes = [], {}
+    for i in range(4):
+        gid = f"SK_{i}"
+        games.append(
+            {
+                "game_id": gid,
+                "game_start_time": f"2026-11-0{i + 1}T00:00:00Z",
+                "status": "FINAL",
+                "home_team": "BOS",
+                "away_team": "MIA",
+            }
+        )
+        # Garbage-time fringe players only appeared in game 1 (blowout), not in last game (i == 3)
+        roster = core + garbage if i == 1 else core
+        boxes[gid] = _make_box("BOS", "MIA", 116.0, 106.0, roster, opp)
+
+    games.append(
+        {
+            "game_id": "SK_NEXT",
+            "game_start_time": "2026-11-06T00:00:00Z",
+            "status": "SCHEDULED",
+            "home_team": "BOS",
+            "away_team": "MIA",
+        }
+    )
+
+    b_none = compute_boxscore_feature_bundle(games, boxes, availability_overrides=None)
+    b_empty_report = compute_boxscore_feature_bundle(
+        games,
+        boxes,
+        availability_overrides={"SK_NEXT": {"BOS": frozenset(), "MIA": frozenset()}},
+    )
+    h_none, _ = b_none["SK_NEXT"]["_bx_exp_lineup"]
+    h_empty, _ = b_empty_report["SK_NEXT"]["_bx_exp_lineup"]
+
+    # Empty official OUT list must match training bit-for-bit (no garbage-time dilution!)
+    assert h_empty == h_none
+    assert "Garbage 1" not in h_empty
+    assert abs(sum(h_empty.values()) - 5.0) < 1e-6
+
+    # Even when a rotation player missed the last game (e.g. injured/questionable/resting),
+    # an empty official OUT list must preserve exact train/serving parity with no-override path
+    # (no serving-only restoration skew).
+    boxes_rest = deepcopy(boxes)
+    boxes_rest["SK_3"] = _make_box("BOS", "MIA", 112.0, 106.0, [p for p in core if p[0] != "Starter A"], opp)
+    b_rest_none = compute_boxscore_feature_bundle(games, boxes_rest, availability_overrides=None)
+    b_rest_empty = compute_boxscore_feature_bundle(
+        games,
+        boxes_rest,
+        availability_overrides={"SK_NEXT": {"BOS": frozenset(), "MIA": frozenset()}},
+    )
+    h_rest_none, _ = b_rest_none["SK_NEXT"]["_bx_exp_lineup"]
+    h_rest_empty, _ = b_rest_empty["SK_NEXT"]["_bx_exp_lineup"]
+    assert h_rest_empty == h_rest_none
+    assert "Starter A" not in h_rest_empty
+    assert "Garbage 1" not in h_rest_empty
+
+    # Newly ruled OUT player from last game is excluded and remaining shares re-normalize to 5.0
+    b_out_star = compute_boxscore_feature_bundle(
+        games,
+        boxes,
+        availability_overrides={"SK_NEXT": {"BOS": frozenset({player_name_key("Starter A")}), "MIA": frozenset()}},
+    )
+    h_out_star, _ = b_out_star["SK_NEXT"]["_bx_exp_lineup"]
+    assert "Starter A" not in h_out_star
+    assert "Starter B" in h_out_star
+    assert abs(sum(h_out_star.values()) - 5.0) < 1e-6
+
+
+def test_augment_resolved_calibration_deduplicates_live_games_and_per_market(tmp_path: Path) -> None:
+    from scripts.run_cloud_cycle import _augment_resolved_calibration_from_walk_forward
+    from src.storage.db import DatabaseManager
+
+    games, boxes = _load_real_sample(limit=175)
+    enriched = attach_boxscore_features(games, boxes)
+    db = DatabaseManager(tmp_path / "cal_aug.sqlite3")
+
+    last_10 = enriched[-10:]
+    live_ml = [
+        {
+            "game_id": str(g["game_id"]),
+            "raw_probability": 0.612345,
+            "game_start_time": str(g["game_start_time"]),
+            "result_recorded_at": None,
+            "outcome": 1 if int(g["home_score"]) > int(g["away_score"]) else 0,
+        }
+        for g in last_10
+    ]
+    live_tot: list[dict[str, Any]] = []
+    live_sp: list[dict[str, Any]] = []
+    cutoff_after = "2030-01-01T00:00:00Z"
+
+    _augment_resolved_calibration_from_walk_forward(db, enriched, live_ml, live_tot, live_sp, cutoff_after)
+    ml_gids = [str(r["game_id"]) for r in live_ml]
+    assert len(ml_gids) == len(set(ml_gids)), "Live games must never be duplicated by walk-forward augmentation"
+    assert len(ml_gids) == 65
+    # Verify original live probabilities for those 10 games were preserved untouched
+    preserved = {str(r["game_id"]): r["raw_probability"] for r in live_ml if str(r["game_id"]) in {str(g["game_id"]) for g in last_10}}
+    assert len(preserved) == 10
+    assert all(abs(v - 0.612345) < 1e-9 for v in preserved.values())
+
+
+def test_slate_intelligence_uses_boxscore_rapm_features(tmp_path: Path) -> None:
+    import json
+    from datetime import timedelta
+    from src.reporting.slate_intelligence import compute_upcoming_slate_intelligence
+    from src.storage.db import DatabaseManager
+    from src.validation.validator import parse_iso_utc
+
+    games, boxes = _load_real_sample(limit=150)
+    db = DatabaseManager(tmp_path / "slate_v9.sqlite3")
+    with db.connect() as conn:
+        for idx, g in enumerate(games):
+            is_last = idx == len(games) - 1
+            gid = f"ESPN_TEST_{idx}" if is_last else str(g["game_id"])
+            status = "SCHEDULED" if is_last else "FINAL"
+            hs = None if is_last else g["home_score"]
+            as_ = None if is_last else g["away_score"]
+            conn.execute(
+                """
+                INSERT INTO games (
+                    game_id, season, matchday_date, game_start_time, home_team, away_team,
+                    status, home_score, away_score, home_off_rtg, home_def_rtg, home_pace,
+                    away_off_rtg, away_def_rtg, away_pace, home_rest_days, away_rest_days,
+                    features_available_at, source_provider, ingested_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'espn', '2025-01-01T00:00:00Z')
+                """,
+                (
+                    gid,
+                    g["season"],
+                    g["matchday_date"],
+                    g["game_start_time"],
+                    g["home_team"],
+                    g["away_team"],
+                    status,
+                    hs,
+                    as_,
+                    g["home_off_rtg"],
+                    g["home_def_rtg"],
+                    g["home_pace"],
+                    g["away_off_rtg"],
+                    g["away_def_rtg"],
+                    g["away_pace"],
+                    g["home_rest_days"],
+                    g["away_rest_days"],
+                    g["features_available_at"],
+                ),
+            )
+            if not is_last and str(g["game_id"]) in boxes:
+                bx = boxes[str(g["game_id"])]
+                conn.execute(
+                    "INSERT INTO game_boxscores (game_id, team_stats_json, players_json, source, fetched_at) VALUES (?, ?, ?, 'espn', ?)",
+                    (str(g["game_id"]), json.dumps(bx["teams"]), json.dumps(bx["players"]), "2025-01-01T00:00:00Z"),
+                )
+
+    slate = compute_upcoming_slate_intelligence(db)
+    assert len(slate) == 1
+
+    # Compare directly against EnsembleStackingModel enriched with compute_boxscore_feature_bundle
+    obs_all = db.fetch_all("SELECT * FROM v_observed_games ORDER BY game_start_time ASC")
+    bx_map = compute_boxscore_feature_bundle(obs_all, boxes)
+    finals_enr = [{**g, **bx_map.get(g["game_id"], {})} for g in obs_all if g["status"] == "FINAL"]
+    sched_enr = [{**g, **bx_map.get(g["game_id"], {})} for g in obs_all if g["status"] == "SCHEDULED"][0]
+
+    ens = EnsembleStackingModel(load_config().model.version_id)
+    fit_cutoff = (parse_iso_utc(str(finals_enr[-1]["game_start_time"])) + timedelta(seconds=1)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    ens.fit(finals_enr, fit_cutoff)
+    assert ens.model_h.rapm_fitted is True
+    expected_ml = ens.predict_moneyline(sched_enr, finals_enr)
+    assert slate[0]["projections"]["expected_margin"] == expected_ml["expected_margin"]
+    assert slate[0]["projections"]["p_home_pct"] == round(expected_ml["p_home"] * 100.0, 1)

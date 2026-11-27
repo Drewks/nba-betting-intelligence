@@ -165,7 +165,7 @@ def sync_obsidian_vault(
             "# Catálogo de Modelos Cuantitativos (Modelos A–H)\n\n"
             "1. **Modelo A (`model_a_baseline_v1`)**: Frecuencia histórica de victoria local y media/desviación de puntos totales.\n"
             "2. **Modelo B (`model_b_elo_v8`)**: Sistema Elo secuencial con ajuste por localía (+65 Elo) y descanso (+12 Elo/día).\n"
-            "3. **Modelo C (`model_c_point_margin_v9`)**: Regresión Huber sobre eficiencia ajustada Ridge/RAPM, `Offensive/Defensive Rating`, `Pace`, descanso y forma reciente.\n"
+            "3. **Modelo C (`model_c_point_margin_v9`)**: Regresión RidgeCV sobre eficiencia ajustada Ridge/RAPM, `Offensive/Defensive Rating`, `Pace`, descanso y forma reciente.\n"
             "4. **Modelo D (`model_d_total_points_v9`)**: Regresión Ridge de totales con ritmo exacto de 48 minutos, RAPM ofensivo/defensivo y **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
             "5. **Modelo E (`model_e_lightgbm_v9`)**: `LightGBM` residual sobre priors lineales evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
             f"6. **Modelo F (`{str((metrics.get('run_manifest') or {}).get('model_version_id') or load_config().model.version_id)}`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E, G y H mediante apilamiento convexo walk-forward.\n"
