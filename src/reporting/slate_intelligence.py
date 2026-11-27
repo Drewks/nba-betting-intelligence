@@ -4,13 +4,17 @@ Computes comprehensive pre-game intelligence for the upcoming slate.
 
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 from typing import Any
 
 from src.config import load_config
+from src.features.boxscore_features import compute_boxscore_feature_bundle
+from src.ingestion.boxscores import load_boxscores
 from src.models.statistical_models import EnsembleStackingModel, build_pregame_features
 from src.storage.db import DatabaseManager
 from src.utils.team_dictionary import format_matchup, get_team_full_name
+from src.validation.validator import parse_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +26,7 @@ def _fmt(value: Any, spec: str = ".5f", missing: str = "null") -> str:
 
 def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, Any]]:
     """
-    Computes pre-game odds, V8 model projections (Moneyline, Total Points, Spread, Simulation Quantiles, OT/Blowout),
+    Computes pre-game odds, V9 model projections (Moneyline, Total Points, Spread, Simulation Quantiles, OT/Blowout),
     key basketball statistics (Elo, Off/Def Rating, Pace, Rest/B2B, Geodesic Travel Miles, Altitude),
     and clear Spanish explanations of why the bot placed a bet or decided NO_BET for each upcoming game.
     """
@@ -30,12 +34,31 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
     risk_cfg = cfg.risk
     min_ev_pct = float(risk_cfg.min_ev_threshold) * 100.0
 
-    all_final_games = db.fetch_all(
-        "SELECT * FROM v_observed_games WHERE status = 'FINAL' AND home_score IS NOT NULL ORDER BY game_start_time"
+    all_observed_games = db.fetch_all(
+        "SELECT * FROM v_observed_games ORDER BY game_start_time ASC"
     )
+    boxscores: dict[str, dict[str, Any]] = {}
+    try:
+        boxscores = load_boxscores(db)
+    except Exception as exc:
+        logger.debug("Boxscores unavailable for slate intelligence fallback: %s", exc)
+    bx_features = (
+        compute_boxscore_feature_bundle(all_observed_games, boxscores)
+        if boxscores
+        else {}
+    )
+
+    all_final_games = [
+        {**g, **bx_features.get(g["game_id"], {})}
+        for g in all_observed_games
+        if g.get("status") == "FINAL" and g.get("home_score") is not None
+    ]
     model_f = EnsembleStackingModel(cfg.model.version_id)
     if all_final_games:
-        model_f.fit(all_final_games, all_final_games[-1]["game_start_time"])
+        fit_cutoff = (
+            parse_iso_utc(str(all_final_games[-1]["game_start_time"])) + timedelta(seconds=1)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        model_f.fit(all_final_games, fit_cutoff)
 
     sched_games = db.fetch_all(
         "SELECT * FROM v_observed_games WHERE status = 'SCHEDULED' AND game_id LIKE 'ESPN_%' ORDER BY game_start_time ASC"
@@ -44,6 +67,7 @@ def compute_upcoming_slate_intelligence(db: DatabaseManager) -> list[dict[str, A
         sched_games = db.fetch_all(
             "SELECT * FROM v_observed_games WHERE status = 'SCHEDULED' ORDER BY game_start_time ASC LIMIT 10"
         )
+    sched_games = [{**g, **bx_features.get(g["game_id"], {})} for g in sched_games]
 
     slate_items: list[dict[str, Any]] = []
     for g in sched_games:

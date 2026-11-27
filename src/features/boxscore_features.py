@@ -198,20 +198,38 @@ class _Team:
         """
         Builds strictly pre-game expected player minute shares (summing to 5.0 court slots) and
         their combined causal boxscore prior value. When `out_keys` is provided (live official injury
-        report), excludes players ruled OUT and includes active recent rotation players; otherwise
-        uses players from the team's most recent game.
+        report), starts from players in the team's most recent game minus those ruled OUT and
+        restores returning rotation players (`gp >= 3`, `avg_min >= ROTATION_MIN_MINUTES`) who missed
+        the last game without dumping garbage-time fringe players into the rotation (preserving exact
+        train/serving parity when nobody is OUT).
         """
         last = self.recent_played[-1] if self.recent_played else set()
         raw_m: dict[str, float] = {}
         if out_keys is not None:
-            # Official report available: start from active rotation (played recently) minus OUT list
-            recent_pool = set().union(*list(self.recent_played)) if self.recent_played else set()
-            for name in recent_pool:
+            for name in last:
                 if player_name_key(name) in out_keys:
                     continue
                 rec = self.players.get(name)
-                if rec is not None and (self.games - rec[3]) <= 4:
+                raw_m[name] = max(2.0, rec[0] if rec is not None else 15.0)
+            recent_pool = set().union(*list(self.recent_played)) if self.recent_played else set()
+            for name in recent_pool:
+                if name in raw_m or player_name_key(name) in out_keys:
+                    continue
+                rec = self.players.get(name)
+                if (
+                    rec is not None
+                    and rec[2] >= 3.0
+                    and rec[0] >= ROTATION_MIN_MINUTES
+                    and (self.games - rec[3]) <= 4
+                ):
                     raw_m[name] = max(2.0, rec[0])
+            if not raw_m and recent_pool:
+                for name in recent_pool:
+                    if player_name_key(name) in out_keys:
+                        continue
+                    rec = self.players.get(name)
+                    if rec is not None and (self.games - rec[3]) <= 4:
+                        raw_m[name] = max(2.0, rec[0])
         elif last:
             for name in last:
                 rec = self.players.get(name)

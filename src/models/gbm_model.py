@@ -43,7 +43,7 @@ class AdvancedGBMModel:
 
     def __init__(
         self,
-        version_id: str = "model_e_lightgbm_v1",
+        version_id: str = "model_e_lightgbm_v9",
         shared_ridge_rapm: RidgeEfficiencyRAPMModel | None = None,
     ) -> None:
         self.version_id = version_id

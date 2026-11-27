@@ -91,12 +91,23 @@ def _augment_resolved_calibration_from_walk_forward(
     resolved_sp_preds: list[dict[str, Any]],
     now_str: str,
 ) -> None:
-    """Fills sparse live calibration samples (< 50) using strict chronological OOS slices."""
-    if len(resolved_ml_preds) >= 50 or len(all_final_games) < 150:
+    """
+    Fills sparse live calibration samples (< 50 per market) using strict chronological OOS slices,
+    strictly deduplicating by `game_id` so live settled games are never double-counted during
+    a new model version's cold-start ramp.
+    """
+    need_ml = len(resolved_ml_preds) < 50
+    need_tot = len(resolved_tot_preds) < 50
+    need_sp = len(resolved_sp_preds) < 50
+    if not (need_ml or need_tot or need_sp) or len(all_final_games) < 150:
         return
     wf_slice = [g for g in all_final_games[-65:] if str(g["game_start_time"]) < now_str]
     if not wf_slice:
         return
+
+    existing_ml_gids = {str(r["game_id"]) for r in resolved_ml_preds if r.get("game_id")}
+    existing_tot_gids = {str(r["game_id"]) for r in resolved_tot_preds if r.get("game_id")}
+    existing_sp_gids = {str(r["game_id"]) for r in resolved_sp_preds if r.get("game_id")}
 
     wf_gids = [str(g["game_id"]) for g in wf_slice]
     placeholders = ",".join("?" for _ in wf_gids)
@@ -141,23 +152,32 @@ def _augment_resolved_calibration_from_walk_forward(
     wf_model = EnsembleStackingModel(MODEL_VERSION_ID)
     wf_model.fit(wf_train, wf_cutoff)
     for wg in wf_slice:
+        gid_wf = str(wg["game_id"])
         rec_ts = wg.get("result_recorded_at")
         if rec_ts and parse_iso_utc(rec_ts) > parse_iso_utc(now_str):
             rec_ts = None
         wg_prior = [fg for fg in all_final_games if str(fg["game_start_time"]) < str(wg["game_start_time"])]
-        resolved_ml_preds.append(
-            {
-                "raw_probability": wf_model.predict_moneyline(wg, wg_prior)["p_home"],
-                "game_start_time": wg["game_start_time"],
-                "result_recorded_at": rec_ts,
-                "outcome": 1 if wg["home_score"] > wg["away_score"] else 0,
-            }
-        )
-        gid_wf = str(wg["game_id"])
+        if need_ml and gid_wf not in existing_ml_gids:
+            resolved_ml_preds.append(
+                {
+                    "game_id": gid_wf,
+                    "raw_probability": wf_model.predict_moneyline(wg, wg_prior)["p_home"],
+                    "game_start_time": wg["game_start_time"],
+                    "result_recorded_at": rec_ts,
+                    "outcome": 1 if wg["home_score"] > wg["away_score"] else 0,
+                }
+            )
+            existing_ml_gids.add(gid_wf)
         tot_line_wf = obs_wf_tot_line.get(gid_wf)
-        if tot_line_wf is not None and abs((float(wg["home_score"]) + float(wg["away_score"])) - tot_line_wf) > 1e-9:
+        if (
+            need_tot
+            and gid_wf not in existing_tot_gids
+            and tot_line_wf is not None
+            and abs((float(wg["home_score"]) + float(wg["away_score"])) - tot_line_wf) > 1e-9
+        ):
             resolved_tot_preds.append(
                 {
+                    "game_id": gid_wf,
                     "raw_probability": wf_model.predict_total_points(wg, wg_prior, tot_line_wf)["p_over"],
                     "line_value": tot_line_wf,
                     "game_start_time": wg["game_start_time"],
@@ -165,10 +185,17 @@ def _augment_resolved_calibration_from_walk_forward(
                     "outcome": 1 if (wg["home_score"] + wg["away_score"]) > tot_line_wf else 0,
                 }
             )
+            existing_tot_gids.add(gid_wf)
         sp_line_wf = obs_wf_sp_line.get(gid_wf)
-        if sp_line_wf is not None and abs((float(wg["home_score"]) - float(wg["away_score"])) + sp_line_wf) > 1e-9:
+        if (
+            need_sp
+            and gid_wf not in existing_sp_gids
+            and sp_line_wf is not None
+            and abs((float(wg["home_score"]) - float(wg["away_score"])) + sp_line_wf) > 1e-9
+        ):
             resolved_sp_preds.append(
                 {
+                    "game_id": gid_wf,
                     "raw_probability": wf_model.predict_spread(wg, wg_prior, sp_line_wf)["p_cover_home"],
                     "line_value": sp_line_wf,
                     "game_start_time": wg["game_start_time"],
@@ -176,6 +203,7 @@ def _augment_resolved_calibration_from_walk_forward(
                     "outcome": 1 if (wg["home_score"] - wg["away_score"] + sp_line_wf) > 0 else 0,
                 }
             )
+            existing_sp_gids.add(gid_wf)
 
 
 def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None = None) -> dict[str, Any]:
@@ -331,7 +359,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             },
         ),
         (model_f.model_b.version_id, "model_b_elo", "moneyline", {"family": "elo"}),
-        (model_f.model_c.version_id, "model_c_point_margin", "moneyline", {"family": "huber_margin"}),
+        (model_f.model_c.version_id, "model_c_point_margin", "moneyline", {"family": "ridge_rapm_margin"}),
         (model_f.model_d.version_id, "model_d_total_points", "total_points", {"family": "ridge_totals"}),
         (model_f.model_e.version_id, "model_e_lightgbm", "moneyline", {"family": "hist_gbm"}),
         (
@@ -366,7 +394,8 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             FROM v_observed_predictions p
             WHERE p.market = 'moneyline' AND p.selection = 'HOME' AND p.model_version_id = ?
         )
-        SELECT COALESCE(l.raw_model_probability, l.raw_probability) AS raw_probability,
+        SELECT g.game_id,
+               COALESCE(l.raw_model_probability, l.raw_probability) AS raw_probability,
                g.game_start_time, g.result_recorded_at,
                CASE WHEN g.home_score > g.away_score THEN 1 ELSE 0 END AS outcome
         FROM latest l JOIN games g ON l.game_id = g.game_id
@@ -382,7 +411,8 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             FROM v_observed_predictions p
             WHERE p.market = 'total_points' AND p.selection = 'OVER' AND p.model_version_id = ?
         )
-        SELECT COALESCE(l.raw_model_probability, l.raw_probability) AS raw_probability,
+        SELECT g.game_id,
+               COALESCE(l.raw_model_probability, l.raw_probability) AS raw_probability,
                l.line_value, g.game_start_time, g.result_recorded_at,
                CASE WHEN (g.home_score + g.away_score) > l.line_value THEN 1 ELSE 0 END AS outcome
         FROM latest l JOIN games g ON l.game_id = g.game_id
@@ -399,7 +429,8 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             FROM v_observed_predictions p
             WHERE p.market = 'spread' AND p.selection = 'HOME' AND p.model_version_id = ?
         )
-        SELECT COALESCE(l.raw_model_probability, l.raw_probability) AS raw_probability,
+        SELECT g.game_id,
+               COALESCE(l.raw_model_probability, l.raw_probability) AS raw_probability,
                l.line_value, g.game_start_time, g.result_recorded_at,
                CASE WHEN (g.home_score - g.away_score + l.line_value) > 0 THEN 1 ELSE 0 END AS outcome
         FROM latest l JOIN games g ON l.game_id = g.game_id
@@ -519,8 +550,17 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
     live_active_m012_count = int((live_active_m012_row or {}).get("c") or 0)
 
     bt = WalkForwardBacktester(db, paper_engine)
-    if live_active_m012_count > 0:
-        metrics = bt.compute_comprehensive_metrics(model_comparison_records=[])
+    live_active_records = (
+        bt._reconstruct_comparison_records_from_db(model_version_id=MODEL_VERSION_ID)
+        if live_active_m012_count > 0
+        else []
+    )
+    if live_active_records and any(r.get("model_c_ml") is not None for r in live_active_records):
+        metrics = bt.compute_comprehensive_metrics(
+            model_comparison_records=live_active_records,
+            calibration_evaluation_source="DB_OBSERVED_PREDICTIONS_M012",
+            model_version_id=MODEL_VERSION_ID,
+        )
     else:
         oos_records = build_walk_forward_oos_comparisons_for_active_model(
             db,
@@ -538,6 +578,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
                 if oos_records
                 else "INSUFFICIENT_M012_OBSERVED_PREDICTIONS"
             ),
+            model_version_id=MODEL_VERSION_ID,
         )
 
     shadow_summary = summarize_shadow_ledger(db)

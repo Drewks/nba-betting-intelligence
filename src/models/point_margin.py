@@ -41,7 +41,7 @@ class PointMarginModel:
 
     def __init__(
         self,
-        version_id: str = "model_c_point_margin_v1",
+        version_id: str = "model_c_point_margin_v9",
         alpha: float = 50.0,
         default_residual_std: float = 13.6,
         home_court_points: float = 1.85,
