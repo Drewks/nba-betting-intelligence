@@ -197,11 +197,11 @@ class _Team:
     ) -> tuple[dict[str, float], float]:
         """
         Builds strictly pre-game expected player minute shares (summing to 5.0 court slots) and
-        their combined causal boxscore prior value. When `out_keys` is provided (live official injury
-        report), starts from players in the team's most recent game minus those ruled OUT and
-        restores returning rotation players (`gp >= 3`, `avg_min >= ROTATION_MIN_MINUTES`) who missed
-        the last game without dumping garbage-time fringe players into the rotation (preserving exact
-        train/serving parity when nobody is OUT).
+        their combined causal boxscore prior value from players in the team's most recent game.
+        When `out_keys` is provided (live official injury report), removes players explicitly ruled
+        OUT from that same base lineup so empty-OUT slates have exact train/serving parity (zero
+        serving-only restoration skew); falls back to non-OUT recent players only if removing OUT
+        players empties the lineup.
         """
         last = self.recent_played[-1] if self.recent_played else set()
         raw_m: dict[str, float] = {}
@@ -211,19 +211,8 @@ class _Team:
                     continue
                 rec = self.players.get(name)
                 raw_m[name] = max(2.0, rec[0] if rec is not None else 15.0)
-            recent_pool = set().union(*list(self.recent_played)) if self.recent_played else set()
-            for name in recent_pool:
-                if name in raw_m or player_name_key(name) in out_keys:
-                    continue
-                rec = self.players.get(name)
-                if (
-                    rec is not None
-                    and rec[2] >= 3.0
-                    and rec[0] >= ROTATION_MIN_MINUTES
-                    and (self.games - rec[3]) <= 4
-                ):
-                    raw_m[name] = max(2.0, rec[0])
-            if not raw_m and recent_pool:
+            if not raw_m and self.recent_played:
+                recent_pool = set().union(*list(self.recent_played))
                 for name in recent_pool:
                     if player_name_key(name) in out_keys:
                         continue

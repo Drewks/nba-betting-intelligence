@@ -667,23 +667,38 @@ def test_expected_lineup_shares_no_train_serving_skew_on_official_report() -> No
     h_none, _ = b_none["SK_NEXT"]["_bx_exp_lineup"]
     h_empty, _ = b_empty_report["SK_NEXT"]["_bx_exp_lineup"]
 
-    # Empty official OUT list must match training (no garbage-time dilution!)
+    # Empty official OUT list must match training bit-for-bit (no garbage-time dilution!)
     assert h_empty == h_none
     assert "Garbage 1" not in h_empty
     assert abs(sum(h_empty.values()) - 5.0) < 1e-6
 
-    # Now test returning rotation player: Starter A rested in last game (i == 3) but is NOT in OUT list today
+    # Even when a rotation player missed the last game (e.g. injured/questionable/resting),
+    # an empty official OUT list must preserve exact train/serving parity with no-override path
+    # (no serving-only restoration skew).
     boxes_rest = deepcopy(boxes)
     boxes_rest["SK_3"] = _make_box("BOS", "MIA", 112.0, 106.0, [p for p in core if p[0] != "Starter A"], opp)
-    b_return = compute_boxscore_feature_bundle(
+    b_rest_none = compute_boxscore_feature_bundle(games, boxes_rest, availability_overrides=None)
+    b_rest_empty = compute_boxscore_feature_bundle(
         games,
         boxes_rest,
         availability_overrides={"SK_NEXT": {"BOS": frozenset(), "MIA": frozenset()}},
     )
-    h_return, _ = b_return["SK_NEXT"]["_bx_exp_lineup"]
-    assert "Starter A" in h_return
-    assert "Garbage 1" not in h_return
-    assert abs(sum(h_return.values()) - 5.0) < 1e-6
+    h_rest_none, _ = b_rest_none["SK_NEXT"]["_bx_exp_lineup"]
+    h_rest_empty, _ = b_rest_empty["SK_NEXT"]["_bx_exp_lineup"]
+    assert h_rest_empty == h_rest_none
+    assert "Starter A" not in h_rest_empty
+    assert "Garbage 1" not in h_rest_empty
+
+    # Newly ruled OUT player from last game is excluded and remaining shares re-normalize to 5.0
+    b_out_star = compute_boxscore_feature_bundle(
+        games,
+        boxes,
+        availability_overrides={"SK_NEXT": {"BOS": frozenset({player_name_key("Starter A")}), "MIA": frozenset()}},
+    )
+    h_out_star, _ = b_out_star["SK_NEXT"]["_bx_exp_lineup"]
+    assert "Starter A" not in h_out_star
+    assert "Starter B" in h_out_star
+    assert abs(sum(h_out_star.values()) - 5.0) < 1e-6
 
 
 def test_augment_resolved_calibration_deduplicates_live_games_and_per_market(tmp_path: Path) -> None:
