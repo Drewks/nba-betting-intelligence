@@ -27,6 +27,7 @@ from src.models.ensemble import EnsembleStackingModel
 from src.models.gbm_model import AdvancedGBMModel
 from src.models.market_residual import MarketResidualModel
 from src.models.point_margin import PointMarginModel
+from src.models.ridge_rapm import RidgeEfficiencyRAPMModel
 from src.models.total_points import TotalPointsModel
 
 __all__ = [
@@ -41,6 +42,7 @@ __all__ = [
     "TotalPointsModel",
     "AdvancedGBMModel",
     "DeepMonteCarloHybridModel",
+    "RidgeEfficiencyRAPMModel",
     "EnsembleStackingModel",
     "MarketResidualModel",
 ]

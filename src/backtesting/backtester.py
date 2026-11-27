@@ -330,7 +330,7 @@ class WalkForwardBacktester:
         try:
             active_model_version_id = load_config().model.version_id
         except Exception:
-            active_model_version_id = "model_f_ensemble_v8"
+            active_model_version_id = "model_f_ensemble_v9"
         by_model_version = summarize_model_versions_from_db(
             self.db,
             active_model_version_id=active_model_version_id,

@@ -45,6 +45,29 @@ class MarketAnchorScheduleConfig:
 
 
 @dataclass(frozen=True)
+class RidgeRAPMConfig:
+    """Simultaneous multi-horizon Ridge adjusted efficiency & prior-informed player RAPM hyperparameters."""
+
+    enabled: bool = True
+    slow_half_life_days: float = 45.0
+    fast_half_life_days: float = 18.0
+    slow_season_decay: float = 0.40
+    fast_season_decay: float = 0.15
+    lam_margin_slow: float = 2.5
+    lam_eff_slow: float = 4.0
+    lam_pace_slow: float = 4.0
+    lam_margin_fast: float = 4.0
+    lam_eff_fast: float = 6.0
+    lam_pace_fast: float = 6.0
+    luck_adjust_blend: float = 0.25
+    player_rapm_half_life_days: float = 180.0
+    player_rapm_damp: float = 3.2
+    player_od_rapm_damp: float = 4.5
+    min_games_for_team_ridge: int = 30
+    min_games_for_player_rapm: int = 80
+
+
+@dataclass(frozen=True)
 class ModelConfig:
     version_id: str
     ewma_alpha_slow: float
@@ -57,6 +80,7 @@ class ModelConfig:
     moneyline_max_disagreement: float | None = None
     moneyline_max_odds: float | None = None
     anchor_schedule: MarketAnchorScheduleConfig = field(default_factory=MarketAnchorScheduleConfig)
+    ridge_rapm: RidgeRAPMConfig = field(default_factory=RidgeRAPMConfig)
 
 
 @dataclass(frozen=True)
@@ -505,6 +529,26 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
             raise ConfigError(
                 f"market_anchor_schedule.{mkt_lbl}_close_weight ({cl_w}) cannot exceed {mkt_lbl}_open_weight ({op_w})"
             )
+    rr_raw = m.get("ridge_rapm") or {}
+    ridge_rapm = RidgeRAPMConfig(
+        enabled=bool(rr_raw.get("enabled", True)),
+        slow_half_life_days=_in_range("ridge_rapm.slow_half_life_days", rr_raw.get("slow_half_life_days", 45.0), 7.0, 365.0),
+        fast_half_life_days=_in_range("ridge_rapm.fast_half_life_days", rr_raw.get("fast_half_life_days", 18.0), 3.0, 180.0),
+        slow_season_decay=_in_range("ridge_rapm.slow_season_decay", rr_raw.get("slow_season_decay", 0.40), 0.0, 1.0),
+        fast_season_decay=_in_range("ridge_rapm.fast_season_decay", rr_raw.get("fast_season_decay", 0.15), 0.0, 1.0),
+        lam_margin_slow=_in_range("ridge_rapm.lam_margin_slow", rr_raw.get("lam_margin_slow", 2.5), 0.1, 100.0),
+        lam_eff_slow=_in_range("ridge_rapm.lam_eff_slow", rr_raw.get("lam_eff_slow", 4.0), 0.1, 100.0),
+        lam_pace_slow=_in_range("ridge_rapm.lam_pace_slow", rr_raw.get("lam_pace_slow", 4.0), 0.1, 100.0),
+        lam_margin_fast=_in_range("ridge_rapm.lam_margin_fast", rr_raw.get("lam_margin_fast", 4.0), 0.1, 100.0),
+        lam_eff_fast=_in_range("ridge_rapm.lam_eff_fast", rr_raw.get("lam_eff_fast", 6.0), 0.1, 100.0),
+        lam_pace_fast=_in_range("ridge_rapm.lam_pace_fast", rr_raw.get("lam_pace_fast", 6.0), 0.1, 100.0),
+        luck_adjust_blend=_in_range("ridge_rapm.luck_adjust_blend", rr_raw.get("luck_adjust_blend", 0.25), 0.0, 1.0),
+        player_rapm_half_life_days=_in_range("ridge_rapm.player_rapm_half_life_days", rr_raw.get("player_rapm_half_life_days", 180.0), 14.0, 730.0),
+        player_rapm_damp=_in_range("ridge_rapm.player_rapm_damp", rr_raw.get("player_rapm_damp", 3.2), 0.5, 50.0),
+        player_od_rapm_damp=_in_range("ridge_rapm.player_od_rapm_damp", rr_raw.get("player_od_rapm_damp", 4.5), 0.5, 50.0),
+        min_games_for_team_ridge=int(_in_range("ridge_rapm.min_games_for_team_ridge", rr_raw.get("min_games_for_team_ridge", 30), 10, 500)),
+        min_games_for_player_rapm=int(_in_range("ridge_rapm.min_games_for_player_rapm", rr_raw.get("min_games_for_player_rapm", 80), 20, 1000)),
+    )
     model = ModelConfig(
         version_id=str(_require(m, "version_id", "model")),
         ewma_alpha_slow=_in_range("ewma_alpha_slow", _require(m, "ewma_alpha_slow", "model"), 0.001, 0.5),
@@ -530,6 +574,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
             _in_range("moneyline_max_odds", ml_mo_raw, 1.05, 50.0) if ml_mo_raw is not None else None
         ),
         anchor_schedule=anchor_schedule,
+        ridge_rapm=ridge_rapm,
     )
     staking_mode = str(_require(r, "staking_mode", "risk_management"))
     if staking_mode not in ("fractional_kelly", "flat"):

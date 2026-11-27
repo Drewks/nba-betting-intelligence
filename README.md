@@ -3,7 +3,7 @@
 Sistema cuantitativo de investigación probabilística, calibración estadística y **paper trading exclusivo (S/ 100.00 PEN virtual)** para la NBA.
 
 > [!WARNING]
-> **Aviso de Integridad y Riesgo**: entorno exclusivo de investigación y paper trading (**S/ 100.00 PEN virtuales**, `config/model_config.yaml` como única fuente de verdad — política efectiva desde `2026-11-14`, versión de modelo `model_f_ensemble_v8`).
+> **Aviso de Integridad y Riesgo**: entorno exclusivo de investigación y paper trading (**S/ 100.00 PEN virtuales**, `config/model_config.yaml` como única fuente de verdad — política efectiva desde `2026-11-14`, versión de modelo `model_f_ensemble_v9`).
 > Muestra histórica inicial con cuotas observadas: **25 apuestas liquidadas, ROI ≈ 0%, IC 95% ≈ [-24%, +28%]**. No hay evidencia de ventaja estadísticamente significativa.
 > Confirmar un edge del 5% exige ~1,400 apuestas; uno del 2%, ~8,800. Por eso la métrica principal es el **CLV contra el cierre sin margen**.
 
@@ -20,7 +20,7 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
 | Historial inmutable + Manifiesto por ejecución | ✅ | Triggers SQLite, `audit_row_registry`, tabla append-only `run_manifests` (`commit_sha`, `config_hash`, versiones, calibradores, semillas) y `Shadow Signal Ledger` (`shadow_candidates`). |
 | Restauración del historial borrado el 2026-11-09 | ✅ | Migración `2026_11_09_003` (bundle con checksum en `data/recovery/`), cada acción en `audit_repairs`. |
 | Gestión de riesgo (`config/model_config.yaml`) | ✅ | Única fuente de verdad: **Kelly fraccional 25% (`kelly_fraction: 0.25`)**, **EV mínimo 2.0% (`min_ev_threshold: 0.02`)**, tope `S/ 10.00` (`max_stake_pen: 10.00`, máx. `10%` banca), mín. `S/ 1.00`, máx. `3` selecciones/jornada, máx. `30%` exposición. |
-| Métricas, Holdout y Bonferroni | ✅ | Fail-closed; probabilidades separadas (`raw_model`, `calibrated_model`, `market_fair`, `market_anchored`), `holdout_season: 2026-27` intacto, corrección Bonferroni (`trials_evaluated_count: 11`) y estimador cronológico de cierre (`TotalsClosingEstimator`). |
+| Métricas, Holdout y Bonferroni | ✅ | Fail-closed; probabilidades separadas (`raw_model`, `calibrated_model`, `market_fair`, `market_anchored`), `holdout_season: 2026-27` intacto, corrección Bonferroni (`trials_evaluated_count: 12`) y estimador cronológico de cierre (`TotalsClosingEstimator`). |
 | CLV & Shadow Signal Ledger | ✅ | `100·(cuota × p_cierre_sin_margen − 1)`, cierre Pinnacle preferido; todas las señales `+EV` (incluidas bloqueadas por `min_ev` / `min_stake` / tope diario) quedan en `shadow_candidates` (1u hipotética) sin tocar la banca S/100. |
 | Injury Sniper | 🟡 | Ancla en el mercado; solo cambios de estado NUEVOS (vs. snapshot previo) mueven la probabilidad. Tabla de impacto aún sin calibrar. |
 | Casas peruanas (`Betano` & `RETAbet`) | 🟡 | Política explícita `sources.peru_scraper_policy: PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS`: solo JSON endpoints públicos de lectura sin evasión antibot Cloudflare/Shape; Playwright local desacoplado de GitHub Actions. |
@@ -34,7 +34,7 @@ Sistema cuantitativo de investigación probabilística, calibración estadístic
 ## 📐 Reglas operativas (`config/model_config.yaml` — vigencia `2026-11-14`)
 
 > [!IMPORTANT]
-> Todos los límites numéricos operativos se leen exclusivamente de [`config/model_config.yaml`](config/model_config.yaml) (`model.version_id: model_f_ensemble_v8`). Ninguna documentación ni reporte debe redefinir estos umbrales manualmente.
+> Todos los límites numéricos operativos se leen exclusivamente de [`config/model_config.yaml`](config/model_config.yaml) (`model.version_id: model_f_ensemble_v9`). Ninguna documentación ni reporte debe redefinir estos umbrales manualmente.
 
 1. **Benchmark = mercado sin margen**: la calibración del modelo (`raw_model_probability`, `calibrated_model_probability`) se compara contra `market_fair_probability` exactamente sobre los mismos partidos antes del anclaje dinámico al mercado (`market_anchor_schedule` con decaimiento apertura→cierre; peso base `market_anchor_model_weight: 0.30`).
 2. **Política de Stake, EV mínimo y Cuota de APIs**:

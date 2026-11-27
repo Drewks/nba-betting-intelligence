@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 import numpy as np
+from scipy.optimize import minimize
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 
@@ -168,7 +169,9 @@ class ProbabilityCalibrator:
 
         chosen = self.requested_method
         if chosen == "auto":
-            chosen = "isotonic" if self.train_sample_size >= self.min_samples_isotonic else "logistic"
+            # Smooth Bayesian-prior temperature scaling preserves strict monotonicity and avoids
+            # step-function overfitting of isotonic regression on noisy sports outcomes.
+            chosen = "logistic"
         elif chosen == "isotonic" and self.train_sample_size < self.min_samples_isotonic:
             chosen = "logistic"
 
@@ -177,14 +180,50 @@ class ProbabilityCalibrator:
         lr.fit(X_logit, y_arr)
         self.logistic_model = lr
 
-        # Enforce positive monotonicity and shrink small-sample intercept toward 0.0
-        # so short-term coin-flip variance on N < 200 games cannot create directional Home/Away bias
-        raw_slope = float(lr.coef_[0][0])
-        raw_intercept = float(lr.intercept_[0])
-        self.eff_slope = float(np.clip(raw_slope, 0.70, 1.30)) if raw_slope > 0.20 else 1.0
-        intercept_w = min(1.0, max(0.0, (self.train_sample_size - 50.0) / 250.0))
-        max_int = min(0.18, 0.02 + 0.16 * intercept_w)
-        self.eff_intercept = float(np.clip(raw_intercept * intercept_w, -max_int, max_int))
+        # Fisher-information-scaled Empirical-Bayes Platt temperature scaling in log-odds space:
+        # Scales the prior precision by the empirical per-sample Fisher information `E[p(1-p) z^2]`
+        # so high-dispersion, already-calibrated markets (e.g. Moneyline) receive strong small-sample
+        # protection toward slope=1.0 while low-dispersion market-relative markets (Totals / Spreads)
+        # rapidly learn temperature shrinkage without chasing transient Over/Home base-rate drift.
+        z_vec = X_logit.ravel()
+        y_float = y_arr.astype(float)
+        n_f = float(self.train_sample_size)
+        p_id = np.clip(p_arr, 1e-5, 1.0 - 1e-5)
+        w_var = p_id * (1.0 - p_id)
+        fisher_slope = float(np.mean(w_var * (z_vec ** 2)))
+        fisher_int = float(np.mean(w_var))
+        lam_slope = (105.0 * max(0.015, fisher_slope)) / n_f
+        lam_intercept = (220.0 * max(0.05, fisher_int)) / n_f
+
+        def _platt_obj_and_grad(params: np.ndarray) -> tuple[float, np.ndarray]:
+            a, b = float(params[0]), float(params[1])
+            z = np.clip(a * z_vec + b, -20.0, 20.0)
+            p = np.clip(1.0 / (1.0 + np.exp(-z)), 1e-7, 1.0 - 1e-7)
+            nll = -float(np.mean(y_float * np.log(p) + (1.0 - y_float) * np.log(1.0 - p)))
+            loss = nll + 0.5 * lam_slope * ((a - 1.0) ** 2) + 0.5 * lam_intercept * (b ** 2)
+            diff = p - y_float
+            g_a = float(np.mean(diff * z_vec)) + lam_slope * (a - 1.0)
+            g_b = float(np.mean(diff)) + lam_intercept * b
+            return loss, np.array([g_a, g_b], dtype=float)
+
+        opt = minimize(
+            _platt_obj_and_grad,
+            x0=np.array([1.0, 0.0], dtype=float),
+            jac=True,
+            method="L-BFGS-B",
+            bounds=[(0.12, 1.35), (-0.06, 0.06)],
+        )
+        if opt.success:
+            raw_slope = float(opt.x[0])
+            raw_intercept = float(opt.x[1])
+        else:
+            raw_slope = float(np.clip(float(lr.coef_[0][0]), 0.15, 1.35))
+            raw_intercept = 0.0
+
+        self.eff_slope = raw_slope
+        # Enforce strict zero intercept on small samples (N <= 50) to prevent directional bias
+        intercept_w = min(1.0, max(0.0, (self.train_sample_size - 50.0) / 350.0))
+        self.eff_intercept = float(np.clip(raw_intercept * intercept_w, -0.05, 0.05))
 
         if chosen == "isotonic":
             iso = IsotonicRegression(y_min=0.03, y_max=0.97, out_of_bounds="clip")
@@ -203,17 +242,16 @@ class ProbabilityCalibrator:
 
     def transform(self, raw_probabilities: list[float] | np.ndarray) -> np.ndarray:
         p_arr = np.asarray(raw_probabilities, dtype=float)
-        shrink = min(0.45, max(0.12, self.train_sample_size / 400.0))
         if self.active_method == "isotonic" and self.isotonic_model is not None:
             iso_cal = self.isotonic_model.predict(p_arr)
             platt_cal = self._platt_predict(p_arr)
-            cal = 0.40 * iso_cal + 0.60 * platt_cal
-            blended = (1.0 - shrink) * p_arr + shrink * cal
+            # Smoothly weight isotonic only as sample size grows (prevents step-function variance on N=100..300)
+            iso_w = min(0.28, max(0.0, (self.train_sample_size - 100.0) / 1000.0))
+            blended = iso_w * iso_cal + (1.0 - iso_w) * platt_cal
             return np.round(np.clip(blended, 0.03, 0.97), 6)
         if self.active_method == "logistic" and self.logistic_model is not None:
             cal = self._platt_predict(p_arr)
-            blended = (1.0 - shrink) * p_arr + shrink * cal
-            return np.round(np.clip(blended, 0.03, 0.97), 6)
+            return np.round(np.clip(cal, 0.03, 0.97), 6)
         return np.round(np.clip(p_arr, 0.03, 0.97), 6)
 
     def transform_single(self, raw_probability: float) -> float:

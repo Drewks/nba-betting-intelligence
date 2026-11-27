@@ -145,7 +145,7 @@ def sync_obsidian_vault(
             "Consulte el detalle de partidos evaluados y predicciones en `09-Reports/`.\n"
         ),
         f"04-Predictions/Predictions-Summary-{target_date}.md": (
-            f"---\ndate_generated: {now_str}\nmodel_versions: [{active_model_id}, model_b_elo_v8, model_c_point_margin_v8, model_d_total_points_v8, model_e_lightgbm_v8, model_g_ml_montecarlo_v8]\n---\n"
+            f"---\ndate_generated: {now_str}\nmodel_versions: [{active_model_id}, model_b_elo_v8, model_c_point_margin_v9, model_d_total_points_v9, model_e_lightgbm_v9, model_g_ml_montecarlo_v9, model_h_ridge_rapm_v9]\n---\n"
             "# Historial Auditable de Predicciones\n\n"
             "- Todas las predicciones están protegidas mediante triggers `BEFORE UPDATE` y `BEFORE DELETE` en SQLite (`data/nba_intelligence.sqlite3`).\n"
             "- Prohibido sobrescribir predicciones o cuotas originales.\n"
@@ -162,14 +162,15 @@ def sync_obsidian_vault(
         ),
         "06-Models/Model-Catalog-and-Versions.md": (
             f"---\ndate_generated: {now_str}\n---\n"
-            "# Catálogo de Modelos Cuantitativos (Modelos A–G)\n\n"
+            "# Catálogo de Modelos Cuantitativos (Modelos A–H)\n\n"
             "1. **Modelo A (`model_a_baseline_v1`)**: Frecuencia histórica de victoria local y media/desviación de puntos totales.\n"
             "2. **Modelo B (`model_b_elo_v8`)**: Sistema Elo secuencial con ajuste por localía (+65 Elo) y descanso (+12 Elo/día).\n"
-            "3. **Modelo C (`model_c_point_margin_v8`)**: Regresión Ridge sobre `Offensive Rating`, `Defensive Rating`, `Net Rating`, `Pace`, descanso y forma reciente.\n"
-            "4. **Modelo D (`model_d_total_points_v8`)**: Distribución normal con **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
-            "5. **Modelo E (`model_e_lightgbm_v8`)**: `LightGBM` evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
-            f"6. **Modelo F (`{str((metrics.get('run_manifest') or {}).get('model_version_id') or load_config().model.version_id)}`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E y G en escala log-odds.\n"
-            "7. **Modelo G (`model_g_ml_montecarlo_v8`)**: **Simulador Híbrido ML + 10,000 Partidos Monte Carlo por Posesión** (modela `Q1–Q3`, desaceleración por `Blowout/Garbage-Time` en `Q4`, faltas intencionales en los últimos 90s `Clutch Fouling` y prórrogas iterativas `Overtime` + percentiles de simulación `[Q10, Q90]`).\n"
+            "3. **Modelo C (`model_c_point_margin_v9`)**: Regresión Huber sobre eficiencia ajustada Ridge/RAPM, `Offensive/Defensive Rating`, `Pace`, descanso y forma reciente.\n"
+            "4. **Modelo D (`model_d_total_points_v9`)**: Regresión Ridge de totales con ritmo exacto de 48 minutos, RAPM ofensivo/defensivo y **covarianza explícita entre marcadores** ($\\text{Var}(H+A) = \\text{Var}(H) + \\text{Var}(A) + 2\\text{Cov}(H,A)$).\n"
+            "5. **Modelo E (`model_e_lightgbm_v9`)**: `LightGBM` residual sobre priors lineales evaluado estrictamente fuera de muestra mediante validación walk-forward.\n"
+            f"6. **Modelo F (`{str((metrics.get('run_manifest') or {}).get('model_version_id') or load_config().model.version_id)}`)**: Meta-Ensemble de Sindicato que combina Modelos B, C, D, E, G y H mediante apilamiento convexo walk-forward.\n"
+            "7. **Modelo G (`model_g_ml_montecarlo_v9`)**: **Simulador Híbrido ML + 10,000 Partidos Monte Carlo por Posesión** (modela `Q1–Q3`, desaceleración por `Blowout/Garbage-Time` en `Q4`, faltas intencionales en los últimos 90s `Clutch Fouling` y prórrogas iterativas `Overtime` + percentiles de simulación `[Q10, Q90]`).\n"
+            "8. **Modelo H (`model_h_ridge_rapm_v9`)**: Motor simultáneo Ridge multi-horizonte de eficiencia ajustada por calendario y RAPM de jugadores informado por priors causales.\n"
         ),
         "07-Backtesting/Walk-Forward-Backtest-Results.md": weekly_report_md,
         "08-Calibration/Calibration-and-Reliability.md": (

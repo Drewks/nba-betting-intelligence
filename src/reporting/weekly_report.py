@@ -40,17 +40,18 @@ def generate_weekly_report(
     roi_ci_high = boot.get("roi_ci_upper_pct") if boot.get("roi_ci_upper_pct") is not None else boot.get("roi_ci_upper_95_pct")
 
     run_manifest = metrics.get("run_manifest") or {}
-    active_model_id = str(run_manifest.get("model_version_id") or "model_f_ensemble_v8")
+    active_model_id = str(run_manifest.get("model_version_id") or "model_f_ensemble_v9")
     manifest_id_str = str(run_manifest.get("run_id") or "n/d")
     sub_vers = run_manifest.get("submodel_versions") or {}
     version_list = [
         active_model_id,
         str(sub_vers.get("model_a") or "model_a_baseline_v1"),
         str(sub_vers.get("model_b") or "model_b_elo_v8"),
-        str(sub_vers.get("model_c") or "model_c_point_margin_v8"),
-        str(sub_vers.get("model_d") or "model_d_total_points_v8"),
-        str(sub_vers.get("model_e") or "model_e_lightgbm_v8"),
-        str(sub_vers.get("model_g") or "model_g_ml_montecarlo_v8"),
+        str(sub_vers.get("model_c") or "model_c_point_margin_v9"),
+        str(sub_vers.get("model_d") or "model_d_total_points_v9"),
+        str(sub_vers.get("model_e") or "model_e_lightgbm_v9"),
+        str(sub_vers.get("model_g") or "model_g_ml_montecarlo_v9"),
+        str(sub_vers.get("model_h") or "model_h_ridge_rapm_v9"),
     ]
     lines = [
         "---",

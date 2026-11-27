@@ -75,14 +75,14 @@ class PlayerPropsEngine:
         self.db = db
         self.min_ev_threshold = min_ev_threshold
         self._config_load_error: str | None = None
-        self.model_version_id: str = "model_f_ensemble_v8"
+        self.model_version_id: str = "model_f_ensemble_v9"
         if risk_config is not None:
             self.risk: RiskConfig | None = risk_config
         else:
             try:
                 cfg = load_config()
                 self.risk = cfg.risk
-                self.model_version_id = getattr(getattr(cfg, "model", None), "version_id", "model_f_ensemble_v8")
+                self.model_version_id = getattr(getattr(cfg, "model", None), "version_id", "model_f_ensemble_v9")
             except Exception as exc:
                 self.risk = None
                 self._config_load_error = str(exc)

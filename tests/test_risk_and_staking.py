@@ -480,8 +480,8 @@ def test_39_v8_drawdown_kelly_shield_and_official_v8_promotion() -> None:
     assert 0.0 <= top_sgp["kelly_stake_pen"] <= 10.00
     assert "CUOTA ESTIMADA" in top_sgp["rationale"]
 
-    # 3. Verify V8 Official Model Promotion
-    assert rcc.MODEL_VERSION_ID == "model_f_ensemble_v8"
+    # 3. Verify Official Model Promotion matches config/model_config.yaml
+    assert rcc.MODEL_VERSION_ID == "model_f_ensemble_v9"
 
 
 # 50. Audited Phase 0: Rigorous Risk Management, Negative-EV Zero Stake & Quarantined Odds Integrity
