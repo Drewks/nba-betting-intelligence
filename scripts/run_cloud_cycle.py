@@ -44,7 +44,7 @@ from src.agents.specialized_agents import (
 )
 from src.backtesting.backtester import WalkForwardBacktester
 from src.config import load_config
-from src.features.boxscore_features import compute_boxscore_features
+from src.features.boxscore_features import compute_boxscore_feature_bundle
 from src.features.official_availability import build_official_availability_overrides
 from src.features.team_ratings import apply_pregame_team_ratings
 from src.ingestion.adapters import DataSourceRouter, ESPNPublicAdapter
@@ -308,7 +308,7 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             )
         except Exception as exc:
             logger.warning("Official injury report not applied (proxy kept): %s", exc)
-    bx_features = compute_boxscore_features(
+    bx_features = compute_boxscore_feature_bundle(
         db.fetch_all("SELECT * FROM v_observed_games ORDER BY game_start_time ASC"),
         load_boxscores(db),
         availability_overrides=availability_overrides,
@@ -340,13 +340,19 @@ def run_incremental_cloud_cycle(mode: str = "auto", db_path: Path | str | None =
             "total_points",
             {"n_simulations": 10000, "regimes": ["Q1_Q3", "Q4_Blowout", "Clutch_Fouling", "Overtime"]},
         ),
+        (
+            model_f.model_h.version_id,
+            "model_h_ridge_rapm",
+            "moneyline",
+            {"family": "simultaneous_ridge_efficiency_and_prior_informed_player_rapm"},
+        ),
     ]:
         db.execute_insert(
             """
             INSERT OR IGNORE INTO model_versions (
                 model_version_id, model_family, market, train_start_date, train_end_date,
                 trained_at, hyperparameters_json, is_active, approved_by
-            ) VALUES (?, ?, ?, '2024-10-22', ?, ?, ?, 1, 'orchestrator_v8')
+            ) VALUES (?, ?, ?, '2024-10-22', ?, ?, ?, 1, 'orchestrator_v9')
             """,
             (m_id, m_fam, m_mkt, today_str, now_str, json.dumps(m_hp)),
         )

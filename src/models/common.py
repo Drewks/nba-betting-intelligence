@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from scipy.optimize import minimize_scalar
 
 from src.validation.validator import parse_iso_utc
 
@@ -62,6 +63,101 @@ TOTAL_FEATURE_COLUMNS: list[str] = [
     "pace_clash",
     "recent_total_trend",
 ]
+
+
+ENHANCED_MARGIN_FEATURE_COLUMNS: tuple[str, ...] = (
+    "ridge_margin_slow",
+    "ridge_margin_fast",
+    "rapm_margin",
+    "structural_margin",
+    "elo_spread",
+    "bx_lineup_prior_diff",
+    "bx_missing_pts_diff",
+    "bx_unpriced_pts_diff",
+    "bx_new_absence_pts_diff",
+    "bx_efg_diff",
+    "bx_tov_diff",
+    "bx_orb_diff",
+    "bx_ftr_diff",
+    "bx_tp_luck_diff",
+    "fatigue_diff",
+    "altitude_advantage",
+    "form_surge_diff",
+    "venue_split_diff",
+)
+
+
+ENHANCED_TOTAL_FEATURE_COLUMNS: tuple[str, ...] = (
+    "ridge_total_slow",
+    "ridge_total_fast",
+    "rapm_total",
+    "structural_total",
+    "ridge_pace_slow",
+    "blowout_drag_ridge",
+    "ot_bonus_ridge",
+    "b2b_total_drag",
+    "bx_missing_pts_sum",
+    "bx_ftr_sum",
+    "bx_tpa_rate_sum",
+    "bx_tp_luck_sum",
+    "pace_clash",
+    "recent_total_trend",
+)
+
+
+def build_enhanced_margin_vector(
+    feats: dict[str, float],
+    ridge_pred: dict[str, float],
+) -> list[float]:
+    """Assembles the unified V9 margin feature vector from pre-game features and Ridge/RAPM signals."""
+    merged = {**feats, **ridge_pred}
+    return [float(merged.get(col, 0.0)) for col in ENHANCED_MARGIN_FEATURE_COLUMNS]
+
+
+def build_enhanced_total_vector(
+    feats: dict[str, float],
+    ridge_pred: dict[str, float],
+) -> list[float]:
+    """Assembles the unified V9 totals feature vector from pre-game features and Ridge/RAPM signals."""
+    merged = {**feats, **ridge_pred}
+    return [float(merged.get(col, 0.0)) for col in ENHANCED_TOTAL_FEATURE_COLUMNS]
+
+
+def fit_oof_logistic_scale(
+    oof_margins: list[float] | np.ndarray,
+    outcomes: list[float] | np.ndarray,
+    *,
+    prior_scale: float = 7.55,
+    min_scale: float = 6.9,
+    max_scale: float = 7.80,
+    prior_strength: float = 40.0,
+) -> float:
+    """
+    Fits the 1D logistic win-probability scale `s` in `P(home) = sigmoid(margin / s)` strictly on
+    recency-weighted out-of-fold margins via L2-regularized binary log-loss, preventing early-warmup
+    fold dispersion from inflating scale and keeping Moneyline probabilities sharply calibrated.
+    """
+    m = np.asarray(oof_margins, dtype=float)
+    y = np.asarray(outcomes, dtype=float)
+    n = len(m)
+    if n < 30 or len(y) != n:
+        return float(np.clip(prior_scale, min_scale, max_scale))
+
+    w = np.exp(np.linspace(-0.75, 0.0, n))
+    w_sum = float(np.sum(w))
+    lam = float(prior_strength) / float(n)
+
+    def _obj(scale: float) -> float:
+        z = np.clip(m / scale, -20.0, 20.0)
+        p = np.clip(1.0 / (1.0 + np.exp(-z)), 1e-6, 1.0 - 1e-6)
+        nll = -float(np.sum(w * (y * np.log(p) + (1.0 - y) * np.log(1.0 - p))) / w_sum)
+        reg = 0.5 * lam * (((scale - prior_scale) / max(1.0, prior_scale)) ** 2)
+        return nll + reg
+
+    res = minimize_scalar(_obj, bounds=(min_scale, max_scale), method="bounded")
+    if res.success and np.isfinite(res.x):
+        return float(np.clip(float(res.x), min_scale, max_scale))
+    return float(np.clip(prior_scale, min_scale, max_scale))
 
 
 def _filter_strictly_prior_final_games(

@@ -458,6 +458,7 @@ def fit_and_log_cycle_calibrators(
         "model_d": model_f.model_d.version_id,
         "model_e": model_f.model_e.version_id,
         "model_g": model_f.model_g.version_id,
+        "model_h": model_f.model_h.version_id,
     }
     calibrator_metadata = {
         "moneyline": {"method": ml_method, "sample_size": len(resolved_ml_preds), "venn_abers_fitted": ml_va.is_fitted},

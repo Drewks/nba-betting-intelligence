@@ -7,7 +7,9 @@ with moment-matched expectation anchoring to prevent drift while capturing fat-t
 from __future__ import annotations
 
 import hashlib
+import math
 from typing import Any
+
 import numpy as np
 from scipy.stats import norm
 
@@ -20,9 +22,9 @@ from src.models.total_points import TotalPointsModel
 class DeepMonteCarloHybridModel:
     """
     Modelo G (Hybrid Machine Learning + 10,000-Game Quarter-by-Quarter Possession Monte Carlo):
-    - Layer 1 (ML Parameter Estimation): Uses RidgeCV + Residual LightGBM + Elo/Efficiency features to estimate
-      expected possessions per game, Points Per Possession (PPP) for Home & Away, shared game-environment covariance,
-      and 3PT heavy-tailed Student-t volatility.
+    - Layer 1 (ML Parameter Estimation): Uses Ridge/RAPM Margin + Residual LightGBM + Exact 48-min
+      Regulation Pace to estimate expected possessions per game, Points Per Possession (PPP) for
+      Home & Away, shared game-environment covariance, and 3PT heavy-tailed Student-t volatility.
     - Layer 2 (Vectorized 10,000-Game Monte Carlo Simulator with First-Moment Matching): Simulates Q1-Q3,
       Q4 Blowout/Garbage-Time deceleration, Late-Game Intentional Fouling, and iterative 5-minute Overtime
       periods until resolution without tie-breaking bias, centered via exact first-moment matching.
@@ -37,7 +39,7 @@ class DeepMonteCarloHybridModel:
 
     def __init__(
         self,
-        version_id: str = "model_g_ml_montecarlo_v8",
+        version_id: str = "model_g_ml_montecarlo_v9",
         n_simulations: int = 10000,
         shared_margin_model: PointMarginModel | None = None,
         shared_totals_model: TotalPointsModel | None = None,
@@ -46,9 +48,9 @@ class DeepMonteCarloHybridModel:
         self.version_id = version_id
         self.n_simulations = int(n_simulations)
         self._owns_submodels = shared_margin_model is None
-        self.margin_model = shared_margin_model or PointMarginModel("model_c_for_mc_v8")
-        self.totals_model = shared_totals_model or TotalPointsModel("model_d_for_mc_v8")
-        self.gbm_model = shared_gbm_model or AdvancedGBMModel("model_e_for_mc_v8")
+        self.margin_model = shared_margin_model or PointMarginModel("model_c_for_mc_v9")
+        self.totals_model = shared_totals_model or TotalPointsModel("model_d_for_mc_v9")
+        self.gbm_model = shared_gbm_model or AdvancedGBMModel("model_e_for_mc_v9")
 
     def fit(self, historical_games: list[dict[str, Any]], cutoff_time_str: str) -> None:
         if self._owns_submodels:
@@ -70,24 +72,44 @@ class DeepMonteCarloHybridModel:
         precomputed_d: dict[str, float] | None = None,
         precomputed_e_ml: dict[str, float] | None = None,
         precomputed_e_tot: dict[str, float] | None = None,
+        precomputed_feats: dict[str, float] | None = None,
+        precomputed_ridge: dict[str, float] | None = None,
     ) -> dict[str, float]:
-        feats = build_pregame_features(game, historical_games, market="total_points")
-        c_res = precomputed_c or self.margin_model.predict_moneyline(game, historical_games)
-        d_res = precomputed_d or self.totals_model.predict_total_points(game, historical_games, line_value)
-        e_ml = precomputed_e_ml or self.gbm_model.predict_moneyline(game, historical_games)
-        e_tot = precomputed_e_tot or self.gbm_model.predict_total_points(game, historical_games, line_value)
+        feats = precomputed_feats if precomputed_feats is not None else build_pregame_features(
+            game, historical_games, market="total_points"
+        )
+        c_res = precomputed_c or self.margin_model.predict_moneyline(
+            game, historical_games, precomputed_feats=feats, precomputed_ridge=precomputed_ridge
+        )
+        d_res = precomputed_d or self.totals_model.predict_total_points(
+            game, historical_games, line_value, precomputed_feats=feats, precomputed_ridge=precomputed_ridge
+        )
+        e_ml = precomputed_e_ml or self.gbm_model.predict_moneyline(
+            game, historical_games, precomputed_feats=feats, precomputed_ridge=precomputed_ridge
+        )
+        e_tot = precomputed_e_tot or self.gbm_model.predict_total_points(
+            game, historical_games, line_value, precomputed_feats=feats, precomputed_ridge=precomputed_ridge
+        )
 
-        # Layer 1: Blend Elo spread, RidgeCV margin, and GBM margin
-        e_mar = e_ml.get("expected_margin", c_res["expected_margin"])
-        ml_margin = 0.50 * feats["elo_spread"] + 0.30 * c_res["expected_margin"] + 0.20 * e_mar
-        ml_total = 0.72 * d_res["expected_total"] + 0.28 * e_tot["expected_total"]
+        # Layer 1: Blend Ridge/RAPM PointMargin, Residual GBM, and Elo spread
+        e_mar = float(e_ml.get("expected_margin", c_res["expected_margin"]))
+        if getattr(self.margin_model, "uses_enhanced_features", False):
+            ml_margin = 0.65 * float(c_res["expected_margin"]) + 0.25 * e_mar + 0.10 * float(feats["elo_spread"])
+        else:
+            ml_margin = 0.50 * float(feats["elo_spread"]) + 0.30 * float(c_res["expected_margin"]) + 0.20 * e_mar
+        ml_total = 0.72 * float(d_res["expected_total"]) + 0.28 * float(e_tot["expected_total"])
 
         # Adjust baseline regulation total down by ~1.35 pts because OT and clutch fouling add ~1.35 pts on average
         reg_total_mean = ml_total - 1.35
         exp_home_reg = 0.5 * (reg_total_mean + ml_margin)
         exp_away_reg = 0.5 * (reg_total_mean - ml_margin)
 
-        exp_pace = max(92.0, min(106.0, float(feats["expected_pace"])))
+        raw_pace = (
+            float(precomputed_ridge["ridge_pace_slow"])
+            if (precomputed_ridge is not None and precomputed_ridge.get("is_fitted", 0.0) > 0.5)
+            else float(feats["expected_pace"])
+        )
+        exp_pace = max(92.0, min(106.5, raw_pace))
         ppp_home = exp_home_reg / exp_pace
         ppp_away = exp_away_reg / exp_pace
 
@@ -95,12 +117,10 @@ class DeepMonteCarloHybridModel:
         rng = np.random.default_rng(self._deterministic_seed(str(game.get("game_id", "NBA_MC"))))
         n = self.n_simulations
 
-        # Shared regulation possessions + shared game-flow/whistle environment shock (induces realistic Cov(H, A) ~ +38)
         poss_q1_q3 = rng.normal(loc=0.75 * exp_pace, scale=3.10, size=n)
         poss_q4 = rng.normal(loc=0.25 * exp_pace, scale=1.80, size=n)
         shared_env_ppp = rng.normal(loc=0.0, scale=0.044, size=n)
 
-        # Independent team shooting shocks (calibrated so std(margin) ~ 11.5 near 0 and std(total) ~ 18.2)
         t_scale = 0.8165
         eff_std_q1_q3 = 0.106 * t_scale
         eff_std_q4 = 0.062 * t_scale
@@ -161,16 +181,16 @@ class DeepMonteCarloHybridModel:
         raw_margins = h_final - a_final
         raw_totals = h_final + a_final
 
-        # First-moment matching (control variate centering) to eliminate Monte Carlo regime drift
-        # while retaining exact empirical skewness, heavy Student-t tails, and OT/foul multi-modality
+        # First-moment matching (control variate centering)
         sim_margins = raw_margins + (ml_margin - float(np.mean(raw_margins)))
         sim_totals = raw_totals + (ml_total - float(np.mean(raw_totals)))
 
         p_home_emp = float(np.mean(sim_margins > 0.0))
-        p_home_smooth = float(1.0 - norm.cdf(0.0, loc=ml_margin, scale=11.55))
-        p_home_mc = float(np.clip(0.50 * p_home_emp + 0.50 * p_home_smooth, 1e-4, 1.0 - 1e-4))
+        logistic_scale = float(getattr(self.margin_model, "win_logistic_scale", 7.4))
+        p_home_smooth = float(1.0 / (1.0 + math.exp(-ml_margin / logistic_scale)))
+        p_home_mc = float(np.clip(0.45 * p_home_emp + 0.55 * p_home_smooth, 1e-4, 1.0 - 1e-4))
 
-        mc_tot_std = float(np.clip(np.std(sim_totals), 16.5, 20.5))
+        mc_tot_std = float(np.clip(np.std(sim_totals), 17.0, 20.5))
         is_int_line = abs(line_value - round(line_value)) < 1e-6
         if is_int_line:
             over_mask = sim_totals > (line_value + 0.5)
@@ -184,7 +204,6 @@ class DeepMonteCarloHybridModel:
             p_under_smooth = float(norm.cdf(line_value - 0.5, loc=ml_total, scale=mc_tot_std))
             p_push_smooth = max(0.0, 1.0 - p_over_smooth - p_under_smooth)
 
-            # Convex blend of two valid unconditional probability triples sums to exact 1.0 (F-004).
             p_over_mc = 0.50 * p_over_emp + 0.50 * p_over_smooth
             p_under_mc = 0.50 * p_under_emp + 0.50 * p_under_smooth
             p_push_mc = max(0.0, 1.0 - p_over_mc - p_under_mc)

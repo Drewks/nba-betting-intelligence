@@ -11,7 +11,7 @@
 # ==============================================================================
 
 model:
-  version_id: "model_f_ensemble_v8"
+  version_id: "model_f_ensemble_v9"
   ewma_alpha_slow: 0.0375
   ewma_alpha_fast: 0.130
   tempo_alpha_slow: 0.055
@@ -31,6 +31,24 @@ model:
     total_points_close_weight: 0.00
     spread_open_weight: 0.24
     spread_close_weight: 0.02
+  ridge_rapm:                        # Simultaneous multi-horizon Ridge adjusted efficiency & prior-informed player RAPM (dev-validated 2024-25/2025-26)
+    enabled: true
+    slow_half_life_days: 45.0
+    fast_half_life_days: 18.0
+    slow_season_decay: 0.40
+    fast_season_decay: 0.15
+    lam_margin_slow: 2.5
+    lam_eff_slow: 4.0
+    lam_pace_slow: 4.0
+    lam_margin_fast: 4.0
+    lam_eff_fast: 6.0
+    lam_pace_fast: 6.0
+    luck_adjust_blend: 0.25
+    player_rapm_half_life_days: 180.0
+    player_rapm_damp: 3.2
+    player_od_rapm_damp: 4.5
+    min_games_for_team_ridge: 30
+    min_games_for_player_rapm: 80
 
 risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
   virtual_bankroll_initial_pen: 100.00
@@ -106,9 +124,10 @@ evaluation:
   holdout_season: "2026-27"
   # Lower bound: 9 distinct backtest reports were published before the freeze (EV 5% / 2%, ML odds cap,
   # EWMA re-tunes, margin and box-score variants); +1 for the 2026-11-17 Pinnacle-margin (3.2%) run;
-  # +1 for the dev-only (2024-25/2025-26) time-decaying market anchor schedule calibration.
-  trials_evaluated_count: 11
-  frozen_protocol_id: "V8_FROZEN_2026_11_15"
+  # +1 for the dev-only (2024-25/2025-26) time-decaying market anchor schedule calibration;
+  # +1 for the V9 simultaneous Ridge/RAPM + upgraded ensemble promotion (2026-11-27).
+  trials_evaluated_count: 12
+  frozen_protocol_id: "V9_FROZEN_2026_11_27"
   # 2026-27 was visible in every published report before the freeze, so it is NOT an untouched holdout.
   season_holdout_contaminated: true
   # Genuine out-of-sample evidence: only games that start after the protocol freeze.
