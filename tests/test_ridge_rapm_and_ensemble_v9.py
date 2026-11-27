@@ -605,6 +605,12 @@ def test_reconstruct_comparison_records_strict_version_isolation(tmp_path: Path)
     # V9 predicted 0.85 on winning home team (120-105, total 225 > 218.5) => Brier = (0.85 - 1.0)^2 = 0.0225
     assert abs(float(m_v9["overall_brier_score"]) - 0.0225) < 1e-6
 
+    # Dashboard markdown fallback (metrics=None) must also isolate to active config version (never mixing V8)
+    from src.reporting.dashboard_export import generate_bet_tracking_markdown
+
+    md_out = generate_bet_tracking_markdown(db)
+    assert "Modelo 0.0225 vs Mercado 0.2500 (N=1)" in md_out
+
 
 def test_expected_lineup_shares_no_train_serving_skew_on_official_report() -> None:
     core = [

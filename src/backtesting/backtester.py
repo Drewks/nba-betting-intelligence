@@ -427,18 +427,21 @@ class WalkForwardBacktester:
         model_comparison_records: list[dict[str, Any]] | None = None,
         closing_rows: list[dict[str, Any]] | None = None,
         calibration_evaluation_source: str | None = None,
+        model_version_id: str | None = None,
     ) -> dict[str, Any]:
         """Alias for compute_comprehensive_metrics (observed financial and statistical evaluation)."""
         return self.compute_comprehensive_metrics(
             model_comparison_records=model_comparison_records,
             closing_rows=closing_rows,
             calibration_evaluation_source=calibration_evaluation_source,
+            model_version_id=model_version_id,
         )
 
 
 def compute_financial_and_statistical_metrics(
     db: DatabaseManager,
     paper_engine: PaperTradingEngine | None = None,
+    model_version_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Computes observed financial and statistical metrics from v_observed_simulated_bets,
@@ -446,4 +449,4 @@ def compute_financial_and_statistical_metrics(
     """
     engine = paper_engine or PaperTradingEngine(db, exclude_synthetic=True)
     bt = WalkForwardBacktester(db, engine)
-    return bt.compute_comprehensive_metrics()
+    return bt.compute_comprehensive_metrics(model_version_id=model_version_id)

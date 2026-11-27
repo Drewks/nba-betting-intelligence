@@ -108,9 +108,13 @@ def main() -> None:
             print("-" * 80)
 
     if not args.dry_run:
-        # Regenerate tracking dashboard with metrics COMPUTED from the database (never hardcoded).
+        from src.config import load_config
+
+        # Regenerate tracking dashboard with metrics COMPUTED from the database (never hardcoded),
+        # strictly isolated to the configured active model version.
         metrics = WalkForwardBacktester(db, build_production_engine(db)).compute_comprehensive_metrics(
-            model_comparison_records=[]
+            model_comparison_records=[],
+            model_version_id=load_config().model.version_id,
         )
         export_bets_and_tracking_dashboard(
             db=db,
