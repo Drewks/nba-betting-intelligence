@@ -1,0 +1,150 @@
+{
+  "archived_at": "2026-11-28T03:54:59Z",
+  "asset_name": "nba_intelligence-2026-11-28.sqlite3.gz",
+  "continuity": {
+    "ok": true,
+    "previous_snapshot": "2026-11-27",
+    "violations": []
+  },
+  "gz_sha256": "27f02563350e70305ef4f6d06feb57d884668b0dbf8820849714ff62632710c4",
+  "gz_size_bytes": 8487086,
+  "release_tag": "db-archive",
+  "schema": 1,
+  "snapshot_date": "2026-11-28",
+  "source_commit": "83488612fde9843f8b9262777be71c7fca2f7a47",
+  "source_committed_at": "2026-11-28T03:54:50Z",
+  "sqlite_sha256": "ade1a4788d8e3576f944fb1c26f23111053fbfaf303305cb3d228db53dcca613",
+  "sqlite_size_bytes": 66363392,
+  "tables": {
+    "agent_execution_log": {
+      "content_sha256": "b90d8b559c990cb9d831080f326bd62a75454e25d877f2e57fe76bd6ee00f1a4",
+      "immutable": false,
+      "row_count": 7
+    },
+    "audit_repairs": {
+      "content_sha256": "19b281aed92a0dde5d42065764850aaed415b9eac0c6f95c00bfe46a419f27d2",
+      "immutable": true,
+      "row_count": 940
+    },
+    "audit_row_registry": {
+      "content_sha256": "7da0b772a4354d6569f8faa7f2a8357ce2adcc069baf0f781dd1038854927309",
+      "immutable": true,
+      "row_count": 35426
+    },
+    "bankroll_ledger": {
+      "content_sha256": "0a9c46ed061da76fbf969957e516e4184a77feffc2519588a0a57740bbc59fe8",
+      "immutable": true,
+      "row_count": 285
+    },
+    "boxscore_fetch_failures": {
+      "content_sha256": "7c6a8edef81b0f72b31262bc15f0855b2d33c5eb630a9fc99ae51b8521517fe7",
+      "immutable": false,
+      "row_count": 4
+    },
+    "calibration_logs": {
+      "content_sha256": "e524359711f167f9a766e41338159192274a8c433a8e36cd564c6f728106fa14",
+      "immutable": true,
+      "row_count": 337
+    },
+    "decision_log": {
+      "content_sha256": "78fd6e0e4295a46b10df6f20f6aebe33c4bd33072b6a1642710b71103697b22d",
+      "immutable": true,
+      "row_count": 3568
+    },
+    "game_boxscores": {
+      "content_sha256": "7d6e80844b3281f0009cd4a23f455d33cc3c052f2ef270dc13382ff7da33e65f",
+      "immutable": true,
+      "row_count": 2915
+    },
+    "games": {
+      "content_sha256": "d8f7a4d2b2d9ecc7e1f2e6c8bb0432be55257b7054af7bd5703113f7a27337f7",
+      "immutable": false,
+      "row_count": 3164
+    },
+    "injury_status_snapshots": {
+      "content_sha256": "e9e1a50959b25cae903c070d71dc40992648ee438aa924aac43252e92a3c04b4",
+      "immutable": true,
+      "row_count": 3592
+    },
+    "model_versions": {
+      "content_sha256": "aa1269609dc0a010dc3751243c9f9c507b72884cf71e7fd0dae3f8446a788be3",
+      "immutable": false,
+      "row_count": 24
+    },
+    "odds_snapshots": {
+      "content_sha256": "a8ac1d237957a9d708b9ff7ee1e88ef368f3ff4dbbe04aa0ebf258ccc94eff8c",
+      "immutable": true,
+      "row_count": 27626
+    },
+    "parlay_bankroll_ledger": {
+      "content_sha256": "ffedf41780afaa4b4b401f52c717ad62d7fb3dba60c660abd95e3c835a1f4af4",
+      "immutable": true,
+      "row_count": 5
+    },
+    "parlay_bets": {
+      "content_sha256": "b331ed8b398825d1baba07754bb94fe21ebc2cbf296d4f027af009f9f6601271",
+      "immutable": true,
+      "row_count": 2
+    },
+    "player_boxscores": {
+      "content_sha256": "598f8f7da72a99c3e570b3849341d88589abfeaa3a14884d0a802d9e1b8593b5",
+      "immutable": false,
+      "row_count": 77163
+    },
+    "player_prop_picks": {
+      "content_sha256": "4c0140a986f9720ccfb523354f17ec81367418aa6b778c385af5c154a4b385d0",
+      "immutable": true,
+      "row_count": 345
+    },
+    "predictions": {
+      "content_sha256": "7f74ce02cf0e7bfc068dcf150ff8fecf68877e3a93d07e31d0762955a874149f",
+      "immutable": true,
+      "row_count": 3336
+    },
+    "quarantined_odds": {
+      "content_sha256": "87feb947ff88cdaafdf5aae046108f3c36b380426b7176bb8794a2019ed62515",
+      "immutable": true,
+      "row_count": 3366
+    },
+    "run_manifests": {
+      "content_sha256": "c4f0a679a2ed45178d5a9a9371b10c0f260dddf94d76d842b1ccdbd45e9b6abf",
+      "immutable": true,
+      "row_count": 71
+    },
+    "schema_migrations": {
+      "content_sha256": "ed31b9f8b833f94bceb99e9ffad8cfa4aa5b06a1983286079d431cef5a04613b",
+      "immutable": true,
+      "row_count": 16
+    },
+    "shadow_candidates": {
+      "content_sha256": "c88ea688cea35a6943e6cb2f2b09df2ca575b3b51dc32717285885999ae85cd0",
+      "immutable": true,
+      "row_count": 345
+    },
+    "simulated_bets": {
+      "content_sha256": "bf7be97c9fa252ee554ad9d582018d2362bdc621e0b708e47ac5fff912188b8e",
+      "immutable": true,
+      "row_count": 142
+    },
+    "sniper_alerts": {
+      "content_sha256": "43bdbd7ff97577ee1e0d60c7f082dc0d626884280c3ed17905ebc0b7a6390316",
+      "immutable": false,
+      "row_count": 158
+    },
+    "sqlite_sequence": {
+      "content_sha256": "cf2d3812bc2b664bb7610189d8a265cf26cfd14e31a255601731bbd7961a0abe",
+      "immutable": false,
+      "row_count": 3
+    },
+    "team_rosters": {
+      "content_sha256": "0c566388bc36675d42100e57bf74178ba529b43b0e3aaa42950becdf81b6b241",
+      "immutable": false,
+      "row_count": 530
+    },
+    "teams": {
+      "content_sha256": "a41c1355857c1193f6aaa02830455a5ffbdc706bcb1aa10fc3960c509fc67471",
+      "immutable": false,
+      "row_count": 30
+    }
+  }
+}
