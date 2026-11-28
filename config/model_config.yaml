@@ -125,13 +125,18 @@ evaluation:
   # Lower bound: 9 distinct backtest reports were published before the freeze (EV 5% / 2%, ML odds cap,
   # EWMA re-tunes, margin and box-score variants); +1 for the 2026-11-17 Pinnacle-margin (3.2%) run;
   # +1 for the dev-only (2024-25/2025-26) time-decaying market anchor schedule calibration;
-  # +1 for the V9 simultaneous Ridge/RAPM + upgraded ensemble promotion (2026-11-27).
-  trials_evaluated_count: 12
+  # +1 for the V9 simultaneous Ridge/RAPM + upgraded ensemble promotion (2026-11-27);
+  # +8 for the V9 search itself: 17 new Ridge/RAPM hyperparameters, the Empirical-Bayes calibrator
+  # constants/bounds and the stacking priors were tuned on dev data without a published trial log, so
+  # V9 is counted as several trials (conservative lower bound), not one.
+  trials_evaluated_count: 20
   frozen_protocol_id: "V9_FROZEN_2026_11_27"
   # 2026-27 was visible in every published report before the freeze, so it is NOT an untouched holdout.
   season_holdout_contaminated: true
-  # Genuine out-of-sample evidence: only games that start after the protocol freeze.
-  forward_holdout_start_utc: "2026-11-15T00:00:00Z"
+  # Genuine out-of-sample evidence: only games that start after the protocol freeze. Moved from
+  # 2026-11-15 to the V9 freeze: 2026-11-15..2026-11-26 live data was inspected while building V9
+  # (staging runs on origin/state-live), so it is no longer out-of-sample for the active model.
+  forward_holdout_start_utc: "2026-11-27T00:00:00Z"
 
 evidence_staking:                    # Roadmap phase 3: stake size follows the shadow-ledger CLV evidence per market
   enabled: true
