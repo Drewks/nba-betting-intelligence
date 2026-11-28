@@ -1,0 +1,65 @@
+name: Continuous Integration (Lint, Types & Test Suite)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, Type Check & Pytest Suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard - audit database is written only by the automation bot
+        run: |
+          # data/nba_intelligence.sqlite3 is the immutable audit trail. Manual commits of this binary file
+          # replaced history on 2026-11-09. Only the bot (commits marked [skip ci]) may change it.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="origin/${{ github.base_ref }}...HEAD"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+          else
+            RANGE=""
+          fi
+          if [ -n "$RANGE" ] && git diff --name-only $RANGE | grep -qx "data/nba_intelligence.sqlite3"; then
+            echo "::error::This change modifies data/nba_intelligence.sqlite3. Use migrations (src/storage/migrations.py) instead."
+            exit 1
+          fi
+
+      - name: Install uv and configure Python 3.12
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --python 3.12
+
+      - name: Ruff Linter & Code Style
+        run: |
+          uv run ruff check src/ scripts/ tests/
+
+      - name: Mypy Static Type Verification
+        run: |
+          uv run mypy src/
+
+      - name: Pytest Suite (isolated in tmp_path)
+        run: |
+          if ! uv run pytest -v --tb=short; then
+            FAILED_SUMMARY=$(uv run pytest --tb=short --last-failed 2>&1 | tail -n 30 | tr '\n' ' ')
+            echo "::error title=PytestFailure::$FAILED_SUMMARY"
+            exit 1
+          fi

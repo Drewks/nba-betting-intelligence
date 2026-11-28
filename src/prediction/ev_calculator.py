@@ -1,0 +1,915 @@
+"""Expected Value (EV), gross implied probability, documented de-vigging (Multiplicative, Shin, Power), and Steam Move detection."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+import itertools
+import json
+import logging
+import math
+from pathlib import Path
+from typing import Any
+import numpy as np
+from scipy.optimize import minimize
+
+from src.calibration.calibrator import conformal_lower_bound_ev
+from src.validation.validator import DataValidationError, validate_odds_record
+
+logger = logging.getLogger(__name__)
+
+
+def calculate_implied_prob_gross(decimal_odds: float) -> float:
+    """
+    Calculates gross implied probability from decimal odds O:
+        p_implicita = 1 / O
+    """
+    if decimal_odds is None or not isinstance(decimal_odds, (int, float)) or math.isnan(decimal_odds) or decimal_odds <= 1.0:
+        raise DataValidationError(f"Decimal odds must be a finite number > 1.0; got {decimal_odds!r}")
+    return round(1.0 / float(decimal_odds), 6)
+
+
+def devig_multiplicative(odds_a: float, odds_b: float) -> tuple[float, float, float]:
+    """
+    Documented multiplicative (proportional) margin removal method.
+    Distinguishes gross implied probabilities (1/O) from fair market probabilities:
+        p_fair_a = (1/O_a) / (1/O_a + 1/O_b)
+        p_fair_b = (1/O_b) / (1/O_a + 1/O_b)
+    Returns (p_fair_a, p_fair_b, overround).
+    """
+    p_a = calculate_implied_prob_gross(odds_a)
+    p_b = calculate_implied_prob_gross(odds_b)
+    total_gross = p_a + p_b
+    overround = round(total_gross - 1.0, 6)
+    return round(p_a / total_gross, 6), round(p_b / total_gross, 6), overround
+
+
+def devig_shin(odds_a: float, odds_b: float) -> tuple[float, float, float]:
+    """
+    V8 Shin's Method (1991, 1993) de-vigging for two-way markets.
+    Accounts for asymmetric insider trading / favorite-longshot bias (FLB), where
+    bookmakers embed disproportionately higher margin into underdogs/longshots than favorites.
+    Given gross implied probabilities pi_a = 1/O_a, pi_b = 1/O_b and S = pi_a + pi_b:
+      - If S <= 1.000001 (zero or negative margin), falls back to proportional normalization.
+      - Otherwise solves Shin's mapping with insider trading fraction z in (0, 0.25]:
+            u_i(z) = (sqrt(z^2 + 4 * (1 - z) * (pi_i^2 / S)) - z) / (2 * (1 - z))
+        and normalizes p_fair_i = u_i / (u_a + u_b).
+    Returns (p_fair_a, p_fair_b, overround).
+    """
+    pi_a = calculate_implied_prob_gross(odds_a)
+    pi_b = calculate_implied_prob_gross(odds_b)
+    total_gross = pi_a + pi_b
+    overround = round(total_gross - 1.0, 6)
+    if total_gross <= 1.000001 or abs(pi_a - pi_b) < 1e-9:
+        return round(pi_a / total_gross, 6), round(pi_b / total_gross, 6), overround
+
+    z = max(1e-6, min(0.25, total_gross - 1.0))
+    denom = 2.0 * (1.0 - z)
+    u_a = (math.sqrt(z * z + 4.0 * (1.0 - z) * (pi_a * pi_a) / total_gross) - z) / denom
+    u_b = (math.sqrt(z * z + 4.0 * (1.0 - z) * (pi_b * pi_b) / total_gross) - z) / denom
+    u_sum = u_a + u_b
+    if u_sum <= 0.0:
+        return round(pi_a / total_gross, 6), round(pi_b / total_gross, 6), overround
+    return round(u_a / u_sum, 6), round(u_b / u_sum, 6), overround
+
+
+def devig_power(odds_a: float, odds_b: float) -> tuple[float, float, float]:
+    """
+    V8 Power (Logarithmic) de-vigging method.
+    Solves for exponent k > 0 such that (1/O_a)^k + (1/O_b)^k = 1.0 via bisection.
+    Corrects favorite-longshot bias continuously across heavy favorites and longshots.
+    Returns (p_fair_a, p_fair_b, overround).
+    """
+    pi_a = calculate_implied_prob_gross(odds_a)
+    pi_b = calculate_implied_prob_gross(odds_b)
+    total_gross = pi_a + pi_b
+    overround = round(total_gross - 1.0, 6)
+    if abs(total_gross - 1.0) < 1e-7 or abs(pi_a - pi_b) < 1e-9:
+        return round(pi_a / total_gross, 6), round(pi_b / total_gross, 6), overround
+
+    low_k, high_k = 0.5, 5.0
+    for _ in range(40):
+        mid_k = 0.5 * (low_k + high_k)
+        val = (pi_a ** mid_k) + (pi_b ** mid_k)
+        if val > 1.0:
+            low_k = mid_k
+        else:
+            high_k = mid_k
+    k_opt = 0.5 * (low_k + high_k)
+    p_a = pi_a ** k_opt
+    p_b = pi_b ** k_opt
+    s_p = p_a + p_b
+    return round(p_a / s_p, 6), round(p_b / s_p, 6), overround
+
+
+def calculate_ev(
+    estimated_prob: float,
+    decimal_odds: float,
+    p_push: float = 0.0,
+    p_loss: float | None = None,
+) -> dict[str, float]:
+    """
+    Calculates Expected Value per unit staked under explicit win/loss/push rules (F-004):
+        p_win + p_loss + p_push = 1
+        EV = p_win * (decimal_odds - 1.0) - p_loss
+    Push refunds the original unit staked (0 net profit, 0 net loss).
+    When p_push == 0 and p_loss is None, reduces identically to p * O - 1.
+    """
+    if estimated_prob is None or not isinstance(estimated_prob, (int, float)) or math.isnan(estimated_prob):
+        raise DataValidationError(f"Invalid estimated probability: {estimated_prob!r}")
+    if p_push is None or not isinstance(p_push, (int, float)) or math.isnan(p_push):
+        raise DataValidationError(f"Invalid p_push probability: {p_push!r}")
+    p_win = float(estimated_prob)
+    p_p = float(p_push)
+    if p_win < 0.0 or p_win > 1.0:
+        raise DataValidationError(f"Probability must be in [0, 1]; got {estimated_prob!r}")
+    if p_p < 0.0 or p_p > 1.0:
+        raise DataValidationError(f"p_push must be in [0, 1]; got {p_push!r}")
+
+    p_l = max(0.0, 1.0 - p_win - p_p) if p_loss is None else float(p_loss)
+    if p_l < 0.0 or p_l > 1.0:
+        raise DataValidationError(f"p_loss must be in [0, 1]; got {p_l!r}")
+    if abs((p_win + p_l + p_p) - 1.0) > 1e-3:
+        raise DataValidationError(
+            f"Probability triple (p_win={p_win}, p_loss={p_l}, p_push={p_p}) must sum to 1.0"
+        )
+
+    p_gross = calculate_implied_prob_gross(decimal_odds)
+    ev_unit = p_win * (float(decimal_odds) - 1.0) - p_l
+    ev_pct = 100.0 * ev_unit
+    return {
+        "p_win": round(p_win, 6),
+        "p_loss": round(p_l, 6),
+        "p_push": round(p_p, 6),
+        "implied_prob_gross": p_gross,
+        "ev_unit": round(ev_unit, 6),
+        "ev_pct": round(ev_pct, 4),
+    }
+
+
+SHARP_BOOK_KEYWORDS: tuple[str, ...] = ("pinnacle", "betfair", "matchbook", "lowvig", "circa", "bookmaker")
+
+
+_BOOKMAKER_ALIASES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("pinnacle",), "pinnacle"),
+    (("draftkings", "draft kings"), "draftkings"),
+    (("fanduel", "fan duel"), "fanduel"),
+    (("betmgm", "bet mgm"), "betmgm"),
+    (("caesars",), "caesars"),
+    (("bet365",), "bet365"),
+    (("betfair",), "betfair"),
+    (("matchbook",), "matchbook"),
+    (("lowvig",), "lowvig"),
+    (("circa",), "circa"),
+    (("retabet",), "retabet"),
+    (("betano",), "betano"),
+    (("te apuesto", "te_apuesto", "teapuesto"), "te_apuesto"),
+    (("betsson",), "betsson"),
+    (("coolbet",), "coolbet"),
+    (("apuesta total", "apuesta_total", "apuestatotal"), "apuesta_total"),
+    (("inkabet",), "inkabet"),
+    (("doradobet",), "doradobet"),
+    (("1xbet",), "1xbet"),
+    (("unibet",), "unibet"),
+    (("betrivers",), "betrivers"),
+    (("william hill",), "william_hill"),
+    (("marathon",), "marathonbet"),
+    (("bovada",), "bovada"),
+    (("888sport",), "888sport"),
+)
+
+
+def canonical_bookmaker_name(provider: str) -> str:
+    """Canonicalizes provider names across line-shopping and scraped data feeds."""
+    s = str(provider or "").strip().lower()
+    for aliases, canonical in _BOOKMAKER_ALIASES:
+        if any(alias in s for alias in aliases):
+            return canonical
+    return s
+
+# Weight of the (calibrated) model probability when blending with the de-vigged market consensus.
+# Sharp NBA closing lines are very efficient; a pure model estimate that disagrees by 10+ points
+# is far more likely to be model error than edge. 0.30 is a conservative prior until enough real
+# out-of-sample results exist to learn it.
+def _load_model_weights_from_config() -> tuple[float, float]:
+    try:
+        from src.config import load_config
+        m = load_config().model
+        return m.market_anchor_model_weight, getattr(m, "max_model_market_disagreement", 0.15)
+    except Exception:
+        return 0.30, 0.15
+
+_cfg_w, _cfg_d = _load_model_weights_from_config()
+DEFAULT_MODEL_WEIGHT: float = _cfg_w
+MAX_MODEL_MARKET_DISAGREEMENT: float = _cfg_d
+
+
+def compute_market_consensus(odds_rows: list[dict[str, Any]], method: str = "shin") -> dict[tuple[str, str, float | None], dict[str, Any]]:
+    """
+    De-vigged fair probability consensus per (market, selection, line_value).
+    Prefers sharp books (Pinnacle, Betfair, Matchbook, LowVig...) and falls back to the median of
+    all books. Only rows with a counterpart price (two-way market) are used.
+    Deduplicates across canonical bookmakers so repeated snapshots from the same bookmaker
+    do not distort the consensus median or inflate n_books.
+    Supports method='shin' (default, corrects favorite-longshot bias), 'power', or 'multiplicative'.
+    """
+    devig_fn = devig_shin if method == "shin" else (devig_power if method == "power" else devig_multiplicative)
+    groups: dict[tuple[str, str, float | None], dict[str, dict[str, float]]] = {}
+    sorted_rows = sorted(odds_rows, key=lambda r: str(r.get("captured_at") or ""))
+    for o in sorted_rows:
+        cp = o.get("counterpart_decimal_odds")
+        if cp is None or float(cp) <= 1.0 or float(o.get("decimal_odds") or 0.0) <= 1.0:
+            continue
+        p_fair, _, _ = devig_fn(float(o["decimal_odds"]), float(cp))
+        key = (o["market"], o["selection"], o.get("line_value"))
+        bucket = groups.setdefault(key, {"sharp": {}, "all": {}})
+        canon = canonical_bookmaker_name(str(o.get("provider", "")))
+        bucket["all"][canon] = p_fair
+        if any(k in canon for k in SHARP_BOOK_KEYWORDS):
+            bucket["sharp"][canon] = p_fair
+
+    out: dict[tuple[str, str, float | None], dict[str, Any]] = {}
+    for key, b in groups.items():
+        src_map = b["sharp"] if b["sharp"] else b["all"]
+        src = list(src_map.values())
+        srt = sorted(src)
+        mid = len(srt) // 2
+        median = srt[mid] if len(srt) % 2 else 0.5 * (srt[mid - 1] + srt[mid])
+        out[key] = {
+            "p_market": round(median, 6),
+            "source": "sharp" if b["sharp"] else "consensus",
+            "n_books": len(src_map),
+        }
+    return out
+
+
+def compute_line_steam(odds_history: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, float]]:
+    """
+    Computes chronological line movement ("Steam Move" velocity) per (market, selection)
+    across ordered pre-game odds_snapshots:
+        steam_delta = p_fair_latest - p_fair_opening
+    Positive steam_delta (> 0) indicates sharp money steaming toward this selection (implied fair prob rising).
+    Negative steam_delta (< 0) indicates market steaming against this selection.
+    """
+    ordered = sorted(odds_history, key=lambda r: str(r.get("captured_at", "")))
+    by_side: dict[tuple[str, str], list[float]] = {}
+    for o in ordered:
+        dec = o.get("decimal_odds")
+        cp = o.get("counterpart_decimal_odds")
+        if dec is None or float(dec) <= 1.0:
+            continue
+        if cp is not None and float(cp) > 1.0:
+            p_f, _, _ = devig_shin(float(dec), float(cp))
+        else:
+            p_f = calculate_implied_prob_gross(float(dec))
+        key = (str(o.get("market", "")), str(o.get("selection", "")))
+        by_side.setdefault(key, []).append(p_f)
+
+    out: dict[tuple[str, str], dict[str, float]] = {}
+    for key, probs in by_side.items():
+        p_open = probs[0]
+        p_latest = probs[-1]
+        out[key] = {
+            "p_fair_open": round(p_open, 6),
+            "p_fair_latest": round(p_latest, 6),
+            "steam_delta": round(p_latest - p_open, 6),
+            "n_snapshots": float(len(probs)),
+        }
+    return out
+
+
+def market_anchored_probability(
+    model_prob: float,
+    market_prob: float | None,
+    model_weight: float = DEFAULT_MODEL_WEIGHT,
+) -> float:
+    """p_final = w * p_model + (1 - w) * p_market  (falls back to p_model when no market exists)."""
+    if market_prob is None:
+        return round(float(model_prob), 6)
+    w = max(0.0, min(1.0, float(model_weight)))
+    return round(w * float(model_prob) + (1.0 - w) * float(market_prob), 6)
+
+
+def resolve_market_anchor_weight(
+    market: str,
+    *,
+    hours_to_tipoff: float | None,
+    fallback_weight: float,
+    moneyline_weight: float | None = None,
+    schedule: Any = None,
+) -> float:
+    """
+    Resolves per-market model anchor weight using optional Bayesian time decay from opening lines
+    toward efficient closing lines:
+        tau = clip(hours_to_tipoff / horizon_hours, 0, 1)
+        w = w_close + (w_open - w_close) * (tau ** decay_power)
+    """
+    base_w = float(moneyline_weight) if (market == "moneyline" and moneyline_weight is not None) else float(fallback_weight)
+    if schedule is None or not bool(getattr(schedule, "enabled", False)) or hours_to_tipoff is None:
+        return round(max(0.0, min(1.0, base_w)), 6)
+
+    bounds_by_market: dict[str, tuple[float, float]] = {
+        "moneyline": (
+            float(getattr(schedule, "moneyline_open_weight", base_w)),
+            float(getattr(schedule, "moneyline_close_weight", base_w)),
+        ),
+        "total_points": (
+            float(getattr(schedule, "total_points_open_weight", base_w)),
+            float(getattr(schedule, "total_points_close_weight", base_w)),
+        ),
+        "spread": (
+            float(getattr(schedule, "spread_open_weight", base_w)),
+            float(getattr(schedule, "spread_close_weight", base_w)),
+        ),
+    }
+    if market not in bounds_by_market:
+        return round(max(0.0, min(1.0, base_w)), 6)
+
+    w_open, w_close = bounds_by_market[market]
+    horizon = max(1e-6, float(getattr(schedule, "horizon_hours", 12.0)))
+    power = float(getattr(schedule, "decay_power", 1.0))
+    tau = max(0.0, min(1.0, float(hours_to_tipoff) / horizon))
+    w_eff = w_close + (w_open - w_close) * (tau ** power)
+    return round(max(0.0, min(1.0, float(w_eff))), 6)
+
+
+_CALIBRATED_WEIGHTS_CACHE: dict[str, float] | None = None
+
+
+def _get_clv_meta_labeling_weights() -> dict[str, float]:
+    global _CALIBRATED_WEIGHTS_CACHE
+    if _CALIBRATED_WEIGHTS_CACHE is not None:
+        return _CALIBRATED_WEIGHTS_CACHE
+
+    weights: dict[str, float] = {
+        "intercept": 0.15,
+        "coef_steam_delta": 14.0,
+        "coef_conformal_width_excess": -1.6,
+        "coef_disagreement_excess": -0.9,
+        "coef_overround_excess": -2.2,
+        "time_decay_rate": 0.04,
+        "max_hours_to_tipoff": 12.0,
+        "adverse_steam_threshold": -0.040,
+        "min_p_clv_threshold": 0.48,
+        "exp_clv_multiplier": 8.0,
+    }
+
+    try:
+        from src.config import load_config
+        cfg = load_config()
+        if cfg.clv_meta_labeling.enabled:
+            cal_p = Path(cfg.clv_meta_labeling.calibrated_weights_path)
+            if cal_p.exists():
+                with open(cal_p, "r", encoding="utf-8") as f:
+                    cal_data = json.load(f).get("clv_meta_labeling") or {}
+                if cal_data:
+                    weights.update({
+                        "intercept": float(cal_data.get("intercept", cfg.clv_meta_labeling.intercept)),
+                        "coef_steam_delta": float(cal_data.get("coef_steam_delta", cfg.clv_meta_labeling.coef_steam_delta)),
+                        "coef_conformal_width_excess": float(cal_data.get("coef_conformal_width_excess", cfg.clv_meta_labeling.coef_conformal_width_excess)),
+                        "coef_disagreement_excess": float(cal_data.get("coef_disagreement_excess", cfg.clv_meta_labeling.coef_disagreement_excess)),
+                        "coef_overround_excess": float(cal_data.get("coef_overround_excess", cfg.clv_meta_labeling.coef_overround_excess)),
+                        "time_decay_rate": float(cal_data.get("time_decay_rate", cfg.clv_meta_labeling.time_decay_rate)),
+                        "max_hours_to_tipoff": float(cal_data.get("max_hours_to_tipoff", cfg.clv_meta_labeling.max_hours_to_tipoff)),
+                        "adverse_steam_threshold": float(cal_data.get("adverse_steam_threshold", cfg.clv_meta_labeling.adverse_steam_threshold)),
+                        "min_p_clv_threshold": float(cal_data.get("min_p_clv_threshold", cfg.clv_meta_labeling.min_p_clv_threshold)),
+                    })
+            else:
+                weights.update({
+                    "intercept": cfg.clv_meta_labeling.intercept,
+                    "coef_steam_delta": cfg.clv_meta_labeling.coef_steam_delta,
+                    "coef_conformal_width_excess": cfg.clv_meta_labeling.coef_conformal_width_excess,
+                    "coef_disagreement_excess": cfg.clv_meta_labeling.coef_disagreement_excess,
+                    "coef_overround_excess": cfg.clv_meta_labeling.coef_overround_excess,
+                    "time_decay_rate": cfg.clv_meta_labeling.time_decay_rate,
+                    "max_hours_to_tipoff": cfg.clv_meta_labeling.max_hours_to_tipoff,
+                    "adverse_steam_threshold": cfg.clv_meta_labeling.adverse_steam_threshold,
+                    "min_p_clv_threshold": cfg.clv_meta_labeling.min_p_clv_threshold,
+                })
+    except Exception as exc:
+        logger.debug("Using default CLV meta-labeling weights: %s", exc)
+
+    _CALIBRATED_WEIGHTS_CACHE = weights
+    return weights
+
+
+def predict_clv_meta_label(
+    odds_record: dict[str, Any],
+    game_start_time: str,
+    steam_delta: float = 0.0,
+    conformal_width: float | None = None,
+    model_market_disagreement: float | None = None,
+    overround: float | None = None,
+    custom_weights: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """
+    V8 Phase 2 Meta-Labeling CLV Filter (inspired by Marcos López de Prado).
+    Predicts the likelihood of achieving positive Closing Line Value (P(CLV > 0))
+    conditioned on line movement velocity (steam), market overround, time to tipoff,
+    model disagreement, and conformal prediction set width.
+    """
+    s_delta = float(steam_delta or 0.0)
+    width = float(conformal_width) if conformal_width is not None else 0.12
+    ov = float(overround) if overround is not None else 0.045
+    disag = abs(float(model_market_disagreement)) if model_market_disagreement is not None else 0.03
+
+    # Calculate hours to tipoff
+    try:
+        from src.validation.validator import parse_iso_utc
+        t_game = parse_iso_utc(game_start_time)
+        t_odds = parse_iso_utc(str(odds_record.get("captured_at") or game_start_time))
+        hours_to_tipoff = max(0.1, (t_game - t_odds).total_seconds() / 3600.0)
+    except Exception:
+        hours_to_tipoff = 2.0
+
+    w = custom_weights or _get_clv_meta_labeling_weights()
+    time_factor = 1.0 / (1.0 + w["time_decay_rate"] * min(w["max_hours_to_tipoff"], hours_to_tipoff))
+    z_score = (
+        w["intercept"]
+        + w["coef_steam_delta"] * s_delta
+        + w["coef_conformal_width_excess"] * max(0.0, width - 0.15)
+        + w["coef_disagreement_excess"] * max(0.0, disag - 0.08)
+        + w["coef_overround_excess"] * max(0.0, ov - 0.05)
+    )
+    p_clv = 1.0 / (1.0 + math.exp(-z_score * time_factor))
+    exp_clv = round(s_delta * 100.0 + (p_clv - 0.50) * w.get("exp_clv_multiplier", 8.0), 2)
+
+    if s_delta <= w["adverse_steam_threshold"]:
+        return {
+            "p_positive_clv": round(p_clv, 4),
+            "expected_clv_pct": exp_clv,
+            "meta_label_pass": False,
+            "reason_code": "ADVERSE_STEAM_DECAY",
+        }
+    if p_clv < w["min_p_clv_threshold"]:
+        return {
+            "p_positive_clv": round(p_clv, 4),
+            "expected_clv_pct": exp_clv,
+            "meta_label_pass": False,
+            "reason_code": "NEGATIVE_EXPECTED_CLV",
+        }
+
+    return {
+        "p_positive_clv": round(p_clv, 4),
+        "expected_clv_pct": exp_clv,
+        "meta_label_pass": True,
+        "reason_code": "PASS",
+    }
+
+
+def evaluate_market_opportunity(
+    estimated_prob: float,
+    uncertainty_std: float,
+    odds_record: dict[str, Any],
+    game_start_time: str,
+    model_version_id: str,
+    simulated_prediction_time: str | None = None,
+    market_consensus_prob: float | None = None,
+    model_weight: float = DEFAULT_MODEL_WEIGHT,
+    max_disagreement: float = MAX_MODEL_MARKET_DISAGREEMENT,
+    steam_delta: float = 0.0,
+    conformal_interval: dict[str, float] | None = None,
+    p_push: float = 0.0,
+    raw_model_prob: float | None = None,
+) -> dict[str, Any]:
+    """
+    Validates odds + timestamp, estimates fair de-vigged probability (Shin's method) when counterpart odds exist,
+    modulates model_weight when sharp steam moves are detected, anchors the estimated probability
+    to market consensus (preserving unconditional push probability p_push), computes Venn-Abers conformal
+    lower-bound EV, and returns separated model/calibrated/fair/anchored probability fields (F-004, F-008).
+    """
+    validate_odds_record(odds_record, game_start_time, simulated_prediction_time)
+    dec_odds = float(odds_record["decimal_odds"])
+    counterpart = odds_record.get("counterpart_decimal_odds")
+
+    if counterpart is not None and counterpart > 1.0:
+        p_fair, _, overround = devig_shin(dec_odds, float(counterpart))
+    else:
+        p_fair = None
+        overround = None
+
+    p_p = max(0.0, min(0.5, float(p_push or 0.0)))
+    non_push = max(1e-9, 1.0 - p_p)
+    p_cond_model = min(1.0, max(0.0, float(estimated_prob) / non_push)) if p_p > 0.0 else float(estimated_prob)
+
+    market_prob = market_consensus_prob if market_consensus_prob is not None else p_fair
+    disagreement = (p_cond_model - float(market_prob)) if market_prob is not None else None
+
+    eff_weight = max(0.0, float(model_weight))
+    s_delta = float(steam_delta or 0.0)
+    if market_prob is not None and s_delta != 0.0 and eff_weight > 0.0:
+        # Adverse steam (>= 2.5% move against our selection): shift weight toward sharp market.
+        # Never increase weight above the scheduled anchor (especially when P2 decays weights < 0.15).
+        if s_delta <= -0.025:
+            eff_weight = max(0.0, eff_weight - 0.08)
+        # Confirming steam (>= 2.0% move toward our selection when model also favors this side)
+        elif s_delta >= 0.020 and p_cond_model > float(market_prob):
+            eff_weight = min(0.42, eff_weight + 0.04)
+
+    anchored_cond = market_anchored_probability(p_cond_model, market_prob, model_weight=eff_weight)
+    if p_p > 0.0:
+        anchored_prob = non_push * anchored_cond
+        anchored_loss = non_push * (1.0 - anchored_cond)
+    else:
+        anchored_prob = anchored_cond
+        anchored_loss = 1.0 - anchored_prob
+
+    ev_metrics = calculate_ev(anchored_prob, dec_odds, p_push=p_p, p_loss=anchored_loss)
+
+    lb_metrics = None
+    if conformal_interval is not None and "p0" in conformal_interval:
+        p_low = float(conformal_interval["p0"])
+        lb_metrics = conformal_lower_bound_ev(
+            point_prob=estimated_prob,
+            interval_low=p_low,
+            market_prob=market_prob,
+            model_weight=eff_weight,
+            decimal_odds=dec_odds,
+            p_push=p_p,
+        )
+
+    ev_lb_unit = lb_metrics["ev_lower_bound"] if lb_metrics else ev_metrics["ev_unit"]
+    ev_lb_pct = round(ev_lb_unit * 100.0, 4)
+
+    try:
+        from src.config import load_config
+        cfg = load_config()
+        meta_enabled = cfg.clv_meta_labeling.enabled
+    except Exception:
+        meta_enabled = True
+
+    if meta_enabled:
+        clv_meta = predict_clv_meta_label(
+            odds_record=odds_record,
+            game_start_time=game_start_time,
+            steam_delta=s_delta,
+            conformal_width=float(conformal_interval["width"]) if (conformal_interval and "width" in conformal_interval) else None,
+            model_market_disagreement=disagreement,
+            overround=overround,
+        )
+    else:
+        clv_meta = {
+            "p_positive_clv": 0.50,
+            "expected_clv_pct": 0.0,
+            "meta_label_pass": True,
+            "reason_code": "DISABLED",
+        }
+
+    cal_model_p = round(float(estimated_prob), 6)
+    raw_model_p = round(float(raw_model_prob), 6) if raw_model_prob is not None else cal_model_p
+    mkt_anchored_p = round(float(anchored_prob), 6)
+
+    return {
+        "p_positive_clv": clv_meta["p_positive_clv"],
+        "expected_clv_pct": clv_meta["expected_clv_pct"],
+        "meta_label_pass": clv_meta["meta_label_pass"],
+        "meta_label_reason": clv_meta["reason_code"],
+        "game_id": odds_record["game_id"],
+        "market": odds_record["market"],
+        "selection": odds_record["selection"],
+        "line_value": odds_record.get("line_value"),
+        "decimal_odds_used": dec_odds,
+        "odds_provider": odds_record["provider"],
+        "odds_captured_at": odds_record["captured_at"],
+        "estimated_probability": mkt_anchored_p,
+        "raw_model_probability": raw_model_p,
+        "calibrated_model_probability": cal_model_p,
+        "market_fair_probability": p_fair,
+        "market_anchored_probability": mkt_anchored_p,
+        "p_win": ev_metrics["p_win"],
+        "p_loss": ev_metrics["p_loss"],
+        "p_push": ev_metrics["p_push"],
+        "uncertainty_std": round(float(uncertainty_std), 6),
+        "implied_prob_gross": ev_metrics["implied_prob_gross"],
+        "implied_prob_fair": p_fair,
+        "bookmaker_overround": overround,
+        "ev_unit": ev_metrics["ev_unit"],
+        "ev_pct": ev_metrics["ev_pct"],
+        "model_version_id": model_version_id,
+        "effective_model_weight": round(eff_weight, 6),
+        "model_market_disagreement": round(float(disagreement), 6) if disagreement is not None else None,
+        "max_model_market_disagreement": max_disagreement,
+        "steam_delta": round(s_delta, 6),
+        "conformal_p_low": round(float(conformal_interval["p0"]), 6) if (conformal_interval and "p0" in conformal_interval) else None,
+        "conformal_p_high": round(float(conformal_interval["p1"]), 6) if (conformal_interval and "p1" in conformal_interval) else None,
+        "conformal_width": round(float(conformal_interval["width"]), 6) if (conformal_interval and "width" in conformal_interval) else None,
+        "ev_lower_bound": round(float(ev_lb_unit), 6),
+        "ev_lower_bound_pct": ev_lb_pct,
+    }
+
+
+def evaluate_scheduled_market_opportunity(
+    estimated_prob: float,
+    uncertainty_std: float,
+    odds_record: dict[str, Any],
+    game_start_time: str,
+    model_version_id: str,
+    *,
+    hours_to_tipoff: float | None,
+    market_anchor_weight: float,
+    moneyline_weight: float | None,
+    anchor_schedule: Any,
+    max_disagreement: float = MAX_MODEL_MARKET_DISAGREEMENT,
+    moneyline_max_disagreement: float | None = None,
+    moneyline_max_odds: float | None = None,
+    simulated_prediction_time: str | None = None,
+    market_consensus_prob: float | None = None,
+    steam_delta: float = 0.0,
+    conformal_interval: dict[str, float] | None = None,
+    p_push: float = 0.0,
+    raw_model_prob: float | None = None,
+) -> dict[str, Any]:
+    """
+    The production decision rule for one quote. The live cycle (`scripts/cloud_cycle_helpers.py`), the
+    real-odds backtest, the fallback out-of-sample comparisons and the orchestrator's walk-forward simulation
+    (`src/backtesting/walk_forward_helpers.py`) all call it, so they evaluate one policy:
+      1. model weight from `anchor_schedule` at `hours_to_tipoff` (`resolve_market_anchor_weight`;
+         `market_anchor_weight` / `moneyline_weight` only apply when the schedule is off or has no entry),
+      2. the market-specific model/market disagreement limit,
+      3. steam modulation, market anchoring, EV and conformal lower bound (`evaluate_market_opportunity`).
+    Production passes `config.model.anchor_schedule`. The result adds `scheduled_model_weight` (before steam),
+    `hours_to_tipoff` and, for moneyline, the `moneyline_max_odds` cap read by the pre-bet guards.
+    """
+    market = str(odds_record.get("market") or "")
+    scheduled_weight = resolve_market_anchor_weight(
+        market,
+        hours_to_tipoff=hours_to_tipoff,
+        fallback_weight=market_anchor_weight,
+        moneyline_weight=moneyline_weight,
+        schedule=anchor_schedule,
+    )
+    eff_disagreement = (
+        moneyline_max_disagreement
+        if (market == "moneyline" and moneyline_max_disagreement is not None)
+        else max_disagreement
+    )
+    opp = evaluate_market_opportunity(
+        estimated_prob=estimated_prob,
+        uncertainty_std=uncertainty_std,
+        odds_record=odds_record,
+        game_start_time=game_start_time,
+        model_version_id=model_version_id,
+        simulated_prediction_time=simulated_prediction_time,
+        market_consensus_prob=market_consensus_prob,
+        model_weight=scheduled_weight,
+        max_disagreement=eff_disagreement,
+        steam_delta=steam_delta,
+        conformal_interval=conformal_interval,
+        p_push=p_push,
+        raw_model_prob=raw_model_prob,
+    )
+    opp["scheduled_model_weight"] = scheduled_weight
+    opp["hours_to_tipoff"] = round(float(hours_to_tipoff), 3) if hours_to_tipoff is not None else None
+    if market == "moneyline" and moneyline_max_odds is not None:
+        opp["moneyline_max_odds"] = moneyline_max_odds
+    return opp
+
+
+def describe_market_anchor_schedule(schedule: Any) -> dict[str, Any]:
+    """Report view of a market anchor schedule: the attributes `resolve_market_anchor_weight` reads."""
+    enabled = schedule is not None and bool(getattr(schedule, "enabled", False))
+    out: dict[str, Any] = {"enabled": enabled}
+    if schedule is None:
+        return out
+    out["horizon_hours"] = float(getattr(schedule, "horizon_hours", 12.0))
+    out["decay_power"] = float(getattr(schedule, "decay_power", 1.0))
+    for market in ("moneyline", "total_points", "spread"):
+        open_w = getattr(schedule, f"{market}_open_weight", None)
+        close_w = getattr(schedule, f"{market}_close_weight", None)
+        out[market] = {
+            "open_weight": float(open_w) if open_w is not None else None,
+            "close_weight": float(close_w) if close_w is not None else None,
+        }
+    return out
+
+
+def _cand_odds(c: dict[str, Any]) -> float:
+    return float(c.get("decimal_odds_used") or c.get("decimal_odds") or 0.0)
+
+
+def _cand_provider(c: dict[str, Any]) -> str:
+    return str(c.get("odds_provider") or c.get("provider") or "")
+
+
+def _cand_sort_key(c: dict[str, Any]) -> tuple[float, float, str]:
+    return (
+        _cand_odds(c),
+        float(c.get("ev_unit") or 0.0),
+        str(c.get("odds_captured_at") or c.get("captured_at") or ""),
+    )
+
+
+def select_best_line_shopping_candidates(
+    candidates: list[dict[str, Any]],
+    accessible_books: Iterable[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Groups evaluated opportunities by (game_id, market, selection, line_value) across
+    bookmakers and selects the highest-odds quote for each contract, recording cross-book
+    metadata (`line_shop_books`, `line_shop_gain_pct`, `runner_up_provider`).
+    If `accessible_books` is provided, restricts selection to matching canonical books
+    when at least one exists for that contract.
+    """
+    if not candidates:
+        return []
+
+    allowed_books = (
+        {canonical_bookmaker_name(b) for b in accessible_books if str(b or "").strip()}
+        if accessible_books is not None
+        else None
+    )
+
+    grouped: dict[tuple[str, str, str, float | None], list[dict[str, Any]]] = {}
+    for c in candidates:
+        lv = c.get("line_value")
+        lv_norm = round(float(lv), 2) if lv is not None else None
+        key = (
+            str(c.get("game_id") or ""),
+            str(c.get("market") or ""),
+            str(c.get("selection") or ""),
+            lv_norm,
+        )
+        grouped.setdefault(key, []).append(c)
+
+    selected: list[dict[str, Any]] = []
+    for group in grouped.values():
+        best_by_book: dict[str, dict[str, Any]] = {}
+        for item in group:
+            book = canonical_bookmaker_name(_cand_provider(item))
+            prev = best_by_book.get(book)
+            if prev is None or _cand_sort_key(item) > _cand_sort_key(prev):
+                best_by_book[book] = item
+
+        pool = (
+            [entry for book, entry in best_by_book.items() if book in allowed_books]
+            if allowed_books is not None
+            else []
+        )
+        if not pool:
+            pool = list(best_by_book.values())
+
+        pool.sort(key=_cand_sort_key, reverse=True)
+        winner = dict(pool[0])
+        winner_book = canonical_bookmaker_name(_cand_provider(winner))
+        others = sorted(
+            (entry for book, entry in best_by_book.items() if book != winner_book and _cand_odds(entry) > 1.0),
+            key=_cand_sort_key,
+            reverse=True,
+        )
+
+        if others:
+            runner_up = others[0]
+            runner_odds = _cand_odds(runner_up)
+            gain_pct = round(((_cand_odds(winner) / runner_odds) - 1.0) * 100.0, 2) if runner_odds > 0.0 else 0.0
+            runner_provider: str | None = _cand_provider(runner_up)
+        else:
+            gain_pct = 0.0
+            runner_provider = None
+
+        winner["line_shop_books"] = len(best_by_book)
+        winner["line_shop_gain_pct"] = gain_pct
+        winner["runner_up_provider"] = runner_provider
+        selected.append(winner)
+
+    return selected
+
+
+def optimize_simultaneous_kelly_portfolio(
+    candidates: list[dict[str, Any]],
+    bankroll_pen: float,
+    max_total_exposure_fraction: float = 0.15,
+    max_individual_fraction: float = 0.06,
+    fractional_multiplier: float = 0.50,
+    peak_bankroll_pen: float | None = None,
+) -> list[dict[str, Any]]:
+    """
+    V8 Multi-Bet Simultaneous Kelly Portfolio Optimization (scipy.optimize SLSQP).
+    Maximizes expected logarithmic bankroll growth E[ln(1 + sum(f_i * R_i))] across simultaneous
+    independent game outcomes under a convex joint risk constraint, allocating more capital to
+    picks with superior EV / Uncertainty trade-offs.
+    V8 Enhancement: High-Water Mark Drawdown Shield (HWM).
+    Contracts the fractional Kelly multiplier during equity drawdowns (d = (peak - current)/peak)
+    via hwm_shield = max(0.40, 1.0 - 2.0 * d) to protect the bankroll geometrically.
+    """
+    if not candidates or bankroll_pen <= 0.0:
+        return candidates
+
+    effective_mult = fractional_multiplier
+    effective_max_indiv = max_individual_fraction
+    effective_max_total = max_total_exposure_fraction
+    if peak_bankroll_pen is not None and peak_bankroll_pen > bankroll_pen > 0.0:
+        drawdown_pct = (peak_bankroll_pen - bankroll_pen) / peak_bankroll_pen
+        hwm_shield = max(0.40, min(1.0, 1.0 - 2.0 * drawdown_pct))
+        effective_mult = fractional_multiplier * hwm_shield
+        effective_max_indiv = max_individual_fraction * hwm_shield
+        effective_max_total = max_total_exposure_fraction * hwm_shield
+
+    enriched = [dict(c) for c in candidates]
+    k = len(enriched)
+
+    # Extract probabilities and decimal odds (strictly require valid observed odds and probabilities)
+    valid_candidates: list[dict[str, Any]] = []
+    probs: list[float] = []
+    odds: list[float] = []
+    for c in enriched:
+        p_val = c.get("estimated_probability") if c.get("estimated_probability") is not None else c.get("calibrated_probability")
+        o_val = c.get("decimal_odds_used") if c.get("decimal_odds_used") is not None else c.get("decimal_odds")
+        if p_val is None or o_val is None:
+            continue
+        try:
+            p_float = float(p_val)
+            o_float = float(o_val)
+        except (ValueError, TypeError):
+            continue
+        if o_float <= 1.0 or not (0.0 < p_float < 1.0):
+            continue
+        probs.append(float(np.clip(p_float, 0.02, 0.98)))
+        odds.append(o_float)
+        valid_candidates.append(c)
+
+    if not valid_candidates:
+        return candidates
+
+    enriched = valid_candidates
+    k = len(enriched)
+
+    p_arr = np.asarray(probs, dtype=float)
+    o_arr = np.asarray(odds, dtype=float)
+
+    # Single-bet exact Kelly formula shortcut
+    if k == 1:
+        p_val = p_arr[0]
+        o_val = o_arr[0]
+        b_val = o_val - 1.0
+        ev_unit = (p_val * o_val) - 1.0
+        if b_val <= 0.0 or ev_unit <= 0.0:
+            eff_f = 0.0
+            stake = 0.00
+        else:
+            f_star = max(0.0, (p_val * (b_val + 1.0) - 1.0) / b_val)
+            eff_f = min(effective_max_indiv, f_star * effective_mult)
+            if eff_f <= 0.0:
+                stake = 0.00
+            else:
+                max_s = bankroll_pen * effective_max_indiv
+                if p_val < 0.50:
+                    t_cap, t_min = min(max_s, 1.75), 1.00
+                elif p_val < 0.58:
+                    t_cap, t_min = min(max_s, 3.35), min(max_s, 2.00)
+                elif p_val < 0.65:
+                    t_cap, t_min = min(max_s, 4.75), min(max_s, 3.50)
+                else:
+                    t_cap, t_min = max_s, min(max_s, 4.80)
+                raw_s = bankroll_pen * eff_f
+                stake = round(max(t_min, min(t_cap, raw_s)), 2)
+        enriched[0]["kelly_optimal_fraction"] = round(float(eff_f), 5)
+        enriched[0]["kelly_recommended_stake_pen"] = stake
+        return enriched
+
+    # Multi-bet joint state enumeration: 2^k states (fast for k <= 10)
+    states = np.asarray(list(itertools.product([0, 1], repeat=k)), dtype=float)
+    p_states = np.prod(states * p_arr + (1.0 - states) * (1.0 - p_arr), axis=1)
+
+    # Net payoffs per state: states * odds - 1
+    state_returns = states * o_arr - 1.0
+
+    def objective(f: np.ndarray) -> float:
+        # Expected log-wealth optimization: W = 1 + dot(state_returns, f)
+        rets = np.dot(state_returns, f)
+        wealth = 1.0 + rets
+        if np.any(wealth <= 1e-5):
+            return 1e5 + float(np.sum(np.maximum(0.0, 1e-5 - wealth)) * 1e4)
+        return -float(np.sum(p_states * np.log(wealth)))
+
+    bounds = [(0.0, effective_max_indiv) for _ in range(k)]
+    constraints = {"type": "ineq", "fun": lambda f: effective_max_total - np.sum(f)}
+    init_f = np.full(k, min(effective_max_indiv, effective_max_total / max(1, k)))
+
+    res = minimize(objective, init_f, method="SLSQP", bounds=bounds, constraints=constraints)
+
+    raw_fractions = res.x if res.success else init_f
+    scaled_fractions = raw_fractions * effective_mult
+
+    for i, c in enumerate(enriched):
+        frac = float(scaled_fractions[i])
+        p_c = p_arr[i]
+        o_c = o_arr[i]
+        ev_c = (p_c * o_c) - 1.0
+        if frac <= 0.0 or ev_c <= 0.0:
+            stake = 0.00
+            frac = 0.0
+        else:
+            max_s = bankroll_pen * effective_max_indiv
+            if p_c < 0.50:
+                t_cap, t_min = min(max_s, 1.75), 1.00
+            elif p_c < 0.58:
+                t_cap, t_min = min(max_s, 3.35), min(max_s, 2.00)
+            elif p_c < 0.65:
+                t_cap, t_min = min(max_s, 4.75), min(max_s, 3.50)
+            else:
+                t_cap, t_min = max_s, min(max_s, 4.80)
+            raw_stake = bankroll_pen * frac
+            stake = round(max(t_min, min(t_cap, raw_stake)), 2)
+        c["kelly_optimal_fraction"] = round(frac, 5)
+        c["kelly_recommended_stake_pen"] = stake
+
+    return enriched

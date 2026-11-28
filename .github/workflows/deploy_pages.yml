@@ -1,0 +1,49 @@
+name: Deploy Dashboard to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "reports/dashboard.html"
+      - ".github/workflows/deploy_pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout
+        uses: actions/checkout@v4
+
+      - name: 2. Ensure docs/index.html exists
+        run: |
+          mkdir -p docs
+          if [ -f "reports/dashboard.html" ]; then
+            cp -f reports/dashboard.html docs/index.html
+          fi
+          touch docs/.nojekyll
+
+      - name: 3. Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: 4. Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './docs'
+
+      - name: 5. Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

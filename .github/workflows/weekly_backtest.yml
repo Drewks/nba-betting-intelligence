@@ -1,0 +1,113 @@
+name: NBA Weekly Real-Odds Backtest (forward holdout)
+
+# The forward holdout (games after the protocol freeze) is the only out-of-sample evidence. It only
+# grows if the in-progress season's market data is refreshed, so once a week this job re-downloads
+# that season, reruns the real-odds backtest on the live database and stores the report in state-live.
+on:
+  schedule:
+    # Mondays 12:07 UTC (07:07 Peru): outside the main cycle and the closing-capture window.
+    - cron: "7 12 * * 1"
+  workflow_run:
+    workflows: ["NBA Betting Intelligence — Cloud Auto-Trading & Calibration (S/100 Virtual)"]
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nba-pipeline-execution
+  cancel-in-progress: false
+
+jobs:
+  weekly-backtest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: 1. Clonar código de main y la base viva de state-live
+        id: prep
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin main
+          git checkout -B main origin/main
+          git fetch --depth=1 origin state-live
+          STATE_BASE_SHA="$(git rev-parse origin/state-live)"
+          # System python3 (uv is installed in step 2): decompresses data/nba_intelligence.sqlite3.gz (or the
+          # uncompressed file of a commit from before the compression) and fails unless integrity_check is ok.
+          python3 -m src.storage.state_live restore "${STATE_BASE_SHA}"
+          if git cat-file -e "${STATE_BASE_SHA}:data/evaluation/real_odds_backtest.json" 2>/dev/null; then
+            git checkout "${STATE_BASE_SHA}" -- data/evaluation/real_odds_backtest.json
+          fi
+          echo "STATE_BASE_SHA=${STATE_BASE_SHA}" >> "$GITHUB_ENV"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          event_name = os.getenv("GITHUB_EVENT_NAME", "")
+          if event_name != "workflow_run":
+              print("should_run=true")
+              raise SystemExit(0)
+
+          report_path = Path("data/evaluation/real_odds_backtest.json")
+          if not report_path.exists():
+              print("should_run=true")
+              raise SystemExit(0)
+
+          try:
+              data = json.loads(report_path.read_text(encoding="utf-8"))
+              gen_raw = str(data.get("generated_at") or "").strip()
+              if not gen_raw:
+                  print("should_run=true")
+                  raise SystemExit(0)
+              gen_dt = datetime.fromisoformat(gen_raw.replace("Z", "+00:00"))
+              age_days = (datetime.now(timezone.utc) - gen_dt).total_seconds() / 86400.0
+              if age_days >= 7.0:
+                  print("should_run=true")
+              else:
+                  print("should_run=false")
+          except Exception:
+              print("should_run=true")
+          PY
+
+      - name: 2. Instalar uv y dependencias
+        if: steps.prep.outputs.should_run == 'true'
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          "$HOME/.local/bin/uv" sync --python 3.12
+
+      - name: 3. Refrescar la temporada en curso y regenerar el backtest
+        if: steps.prep.outputs.should_run == 'true'
+        run: |
+          SEASON="$(uv run python -c 'from src.config import load_config; print(load_config().evaluation.holdout_season)')"
+          # Work on a copy: the backtest must never write to the audit database.
+          cp data/nba_intelligence.sqlite3 "$RUNNER_TEMP/backtest.sqlite3"
+          uv run python scripts/run_real_odds_backtest.py --db "$RUNNER_TEMP/backtest.sqlite3" --sensitivity --refresh-season "$SEASON"
+          cat reports/real_odds_backtest.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 4. Guardar el reporte en state-live (base de datos y resto del árbol intactos)
+        if: steps.prep.outputs.should_run == 'true'
+        run: |
+          git config user.name "nba-intelligence-bot"
+          git config user.email "nba-intelligence-bot@users.noreply.github.com"
+          git read-tree "${STATE_BASE_SHA}"
+          git add -f reports/real_odds_backtest.md data/evaluation/real_odds_backtest.json data/raw/market_consensus_*.csv
+          TREE_SHA="$(git write-tree)"
+          if [ "$(git rev-parse "${STATE_BASE_SHA}^{tree}")" = "${TREE_SHA}" ]; then
+            echo "Sin cambios en el backtest."
+            exit 0
+          fi
+          git fetch --depth=1 origin state-live
+          if [ "$(git rev-parse origin/state-live)" != "${STATE_BASE_SHA}" ]; then
+            echo "::error::state-live changed during the backtest; re-run the workflow."
+            exit 1
+          fi
+          NEW_COMMIT="$(git commit-tree "$TREE_SHA" -m 'chore(weekly-backtest): backtest con cuotas reales y holdout hacia adelante [skip ci]')"
+          git push --force-with-lease="refs/heads/state-live:${STATE_BASE_SHA}" origin "${NEW_COMMIT}:refs/heads/state-live"

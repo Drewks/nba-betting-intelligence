@@ -1,0 +1,221 @@
+# ==============================================================================
+# NBA Betting Intelligence — Model & Risk Configuration (single source of truth)
+# Loaded by src/config.py. Values are validated at load time (out-of-range values fail fast).
+#
+# Honesty notes:
+# - The EWMA rates below are UNTUNED structural priors. The previous "Optuna-optimized" values
+#   (0.020 / 0.155 / 0.035 / 0.080) were selected by an objective that leaked final scores and
+#   are invalid. Re-tune only with scripts/run_optuna_study.py (validation + untouched holdout).
+# - None of these parameters has been validated against historical Pinnacle closing lines:
+#   the project does not yet store historical closing odds.
+# ==============================================================================
+
+model:
+  version_id: "model_f_ensemble_v9"
+  ewma_alpha_slow: 0.0375
+  ewma_alpha_fast: 0.130
+  tempo_alpha_slow: 0.055
+  tempo_alpha_fast: 0.130
+  market_anchor_model_weight: 0.30   # p_final = 0.30 * p_model + 0.70 * p_market (de-vigged)
+  max_model_market_disagreement: 0.15 # Maximum allowable spread between model and sharp market consensus
+  moneyline_model_weight: 0.30       # Market-specific ML anchor weight
+  moneyline_max_disagreement: 0.15   # Market-specific ML max model-vs-market disagreement
+  moneyline_max_odds: 2.80           # Policy ML decimal odds cap (mitigates longshot tail traps; not holdout-validated)
+  market_anchor_schedule:            # Dev-only (2024-25/2025-26, n=2003) Bayesian decay open -> close
+    enabled: true
+    horizon_hours: 12.0
+    decay_power: 1.0
+    moneyline_open_weight: 0.28
+    moneyline_close_weight: 0.11
+    total_points_open_weight: 0.30
+    total_points_close_weight: 0.00
+    spread_open_weight: 0.24
+    spread_close_weight: 0.02
+  ridge_rapm:                        # Simultaneous multi-horizon Ridge adjusted efficiency & prior-informed player RAPM (dev-validated 2024-25/2025-26)
+    enabled: true
+    slow_half_life_days: 45.0
+    fast_half_life_days: 18.0
+    slow_season_decay: 0.40
+    fast_season_decay: 0.15
+    lam_margin_slow: 2.5
+    lam_eff_slow: 4.0
+    lam_pace_slow: 4.0
+    lam_margin_fast: 4.0
+    lam_eff_fast: 6.0
+    lam_pace_fast: 6.0
+    luck_adjust_blend: 0.25
+    player_rapm_half_life_days: 180.0
+    player_rapm_damp: 3.2
+    player_od_rapm_damp: 4.5
+    min_games_for_team_ridge: 30
+    min_games_for_player_rapm: 80
+
+risk_management:                     # AGENTS.md section 2 (paper_trading_manager) — owner decision 2026-11-09
+  virtual_bankroll_initial_pen: 100.00
+  # Production fractional Kelly staking: stake grows with the model's calibrated, market-anchored win probability
+  # for a given price (quarter Kelly, 25%). It is 0 when EV <= threshold and is never rounded up to a floor.
+  staking_mode: "fractional_kelly"   # "fractional_kelly" | "flat"
+  kelly_fraction: 0.25               # quarter Kelly (25%)
+  min_stake_pen: 1.00                # smaller Kelly stakes are skipped
+  max_stake_pen: 10.00               # hard cap per selection
+  max_stake_bankroll_fraction: 0.10  # hard cap per selection as % of bankroll
+  base_stake_pen: 1.00               # only used when staking_mode = "flat"
+  max_selections_per_matchday: 3
+  min_ev_threshold: 0.02             # EV >= 2.0%
+  min_ev: 0.02                       # alias for min_ev_threshold (2.0%)
+  max_portfolio_exposure_pct: 0.30
+  # Combined bets and player props are paper-traded in their own ledger (player_prop_picks).
+  # Only observed two-way bookmaker prop prices are eligible; they are never mixed into main-market metrics.
+  allow_parlays: false
+  allow_player_props_betting: false
+
+  # Overtime Risk Guard
+  overtime_guard:
+    enabled: true
+    min_overtime_prob: 0.068
+    under_haircut: 0.85
+
+  # Closing Line Value (CLV) Governor
+  clv_governor:
+    enabled: true
+    lookback_bets: 25
+    min_sample_size: 4
+    severe_negative_threshold: -2.0
+    severe_negative_factor: 0.50
+    moderate_negative_threshold: 0.0
+    moderate_negative_factor: 0.75
+    positive_alpha_threshold: 2.0
+    positive_alpha_factor: 1.10
+    neutral_factor: 1.00
+
+  # Conformal Uncertainty & Steam Modulators
+  risk_modulators:
+    high_uncertainty_std: 0.08
+    high_uncertainty_factor: 0.85
+    low_uncertainty_std: 0.045
+    low_uncertainty_factor: 1.10
+    narrow_conformal_width: 0.035
+    narrow_conformal_factor: 1.06
+    wide_conformal_width: 0.080
+    wide_conformal_factor: 0.88
+    ev_lower_bound_boost_factor: 1.05
+    sharp_steam_delta: 0.020
+    sharp_steam_factor: 1.08
+    adverse_steam_delta: -0.020
+    adverse_steam_factor: 0.85
+
+sources:
+  betting_allowed_source_types: ["OBSERVED"]
+  peru_scrapers_enabled: true
+  peru_scraper_policy: "PUBLIC_READONLY_JSON_API_NO_ANTIBOT_BYPASS"
+  allowed_live_api_books: ["te_apuesto", "pinnacle", "betano"]
+  # Trial Sportradar keys return HTTP 404 on Synergy endpoints; enable only with an active Synergy plan.
+  sportradar_synergy_enabled: false
+  # Cloud runs use least-privilege `contents: write` (T-018) with Telegram alerts; opt-in only with token scope.
+  github_issue_notifications_enabled: false
+  # TheOddsAPI v4 quota conservation: `eu` keeps sharp exchanges/books (Pinnacle, Matchbook, Betfair,
+  # Coolbet, Marathon Bet, 888sport) at 2 credits/call (vs 4 with us,eu); ESPN still provides DraftKings free.
+  the_odds_api_regions: "eu"
+  the_odds_api_markets: "h2h,totals"
+  the_odds_api_cache_ttl_seconds: 300
+
+evaluation:
+  development_seasons: ["2024-25", "2025-26"]
+  holdout_season: "2026-27"
+  # Lower bound: 9 distinct backtest reports were published before the freeze (EV 5% / 2%, ML odds cap,
+  # EWMA re-tunes, margin and box-score variants); +1 for the 2026-11-17 Pinnacle-margin (3.2%) run;
+  # +1 for the dev-only (2024-25/2025-26) time-decaying market anchor schedule calibration;
+  # +1 for the V9 simultaneous Ridge/RAPM + upgraded ensemble promotion (2026-11-27);
+  # +8 for the V9 search itself: 17 new Ridge/RAPM hyperparameters, the Empirical-Bayes calibrator
+  # constants/bounds and the stacking priors were tuned on dev data without a published trial log, so
+  # V9 is counted as several trials (conservative lower bound), not one.
+  trials_evaluated_count: 20
+  frozen_protocol_id: "V9_FROZEN_2026_11_27"
+  # 2026-27 was visible in every published report before the freeze, so it is NOT an untouched holdout.
+  season_holdout_contaminated: true
+  # Genuine out-of-sample evidence: only games that start after the protocol freeze. Moved from
+  # 2026-11-15 to the V9 freeze: 2026-11-15..2026-11-26 live data was inspected while building V9
+  # (staging runs on origin/state-live), so it is no longer out-of-sample for the active model.
+  forward_holdout_start_utc: "2026-11-27T00:00:00Z"
+
+evidence_staking:                    # Roadmap phase 3: stake size follows the shadow-ledger CLV evidence per market
+  enabled: true
+  # Verdicts come from the per-game Student-t CI of the market's shadow CLV (see shadow_ledger.clv_evidence).
+  # Multipliers can only shrink the Kelly fraction (0.0-1.0). With the S/1.00 floor, 0.5 on NO_EDGE in
+  # practice stops official bets in a market that loses to the close; the shadow ledger keeps measuring
+  # it and full size returns automatically when the evidence changes.
+  multipliers:
+    EDGE_SUPPORTED: 1.0
+    INCONCLUSIVE: 1.0
+    INSUFFICIENT_SAMPLE: 1.0
+    NO_EDGE: 0.5
+
+execution:                           # Which observed quotes count as a price that could have been taken
+  max_quote_age_hours: 6.0           # older quotes at decision time are not used for bets
+  excluded_provider_markers: ["(Best of"]  # cross-book aggregates (best price of one book + another's counterpart)
+  # No bets into markets with a larger margin: in 378 simultaneous snapshots Te Apuesto (median 9.9%)
+  # never beat Pinnacle's no-vig fair price (Pinnacle median 3.2%).
+  max_bookmaker_overround: 0.06
+  # Pre-bet operational safety guards (V8 defaults centralized from execution_helpers.py)
+  max_plausible_ev_unit: 0.45        # skips extreme ESPN EV outliers caused by unpriced late scratches
+  longshot_odds_threshold: 3.50      # decimal odds above which higher EV is required
+  longshot_min_ev_pct: 15.0          # minimum EV% required above longshot_odds_threshold
+  adverse_steam_threshold: -0.045    # skip if sharp market moved >= 4.5 pts against pick since opening
+  max_conformal_width: 0.22          # maximum Venn-Abers conformal interval width allowed for live bets
+
+sub_bankroll_combinadas:             # Sub-bankroll independiente para SGP y combinadas de alta probabilidad
+  enabled: true
+  virtual_bankroll_initial_pen: 50.00
+  staking_mode: "dynamic_kelly"
+  kelly_fraction: 0.40
+  min_stake_pen: 0.50
+  max_stake_pen: 5.00
+  max_stake_bankroll_fraction: 0.10
+  max_parlays_per_matchday: 2
+  min_compound_ev_pct: 6.0
+
+hybrid_allocation:                   # Política de asignación por mercado (evidencia CLV + compatibilidad 70/30)
+  enabled: true
+  totals_weight: 0.70
+  moneyline_weight: 0.30
+  max_totals_per_matchday: 2
+  max_moneyline_per_matchday: 1
+  allocation_mode: "evidence_guided" # "evidence_guided" | "static_caps" — ranks and caps markets dynamically by shadow CLV evidence
+
+clv_meta_labeling:                   # V8 Phase 3: Calibración empírica CLV Meta-Labeling (pre-bet only, zero lookahead)
+  enabled: false
+  calibrated_weights_path: "config/calibrated_weights.json"
+  intercept: -0.3569
+  coef_steam_delta: 11.2956
+  coef_conformal_width_excess: -3.0232
+  coef_disagreement_excess: -2.9046
+  coef_overround_excess: -0.0870
+  time_decay_rate: 0.04
+  max_hours_to_tipoff: 12.0
+  adverse_steam_threshold: -0.040
+  min_p_clv_threshold: 0.48
+
+copula_correlations:                 # V8 Phase 3: Correlaciones empíricas SGP / Cópulas Vine
+  enabled: true
+  calibrated_weights_path: "config/calibrated_weights.json"
+
+situational_factors:                 # V8 Phase 4: Factores situacionales de descanso, viaje y altitud
+  home_court_advantage_elo: 50.0
+  home_court_advantage_pts: 1.85
+  b2b_penalty_away: -2.10
+  b2b_penalty_home: -1.60
+  rest_3plus_bonus_away: 0.20
+  rest_3plus_bonus_home: 0.30
+  altitude_edge_multiplier: 1.35
+  altitude_threshold_feet: 4000.0
+  altitude_divisor_feet: 4200.0
+  travel_miles_rate: 0.22
+  timezone_rate: 0.12
+
+lineup_synergy:                      # V8 Phase 4: Reglas y umbrales de penalización compuesta de rotación
+  initiator_absence_threshold: 1.25
+  initiator_absence_penalty: 0.32
+  rim_anchor_absence_threshold: 1.40
+  rim_anchor_absence_penalty: 0.35
+  two_way_wing_penalty: 0.22
+  compound_absence_penalty: 0.14

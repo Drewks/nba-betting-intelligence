@@ -1,0 +1,52 @@
+[project]
+name = "nba-betting-intelligence"
+version = "0.1.0"
+description = "Multi-agent quantitative NBA prediction, calibration, and paper trading system (S/100 virtual bankroll)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "scipy>=1.12.0",
+    "scikit-learn>=1.4.0",
+    "lightgbm>=4.3.0",
+    "pyyaml>=6.0.1",
+    "pydantic>=2.6.0",
+    "httpx>=0.27.0",
+    "playwright>=1.42.0",
+    "optuna>=5.0.0",
+    "pypdf>=7.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E501", "B008", "E402"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true

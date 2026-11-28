@@ -1,0 +1,327 @@
+"""Strict validation of data completeness, odds integrity, duplicates, and temporal leakage."""
+
+from __future__ import annotations
+
+from datetime import datetime
+import math
+from typing import Any
+
+from src.ingestion.normalizer import normalize_team_code
+
+
+class DataValidationError(ValueError):
+    """Raised when a game, feature, or odds record violates structural or domain constraints."""
+
+
+class TemporalLeakageError(DataValidationError):
+    """Raised when future information (timestamp >= game_start_time or cutoff) is detected."""
+
+
+ESSENTIAL_GAME_FEATURES: dict[str, list[str]] = {
+    "moneyline": [
+        "home_off_rtg",
+        "home_def_rtg",
+        "away_off_rtg",
+        "away_def_rtg",
+        "home_rest_days",
+        "away_rest_days",
+    ],
+    "total_points": [
+        "home_off_rtg",
+        "home_def_rtg",
+        "away_off_rtg",
+        "away_def_rtg",
+        "home_pace",
+        "away_pace",
+    ],
+    "spread": [
+        "home_off_rtg",
+        "home_def_rtg",
+        "away_off_rtg",
+        "away_def_rtg",
+        "home_rest_days",
+        "away_rest_days",
+    ],
+}
+
+
+def parse_iso_utc(ts_str: str) -> datetime:
+    """Parses an ISO-8601 UTC string into a timezone-aware datetime."""
+    if not ts_str or not isinstance(ts_str, str):
+        raise DataValidationError(f"Missing or invalid timestamp: {ts_str!r}")
+    normalized = ts_str.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise DataValidationError(f"Unparseable ISO timestamp: {ts_str!r}") from exc
+    if dt.tzinfo is None:
+        raise DataValidationError(f"Timestamp must include explicit UTC offset: {ts_str!r}")
+    return dt
+
+
+RESULT_STATUSES: frozenset[str] = frozenset({"FINAL", "POSTPONED", "CANCELLED"})
+
+# A game the feed reports as under way (in progress, halftime, end of a period). It is a feed-only status:
+# it is never stored in `games` (whose CHECK constraint does not allow it) and never bettable. Ingestion
+# leaves the stored pre-game row untouched until the result arrives.
+IN_PROGRESS_STATUS = "IN_PROGRESS"
+LIVE_STATUSES: frozenset[str] = frozenset({IN_PROGRESS_STATUS})
+
+
+def validate_game_record(
+    game: dict[str, Any],
+    simulated_prediction_time: str | None = None,
+) -> dict[str, Any]:
+    """Validates a game dictionary and verifies zero temporal leakage."""
+    if str(game.get("status") or "") in LIVE_STATUSES:
+        raise DataValidationError(
+            f"Game {game.get('game_id')} is in progress (status {game.get('status')!r}): "
+            "a live game is never a pre-game record"
+        )
+    required_keys = [
+        "game_id",
+        "season",
+        "matchday_date",
+        "game_start_time",
+        "home_team",
+        "away_team",
+        "status",
+        "features_available_at",
+        "source_provider",
+    ]
+    for k in required_keys:
+        if not game.get(k):
+            raise DataValidationError(f"Game record missing required field '{k}'")
+
+    home_code = normalize_team_code(game["home_team"])
+    away_code = normalize_team_code(game["away_team"])
+    if home_code == away_code:
+        raise DataValidationError(f"Home and away teams cannot be identical: {home_code}")
+
+    start_dt = parse_iso_utc(game["game_start_time"])
+    avail_dt = parse_iso_utc(game["features_available_at"])
+
+    if avail_dt >= start_dt:
+        raise TemporalLeakageError(
+            f"Future data leakage in game {game['game_id']}: "
+            f"features_available_at ({game['features_available_at']}) >= game_start_time ({game['game_start_time']})"
+        )
+
+    if simulated_prediction_time is not None:
+        pred_dt = parse_iso_utc(simulated_prediction_time)
+        if avail_dt > pred_dt:
+            raise TemporalLeakageError(
+                f"Feature availability ({game['features_available_at']}) is after "
+                f"simulated prediction time ({simulated_prediction_time}) for {game['game_id']}"
+            )
+        if pred_dt >= start_dt:
+            raise TemporalLeakageError(
+                f"Prediction time ({simulated_prediction_time}) is at or after "
+                f"game tipoff ({game['game_start_time']}) for {game['game_id']}"
+            )
+
+    return game
+
+
+def validate_result_record(game: dict[str, Any]) -> dict[str, Any]:
+    """
+    Validates a post-game RESULT record (FINAL / POSTPONED / CANCELLED).
+
+    Results are by definition observed after tip-off, so the pre-game temporal rule
+    (features_available_at < game_start_time) does not apply to them. What must hold instead:
+    - structural identity (ids, teams, timestamps) is valid,
+    - FINAL results carry non-negative integer scores,
+    - the result was recorded strictly after tip-off (a result "known" before tip-off is leakage).
+    Results must never be used to overwrite pre-game feature snapshots (see the ingestion layer).
+    """
+    required_keys = ["game_id", "season", "matchday_date", "game_start_time", "home_team", "away_team", "status"]
+    for k in required_keys:
+        if not game.get(k):
+            raise DataValidationError(f"Result record missing required field '{k}'")
+
+    status = str(game["status"])
+    if status not in RESULT_STATUSES:
+        raise DataValidationError(f"Result record has non-result status {status!r} for {game['game_id']}")
+
+    home_code = normalize_team_code(game["home_team"])
+    away_code = normalize_team_code(game["away_team"])
+    if home_code == away_code:
+        raise DataValidationError(f"Home and away teams cannot be identical: {home_code}")
+
+    start_dt = parse_iso_utc(game["game_start_time"])
+
+    if status == "FINAL":
+        for side in ("home_score", "away_score"):
+            val = game.get(side)
+            if val is None or not isinstance(val, int) or isinstance(val, bool) or val < 0:
+                raise DataValidationError(f"FINAL result for {game['game_id']} has invalid {side}: {val!r}")
+
+    recorded = game.get("result_recorded_at")
+    if recorded:
+        rec_dt = parse_iso_utc(str(recorded))
+        if status == "FINAL" and rec_dt <= start_dt:
+            raise TemporalLeakageError(
+                f"FINAL result for {game['game_id']} recorded at {recorded} which is not after tip-off "
+                f"({game['game_start_time']})"
+            )
+
+    return game
+
+
+def validate_essential_features(game: dict[str, Any], market: str) -> None:
+    """Verifies that all essential variables for the target market are present and finite."""
+    if market not in ESSENTIAL_GAME_FEATURES:
+        raise DataValidationError(f"Unsupported market: {market!r}")
+    for feat in ESSENTIAL_GAME_FEATURES[market]:
+        val = game.get(feat)
+        if val is None or (isinstance(val, float) and (math.isnan(val) or math.isinf(val))):
+            raise DataValidationError(
+                f"Missing essential feature '{feat}' for game {game.get('game_id')} in market '{market}'"
+            )
+
+
+def validate_odds_record(
+    odds: dict[str, Any],
+    game_start_time: str,
+    simulated_prediction_time: str | None = None,
+) -> dict[str, Any]:
+    """Validates decimal odds (> 1.0), market/selection consistency, and pre-game timestamp."""
+    if not odds:
+        raise DataValidationError("Odds record is empty or None")
+
+    dec_odds = odds.get("decimal_odds")
+    if dec_odds is None or not isinstance(dec_odds, (int, float)) or math.isnan(dec_odds) or dec_odds <= 1.0:
+        raise DataValidationError(f"Invalid or missing decimal_odds: {dec_odds!r} (must be > 1.0)")
+
+    counterpart = odds.get("counterpart_decimal_odds")
+    if counterpart is not None and (not isinstance(counterpart, (int, float)) or counterpart <= 1.0):
+        raise DataValidationError(f"Invalid counterpart_decimal_odds: {counterpart!r}")
+
+    market = odds.get("market")
+    selection = odds.get("selection")
+    line_value = odds.get("line_value")
+
+    if market == "moneyline":
+        if selection not in ("HOME", "AWAY"):
+            raise DataValidationError(f"Invalid selection '{selection}' for moneyline market")
+    elif market == "total_points":
+        if selection not in ("OVER", "UNDER"):
+            raise DataValidationError(f"Invalid selection '{selection}' for total_points market")
+        if line_value is None or not isinstance(line_value, (int, float)) or isinstance(line_value, bool) or math.isnan(float(line_value)) or line_value <= 50.0:
+            raise DataValidationError(f"Missing or unrealistic total_points line_value: {line_value!r}")
+    elif market == "spread":
+        if selection not in ("HOME", "AWAY"):
+            raise DataValidationError(f"Invalid selection '{selection}' for spread market")
+        if (
+            line_value is None
+            or not isinstance(line_value, (int, float))
+            or isinstance(line_value, bool)
+            or math.isnan(float(line_value))
+            or abs(float(line_value)) > 45.0
+        ):
+            raise DataValidationError(f"Missing or unrealistic spread line_value: {line_value!r}")
+    else:
+        raise DataValidationError(f"Unsupported market in odds record: {market!r}")
+
+    if not odds.get("provider"):
+        raise DataValidationError("Odds record missing 'provider'")
+
+    captured_dt = parse_iso_utc(odds.get("captured_at", ""))
+    start_dt = parse_iso_utc(game_start_time)
+
+    if captured_dt >= start_dt:
+        raise TemporalLeakageError(
+            f"Post-tipoff odds rejected for {odds.get('game_id')}: "
+            f"captured_at ({odds.get('captured_at')}) >= game_start_time ({game_start_time})"
+        )
+
+    if simulated_prediction_time is not None:
+        pred_dt = parse_iso_utc(simulated_prediction_time)
+        if captured_dt > pred_dt:
+            raise TemporalLeakageError(
+                f"Future odds rejected for {odds.get('game_id')}: "
+                f"captured_at ({odds.get('captured_at')}) > prediction_time ({simulated_prediction_time})"
+            )
+
+    return odds
+
+
+def validate_odds_fetch_provenance(
+    odds: dict[str, Any], fetch_started_at: str, *, max_cache_age_seconds: float = 0.0
+) -> dict[str, Any]:
+    """
+    Checks the capture timestamp of a quote against the moment it was fetched.
+
+    `fetched_at` (when the adapter declares it) is the wall-clock moment the quote was fetched. A quote can
+    never be stamped earlier than that moment (`captured_at < fetched_at` is a backdated stamp, e.g. the
+    removed "tip-off − 15 min" convention for quotes fetched after tip-off), and the fetch itself cannot
+    precede `fetch_started_at`, the moment the caller started the fetch. The one exception is a quote the
+    adapter served from its in-process TTL cache (`from_ttl_cache`): it was fetched by an earlier HTTP call
+    of the same run, so it may precede `fetch_started_at` by at most `max_cache_age_seconds` (the configured
+    cache TTL), and only if it is stamped exactly at that earlier fetch (`captured_at == fetched_at`).
+    Quotes without `fetched_at` carry no fetch record and are left to the other checks.
+    """
+    fetched_raw = odds.get("fetched_at")
+    if not fetched_raw:
+        return odds
+    fetched_dt = parse_iso_utc(str(fetched_raw))
+    captured_dt = parse_iso_utc(str(odds.get("captured_at", "")))
+    started_dt = parse_iso_utc(fetch_started_at)
+    if fetched_dt < started_dt:
+        cache_age = (started_dt - fetched_dt).total_seconds()
+        served_from_cache = (
+            bool(odds.get("from_ttl_cache")) and captured_dt == fetched_dt and cache_age <= max(0.0, max_cache_age_seconds)
+        )
+        if not served_from_cache:
+            raise TemporalLeakageError(
+                f"Quote {odds.get('odds_id')} declares fetched_at ({fetched_raw}) before the fetch started "
+                f"({fetch_started_at})"
+            )
+    if captured_dt < fetched_dt:
+        raise TemporalLeakageError(
+            f"BACKDATED_CAPTURE: quote {odds.get('odds_id')} captured_at ({odds.get('captured_at')}) precedes "
+            f"the moment it was fetched ({fetched_raw})"
+        )
+    return odds
+
+
+def validate_temporal_split(
+    train_games: list[dict[str, Any]],
+    eval_games: list[dict[str, Any]],
+) -> None:
+    """Ensures every training game strictly precedes every evaluation game chronologically."""
+    if not train_games or not eval_games:
+        raise DataValidationError("Both train_games and eval_games must be non-empty.")
+
+    max_train_dt = max(parse_iso_utc(g["game_start_time"]) for g in train_games)
+    min_eval_dt = min(parse_iso_utc(g["game_start_time"]) for g in eval_games)
+
+    train_ids = {g["game_id"] for g in train_games}
+    eval_ids = {g["game_id"] for g in eval_games}
+    overlap = train_ids.intersection(eval_ids)
+    if overlap:
+        raise TemporalLeakageError(f"Train and evaluation sets share overlapping game_ids: {sorted(overlap)}")
+
+    if max_train_dt >= min_eval_dt:
+        raise TemporalLeakageError(
+            f"Temporal split violation: max training game time ({max_train_dt.isoformat()}) "
+            f">= min evaluation game time ({min_eval_dt.isoformat()})"
+        )
+
+
+def detect_duplicates(
+    records: list[dict[str, Any]],
+    key_fields: tuple[str, ...],
+) -> list[tuple[Any, ...]]:
+    """Returns a list of duplicate composite keys found in records."""
+    seen: set[tuple[Any, ...]] = set()
+    duplicates: list[tuple[Any, ...]] = []
+    for rec in records:
+        key = tuple(rec.get(f) for f in key_fields)
+        if key in seen:
+            duplicates.append(key)
+        else:
+            seen.add(key)
+    return duplicates

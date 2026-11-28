@@ -1,0 +1,717 @@
+"""SQLite database schema with strict immutability triggers for predictions and paper trading."""
+
+DDL_STATEMENTS = [
+    """
+    CREATE TABLE IF NOT EXISTS teams (
+        team_id TEXT PRIMARY KEY,
+        full_name TEXT NOT NULL,
+        conference TEXT NOT NULL,
+        division TEXT NOT NULL,
+        source_ids_json TEXT DEFAULT '{}',
+        updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS games (
+        game_id TEXT PRIMARY KEY,
+        season TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        game_start_time TEXT NOT NULL,
+        home_team TEXT NOT NULL,
+        away_team TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('SCHEDULED', 'FINAL', 'POSTPONED', 'CANCELLED')),
+        home_score INTEGER,
+        away_score INTEGER,
+        home_off_rtg REAL,
+        home_def_rtg REAL,
+        home_pace REAL,
+        away_off_rtg REAL,
+        away_def_rtg REAL,
+        away_pace REAL,
+        home_rest_days INTEGER,
+        away_rest_days INTEGER,
+        features_available_at TEXT NOT NULL,
+        source_provider TEXT NOT NULL,
+        ingested_at TEXT NOT NULL,
+        result_recorded_at TEXT
+    );
+    """,
+    # What was known and when: once a game's tip-off has passed, its features_available_at and ingested_at
+    # are history. The rating columns stay writable (apply_pregame_team_ratings recomputes them each cycle).
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_started_game_temporal_rewrite
+    BEFORE UPDATE OF features_available_at, ingested_at ON games
+    FOR EACH ROW
+    WHEN datetime(OLD.game_start_time) <= datetime('now')
+     AND (NEW.features_available_at IS NOT OLD.features_available_at OR NEW.ingested_at IS NOT OLD.ingested_at)
+    BEGIN
+        SELECT RAISE(ABORT, 'TEMPORAL_INTEGRITY_VIOLATION: features_available_at and ingested_at of a started game cannot be changed.');
+    END;
+    """,
+    # INSERT OR REPLACE deletes and re-inserts the row without firing UPDATE triggers (the 2026-11 incident
+    # path): a started game can only be re-inserted with its stored features_available_at and ingested_at.
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_started_game_temporal_replace
+    BEFORE INSERT ON games
+    FOR EACH ROW
+    WHEN EXISTS (
+        SELECT 1 FROM games g
+        WHERE g.game_id = NEW.game_id
+          AND datetime(g.game_start_time) <= datetime('now')
+          AND (g.features_available_at IS NOT NEW.features_available_at OR g.ingested_at IS NOT NEW.ingested_at)
+    )
+    BEGIN
+        SELECT RAISE(ABORT, 'TEMPORAL_INTEGRITY_VIOLATION: a started game cannot be re-inserted with a different features_available_at or ingested_at.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS odds_snapshots (
+        odds_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+        selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+        line_value REAL,
+        decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+        counterpart_decimal_odds REAL CHECK (counterpart_decimal_odds IS NULL OR counterpart_decimal_odds > 1.0),
+        captured_at TEXT NOT NULL,
+        is_closing_line INTEGER NOT NULL DEFAULT 0,
+        source_type TEXT NOT NULL CHECK (source_type IN ('OBSERVED', 'DERIVED', 'SYNTHETIC')),
+        fetched_at TEXT,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS quarantined_odds (
+        odds_id TEXT PRIMARY KEY,
+        reason TEXT NOT NULL,
+        quarantined_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_odds_update
+    BEFORE UPDATE ON odds_snapshots
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Captured odds snapshots cannot be modified.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_odds_delete
+    BEFORE DELETE ON odds_snapshots
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Captured odds snapshots cannot be deleted.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS model_versions (
+        model_version_id TEXT PRIMARY KEY,
+        model_family TEXT NOT NULL,
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+        train_start_date TEXT NOT NULL,
+        train_end_date TEXT NOT NULL,
+        trained_at TEXT NOT NULL,
+        hyperparameters_json TEXT NOT NULL,
+        oos_brier_score REAL,
+        oos_log_loss REAL,
+        is_active INTEGER NOT NULL DEFAULT 0,
+        approved_by TEXT NOT NULL,
+        parent_version_id TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS run_manifests (
+        run_id TEXT PRIMARY KEY,
+        commit_sha TEXT NOT NULL,
+        model_version_id TEXT NOT NULL,
+        ensemble_version TEXT NOT NULL,
+        submodel_versions_json TEXT NOT NULL,
+        config_hash TEXT NOT NULL,
+        config_version TEXT NOT NULL,
+        calibrator_metadata_json TEXT NOT NULL,
+        seeds_json TEXT NOT NULL,
+        data_cutoff_utc TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_run_manifest_update
+    BEFORE UPDATE ON run_manifests
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: run_manifests is append-only.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_run_manifest_delete
+    BEFORE DELETE ON run_manifests
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: run_manifests cannot be deleted.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS predictions (
+        prediction_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+        selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+        line_value REAL,
+        model_version_id TEXT NOT NULL,
+        raw_probability REAL NOT NULL CHECK (raw_probability >= 0.0 AND raw_probability <= 1.0),
+        calibrated_probability REAL NOT NULL CHECK (calibrated_probability >= 0.0 AND calibrated_probability <= 1.0),
+        raw_model_probability REAL CHECK (raw_model_probability IS NULL OR (raw_model_probability >= 0.0 AND raw_model_probability <= 1.0)),
+        calibrated_model_probability REAL CHECK (calibrated_model_probability IS NULL OR (calibrated_model_probability >= 0.0 AND calibrated_model_probability <= 1.0)),
+        market_fair_probability REAL CHECK (market_fair_probability IS NULL OR (market_fair_probability >= 0.0 AND market_fair_probability <= 1.0)),
+        market_anchored_probability REAL CHECK (market_anchored_probability IS NULL OR (market_anchored_probability >= 0.0 AND market_anchored_probability <= 1.0)),
+        run_manifest_id TEXT,
+        uncertainty_std REAL NOT NULL CHECK (uncertainty_std >= 0.0),
+        implied_prob_gross REAL NOT NULL,
+        implied_prob_fair REAL,
+        bookmaker_overround REAL,
+        decimal_odds_used REAL NOT NULL CHECK (decimal_odds_used > 1.0),
+        odds_provider TEXT NOT NULL,
+        odds_captured_at TEXT NOT NULL,
+        ev_unit REAL NOT NULL,
+        ev_pct REAL NOT NULL,
+        emitted_at TEXT NOT NULL,
+        features_snapshot_json TEXT NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(game_id),
+        FOREIGN KEY (model_version_id) REFERENCES model_versions(model_version_id)
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_prediction_update
+    BEFORE UPDATE ON predictions
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Historical predictions cannot be modified.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_prediction_delete
+    BEFORE DELETE ON predictions
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Historical predictions cannot be deleted.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS simulated_bets (
+        bet_id TEXT PRIMARY KEY,
+        prediction_id TEXT NOT NULL UNIQUE,
+        game_id TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread', 'player_prop')),
+        selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+        line_value REAL,
+        decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+        estimated_prob REAL NOT NULL,
+        estimated_ev REAL NOT NULL,
+        stake_pen REAL NOT NULL CHECK (stake_pen > 0.0 AND stake_pen <= 25.0),
+        emitted_at TEXT NOT NULL,
+        model_version_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+        net_profit_pen REAL,
+        bankroll_after_pen REAL,
+        actual_result_summary TEXT,
+        settled_at TEXT,
+        UNIQUE(game_id, market, selection, line_value),
+        FOREIGN KEY (prediction_id) REFERENCES predictions(prediction_id),
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_settled_bet_tampering
+    BEFORE UPDATE ON simulated_bets
+    BEGIN
+        SELECT CASE
+            WHEN OLD.status != 'PENDING' THEN
+                RAISE(ABORT, 'DOUBLE_SETTLEMENT_OR_TAMPERING: Bet has already been settled and is immutable.')
+            WHEN NEW.decimal_odds != OLD.decimal_odds
+              OR NEW.stake_pen != OLD.stake_pen
+              OR NEW.selection != OLD.selection
+              OR COALESCE(NEW.line_value, -9999) != COALESCE(OLD.line_value, -9999)
+              OR NEW.prediction_id != OLD.prediction_id
+              OR NEW.emitted_at != OLD.emitted_at
+              OR NEW.estimated_prob != OLD.estimated_prob
+              OR NEW.estimated_ev != OLD.estimated_ev THEN
+                RAISE(ABORT, 'IMMUTABLE_VIOLATION: Original bet parameters and odds cannot be modified.')
+        END;
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_bet_delete
+    BEFORE DELETE ON simulated_bets
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Simulated bets cannot be deleted from audit history.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS decision_log (
+        decision_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        market TEXT NOT NULL,
+        selection TEXT NOT NULL,
+        decision_type TEXT NOT NULL CHECK (decision_type IN ('BET_PLACED', 'NO_BET')),
+        reason_code TEXT NOT NULL,
+        reason_detail TEXT NOT NULL,
+        ev_pct REAL,
+        emitted_at TEXT NOT NULL,
+        model_version_id TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS bankroll_ledger (
+        entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        event_type TEXT NOT NULL CHECK (event_type IN ('INITIAL_VIRTUAL_BANKROLL', 'BET_RESERVED', 'BET_SETTLED')),
+        reference_bet_id TEXT,
+        amount_delta_pen REAL NOT NULL,
+        settled_bankroll_pen REAL NOT NULL CHECK (settled_bankroll_pen >= 0.0),
+        pending_exposure_pen REAL NOT NULL CHECK (pending_exposure_pen >= 0.0),
+        available_balance_pen REAL NOT NULL CHECK (available_balance_pen >= 0.0)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS calibration_logs (
+        eval_id TEXT PRIMARY KEY,
+        evaluated_at TEXT NOT NULL,
+        model_version_id TEXT NOT NULL,
+        market TEXT NOT NULL,
+        sample_size INTEGER NOT NULL,
+        brier_score REAL NOT NULL,
+        log_loss REAL NOT NULL,
+        ece REAL NOT NULL,
+        calibration_method TEXT NOT NULL,
+        bins_json TEXT NOT NULL,
+        promoted INTEGER NOT NULL DEFAULT 0
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS agent_execution_log (
+        exec_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        phase_number INTEGER NOT NULL,
+        agent_name TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('STARTED', 'COMPLETED', 'FAILED', 'RETRYING')),
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        details_json TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS sniper_alerts (
+        alert_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        window_type TEXT NOT NULL CHECK (window_type IN ('WINDOW_2H', 'WINDOW_30M', 'FORCE', 'TEST')),
+        minutes_to_tipoff REAL NOT NULL,
+        selection TEXT NOT NULL CHECK (selection IN ('HOME', 'AWAY', 'OVER', 'UNDER')),
+        decimal_odds REAL NOT NULL,
+        point_prob REAL NOT NULL,
+        conformal_p_low REAL NOT NULL,
+        conformal_p_high REAL NOT NULL,
+        ev_pct REAL NOT NULL,
+        ev_lower_bound_pct REAL NOT NULL,
+        kelly_stake_pen REAL NOT NULL,
+        transitions_json TEXT NOT NULL,
+        synergy_shift REAL NOT NULL,
+        rational TEXT NOT NULL,
+        emitted_at TEXT NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS player_prop_picks (
+        prop_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        team TEXT NOT NULL,
+        prop_category TEXT NOT NULL CHECK (prop_category IN ('PTS', 'REB', 'AST', 'PRA', '3PM', 'PR', 'PA', 'RA', 'SGP')),
+        line_value REAL NOT NULL,
+        selection TEXT NOT NULL CHECK (selection IN ('OVER', 'UNDER', 'SGP', 'HOME', 'AWAY')),
+        decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+        projected_mean REAL NOT NULL,
+        projected_std REAL NOT NULL,
+        model_prob REAL NOT NULL,
+        conformal_p_low REAL NOT NULL,
+        conformal_p_high REAL NOT NULL,
+        ev_pct REAL NOT NULL,
+        ev_lower_bound_pct REAL NOT NULL,
+        stake_pen REAL NOT NULL DEFAULT 1.00 CHECK (stake_pen > 0.0),
+        kelly_stake_pen REAL NOT NULL,
+        usage_bump_pct REAL NOT NULL DEFAULT 0.0,
+        rationale TEXT NOT NULL,
+        emitted_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+        actual_stat REAL,
+        net_profit_pen REAL,
+        bankroll_after_pen REAL,
+        actual_result_summary TEXT,
+        settled_at TEXT,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS team_rosters (
+        team_id TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        position TEXT,
+        jersey TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (team_id, player_name)
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_settled_prop_tampering
+    BEFORE UPDATE ON player_prop_picks
+    FOR EACH ROW
+    WHEN OLD.status IN ('WON', 'LOST', 'PUSH', 'VOID')
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Settled player prop picks cannot be modified.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_prop_delete
+    BEFORE DELETE ON player_prop_picks
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Player prop picks cannot be deleted from audit history.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS injury_status_snapshots (
+        snapshot_id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        team TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        source TEXT NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_injury_snapshots_game ON injury_status_snapshots (game_id, captured_at);
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS game_boxscores (
+        game_id TEXT PRIMARY KEY,
+        team_stats_json TEXT NOT NULL,
+        players_json TEXT NOT NULL,
+        source TEXT NOT NULL,
+        fetched_at TEXT NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS boxscore_fetch_failures (
+        game_id TEXT PRIMARY KEY,
+        http_status INTEGER,
+        error_message TEXT,
+        attempts INTEGER NOT NULL DEFAULT 1,
+        first_failed_at TEXT NOT NULL,
+        last_failed_at TEXT NOT NULL,
+        permanently_unavailable INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS player_boxscores (
+        game_id TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        player_key TEXT NOT NULL,
+        team TEXT NOT NULL,
+        game_start_time TEXT NOT NULL,
+        minutes REAL NOT NULL,
+        pts REAL NOT NULL,
+        reb REAL NOT NULL,
+        ast REAL NOT NULL,
+        threed REAL NOT NULL,
+        starter INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (game_id, team, player_key),
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_player_boxscores_lookup
+    ON player_boxscores (player_key, game_start_time DESC);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_player_boxscores_team
+    ON player_boxscores (team, game_start_time DESC);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_predictions_lookup
+    ON predictions (game_id, market, selection, model_version_id, emitted_at);
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+        migration_id TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL,
+        details_json TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audit_repairs (
+        repair_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        applied_at TEXT NOT NULL,
+        migration_id TEXT NOT NULL,
+        table_name TEXT NOT NULL,
+        row_pk TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_audit_repairs_mutation
+    BEFORE UPDATE ON audit_repairs
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: audit_repairs is append-only.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_audit_repairs_delete
+    BEFORE DELETE ON audit_repairs
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: audit_repairs is append-only.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS audit_row_registry (
+        table_name TEXT NOT NULL,
+        row_pk TEXT NOT NULL,
+        registered_at TEXT NOT NULL,
+        PRIMARY KEY (table_name, row_pk)
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_registry_update
+    BEFORE UPDATE ON audit_row_registry
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: audit_row_registry is append-only.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_registry_delete
+    BEFORE DELETE ON audit_row_registry
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: audit_row_registry is append-only.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS parlay_bets (
+        parlay_id TEXT PRIMARY KEY,
+        matchday_date TEXT NOT NULL,
+        strategy_type TEXT NOT NULL CHECK (strategy_type IN ('SGP_COPULA', 'HIGH_PROB_PARLAY', 'CROSS_GAME_PARLAY')),
+        legs_json TEXT NOT NULL,
+        num_legs INTEGER NOT NULL CHECK (num_legs >= 2),
+        compound_odds REAL NOT NULL CHECK (compound_odds > 1.0),
+        joint_prob REAL NOT NULL CHECK (joint_prob > 0.0 AND joint_prob <= 1.0),
+        compound_ev_pct REAL NOT NULL,
+        stake_pen REAL NOT NULL CHECK (stake_pen > 0.0 AND stake_pen <= 25.0),
+        emitted_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+        net_profit_pen REAL,
+        bankroll_after_pen REAL,
+        actual_result_summary TEXT,
+        settled_at TEXT
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_settled_parlay_tampering
+    BEFORE UPDATE ON parlay_bets
+    BEGIN
+        SELECT CASE
+            WHEN OLD.status != 'PENDING' THEN
+                RAISE(ABORT, 'DOUBLE_SETTLEMENT_OR_TAMPERING: Parlay bet has already been settled and is immutable.')
+            WHEN NEW.compound_odds != OLD.compound_odds
+              OR NEW.stake_pen != OLD.stake_pen
+              OR NEW.legs_json != OLD.legs_json
+              OR NEW.emitted_at != OLD.emitted_at
+              OR NEW.strategy_type != OLD.strategy_type THEN
+                RAISE(ABORT, 'IMMUTABLE_VIOLATION: Original parlay parameters cannot be modified.')
+        END;
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_parlay_delete
+    BEFORE DELETE ON parlay_bets
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Parlay bets cannot be deleted from audit history.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS parlay_bankroll_ledger (
+        entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        event_type TEXT NOT NULL CHECK (event_type IN ('INITIAL_VIRTUAL_BANKROLL', 'BET_RESERVED', 'BET_SETTLED')),
+        reference_parlay_id TEXT,
+        amount_delta_pen REAL NOT NULL,
+        settled_bankroll_pen REAL NOT NULL CHECK (settled_bankroll_pen >= 0.0),
+        pending_exposure_pen REAL NOT NULL CHECK (pending_exposure_pen >= 0.0),
+        available_balance_pen REAL NOT NULL CHECK (available_balance_pen >= 0.0)
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_parlay_ledger_update
+    BEFORE UPDATE ON parlay_bankroll_ledger
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: parlay_bankroll_ledger entries cannot be updated.');
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_parlay_ledger_delete
+    BEFORE DELETE ON parlay_bankroll_ledger
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: parlay_bankroll_ledger entries cannot be deleted.');
+    END;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS shadow_candidates (
+        shadow_id TEXT PRIMARY KEY,
+        prediction_id TEXT,
+        game_id TEXT NOT NULL,
+        matchday_date TEXT NOT NULL,
+        market TEXT NOT NULL CHECK (market IN ('moneyline', 'total_points', 'spread')),
+        selection TEXT NOT NULL,
+        line_value REAL,
+        model_version_id TEXT NOT NULL,
+        odds_provider TEXT NOT NULL,
+        decimal_odds REAL NOT NULL CHECK (decimal_odds > 1.0),
+        raw_probability REAL NOT NULL,
+        calibrated_probability REAL NOT NULL,
+        ev_unit REAL NOT NULL,
+        ev_pct REAL NOT NULL,
+        hypothetical_kelly_stake_pen REAL NOT NULL CHECK (hypothetical_kelly_stake_pen >= 0.0),
+        decision_status TEXT NOT NULL,
+        rejection_reason TEXT NOT NULL,
+        closing_decimal_odds REAL,
+        closing_fair_prob REAL,
+        clv_pct REAL,
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'WON', 'LOST', 'PUSH', 'VOID')),
+        hypothetical_unit_profit REAL,
+        emitted_at TEXT NOT NULL,
+        settled_at TEXT,
+        source_type TEXT NOT NULL DEFAULT 'OBSERVED' CHECK (source_type = 'OBSERVED'),
+        FOREIGN KEY (game_id) REFERENCES games(game_id)
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_settled_shadow_tampering
+    BEFORE UPDATE ON shadow_candidates
+    BEGIN
+        SELECT CASE
+            WHEN OLD.status != 'PENDING' THEN
+                RAISE(ABORT, 'DOUBLE_SETTLEMENT_OR_TAMPERING: Shadow candidate has already been settled and is immutable.')
+            WHEN NEW.decimal_odds != OLD.decimal_odds
+              OR NEW.calibrated_probability != OLD.calibrated_probability
+              OR NEW.ev_unit != OLD.ev_unit
+              OR NEW.emitted_at != OLD.emitted_at
+              OR NEW.market != OLD.market
+              OR NEW.selection != OLD.selection THEN
+                RAISE(ABORT, 'IMMUTABLE_VIOLATION: Original shadow candidate parameters cannot be modified.')
+        END;
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS prevent_shadow_delete
+    BEFORE DELETE ON shadow_candidates
+    BEGIN
+        SELECT RAISE(ABORT, 'IMMUTABLE_VIOLATION: Shadow candidates cannot be deleted from audit history.');
+    END;
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_predictions_version_market
+    ON predictions (model_version_id, market, game_id);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_shadow_candidates_game_status
+    ON shadow_candidates (game_id, status);
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_shadow_candidates_matchday
+    ON shadow_candidates (matchday_date, model_version_id);
+    """,
+]
+
+# A quote is never stored with a capture time earlier than the moment it was fetched (`fetched_at`, the
+# fetch moment recorded by the writer; NULL for legacy rows). Created by migration 016 only: the column
+# does not exist in legacy tables until then, and a trigger body naming it would break their inserts.
+BACKDATED_ODDS_TRIGGER_DDL = """
+CREATE TRIGGER IF NOT EXISTS prevent_backdated_odds_capture
+BEFORE INSERT ON odds_snapshots
+FOR EACH ROW
+WHEN NEW.fetched_at IS NOT NULL AND datetime(NEW.captured_at) < datetime(NEW.fetched_at)
+BEGIN
+    SELECT RAISE(ABORT, 'TEMPORAL_INTEGRITY_VIOLATION: captured_at of a quote cannot precede the moment it was fetched.');
+END;
+"""
+
+# Odds providers whose quotes were generated by the system itself (never observed in a real market).
+# Kept as defense in depth on top of the explicit `quarantined_odds` table and the `source_type` column.
+UNOBSERVED_PROVIDER_SQL_PREDICATE = """(
+        {col} LIKE '%[T-6H Peru]%'
+     OR {col} LIKE '%[LIVE_SCRAPER]%'
+     OR {col} LIKE '%Synthetic%'
+     OR {col} LIKE '%Calibrated Feed%'
+)"""
+
+# Views are derived objects: they are dropped and recreated on every schema initialization so that
+# existing databases always get the latest definition (CREATE VIEW IF NOT EXISTS would keep stale ones).
+VIEW_DDL: dict[str, str] = {
+    "v_observed_odds_snapshots": f"""
+    CREATE VIEW v_observed_odds_snapshots AS
+    SELECT * FROM odds_snapshots o
+    WHERE o.source_type = 'OBSERVED'
+      AND o.odds_id NOT IN (SELECT odds_id FROM quarantined_odds)
+      AND NOT {UNOBSERVED_PROVIDER_SQL_PREDICATE.format(col="o.provider")}
+      AND NOT (o.provider = 'draftkings' AND o.decimal_odds = 1.90 AND o.counterpart_decimal_odds = 1.90);
+    """,
+    "v_observed_predictions": f"""
+    CREATE VIEW v_observed_predictions AS
+    SELECT p.* FROM predictions p
+    WHERE NOT {UNOBSERVED_PROVIDER_SQL_PREDICATE.format(col="p.odds_provider")}
+      AND NOT (p.odds_provider = 'draftkings' AND p.decimal_odds_used = 1.90);
+    """,
+    "v_observed_simulated_bets": """
+    CREATE VIEW v_observed_simulated_bets AS
+    SELECT b.* FROM simulated_bets b
+    JOIN v_observed_predictions p ON b.prediction_id = p.prediction_id
+    WHERE b.game_id NOT LIKE 'SYN%';
+    """,
+    "v_observed_bankroll_ledger": """
+    CREATE VIEW v_observed_bankroll_ledger AS
+    SELECT
+        l.entry_id,
+        l.timestamp,
+        l.event_type,
+        l.reference_bet_id,
+        l.amount_delta_pen,
+        ROUND(
+            SUM(l.amount_delta_pen) OVER (
+                ORDER BY l.entry_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ),
+            4
+        ) AS settled_bankroll_pen,
+        l.pending_exposure_pen,
+        ROUND(
+            SUM(l.amount_delta_pen) OVER (
+                ORDER BY l.entry_id ASC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) - l.pending_exposure_pen,
+            4
+        ) AS available_balance_pen,
+        l.settled_bankroll_pen AS raw_settled_bankroll_pen
+    FROM bankroll_ledger l
+    WHERE l.reference_bet_id IS NULL
+       OR l.reference_bet_id IN (SELECT bet_id FROM v_observed_simulated_bets);
+    """,
+    "v_observed_games": """
+    CREATE VIEW v_observed_games AS
+    SELECT * FROM games
+    WHERE game_id NOT LIKE 'SYN%'
+      AND source_provider != 'synthetic_fixture';
+    """,
+}

@@ -1,0 +1,61 @@
+{
+  "pixelrag_installed": true,
+  "external_mcp_server_installed": false,
+  "pixelrag_status": "OPERATIONAL_NATIVE_TABULAR_RAG (BROWSERBASE_CLOUD_CDP, 123 docs indexed)",
+  "playwright_engine_used": "BROWSERBASE_CLOUD_CDP",
+  "indexed_documents_count": 123,
+  "top_retrieved_context": [
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "ORL Anthony Black (PG) Day To Day (Back): Black is Questionable for Saturday's (Nov. 28) game against the Wizards.",
+      "relevance_score": 0.2479,
+      "captured_at": "2026-11-27"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "HOU Steven Adams (C) Day To Day (Knee): Adams is Questionable for Saturday's (Nov. 28) game against the 76ers.",
+      "relevance_score": 0.2421,
+      "captured_at": "2026-11-27"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "CHA Grayson Allen (SG) Day To Day (Concussion Protocol): Allen is Questionable for Saturday's (Nov. 28) game against the Nets.",
+      "relevance_score": 0.2276,
+      "captured_at": "2026-11-27"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DAL Kyrie Irving (SG) Day To Day (Injury Management): Irving did not play on Friday's (Nov. 27) game against the Suns.",
+      "relevance_score": 0.2086,
+      "captured_at": "2026-11-28"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "PHI Dean Wade (PF) Day To Day (Injury Management): Wade did not play on Friday's (Nov. 27) game against the Pacers.",
+      "relevance_score": 0.2078,
+      "captured_at": "2026-11-28"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "DAL Caleb Martin (SF) Day To Day (Ankle): Martin did not return on Friday's (Nov. 27) game against the Suns.",
+      "relevance_score": 0.1984,
+      "captured_at": "2026-11-28"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "GSW Gui Santos (PF) Day To Day (Knee): Santos did not return on Friday's (Nov. 27) game against the Trail Blazers.",
+      "relevance_score": 0.1907,
+      "captured_at": "2026-11-28"
+    },
+    {
+      "source": "sportradar_nba_v8_official_injuries",
+      "snippet": "LAC Yanic Konan Niederhäuser (C) Day To Day (Toe): Niederhäuser did not return on Friday's (Nov. 27) game against the Pelicans.",
+      "relevance_score": 0.1885,
+      "captured_at": "2026-11-28"
+    }
+  ],
+  "mode_used": "NATIVE_PLAYWRIGHT_TABULAR_RAG_AND_STRUCTURED_CROSSCHECK",
+  "direct_betting_probabilities_emitted": false,
+  "confidence_score": 0.95,
+  "limitations_documented": "No existe servidor MCP externo 'PixelRAG' en mcp_config.json; por ello opera el motor nativo Visual/Tabular RAG (Playwright Chromium DOM + TF-IDF Vector Index) contrastado contra ESPN API."
+}

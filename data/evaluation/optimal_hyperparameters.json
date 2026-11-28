@@ -1,0 +1,41 @@
+{
+  "objective": "ML (Brier + 0.5*LogLoss) + 0.15*(TotalsRMSE/18)^2 (zero market leakage)",
+  "n_trials": 250,
+  "eval_sample_size": 500,
+  "holdout_sample_size": 500,
+  "baseline_score": 0.70791,
+  "baseline_brier": 0.219243,
+  "baseline_log_loss": 0.629702,
+  "baseline_totals_rmse": 19.3764,
+  "best_score": 0.69284,
+  "improvement_pct": 2.13,
+  "best_hyperparameters": {
+    "alpha_slow": 0.0375,
+    "alpha_fast": 0.13,
+    "tempo_alpha_slow": 0.055,
+    "tempo_alpha_fast": 0.03,
+    "blowout_cap": 34.0,
+    "spread_sigma": 9.5,
+    "momentum_blend_weight": 0.98
+  },
+  "default_hyperparameters": {
+    "alpha_slow": 0.045,
+    "alpha_fast": 0.11,
+    "tempo_alpha_slow": 0.055,
+    "tempo_alpha_fast": 0.13,
+    "blowout_cap": 28.0,
+    "spread_sigma": 11.6,
+    "momentum_blend_weight": 0.88
+  },
+  "holdout": {
+    "baseline_score": 0.66333,
+    "baseline_brier": 0.201379,
+    "baseline_log_loss": 0.590936,
+    "baseline_totals_rmse": 18.9631,
+    "best_score": 0.65208,
+    "best_brier": 0.196574,
+    "best_log_loss": 0.578991,
+    "best_totals_rmse": 18.9362
+  },
+  "adoption_decision": "ADOPT_ON_HOLDOUT_IMPROVEMENT"
+}

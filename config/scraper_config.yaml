@@ -1,0 +1,50 @@
+# ==============================================================================
+# NBA Betting Intelligence — Scraper & External Sources Configuration
+# Single source of truth for sportsbook URLs, Playwright headless browser settings,
+# network wait intervals, timeouts, and API team slug mappings.
+# ==============================================================================
+
+playwright:
+  headless: true
+  timeout_ms: 15000
+  wait_after_load_ms: 2000
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+  viewport:
+    width: 1280
+    height: 800
+
+sportsbooks:
+  retabet:
+    name: "RETAbet Perú"
+    nba_url: "https://retabet.pe/deportes/baloncesto/usa/nba"
+    enabled: true
+    timeout_ms: 15000
+    wait_after_load_ms: 2000
+  betano:
+    name: "Betano Perú"
+    nba_url: "https://www.betano.pe/sport/basquetbol/norteamerica/nba/441g/"
+    api_url: "https://www.betano.pe/api/sport/basquetbol/norteamerica/nba/441g/"
+    enabled: true
+    timeout_ms: 15000
+    wait_after_load_ms: 2000
+  te_apuesto:
+    name: "Te Apuesto Perú"
+    nba_url: "https://www.teapuesto.pe/"
+    api_url: "https://api-latam.core-ix.com/api/v1/tournament-events"
+    enabled: true
+    timeout_ms: 15000
+    wait_after_load_ms: 0
+  pinnacle:
+    name: "Pinnacle Sharp"
+    nba_url: "https://www.pinnacle.com/en/basketball/nba/matchups/"
+    api_url: "https://guest.api.arcadia.pinnacle.com/0.1/leagues/487"
+    enabled: true
+    timeout_ms: 12000
+    wait_after_load_ms: 0
+
+espn:
+  summary_api_url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}"
+  roster_api_url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{espn_code}/roster"
+  team_url_map:
+    NOP: "no"
+    UTA: "utah"

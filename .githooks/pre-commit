@@ -1,0 +1,16 @@
+#!/bin/sh
+# Guard: Block manual staging/committing of SQLite audit database
+if git diff --cached --name-only | grep -qx "data/nba_intelligence.sqlite3"; then
+    if [ "$ALLOW_DB_COMMIT" != "1" ]; then
+        echo "======================================================================"
+        echo "❌ ERROR: Committing 'data/nba_intelligence.sqlite3' is BLOCKED!"
+        echo "The SQLite database is the immutable audit trail and must not be"
+        echo "committed manually. Use migrations (src/storage/migrations.py) instead."
+        echo ""
+        echo "To restore the clean production database:"
+        echo "   git restore --staged data/nba_intelligence.sqlite3"
+        echo "   git restore data/nba_intelligence.sqlite3"
+        echo "======================================================================"
+        exit 1
+    fi
+fi

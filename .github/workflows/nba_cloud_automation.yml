@@ -1,0 +1,329 @@
+name: NBA Betting Intelligence — Cloud Auto-Trading & Calibration (S/100 Virtual)
+
+on:
+  schedule:
+    # 0. Apertura Temprana de Mercado (compensa retrasos de cron GitHub y captura líneas >= 6h pre-tipoff):
+    # 11:15 UTC -> 06:15 AM Perú
+    - cron: "15 11 * * *"
+    # 1. Apertura de Mercado (Cuotas observadas ESPN + Bookmakers):
+    # 15:15 UTC -> 10:15 AM Perú
+    - cron: "15 15 * * *"
+    # 2. Injury Sniper T-2H (Reporte oficial de bajas NBA + Líneas observadas):
+    # 22:15 UTC -> 05:15 PM Perú
+    - cron: "15 22 * * *"
+    # 3. Cierre Pre-Tipoff T-25m Ola 1 (Quintetos confirmados + Stale Lines / Surebets):
+    # 23:35 UTC -> 06:35 PM Perú
+    - cron: "35 23 * * *"
+    # 4. Liquidación Nocturna Oficial ESPN + Reconciliación CPPI S/100 + Resumen Diario Telegram:
+    # 06:45 UTC -> 01:45 AM Perú
+    - cron: "45 6 * * *"
+  workflow_dispatch:
+    inputs:
+      cycle_mode:
+        description: "Modo de ciclo a ejecutar (auto, morning, sniper, settle, all)"
+        required: false
+        default: "auto"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nba-pipeline-execution
+  cancel-in-progress: false
+
+jobs:
+  run-nba-intelligence-cycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: 1. Clonar código de main (la base congelada de main es la línea base de los tests)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin main
+          git checkout -B main origin/main
+
+      - name: 2. Instalar uv y configurar Python 3.12 (Nativo sin Node.js)
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 3. Instalar dependencias del proyecto
+        run: |
+          uv sync --extra dev --python 3.12
+
+      - name: 4. Ejecutar lint, type check y suite de pruebas (sobre la base congelada de main, antes de restaurar el estado vivo)
+        run: |
+          uv run ruff check src/ scripts/ tests/
+          uv run mypy src/
+          uv run pytest
+
+      - name: 4b. Restaurar estado vivo desde state-live
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Tests run first against main's frozen baseline: live values (bankroll, bet counts) change
+          # with every settlement, so running the suite on the live DB made production fail on a winning bet.
+          # The weekly backtest report lives in state-live too; restoring it keeps step 7 from replacing it
+          # with main's older copy.
+          STATE_BASE_SHA=""
+          if git ls-remote --exit-code --heads origin state-live >/dev/null 2>&1; then
+            git fetch --depth=1 origin state-live
+            STATE_BASE_SHA="$(git rev-parse origin/state-live)"
+            # The audit database is stored as data/nba_intelligence.sqlite3.gz. This decompresses it (or the
+            # uncompressed file of a commit from before the compression) into data/nba_intelligence.sqlite3
+            # and stops the cycle unless PRAGMA integrity_check returns ok.
+            python3 -m src.storage.state_live restore "${STATE_BASE_SHA}"
+            for state_path in \
+              data/evaluation/dispatched_telegram_alerts.json \
+              data/evaluation/telegram_last_update_id.txt \
+              data/visual_rag/latest_visual_context.json \
+              reports/real_odds_backtest.md \
+              data/evaluation/real_odds_backtest.json; do
+              if git cat-file -e "${STATE_BASE_SHA}:${state_path}" 2>/dev/null; then
+                git checkout "${STATE_BASE_SHA}" -- "${state_path}"
+              fi
+            done
+            while IFS= read -r csv_path; do
+              if [ -n "${csv_path}" ]; then
+                git checkout "${STATE_BASE_SHA}" -- "${csv_path}"
+              fi
+            done < <(git ls-tree -r --name-only "${STATE_BASE_SHA}" -- data/raw/ | grep -E '^data/raw/market_consensus_.*\.csv$' || true)
+          fi
+          echo "STATE_BASE_SHA=${STATE_BASE_SHA}" >> "$GITHUB_ENV"
+
+      - name: 5. Ejecutar Ciclo de Inteligencia, Modelos y Despacho a Telegram
+        env:
+          SPORTRADAR_API_KEY: ${{ secrets.SPORTRADAR_API_KEY }}
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+          BROWSERBASE_API_KEY: ${{ secrets.BROWSERBASE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          SIMULATION_ONLY: "true"
+        run: |
+          CYCLE_MODE="${{ github.event.inputs.cycle_mode }}"
+          SCHEDULE="${{ github.event.schedule }}"
+          UTC_HOUR=$((10#$(date -u +%H)))
+          echo "Disparador: schedule='$SCHEDULE' | input='$CYCLE_MODE' | utc_hour=$UTC_HOUR"
+
+          if [ "$CYCLE_MODE" = "settle" ]; then
+            echo "🌙 [MANUAL SETTLE] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
+            uv run python scripts/run_automated_scheduler.py --run-now settle
+          elif [ "$CYCLE_MODE" = "morning" ]; then
+            echo "☀️ [MANUAL MORNING] Apertura de Mercado (ESPN + Cuotas Observadas) y Alertas Telegram"
+            uv run python scripts/run_automated_scheduler.py --run-now morning
+          elif [ "$CYCLE_MODE" = "sniper" ]; then
+            echo "🎯 [MANUAL SNIPER] Bajas T-2h/T-30m, Paper Trading y Stale Lines / Surebets"
+            uv run python scripts/run_automated_scheduler.py --run-now sniper
+            uv run python scripts/run_live_odds_monitor.py --once
+          elif [ "$SCHEDULE" = "45 6 * * *" ]; then
+            echo "🌙 [VENTANA NOCTURNA 01:45 AM PET] Liquidación oficial ESPN, Reconciliación CPPI y Resumen Diario Telegram"
+            uv run python scripts/run_automated_scheduler.py --run-now settle
+            if [ "$UTC_HOUR" -ge 14 ]; then
+              echo "⏱️ [CRON RETRASADO >=14 UTC] Ejecutando además ventana matutina para no perder apertura."
+              uv run python scripts/run_automated_scheduler.py --run-now morning
+            fi
+          elif [ "$SCHEDULE" = "15 11 * * *" ] || [ "$SCHEDULE" = "15 15 * * *" ]; then
+            if [ "$UTC_HOUR" -ge 21 ] || [ "$UTC_HOUR" -lt 4 ]; then
+              echo "⏱️ [CRON MATUTINO RETRASADO A PRE-TIPOFF] Promoviendo a ventana Sniper + Paper Trading."
+              uv run python scripts/run_automated_scheduler.py --run-now sniper
+              uv run python scripts/run_live_odds_monitor.py --once
+            else
+              echo "☀️ [VENTANA MATUTINA 10:15 AM PET] Apertura de Mercado (ESPN + Cuotas Observadas) y Alertas Telegram"
+              uv run python scripts/run_automated_scheduler.py --run-now morning
+            fi
+          elif [ "$SCHEDULE" = "15 22 * * *" ] || [ "$SCHEDULE" = "35 23 * * *" ]; then
+            if [ "$UTC_HOUR" -ge 5 ] && [ "$UTC_HOUR" -lt 13 ]; then
+              echo "⏱️ [CRON SNIPER RETRASADO A MADRUGADA] Ejecutando liquidación oficial ESPN."
+              uv run python scripts/run_automated_scheduler.py --run-now settle
+            else
+              echo "🎯 [VENTANA INJURY SNIPER & CUOTAS OBSERVADAS] Bajas T-2h/T-30m y Stale Lines / Surebets"
+              uv run python scripts/run_automated_scheduler.py --run-now sniper
+              uv run python scripts/run_live_odds_monitor.py --once
+            fi
+          else
+            echo "🚀 [MODO MANUAL / COMPLETO] Ejecutando apertura matutina y escaneo de cuotas"
+            uv run python scripts/run_automated_scheduler.py --run-now morning
+            uv run python scripts/run_live_odds_monitor.py --once
+          fi
+
+      - name: 6. Publicar Tablero de Pronósticos, Semáforo y Auditoría en el Summary de GitHub Actions
+        run: |
+          for summary_file in SEGUIMIENTO_APUESTAS.md reports/daily_report.md reports/audit_report.md; do
+            if [ -f "$summary_file" ]; then
+              cat "$summary_file" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "---" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: 6b. Checkpoint WAL, optimización de base de datos SQLite y preparación de Pages
+        run: |
+          uv run python -c "from src.storage.db import DatabaseManager; db = DatabaseManager('data/nba_intelligence.sqlite3'); db.checkpoint(truncate=True)"
+          uv run python -c "import sqlite3; conn = sqlite3.connect('data/nba_intelligence.sqlite3'); conn.execute('VACUUM;'); conn.close()"
+          mkdir -p docs
+          if [ -f "reports/dashboard.html" ]; then
+            cp reports/dashboard.html docs/index.html
+          fi
+          touch docs/.nojekyll
+
+      - name: 7. Guardar estado runtime en rama state-live (respeta protección de main)
+        run: |
+          git config user.name "nba-intelligence-bot"
+          git config user.email "nba-intelligence-bot@users.noreply.github.com"
+          # GitHub rejects files over 100 MB, so the database (checkpointed in 6b) is stored as
+          # data/nba_intelligence.sqlite3.gz (gzip -6 -n: no name or timestamp, so an unchanged database keeps
+          # its blob for the no-change check below). stage also drops the uncompressed file from the index,
+          # so this commit removes it from state-live.
+          python3 -m src.storage.state_live stage
+          git add -f SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv data/readiness_status.json data/visual_rag/latest_visual_context.json data/evaluation/*.json reports/*.md reports/dashboard.html docs/.nojekyll docs/index.html NBA/
+          TREE_SHA="$(git write-tree)"
+          if [ -n "${STATE_BASE_SHA:-}" ] && git diff --quiet "${STATE_BASE_SHA}" "${TREE_SHA}" -- \
+            data/nba_intelligence.sqlite3.gz SEGUIMIENTO_APUESTAS.md data/apuestas_historial.csv \
+            data/readiness_status.json data/visual_rag/latest_visual_context.json \
+            data/evaluation reports docs NBA; then
+            echo "Sin cambios nuevos de estado para confirmar en state-live."
+            STATE_LIVE_HEAD_SHA="${STATE_BASE_SHA}"
+          else
+            if [ -n "${STATE_BASE_SHA:-}" ]; then
+              git fetch --depth=1 origin state-live
+              if [ "$(git rev-parse origin/state-live)" != "${STATE_BASE_SHA}" ]; then
+                echo "::error::state-live changed concurrently during the cycle; refusing to overwrite the audit database. Re-run the workflow."
+                exit 1
+              fi
+              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -m 'chore(auto-cycle): actualización cloud de paper trading S/100, liquidación y auto-calibración [skip ci]')"
+              git push --force-with-lease="refs/heads/state-live:${STATE_BASE_SHA}" origin "${NEW_COMMIT}:refs/heads/state-live"
+            else
+              NEW_COMMIT="$(git commit-tree "$TREE_SHA" -m 'chore(auto-cycle): bootstrap inicial state-live de paper trading S/100 y calibración [skip ci]')"
+              git push origin "${NEW_COMMIT}:refs/heads/state-live"
+            fi
+            STATE_LIVE_HEAD_SHA="${NEW_COMMIT}"
+          fi
+          echo "STATE_LIVE_HEAD_SHA=${STATE_LIVE_HEAD_SHA}" >> "$GITHUB_ENV"
+
+      # The same .gz that step 7 stored (gunzip it to get the database). Already compressed, so it is not
+      # zipped again; a missing file fails the step instead of silently skipping the backup.
+      - name: 7c. Respaldo temporal de SQLite vivo (7 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-state-live-db-backup
+          path: data/nba_intelligence.sqlite3.gz
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+
+      # Daily immutable archive: one snapshot per UTC day in GitHub Release `db-archive` (never clobbered)
+      # plus append-only manifest & continuity audit on `state-history` (fast-forward only, contents: write).
+      - name: 7d. Archivar snapshot diario inmutable (db-archive + state-history)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 -m src.storage.state_archive archive --ref "${STATE_LIVE_HEAD_SHA:-origin/state-live}"
+
+      - name: 7a. Subir artefacto web actualizado para GitHub Pages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-pages-docs
+          path: docs/
+          retention-days: 7
+
+      - name: 7b. Sincronizar rama gh-pages con el nuevo dashboard
+        uses: peaceiris/actions-gh-pages@v4
+        continue-on-error: true
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          keep_files: false
+
+  deploy-pages:
+    needs: run-nba-intelligence-cycle
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      # Read-only: step 3b lists this run's artifacts (the endpoint needs it on a private repository).
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Descargar artefacto web actualizado del ciclo
+        uses: actions/download-artifact@v4
+        with:
+          name: nba-pages-docs
+          path: docs/
+
+      - name: 1b. Asegurar existencia de docs/.nojekyll
+        run: |
+          mkdir -p docs
+          touch docs/.nojekyll
+
+      - name: 2. Configurar entorno de GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: 3. Subir artefacto web de Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      # deploy-pages looks the artifact up in this run's artifact list right after the upload, and that
+      # list can lag behind: in runs #124 and #125 (2026-11-24) it still showed 2 of the 3 artifacts
+      # 0.3-0.4 s after "github-pages" was finalized, so the deploy failed with 'No artifacts named
+      # "github-pages" were found'. Wait until the list shows it, and retry the deploy once.
+      - name: 3b. Esperar a que la corrida liste el artefacto de Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          err_file="${RUNNER_TEMP:-/tmp}/pages_artifact_poll.err"
+          warned=0
+          for attempt in $(seq 1 18); do
+            if count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?name=github-pages" --jq '.total_count' 2>"${err_file}")"; then
+              case "${count}" in ''|*[!0-9]*) count=0 ;; esac
+              if [ "${count}" -ge 1 ]; then
+                echo "Artefacto github-pages listado (consulta ${attempt})."
+                exit 0
+              fi
+            elif [ "${warned}" = "0" ]; then
+              echo "::warning::No se pudo consultar la lista de artefactos: $(head -c 300 "${err_file}" | tr '\n' ' ')"
+              warned=1
+            fi
+            sleep 5
+          done
+          echo "::warning::La corrida todavía no lista el artefacto github-pages tras 90 s; se intenta el despliegue igual."
+
+      - name: 4. Desplegar en vivo en GitHub Pages
+        id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: 4a. Esperar antes de reintentar el despliegue
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          echo "::warning::El despliegue de Pages falló; se reintenta una vez en 30 s."
+          sleep 30
+
+      - name: 4b. Reintentar el despliegue en GitHub Pages
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+
+      # This job only runs after run-nba-intelligence-cycle succeeded, so a failure here never means the
+      # paper-trading cycle or the state-live save failed.
+      - name: 5. Aclarar qué falló
+        if: failure()
+        run: |
+          echo "::error::Falló la publicación del tablero en GitHub Pages. El ciclo de paper trading y el guardado en state-live terminaron bien (este job solo corre cuando run-nba-intelligence-cycle termina bien)."
